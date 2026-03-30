@@ -13,7 +13,14 @@ import java.util.concurrent.Executors;
 public class Main {
     private static final String MASTER_KEY = System.getenv("OPTIONSQUANT_MASTER_KEY");
 
-    static void main(String[] args) throws Exception {
+    public static void main(String[] args) throws Exception {
+        // Validación de seguridad al arrancar
+        if (MASTER_KEY == null || MASTER_KEY.isEmpty()) {
+            System.err.println("❌ ERROR: La variable de entorno OPTIONSQUANT_MASTER_KEY no está configurada.");
+            System.exit(1);
+        }
+
+        System.out.println("✅ Seguridad cargada correctamente.");
         System.setOut(new java.io.PrintStream(System.out, true, StandardCharsets.UTF_8));
         System.out.println("=== MOTOR DE TRADING NATIVO (JAVA 25 + VIRTUAL THREADS) ===");
 
