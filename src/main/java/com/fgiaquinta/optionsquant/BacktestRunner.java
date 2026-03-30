@@ -27,6 +27,7 @@ public class BacktestRunner {
                     new P3BouncePutStrategy(ibkr),
                     new C4OpeningCallStrategy(ibkr),
                     new P4OpeningPutStrategy(ibkr),
+                    new C5ContinuationCallStrategy(ibkr),
                     new P5ContinuationPutStrategy(ibkr)
             );
 
