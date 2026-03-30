@@ -31,7 +31,10 @@ public class IbkrService extends DefaultEWrapper {
     private final Map<String, BarSeries> marketData = new ConcurrentHashMap<>();
     private final Map<String, Integer> tickerToConId = new ConcurrentHashMap<>();
     private final Map<String, String> tickerToPrimaryExch = new ConcurrentHashMap<>();
+
     private final Map<String, String> tickerToBestExpiration = new ConcurrentHashMap<>();
+    // NUEVO MAPA: Almacena los Strikes válidos del mercado
+    private final Map<String, TreeSet<Double>> tickerToStrikes = new ConcurrentHashMap<>();
 
     private final Map<String, Execution> pendingExecutions = new ConcurrentHashMap<>();
     private final Map<String, String> execIdToTicker = new ConcurrentHashMap<>();
@@ -49,11 +52,7 @@ public class IbkrService extends DefaultEWrapper {
             reader.start();
             while (client.isConnected()) {
                 signal.waitForSignal();
-                try {
-                    reader.processMsgs();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+                try { reader.processMsgs(); } catch (Exception e) { e.printStackTrace(); }
             }
         });
     }
@@ -101,6 +100,8 @@ public class IbkrService extends DefaultEWrapper {
 
     @Override
     public void securityDefinitionOptionalParameter(int reqId, String exchange, int underlyingConId, String tradingClass, String multiplier, Set<String> expirations, Set<Double> strikes) {
+        // Filtramos para asegurar que solo guardamos cadenas de opciones estándar (multiplicador 100)
+        if (!"100".equals(multiplier)) return;
         if (tickerToBestExpiration.containsKey(tradingClass)) return;
 
         String bestDate = expirations.stream()
@@ -115,7 +116,60 @@ public class IbkrService extends DefaultEWrapper {
 
         if (bestDate != null) {
             tickerToBestExpiration.put(tradingClass, bestDate);
+            // GUARDAMOS LOS STRIKES VÁLIDOS
+            if (strikes != null) {
+                tickerToStrikes.put(tradingClass, new TreeSet<>(strikes));
+            }
             System.out.println("📅 Vencimiento optimo detectado para " + tradingClass + ": " + bestDate);
+        }
+    }
+
+    public boolean placeOrder(String ticker, String action, int qtyIgnored, double entry, double tp, double sl, String strategyName) {
+        try {
+            if (!initialSync.await(10, TimeUnit.SECONDS)) return false;
+
+            Integer subConId = tickerToConId.get(ticker);
+            String expiry = tickerToBestExpiration.get(ticker);
+            String primaryExch = tickerToPrimaryExch.get(ticker);
+            TreeSet<Double> validStrikes = tickerToStrikes.get(ticker);
+
+            if (subConId == null || expiry == null) return false;
+
+            // LÓGICA DE STRIKE SNAPPING (Busca el Strike oficial más cercano)
+            double finalStrike = Math.round(entry);
+            if (validStrikes != null && !validStrikes.isEmpty()) {
+                finalStrike = validStrikes.stream()
+                        .min(Comparator.comparingDouble(s -> Math.abs(s - entry)))
+                        .orElse((double) Math.round(entry));
+            }
+
+            boolean isCall = strategyName.contains("CALL");
+
+            Contract contract = ContractFactory.createOptionContract(
+                    ticker,
+                    expiry,
+                    finalStrike, // Usamos el Strike validado
+                    isCall ? "C" : "P"
+            );
+
+            int pId = nextId.getAndIncrement();
+            int tpId = nextId.getAndIncrement();
+            int slId = nextId.getAndIncrement();
+
+            List<Order> bracket = OrderFactory.createOptionBracket(
+                    pId, tpId, slId, 10, subConId, primaryExch, entry, tp, sl, isCall
+            );
+
+            for (Order o : bracket) {
+                client.placeOrder(o.orderId(), contract, o);
+            }
+
+            System.out.printf("🎯 OPTION SENT: 10x %s %s Strike %.1f | Exp %s%n",
+                    ticker, contract.right(), finalStrike, expiry);
+            return true;
+
+        } catch (Exception e) {
+            return false;
         }
     }
 
@@ -142,46 +196,6 @@ public class IbkrService extends DefaultEWrapper {
                     report.commissionAndFees(),
                     eId
             );
-        }
-    }
-
-    public boolean placeOrder(String ticker, String action, int qtyIgnored, double entry, double tp, double sl, String strategyName) {
-        try {
-            if (!initialSync.await(10, TimeUnit.SECONDS)) return false;
-
-            Integer subConId = tickerToConId.get(ticker);
-            String expiry = tickerToBestExpiration.get(ticker);
-            String primaryExch = tickerToPrimaryExch.get(ticker);
-
-            if (subConId == null || expiry == null) return false;
-
-            boolean isCall = strategyName.contains("CALL");
-
-            Contract contract = ContractFactory.createOptionContract(
-                    ticker,
-                    expiry,
-                    Math.round(entry),
-                    isCall ? "C" : "P"
-            );
-
-            int pId = nextId.getAndIncrement();
-            int tpId = nextId.getAndIncrement();
-            int slId = nextId.getAndIncrement();
-
-            List<Order> bracket = OrderFactory.createOptionBracket(
-                    pId, tpId, slId, 10, subConId, primaryExch, entry, tp, sl, isCall
-            );
-
-            for (Order o : bracket) {
-                client.placeOrder(o.orderId(), contract, o);
-            }
-
-            System.out.printf("🎯 OPTION SENT: 10x %s %s Strike %.0f | Exp %s%n",
-                    ticker, contract.right(), contract.strike(), expiry);
-            return true;
-
-        } catch (Exception e) {
-            return false;
         }
     }
 

@@ -27,9 +27,12 @@ public class ConditionBuilder {
     public static TimeCondition createGoldenRuleCondition(String timeHms) {
         TimeCondition tc = (TimeCondition) OrderCondition.create(OrderConditionType.Time);
         String today = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        tc.time(today + "-" + timeHms);
+
+        // CORRECCIÓN CRÍTICA: IBKR exige un ESPACIO entre la fecha y la hora, no un guion.
+        tc.time(today + " " + timeHms);
+
         tc.isMore(true);
-        tc.conjunctionConnection(false); // OR logic
+        tc.conjunctionConnection(false); // Lógica OR (Precio o Tiempo)
         return tc;
     }
 }
