@@ -3,13 +3,14 @@ package com.fgiaquinta.optionsquant;
 import com.fgiaquinta.optionsquant.engine.ForensicEngine;
 import com.fgiaquinta.optionsquant.services.IbkrService;
 import com.fgiaquinta.optionsquant.strategies.*;
+import com.fgiaquinta.optionsquant.models.TimeFrame;
 import org.ta4j.core.BarSeries;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class BacktestRunner {
-    public static void main(String[] args) {
+    static void main(String[] args) {
         try {
             String fileName = "analisis_forense_optionsquant.txt";
             PrintStream outConsole = System.out;
@@ -39,7 +40,9 @@ public class BacktestRunner {
 
             long start = System.currentTimeMillis();
             Arrays.stream(tickers).parallel().filter(t -> !t.equals("SPY")).forEach(ticker -> {
-                BarSeries s1h = ibkr.getSeries(ticker + "_1hour");
+                // AQUÍ ESTÁ LA CORRECCIÓN: Usamos el Enum TimeFrame.HOUR_1
+                BarSeries s1h = ibkr.getSeries(ticker, TimeFrame.HOUR_1);
+
                 if (s1h != null) auditor.runFullAudit(ticker, s1h);
             });
 
@@ -50,7 +53,10 @@ public class BacktestRunner {
 
     private static class MultiOutputStream extends OutputStream {
         private final OutputStream[] o;
-        public MultiOutputStream(OutputStream... s) { this.o = s; }
-        @Override public void write(int b) throws IOException { for (OutputStream s : o) s.write(b); }
+        public MultiOutputStream(OutputStream... o) { this.o = o; }
+        @Override public void write(int b) throws IOException { for (OutputStream os : o) os.write(b); }
+        @Override public void write(byte[] b, int off, int len) throws IOException { for (OutputStream os : o) os.write(b, off, len); }
+        @Override public void flush() throws IOException { for (OutputStream os : o) os.flush(); }
+        @Override public void close() throws IOException { for (OutputStream os : o) os.close(); }
     }
 }

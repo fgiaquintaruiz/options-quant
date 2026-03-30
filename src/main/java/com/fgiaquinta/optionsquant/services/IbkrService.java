@@ -87,7 +87,7 @@ public class IbkrService extends DefaultEWrapper {
             String cacheKey = request.getCacheKey();
 
             // Cargar datos existentes para no descargar historial duplicado
-            BarSeries series = DataManager.loadSeries(ticker, tf.getIbkrBarSize());
+            BarSeries series = DataManager.loadSeries(cacheKey);
             marketData.put(cacheKey, series);
 
             int reqId = nextId.getAndIncrement();
