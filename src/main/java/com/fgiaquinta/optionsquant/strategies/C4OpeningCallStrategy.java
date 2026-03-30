@@ -4,8 +4,13 @@ import com.fgiaquinta.optionsquant.analyzers.GapAnalyzer;
 import com.fgiaquinta.optionsquant.analyzers.VolatilityAnalyzer;
 import com.fgiaquinta.optionsquant.models.TimeFrame;
 import com.fgiaquinta.optionsquant.services.IbkrService;
+import com.fgiaquinta.optionsquant.utils.ConfigLoader;
 import org.ta4j.core.BarSeries;
 
+/**
+ * Estrategia C4: Apertura Alcista tras Gap Down.
+ * Busca una reversión tras un salto de precio negativo en la apertura.
+ */
 public class C4OpeningCallStrategy implements TradingStrategy {
     private final IbkrService ibkrService;
 
@@ -25,46 +30,47 @@ public class C4OpeningCallStrategy implements TradingStrategy {
         if (idx15m < 1) return false;
 
         // =========================================================================
-        // REGLA 1: Baja Volatilidad Previa (Squeeze en la última vela de ayer)
+        // REGLA 1: Baja Volatilidad Previa (Valor desde config.yaml)
         // =========================================================================
-        // Miramos la vela anterior (ayer al cierre) para ver si las bandas estaban estrechas (< 1.2%)
+        double maxBandWidth = ConfigLoader.getConfig().getParam("opening", "bandWidth");
         double prevBandWidth = VolatilityAnalyzer.getBollingerBandWidthPct(series15m, idx15m - 1, 20, 2.0);
-        if (prevBandWidth > 1.2) return false;
+
+        if (prevBandWidth > maxBandWidth) return false;
 
         // =========================================================================
-        // REGLA 2: Gap Down Extremo (Salto hacia abajo > 1.5%)
+        // REGLA 2: Gap Down Extremo (Límites desde config.yaml)
         // =========================================================================
+        double minGap = ConfigLoader.getConfig().getParam("opening", "callMinGap"); // e.g., -1.5
+        double maxGap = ConfigLoader.getConfig().getParam("opening", "callMaxGap"); // e.g., -4.0
+
         double gapPct = GapAnalyzer.getGapPercentage(series15m, idx15m);
 
-        // Buscamos un Gap Down (valor negativo), por ejemplo menor a -1.5%
-        if (gapPct > -1.5) return false;
+        // Verificamos que el Gap esté dentro del rango negativo definido
+        if (gapPct > minGap || gapPct < maxGap) return false;
 
         // =========================================================================
-        // REGLA 3: Reversión Alcista en Apertura
+        // REGLA 3: Reversión Alcista en Apertura (Vela verde en 15m)
         // =========================================================================
         double currentClose15m = series15m.getBar(idx15m).getClosePrice().doubleValue();
         double currentOpen15m = series15m.getBar(idx15m).getOpenPrice().doubleValue();
 
-        // La primera vela de 15m debe ser verde (fuerza de compra tras el gap)
-        boolean isBullishReversal = currentClose15m > currentOpen15m;
-
-        return isBullishReversal;
+        return currentClose15m > currentOpen15m;
     }
 
     @Override
     public double calculateTP(double entryPrice) {
-        // En Gaps buscamos el "Gap Fill" (retorno al cierre de ayer), aprox +4%
-        return Math.round((entryPrice * 1.04) * 100.0) / 100.0;
+        double tpMult = ConfigLoader.getConfig().getParam("opening", "tp");
+        return Math.round((entryPrice * (1 + tpMult)) * 100.0) / 100.0;
     }
 
     @Override
     public double calculateSL(double entryPrice, String ticker) {
-        // Stop loss corto (-2%) porque si el Gap sigue bajando, la tesis se anula
-        return Math.round((entryPrice * 0.98) * 100.0) / 100.0;
+        double slMult = ConfigLoader.getConfig().getParam("opening", "sl");
+        return Math.round((entryPrice * (1 - slMult)) * 100.0) / 100.0;
     }
 
     @Override
     public String getName() {
-        return "c4_opening_call";
+        return "C4_OPENING_CALL";
     }
 }

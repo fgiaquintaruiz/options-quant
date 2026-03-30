@@ -40,6 +40,7 @@ dependencies {
 
     // 4. PROTOCOLOS E INTERACTIVE BROKERS
     implementation("com.google.protobuf:protobuf-java:4.34.1")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.18.2")
     implementation name: 'TwsApi' // Libreria local en /libs
 }
 

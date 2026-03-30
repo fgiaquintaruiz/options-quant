@@ -151,24 +151,37 @@ public class IbkrService extends DefaultEWrapper {
 
             if (subConId == null || expiry == null || validStrikes == null) return false;
 
+            // Encontrar el strike más cercano
             double finalStrike = validStrikes.stream()
                     .min(Comparator.comparingDouble(s -> Math.abs(s - entry))).get();
 
             boolean isCall = strategyName.contains("CALL");
             Contract contract = ContractFactory.createOptionContract(ticker, expiry, finalStrike, isCall ? "C" : "P");
 
-            // USAR nextOrderId PARA EL BRACKET
+            // IDs para la orden Bracket (Parent, TP y SL)
             int pId = nextOrderId.getAndIncrement();
             int tpId = nextOrderId.getAndIncrement();
             int slId = nextOrderId.getAndIncrement();
 
-            List<Order> bracket = OrderFactory.createOptionBracket(pId, tpId, slId, 10, subConId, tickerToPrimaryExch.get(ticker), entry, tp, sl, isCall);
+            // Crear la estructura de la orden
+            List<Order> bracket = OrderFactory.createOptionBracket(
+                    pId, tpId, slId, qty, subConId, tickerToPrimaryExch.get(ticker), entry, tp, sl, isCall
+            );
 
-            for (Order o : bracket) client.placeOrder(o.orderId(), contract, o);
+            // Enviar las órdenes a IBKR
+            for (Order o : bracket) {
+                client.placeOrder(o.orderId(), contract, o);
+            }
 
-            System.out.printf("🎯 OPTION SENT: 10x %s %s Strike %.1f | Exp %s%n", ticker, contract.right(), finalStrike, expiry);
+            // Notificar a Telegram (Solo con el TP configurado)
+            TelegramService.sendSignalAlert(ticker, strategyName, entry, sl, tp);
+
+            System.out.printf("🎯 OPTION SENT: %dx %s %s Strike %.1f | Exp %s%n", qty, ticker, contract.right(), finalStrike, expiry);
             return true;
-        } catch (Exception e) { return false; }
+        } catch (Exception e) {
+            System.err.println("❌ Error en placeOrder: " + e.getMessage());
+            return false;
+        }
     }
 
     @Override

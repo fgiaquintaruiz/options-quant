@@ -1,5 +1,6 @@
 package com.fgiaquinta.optionsquant.services;
 
+import com.fgiaquinta.optionsquant.utils.ConfigLoader;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -7,29 +8,35 @@ import java.net.http.HttpResponse;
 
 public class TelegramService {
 
-    private static final String BOT_TOKEN = "REDACTED_TELEGRAM_BOT_TOKEN";
-    private static final String CHAT_ID = "REDACTED_CHAT_ID";
-    private static final String CLOUDFLARE_HOST = "https://browser-argue-firefox-charged.trycloudflare.com";
-    private static final String CLOUDFLARE_URL = CLOUDFLARE_HOST + "/buy";
-    private static final String MASTER_KEY = System.getenv("OPTIONSQUANT_MASTER_KEY");
-    
-    // Sends the strategy alert to Telegram with action buttons
-    public static void sendSignalAlert(String ticker, String type, double entry, double sl, double tp1, double tp2) {
+    // Extraemos la configuración centralizada del YAML
+    private static final String BOT_TOKEN = ConfigLoader.getConfig().telegram.botToken;
+    private static final String CHAT_ID = ConfigLoader.getConfig().telegram.chatId;
+    private static final String MASTER_KEY = ConfigLoader.getConfig().telegram.masterKey;
+
+    // El host de Cloudflare suele ser estático o puede ir en config.ibkr si lo prefieres
+    private static final String CLOUDFLARE_URL = "https://browser-argue-firefox-charged.trycloudflare.com/buy";
+
+    /**
+     * Envía una alerta de trading a Telegram con un botón de ejecución.
+     */
+    public static void sendSignalAlert(String ticker, String type, double entry, double sl, double tp) {
         try {
             String url = "https://api.telegram.org/bot" + BOT_TOKEN + "/sendMessage";
 
-            String execUrl = String.format("%s?ticker=%s&type=%s&entry=%.2f&sl=%.2f&tp1=%.2f&tp2=%.2f&token=%s",
-                    CLOUDFLARE_URL, ticker, type, entry, sl, tp1, tp2, MASTER_KEY);
+            // Construcción de la URL de ejecución para el botón
+            String execUrl = String.format("%s?ticker=%s&type=%s&entry=%.2f&sl=%.2f&tp1=%.2f&token=%s",
+                    CLOUDFLARE_URL, ticker, type, entry, sl, tp, MASTER_KEY);
 
+            // Formateo del mensaje en Markdown
             String messageText = "🚨 *ALERTA DE ESTRATEGIA* 🚨\n\n" +
                     "📈 *Activo:* " + ticker + "\n" +
-                    "🔔 *Señal:* " + type + " (Java Native Engine)\n" +
-                    "💵 *Entrada:* " + entry + "\n" +
+                    "🔔 *Señal:* " + type + " (Java Engine)\n" +
+                    "💵 *Precio Entrada:* " + entry + "\n" +
                     "--------------------------\n" +
-                    "🟡 *TP1:* " + tp1 + "\n" +
-                    "🟢 *TP2:* " + tp2 + "\n" +
+                    "🟢 *Objetivo TP:* " + tp + "\n" +
                     "🔴 *Stop Loss:* " + sl;
 
+            // Payload JSON para Telegram (incluye el botón interactivo)
             String jsonPayload = """
                 {
                     "chat_id": "%s",
@@ -38,7 +45,7 @@ public class TelegramService {
                     "reply_markup": {
                         "inline_keyboard": [[
                             {
-                                "text": "🚀 EJECUTAR OPERACIÓN",
+                                "text": "🚀 EJECUTAR OPERACIÓN REAL",
                                 "url": "%s"
                             }
                         ]]
@@ -46,6 +53,7 @@ public class TelegramService {
                 }
                 """.formatted(CHAT_ID, messageText.replace("\n", "\\n"), execUrl);
 
+            // Envío asíncrono mediante el cliente HTTP nativo de Java
             HttpClient client = HttpClient.newHttpClient();
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
@@ -53,12 +61,17 @@ public class TelegramService {
                     .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
                     .build();
 
-            // Fire and forget asynchronous call
             client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                    .thenAccept(response -> System.out.println("[Telegram] Status: " + response.statusCode()));
+                    .thenAccept(response -> {
+                        if (response.statusCode() == 200) {
+                            System.out.println("[Telegram] Alerta enviada correctamente para " + ticker);
+                        } else {
+                            System.err.println("[Telegram] Error al enviar alerta. Código: " + response.statusCode());
+                        }
+                    });
 
         } catch (Exception e) {
-            System.err.println("Error sending Telegram alert: " + e.getMessage());
+            System.err.println("❌ Error crítico en TelegramService: " + e.getMessage());
         }
     }
 }

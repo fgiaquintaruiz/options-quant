@@ -3,6 +3,7 @@ package com.fgiaquinta.optionsquant.strategies;
 import com.fgiaquinta.optionsquant.analyzers.ChannelAnalyzer;
 import com.fgiaquinta.optionsquant.models.TimeFrame;
 import com.fgiaquinta.optionsquant.services.IbkrService;
+import com.fgiaquinta.optionsquant.utils.ConfigLoader;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
@@ -11,6 +12,7 @@ import org.ta4j.core.indicators.bollinger.BollingerBandsUpperIndicator;
 import org.ta4j.core.indicators.statistics.StandardDeviationIndicator;
 
 public class C1SqueezeCallStrategy implements TradingStrategy {
+    public static final String SQUEEZE = "squeeze";
     private final IbkrService ibkrService;
 
     public C1SqueezeCallStrategy(IbkrService ibkrService) {
@@ -83,14 +85,14 @@ public class C1SqueezeCallStrategy implements TradingStrategy {
 
     @Override
     public double calculateTP(double entryPrice) {
-        // Rentabilidad objetivo del +5% sobre el activo (Ajustable a tu gusto)
-        return Math.round((entryPrice * 1.05) * 100.0) / 100.0;
+        double tpMult = ConfigLoader.getConfig().getParam(SQUEEZE, "tp"); // Cambiar categoría según estrategia
+        return Math.round((entryPrice * (1 + tpMult)) * 100.0) / 100.0;
     }
 
     @Override
     public double calculateSL(double entryPrice, String ticker) {
-        // Riesgo máximo del -3% sobre el activo (Ajustable a tu gusto)
-        return Math.round((entryPrice * 0.97) * 100.0) / 100.0;
+        double slMult = ConfigLoader.getConfig().getParam(SQUEEZE, "sl"); // Cambiar categoría según estrategia
+        return Math.round((entryPrice * (1 - slMult)) * 100.0) / 100.0;
     }
 
     @Override

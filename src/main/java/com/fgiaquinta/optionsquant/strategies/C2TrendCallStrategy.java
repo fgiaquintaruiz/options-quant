@@ -3,6 +3,7 @@ package com.fgiaquinta.optionsquant.strategies;
 import com.fgiaquinta.optionsquant.analyzers.TrendAnalyzer;
 import com.fgiaquinta.optionsquant.models.TimeFrame;
 import com.fgiaquinta.optionsquant.services.IbkrService;
+import com.fgiaquinta.optionsquant.utils.ConfigLoader;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
@@ -70,14 +71,14 @@ public class C2TrendCallStrategy implements TradingStrategy {
 
     @Override
     public double calculateTP(double entryPrice) {
-        // En cambios de tendencia buscamos recorridos más largos (+6%)
-        return Math.round((entryPrice * 1.06) * 100.0) / 100.0;
+        double tpMult = ConfigLoader.getConfig().getParam("trend", "tp"); // Cambiar categoría según estrategia
+        return Math.round((entryPrice * (1 + tpMult)) * 100.0) / 100.0;
     }
 
     @Override
     public double calculateSL(double entryPrice, String ticker) {
-        // Ajustamos el stop al -3%
-        return Math.round((entryPrice * 0.97) * 100.0) / 100.0;
+        double slMult = ConfigLoader.getConfig().getParam("trend", "sl"); // Cambiar categoría según estrategia
+        return Math.round((entryPrice * (1 - slMult)) * 100.0) / 100.0;
     }
 
     @Override

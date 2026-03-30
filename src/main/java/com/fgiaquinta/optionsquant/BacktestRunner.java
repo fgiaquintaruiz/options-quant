@@ -33,7 +33,6 @@ public class BacktestRunner {
             );
 
             ForensicEngine auditor = new ForensicEngine(ibkr, strategies);
-            ibkr.setForensicEngine(auditor);
 
             String[] tickers = {"SPY", "NVDA", "AAPL", "TSLA", "AMD", "MSFT"};
             for (String t : tickers) ibkr.startMarketDataTracking(t);

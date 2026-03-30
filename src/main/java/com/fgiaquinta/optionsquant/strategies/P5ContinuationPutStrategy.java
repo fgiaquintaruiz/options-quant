@@ -4,6 +4,7 @@ import com.fgiaquinta.optionsquant.analyzers.GapAnalyzer;
 import com.fgiaquinta.optionsquant.analyzers.WordenAnalyzer;
 import com.fgiaquinta.optionsquant.models.TimeFrame;
 import com.fgiaquinta.optionsquant.services.IbkrService;
+import com.fgiaquinta.optionsquant.utils.ConfigLoader;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
@@ -19,16 +20,22 @@ public class P5ContinuationPutStrategy implements TradingStrategy {
     public boolean isTriggered(int index, BarSeries series1h, BarSeries spySeries) {
         String ticker = series1h.getName().split("_")[0];
 
-        // RULE 1: Moderate Gap Down (Continuation)
+        // REGLA 1: Filtrado de Gap Down (Valores negativos desde config.yaml)
+        double minGap = ConfigLoader.getConfig().getParam("continuation", "putMinGap");
+        double maxGap = ConfigLoader.getConfig().getParam("continuation", "putMaxGap");
+
         double gapPct = GapAnalyzer.getGapPercentage(series1h, index);
-        if (gapPct > -0.5 || gapPct < -2.0) return false;
 
-        // RULE 2: Worden Stochastic Weakness (Trend is healthy bearish)
-        // Buscamos que el precio esté en el percentil bajo (30-50)
+        // Para un PUT, el gap suele ser entre -0.4 y -1.8
+        if (gapPct > minGap || gapPct < maxGap) return false;
+
+        // REGLA 2: Worden Stochastic (Buscamos debilidad, ej: percentil < 45)
+        double threshold = ConfigLoader.getConfig().getParam("continuation", "putWordenThreshold");
         double wStoc = WordenAnalyzer.getWordenStochastic(series1h, index, 12, 3);
-        if (wStoc > 50 || wStoc < 30) return false;
 
-        // RULE 3: 15m Confirmation (Price below SMA20)
+        if (wStoc > threshold) return false;
+
+        // REGLA 3: Confirmación en 15m (Precio < SMA20)
         BarSeries series15m = ibkrService.getSeries(ticker, TimeFrame.MIN_15);
         if (series15m == null || series15m.isEmpty()) return false;
 
@@ -44,16 +51,18 @@ public class P5ContinuationPutStrategy implements TradingStrategy {
 
     @Override
     public double calculateTP(double entryPrice) {
-        return Math.round((entryPrice * 0.95) * 100.0) / 100.0;
+        double tpMult = ConfigLoader.getConfig().getParam("continuation", "tp");
+        return Math.round((entryPrice * (1 - tpMult)) * 100.0) / 100.0;
     }
 
     @Override
     public double calculateSL(double entryPrice, String ticker) {
-        return Math.round((entryPrice * 1.03) * 100.0) / 100.0;
+        double slMult = ConfigLoader.getConfig().getParam("continuation", "sl");
+        return Math.round((entryPrice * (1 + slMult)) * 100.0) / 100.0;
     }
 
     @Override
     public String getName() {
-        return "p5_continuation_put";
+        return "P5_CONTINUATION_PUT";
     }
 }
