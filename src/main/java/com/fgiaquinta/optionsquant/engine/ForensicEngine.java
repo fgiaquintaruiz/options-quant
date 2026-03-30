@@ -19,12 +19,13 @@ public class ForensicEngine {
     }
 
     public void runFullAudit(String ticker, BarSeries series1h) {
-        // Updated to use the Multi-Timeframe signature
+        // Multi-Timeframe data retrieval
         BarSeries series15m = ibkrService.getSeries(ticker, TimeFrame.MIN_15);
         BarSeries spySeries = ibkrService.getSeries("SPY", TimeFrame.HOUR_1);
 
         if (series15m == null || spySeries == null) return;
 
+        // Map creation for high-performance forensic logging
         Long2IntMap index15m = new Long2IntOpenHashMap(series15m.getBarCount());
         for (int j = 0; j < series15m.getBarCount(); j++) {
             index15m.put(series15m.getBar(j).getEndTime().toEpochSecond(), j);
@@ -38,7 +39,16 @@ public class ForensicEngine {
                     double tp = strategy.calculateTP(entryPrice);
                     double sl = strategy.calculateSL(entryPrice, ticker);
 
-                    ForensicLogger.log(ticker, series1h, i, strategy.getClass().getSimpleName(), tp, sl);
+                    // CORRECTED: Call the appropriate method in ForensicLogger
+                    ForensicLogger.logWithFastUtil(
+                            strategy.getClass().getSimpleName(),
+                            ticker,
+                            series1h.getBar(i),
+                            series15m,
+                            index15m,
+                            tp,
+                            sl
+                    );
                 }
             }
         }
