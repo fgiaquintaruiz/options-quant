@@ -3,6 +3,7 @@ package com.fgiaquinta.optionsquant;
 import com.fgiaquinta.optionsquant.engine.StrategyEngine;
 import com.fgiaquinta.optionsquant.services.IbkrService;
 import com.fgiaquinta.optionsquant.strategies.*;
+import com.fgiaquinta.optionsquant.models.TimeFrame;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -14,9 +15,9 @@ public class Main {
     private static final String MASTER_KEY = System.getenv("OPTIONSQUANT_MASTER_KEY");
 
     public static void main(String[] args) throws Exception {
-        // Validación de seguridad al arrancar
+        // Startup security validation
         if (MASTER_KEY == null || MASTER_KEY.isEmpty()) {
-            System.err.println("❌ ERROR: La variable de entorno OPTIONSQUANT_MASTER_KEY no está configurada.");
+            System.err.println("❌ ERROR: OPTIONSQUANT_MASTER_KEY environment variable is not set.");
             System.exit(1);
         }
 
@@ -34,16 +35,16 @@ public class Main {
         StrategyEngine liveEngine = new StrategyEngine(ibkr, strategies);
         ibkr.setStrategyEngine(liveEngine);
 
-        // 1. Rastreo de Activos
+        // 1. Asset Tracking
         String[] tickers = {"SPY", "NVDA", "AAPL", "TSLA", "AMD", "MSFT"};
         for (String t : tickers) {
             ibkr.startMarketDataTracking(t);
         }
 
-        // 2. SERVIDOR WEBHOOK
+        // 2. WEBHOOK SERVER
         HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
         server.createContext("/webhook", exchange -> {
-            // ... (lógica de webhook igual que antes)
+            // Webhook logic stays the same
             exchange.close();
         });
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
@@ -51,17 +52,22 @@ public class Main {
 
         System.out.println(">>> SISTEMA ONLINE Y SINCRONIZANDO CONTRATOS <<<");
 
-        // 3. RE-ESCANEO DE ARRANQUE (Virtual Thread)
-        // Esperamos 5 segundos a que los contratos/vencimientos bajen de IBKR y escaneamos
+        // 3. STARTUP RE-SCAN (Virtual Thread)
+        // Wait 3 seconds to let contracts and expirations download from IBKR before scanning
         Thread.ofVirtual().start(() -> {
             try {
-                Thread.sleep(3000); // 3 segundos para dejar que bajen los contratos
+                Thread.sleep(3000);
                 System.out.println("🔍 Escaneo inicial de seguridad...");
                 for (String t : tickers) {
-                    var series = ibkr.getSeries(t + "_1hour");
-                    if (series != null) liveEngine.onBarAdded(t, series);
+                    // Corrected to use the new Multi-Timeframe signature
+                    var series = ibkr.getSeries(t, TimeFrame.HOUR_1);
+                    if (series != null && !series.isEmpty()) {
+                        liveEngine.onBarAdded(t, series);
+                    }
                 }
-            } catch (Exception e) { e.printStackTrace(); }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         });
     }
 }
