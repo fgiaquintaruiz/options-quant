@@ -1,0 +1,58 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'com.fgiaquinta.optionsquant'
+version = '1.0.0'
+
+// CONFIGURACION DE JAVA 25 LTS
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    // Habilita optimizaciones del compilador para Java 25
+    options.compilerArgs.addAll(['-Xlint:all', '-g'])
+}
+
+repositories {
+    mavenCentral()
+    flatDir {
+        dirs 'libs' // Carpeta local para TwsApi.jar
+    }
+}
+
+dependencies {
+    // 1. RENDIMIENTO Y ESTRUCTURAS DE DATOS (FastUtil 8.5.18)
+    // Vital para la busqueda instantanea O(1) en el backtest
+    implementation("it.unimi.dsi:fastutil:8.5.18")
+
+    // 2. ANALISIS TECNICO (TA4J)
+    implementation 'org.ta4j:ta4j-core:0.15'
+
+    // 3. API Y SERVIDOR WEB (Javalin 7)
+    implementation 'org.slf4j:slf4j-simple:2.0.16' // Actualizado a la ultima estable
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2' // Version compatible con Java 25
+
+    // 4. PROTOCOLOS E INTERACTIVE BROKERS
+    implementation 'com.google.protobuf:protobuf-java:4.29.3'
+    implementation name: 'TwsApi' // Libreria local en /libs
+}
+
+application {
+    // Cambia esto a BacktestRunner si quieres ejecutar el auditor por defecto
+    mainClass = 'com.fgiaquinta.optionsquant.BacktestRunner'
+}
+
+// Configuración para que el JAR incluya las dependencias si es necesario
+jar {
+    manifest {
+        attributes(
+                'Main-Class': 'com.fgiaquinta.optionsquant.BacktestRunner'
+        )
+    }
+}
