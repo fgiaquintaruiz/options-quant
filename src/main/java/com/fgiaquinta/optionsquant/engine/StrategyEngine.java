@@ -2,25 +2,34 @@ package com.fgiaquinta.optionsquant.engine;
 
 import com.fgiaquinta.optionsquant.services.IbkrService;
 import com.fgiaquinta.optionsquant.strategies.TradingStrategy;
-import com.fgiaquinta.optionsquant.models.TimeFrame; // IMPORTANTE: Agregar el Enum
+import com.fgiaquinta.optionsquant.models.TimeFrame;
 import org.ta4j.core.BarSeries;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class StrategyEngine {
     private final IbkrService ibkrService;
     private final List<TradingStrategy> strategies;
-    // Inventory filter: Saves tickers that already have an active order today
+    // Filtro de inventario: Guarda los tickers que ya tienen una orden activa hoy
     private final Set<String> activeOrders = ConcurrentHashMap.newKeySet();
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
     public StrategyEngine(IbkrService ibkr, List<TradingStrategy> strategies) {
         this.ibkrService = ibkr;
         this.strategies = strategies;
+
+        // Auto-mantenimiento: Limpiar el inventario cada 24 horas para el nuevo día de trading
+        scheduler.scheduleAtFixedRate(() -> {
+            clearInventory();
+            System.out.println("🧹 [MANTENIMIENTO] Inventario diario limpiado. Listo para la siguiente sesión.");
+        }, 12, 24, TimeUnit.HOURS); // Ejecuta el primer reset en 12h, y luego cada 24h
     }
 
     public void onBarAdded(String ticker, BarSeries series1h) {
-        // CORRECCIÓN: Usar la nueva firma Multi-Timeframe
         BarSeries spy = ibkrService.getSeries("SPY", TimeFrame.HOUR_1);
         if (spy == null || spy.isEmpty()) return;
 
@@ -29,7 +38,7 @@ public class StrategyEngine {
         for (TradingStrategy strategy : strategies) {
             if (strategy.isTriggered(lastIdx, series1h, spy)) {
 
-                // 1. Verify if it's already active
+                // 1. Verificamos si ya está activo hoy
                 if (activeOrders.contains(ticker)) {
                     continue;
                 }
@@ -38,23 +47,25 @@ public class StrategyEngine {
                 double tp = strategy.calculateTP(price);
                 double sl = strategy.calculateSL(price, ticker);
 
-                // 2. Try to send the order
+                // 2. Intentamos enviar la orden
                 boolean sent = ibkrService.placeOrder(ticker, "BUY", 10, price, tp, sl, strategy.getName());
 
-                // 3. ONLY IF SENT, block the ticker for future signals
+                // 3. SOLO SI SE ENVIÓ, bloqueamos el ticker para futuras señales
                 if (sent) {
                     activeOrders.add(ticker);
-                    System.out.println("✅ Orden confirmada y ticker bloqueado: " + ticker);
-                } else {
-                    // Optional: Warning log for missing market data
-                    // System.out.println("⏳ Esperando datos de contrato para " + ticker + "...");
+                    System.out.println("✅ Orden confirmada y ticker bloqueado por hoy: " + ticker);
                 }
             }
         }
     }
 
-    // Method to clear inventory (call it at the end of the day)
+    // Método para limpiar el inventario
     public void clearInventory() {
         activeOrders.clear();
+    }
+
+    // Método para apagar el scheduler de forma segura si se detiene el bot
+    public void shutdown() {
+        scheduler.shutdownNow();
     }
 }
