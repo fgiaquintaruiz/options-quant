@@ -32,7 +32,8 @@ public class BacktestRunner {
                     new C2TrendCallStrategy(ibkr),
                     new P1SqueezePutStrategy(ibkr),
                     new P2TrendPutStrategy(ibkr),
-                    new C3BounceCallStrategy(ibkr)
+                    new C3BounceCallStrategy(ibkr),
+                    new P3BouncePutStrategy(ibkr)
             );
 
             ForensicEngine auditor = new ForensicEngine(ibkr, strategies);
