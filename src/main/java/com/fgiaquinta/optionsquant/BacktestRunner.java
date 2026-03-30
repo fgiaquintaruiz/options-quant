@@ -12,17 +12,8 @@ import java.util.*;
 public class BacktestRunner {
     static void main(String[] args) {
         try {
-            // Asegurar que la carpeta logs existe
-            File logsDir = new File("logs");
-            if (!logsDir.exists()) logsDir.mkdirs();
-
-            // Mover el archivo a la carpeta logs
-            String fileName = "logs/analisis_forense_optionsquant.txt";
             PrintStream outConsole = System.out;
-            FileOutputStream fos = new FileOutputStream(fileName);
-            PrintStream outFile = new PrintStream(fos);
-
-            System.setOut(new PrintStream(new MultiOutputStream(outConsole, outFile), true, StandardCharsets.UTF_8));
+            System.setOut(new PrintStream(new MultiOutputStream(outConsole), true, StandardCharsets.UTF_8));
 
             System.out.println("INICIANDO BACKTEST ULTRA-RAPIDO (JAVA 25)");
 
@@ -55,7 +46,6 @@ public class BacktestRunner {
                 if (s1h != null) auditor.runFullAudit(ticker, s1h);
             });
 
-            System.out.println("💾 Resumen general de backtest guardado: " + fileName);
             System.out.println("\nTIEMPO TOTAL: " + (System.currentTimeMillis() - start) + "ms");
             System.exit(0);
         } catch (Exception e) { e.printStackTrace(); }
