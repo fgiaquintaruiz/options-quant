@@ -3,6 +3,7 @@ package com.fgiaquinta.optionsquant.engine;
 import com.fgiaquinta.optionsquant.services.IbkrService;
 import com.fgiaquinta.optionsquant.strategies.TradingStrategy;
 import com.fgiaquinta.optionsquant.utils.ForensicLogger;
+import com.fgiaquinta.optionsquant.models.TimeFrame;
 import org.ta4j.core.BarSeries;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2IntMap;
@@ -18,8 +19,10 @@ public class ForensicEngine {
     }
 
     public void runFullAudit(String ticker, BarSeries series1h) {
-        BarSeries series15m = ibkrService.getSeries(ticker + "_15mins");
-        BarSeries spySeries = ibkrService.getSeries("SPY_1hour");
+        // Updated to use the Multi-Timeframe signature
+        BarSeries series15m = ibkrService.getSeries(ticker, TimeFrame.MIN_15);
+        BarSeries spySeries = ibkrService.getSeries("SPY", TimeFrame.HOUR_1);
+
         if (series15m == null || spySeries == null) return;
 
         Long2IntMap index15m = new Long2IntOpenHashMap(series15m.getBarCount());
@@ -32,12 +35,10 @@ public class ForensicEngine {
                 if (strategy.isTriggered(i, series1h, spySeries)) {
                     double entryPrice = series1h.getBar(i).getClosePrice().doubleValue();
 
-                    // Calculamos los niveles usando la logica de la estrategia
                     double tp = strategy.calculateTP(entryPrice);
                     double sl = strategy.calculateSL(entryPrice, ticker);
 
-                    // El logger solo recibe los datos ya procesados
-                    ForensicLogger.logWithFastUtil(strategy.getName(), ticker, series1h.getBar(i), series15m, index15m, tp, sl);
+                    ForensicLogger.log(ticker, series1h, i, strategy.getClass().getSimpleName(), tp, sl);
                 }
             }
         }
