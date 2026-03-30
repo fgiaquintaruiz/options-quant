@@ -1,6 +1,7 @@
 ibkr:
   host: "127.0.0.1"
   port: 7497
+  autoExecute: false
   tickers: ["SPY", "NVDA", "AAPL", "TSLA", "AMD", "MSFT"]
 
 telegram:
@@ -9,48 +10,36 @@ telegram:
   masterKey: "tu_llave_maestra"
 
 strategies:
-  global:
-    quantity: 10
+  global:     
+    quantity: 10.0
     # Estrategias 1: Squeeze (C1 / P1)
-    squeeze:
-      tp: 0.05
-      sl: 0.03
-
+  squeeze:
+    tp: 0.05
+    sl: 0.03
     # Estrategias 2: Trend (C2 / P2)
-    trend:
-      tp: 0.04
-      sl: 0.02
-
-    # Estrategias 3: Bounce (C3 / P3)
-    bounce:
-      tp: 0.04
-      sl: 0.02
-
+  trend:
+    tp: 0.04
+    sl: 0.02
+  # Estrategias 3: Bounce (C3 / P3)
+  bounce:
+    tp: 0.04
+    sl: 0.02
     # Estrategias 4: Opening (C4 / P4)
-    opening:
-      tp: 0.04
-      sl: 0.02
-      bandWidth: 1.2
-      # El Call busca caídas (Gap Down) para rebotar
-      callMinGap: -1.5
-      callMaxGap: -4.0
-      # El Put busca subidas (Gap Up) para corregir
-      putMinGap: 1.5
-      putMaxGap: 4.0
-
-    # Estrategias 5: Continuation (C5 / P5)
-  continuation:
-    tp: 0.035
-    sl: 0.015
-    # Configuración para CALLs
-    callMinGap: 0.4
-    callMaxGap: 1.8
-    callWordenThreshold: 55.0
-    # Configuración para PUTs
-    putMinGap: -0.4      # El gap debe ser menor a este valor (más negativo)
-    putMaxGap: -1.8      # El gap debe ser mayor a este valor (menos negativo)
-    putWordenThreshold: 45.0 # Buscamos que el precio esté en el percentil bajo
   opening:
     tp: 0.04
     sl: 0.02
-    gapThreshold: 1.5
+    bandWidth: 1.2
+    callMinGap: -1.5
+    callMaxGap: -4.0
+    putMinGap: 1.5
+    putMaxGap: 4.0
+    # Estrategias 5: Continuation (C5 / P5)
+  continuation:
+    tp: 0.045
+    sl: 0.025
+    callMinGap: 0.4
+    callMaxGap: 1.8
+    callWordenThreshold: 55.0
+    putMinGap: -0.4
+    putMaxGap: -1.8
+    putWordenThreshold: 45.0

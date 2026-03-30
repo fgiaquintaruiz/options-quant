@@ -1,8 +1,10 @@
 package com.fgiaquinta.optionsquant.engine;
 
 import com.fgiaquinta.optionsquant.services.IbkrService;
+import com.fgiaquinta.optionsquant.services.TelegramService;
 import com.fgiaquinta.optionsquant.strategies.TradingStrategy;
 import com.fgiaquinta.optionsquant.models.TimeFrame;
+import com.fgiaquinta.optionsquant.utils.ConfigLoader;
 import org.ta4j.core.BarSeries;
 import java.util.List;
 import java.util.Set;
@@ -38,22 +40,20 @@ public class StrategyEngine {
         for (TradingStrategy strategy : strategies) {
             if (strategy.isTriggered(lastIdx, series1h, spy)) {
 
-                // 1. Verificamos si ya está activo hoy
-                if (activeOrders.contains(ticker)) {
-                    continue;
-                }
+                double entry = series1h.getBar(lastIdx).getClosePrice().doubleValue();
+                double tp = strategy.calculateTP(entry);
+                double sl = strategy.calculateSL(entry, ticker);
+                int qty = (int) ConfigLoader.getConfig().getParam("global", "quantity");
 
-                double price = series1h.getBar(lastIdx).getClosePrice().doubleValue();
-                double tp = strategy.calculateTP(price);
-                double sl = strategy.calculateSL(price, ticker);
+                // 1. SIEMPRE avisamos a Telegram (el botón ya lleva la info para ejecutar)
+                TelegramService.sendSignalAlert(ticker, strategy.getName(), entry, sl, tp);
 
-                // 2. Intentamos enviar la orden
-                boolean sent = ibkrService.placeOrder(ticker, "BUY", 10, price, tp, sl, strategy.getName());
-
-                // 3. SOLO SI SE ENVIÓ, bloqueamos el ticker para futuras señales
-                if (sent) {
-                    activeOrders.add(ticker);
-                    System.out.println("✅ Orden confirmada y ticker bloqueado por hoy: " + ticker);
+                // 2. SOLO ejecutamos en IBKR si la propiedad está en true
+                if (ConfigLoader.getConfig().ibkr.autoExecute) {
+                    ibkrService.placeOrder(ticker, "BUY", qty, entry, tp, sl, strategy.getName());
+                    System.out.println("🚀 EJECUCIÓN AUTOMÁTICA enviada a IBKR para " + ticker);
+                } else {
+                    System.out.println("📩 SEÑAL DETECTADA: Esperando confirmación manual desde Telegram para " + ticker);
                 }
             }
         }

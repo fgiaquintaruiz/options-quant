@@ -1,16 +1,21 @@
 package com.fgiaquinta.optionsquant.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.List;
 import java.util.Map;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class AppConfig {
     public IbkrConfig ibkr;
     public TelegramConfig telegram;
-    public Map<String, Map<String, Double>> strategies;
+
+    // Usamos Object para capturar cualquier tipo de valor (número o mapa erróneo)
+    public Map<String, Map<String, Object>> strategies;
 
     public static class IbkrConfig {
         public String host;
         public int port;
+        public boolean autoExecute;
         public List<String> tickers;
     }
 
@@ -20,18 +25,21 @@ public class AppConfig {
         public String masterKey;
     }
 
-    /**
-     * Helper para obtener parámetros de estrategias de forma rápida.
-     * Ejemplo: getParam("continuation", "tp")
-     */
     public double getParam(String category, String key) {
         if (strategies == null || !strategies.containsKey(category)) {
-            throw new RuntimeException("Categoría de estrategia no encontrada en config.yaml: " + category);
+            throw new RuntimeException("❌ Categoría '" + category + "' no encontrada en config.yaml");
         }
-        Map<String, Double> categoryParams = strategies.get(category);
-        if (!categoryParams.containsKey(key)) {
-            throw new RuntimeException("Parámetro '" + key + "' no encontrado en la categoría: " + category);
+
+        Object value = strategies.get(category).get(key);
+        if (value == null) {
+            throw new RuntimeException("❌ Parámetro '" + key + "' no encontrado en " + category);
         }
-        return categoryParams.get(key);
+
+        // Conversión segura: acepta tanto 10 como 10.0
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
+
+        throw new RuntimeException("❌ El parámetro '" + key + "' en " + category + " no es un número. Revisa la indentación del YAML.");
     }
 }

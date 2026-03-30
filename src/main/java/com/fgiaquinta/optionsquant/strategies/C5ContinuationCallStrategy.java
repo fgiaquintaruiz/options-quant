@@ -30,7 +30,7 @@ public class C5ContinuationCallStrategy implements TradingStrategy {
         if (gapPct < minGap || gapPct > maxGap) return false;
 
         // REGLA 2: Worden Stochastic (Percentil de fuerza desde config.yaml)
-        double threshold = ConfigLoader.getConfig().getParam(CONTINUATION, "wordenThreshold");
+        double threshold = ConfigLoader.getConfig().getParam(CONTINUATION, "callWordenThreshold");
         double wStoc = WordenAnalyzer.getWordenStochastic(series1h, index, 12, 3);
 
         if (wStoc < threshold) return false;

@@ -173,9 +173,6 @@ public class IbkrService extends DefaultEWrapper {
                 client.placeOrder(o.orderId(), contract, o);
             }
 
-            // Notificar a Telegram (Solo con el TP configurado)
-            TelegramService.sendSignalAlert(ticker, strategyName, entry, sl, tp);
-
             System.out.printf("🎯 OPTION SENT: %dx %s %s Strike %.1f | Exp %s%n", qty, ticker, contract.right(), finalStrike, expiry);
             return true;
         } catch (Exception e) {
