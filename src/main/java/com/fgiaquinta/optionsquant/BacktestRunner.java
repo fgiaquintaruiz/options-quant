@@ -17,7 +17,8 @@ public class BacktestRunner {
 
             System.out.println("INICIANDO BACKTEST ULTRA-RAPIDO (JAVA 25)");
 
-            IbkrService ibkr = new IbkrService();
+            int randomClientId = new java.util.Random().nextInt(99999) + 1;
+            IbkrService ibkr = new IbkrService(randomClientId);
             List<TradingStrategy> strategies = List.of(
                     new C1SqueezeCallStrategy(ibkr),
                     new C2TrendCallStrategy(ibkr),

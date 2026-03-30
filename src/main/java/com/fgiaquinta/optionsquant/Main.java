@@ -25,7 +25,8 @@ public class Main {
         System.setOut(new java.io.PrintStream(System.out, true, StandardCharsets.UTF_8));
         System.out.println("=== MOTOR DE TRADING NATIVO (JAVA 25 + VIRTUAL THREADS) ===");
 
-        IbkrService ibkr = new IbkrService();
+        int randomClientId = new java.util.Random().nextInt(99999) + 1;
+        IbkrService ibkr = new IbkrService(randomClientId);
         List<TradingStrategy> strategies = new ArrayList<>();
         strategies.add(new C1SqueezeCallStrategy(ibkr));
         strategies.add(new C2TrendCallStrategy(ibkr));

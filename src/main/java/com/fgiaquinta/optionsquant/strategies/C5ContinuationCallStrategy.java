@@ -25,7 +25,7 @@ public class C5ContinuationCallStrategy implements TradingStrategy {
 
         // RULE 2: Worden Stochastic Strength (Price is in the upper percentile)
         double wStoc = WordenAnalyzer.getWordenStochastic(series1h, index, 12, 3);
-        if (wStoc < 60) return false;
+        if (wStoc < 55) return false;
 
         // RULE 3: 15m Confirmation (Momentum alignment)
         BarSeries series15m = ibkrService.getSeries(ticker, TimeFrame.MIN_15);
