@@ -19,4 +19,13 @@ public class ContractFactory {
         contract.right(right);
         return contract;
     }
+
+    public static Contract createStockDefinition(String ticker) {
+        Contract contract = new Contract();
+        contract.symbol(ticker);
+        contract.secType("STK");
+        contract.exchange("SMART");
+        contract.currency("USD");
+        return contract;
+    }
 }
