@@ -29,7 +29,7 @@ public class Main {
         List<TradingStrategy> strategies = new ArrayList<>();
         strategies.add(new C1SqueezeCallStrategy(ibkr));
         strategies.add(new C2TrendCallStrategy(ibkr));
-        strategies.add(new P1SqueezePutStrategy());
+        strategies.add(new P1SqueezePutStrategy(ibkr));
         strategies.add(new P2TrendPutStrategy(ibkr));
 
         StrategyEngine liveEngine = new StrategyEngine(ibkr, strategies);

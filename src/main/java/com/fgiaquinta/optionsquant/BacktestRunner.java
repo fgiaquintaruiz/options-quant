@@ -12,12 +12,16 @@ import java.util.*;
 public class BacktestRunner {
     static void main(String[] args) {
         try {
-            String fileName = "analisis_forense_optionsquant.txt";
+            // Asegurar que la carpeta logs existe
+            File logsDir = new File("logs");
+            if (!logsDir.exists()) logsDir.mkdirs();
+
+            // Mover el archivo a la carpeta logs
+            String fileName = "logs/analisis_forense_optionsquant.txt";
             PrintStream outConsole = System.out;
             FileOutputStream fos = new FileOutputStream(fileName);
             PrintStream outFile = new PrintStream(fos);
 
-            // Salida dual: Consola + Archivo
             System.setOut(new PrintStream(new MultiOutputStream(outConsole, outFile), true, StandardCharsets.UTF_8));
 
             System.out.println("INICIANDO BACKTEST ULTRA-RAPIDO (JAVA 25)");
@@ -26,7 +30,7 @@ public class BacktestRunner {
             List<TradingStrategy> strategies = List.of(
                     new C1SqueezeCallStrategy(ibkr),
                     new C2TrendCallStrategy(ibkr),
-                    new P1SqueezePutStrategy(),
+                    new P1SqueezePutStrategy(ibkr),
                     new P2TrendPutStrategy(ibkr)
             );
 

@@ -39,7 +39,7 @@ dependencies {
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2' // Version compatible con Java 25
 
     // 4. PROTOCOLOS E INTERACTIVE BROKERS
-    implementation 'com.google.protobuf:protobuf-java:4.29.3'
+        implementation 'com.google.protobuf:protobuf-java:4.29.3'
     implementation name: 'TwsApi' // Libreria local en /libs
 }
 
