@@ -33,7 +33,10 @@ public class BacktestRunner {
                     new P1SqueezePutStrategy(ibkr),
                     new P2TrendPutStrategy(ibkr),
                     new C3BounceCallStrategy(ibkr),
-                    new P3BouncePutStrategy(ibkr)
+                    new P3BouncePutStrategy(ibkr),
+                    new C4OpeningCallStrategy(ibkr),
+                    new P4OpeningPutStrategy(ibkr),
+                    new P5ContinuationPutStrategy(ibkr)
             );
 
             ForensicEngine auditor = new ForensicEngine(ibkr, strategies);
@@ -52,6 +55,7 @@ public class BacktestRunner {
                 if (s1h != null) auditor.runFullAudit(ticker, s1h);
             });
 
+            System.out.println("💾 Resumen general de backtest guardado: " + fileName);
             System.out.println("\nTIEMPO TOTAL: " + (System.currentTimeMillis() - start) + "ms");
             System.exit(0);
         } catch (Exception e) { e.printStackTrace(); }

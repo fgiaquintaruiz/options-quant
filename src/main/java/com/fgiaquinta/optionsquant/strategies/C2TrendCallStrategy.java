@@ -82,6 +82,6 @@ public class C2TrendCallStrategy implements TradingStrategy {
 
     @Override
     public String getName() {
-        return "C2_TREND_CALL";
+        return "c2_trend_call";
     }
 }

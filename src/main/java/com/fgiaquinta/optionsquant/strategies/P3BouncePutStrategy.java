@@ -91,6 +91,6 @@ public class P3BouncePutStrategy implements TradingStrategy {
 
     @Override
     public String getName() {
-        return "P3_BOUNCE_PUT";
+        return "p3_bounce_put";
     }
 }

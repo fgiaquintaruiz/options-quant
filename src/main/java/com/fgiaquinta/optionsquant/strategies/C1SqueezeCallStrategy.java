@@ -95,6 +95,6 @@ public class C1SqueezeCallStrategy implements TradingStrategy {
 
     @Override
     public String getName() {
-        return "C1_SQUEEZE_CALL";
+        return "c1_squeeze_call";
     }
 }

@@ -41,7 +41,7 @@ public class ForensicEngine {
 
                     // CORRECTED: Call the appropriate method in ForensicLogger
                     ForensicLogger.logWithFastUtil(
-                            strategy.getClass().getSimpleName(),
+                            strategy.getName(),
                             ticker,
                             series1h.getBar(i),
                             series15m,

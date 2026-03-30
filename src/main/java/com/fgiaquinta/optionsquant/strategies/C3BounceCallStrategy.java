@@ -93,6 +93,6 @@ public class C3BounceCallStrategy implements TradingStrategy {
 
     @Override
     public String getName() {
-        return "C3_BOUNCE_CALL";
+        return "c3_bounce_call";
     }
 }

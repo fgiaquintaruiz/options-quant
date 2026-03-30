@@ -87,6 +87,6 @@ public class P1SqueezePutStrategy implements TradingStrategy {
 
     @Override
     public String getName() {
-        return "P1_SQUEEZE_PUT";
+        return "p1_squeeze_put";
     }
 }

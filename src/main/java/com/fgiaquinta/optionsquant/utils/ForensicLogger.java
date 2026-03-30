@@ -55,11 +55,18 @@ public class ForensicLogger {
 
     private static PrintStream getStreamForStrategy(String strategy) {
         return fileMap.computeIfAbsent(strategy, name -> {
+            // Formato: reports/c1_squeeze_call.txt
+            String fileName = "reports/" + name.toLowerCase() + ".txt";
             try {
                 File dir = new File("reports");
-                if (!dir.exists()) dir.mkdir();
-                return new PrintStream(new FileOutputStream("reports/" + name + ".txt", true), true, StandardCharsets.UTF_8);
-            } catch (Exception e) { return System.out; }
+                if (!dir.exists()) dir.mkdirs();
+
+                PrintStream ps = new PrintStream(new FileOutputStream(fileName, true), true, StandardCharsets.UTF_8);
+                System.out.println("💾 Reporte de estrategia guardado: " + fileName);
+                return ps;
+            } catch (Exception e) {
+                return System.out;
+            }
         });
     }
 

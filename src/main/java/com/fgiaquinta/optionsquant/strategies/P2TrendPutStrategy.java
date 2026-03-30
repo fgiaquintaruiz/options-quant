@@ -82,6 +82,6 @@ public class P2TrendPutStrategy implements TradingStrategy {
 
     @Override
     public String getName() {
-        return "P2_TREND_PUT";
+        return "p2_trend_put";
     }
 }

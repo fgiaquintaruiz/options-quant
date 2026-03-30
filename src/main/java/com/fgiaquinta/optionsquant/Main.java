@@ -33,6 +33,9 @@ public class Main {
         strategies.add(new P2TrendPutStrategy(ibkr));
         strategies.add(new C3BounceCallStrategy(ibkr));
         strategies.add(new P3BouncePutStrategy(ibkr));
+        strategies.add(new C4OpeningCallStrategy(ibkr));
+        strategies.add(new P4OpeningPutStrategy(ibkr));
+        strategies.add(new P5ContinuationPutStrategy(ibkr));
 
         StrategyEngine liveEngine = new StrategyEngine(ibkr, strategies);
         ibkr.setStrategyEngine(liveEngine);
