@@ -1,7 +1,7 @@
 package com.fgiaquinta.optionsquant.services;
 
 import com.ib.client.*;
-import com.fgiaquinta.optionsquant.engine.AccountManager;
+import com.fgiaquinta.optionsquant.engine.*;
 import com.fgiaquinta.optionsquant.factories.ContractFactory;
 import com.fgiaquinta.optionsquant.factories.OrderFactory;
 import com.fgiaquinta.optionsquant.engine.StrategyEngine;
@@ -46,12 +46,20 @@ public class IbkrService extends DefaultEWrapper {
     private final Map<String, String> execIdToTicker = new ConcurrentHashMap<>();
 
     private StrategyEngine strategyEngine;
+    private AiNewsInterpreter newsInterpreter;
+    private MarketRadar marketRadar;
 
     // --- CORRECTED CONSTRUCTOR ---
+    @SuppressWarnings("this-escape")
     public IbkrService(AccountManager accountManager) {
         this.accountManager = accountManager;
         this.signal = new EJavaSignal();
         this.client = new EClientSocket(this, signal);
+    }
+
+    public void setNewsRouting(AiNewsInterpreter newsInterpreter, MarketRadar marketRadar) {
+        this.newsInterpreter = newsInterpreter;
+        this.marketRadar = marketRadar;
     }
 
     // --- CONNECTION ---
@@ -219,25 +227,44 @@ public class IbkrService extends DefaultEWrapper {
         }
     }
 
+    // --- UPDATED ERROR METHOD TO MATCH YOUR DECOMPILED LIBRARY ---
     @Override
-    public void error(int id, int errorCode, String errorMsg, String advancedOrderRejectJson) {
-        // Auto-Retry logic for Post-Only limits
+    public void error(int id, long errorCodeLong, int errorCode, String errorMsg, String advancedOrderRejectJson) {
+        // 1. Handle Post-Only Rejections (Maker-fee optimization)
         if (errorMsg != null && errorMsg.toLowerCase().contains("post only")) {
             int count = retryCount.getOrDefault(id, 0);
+
             if (count < 3) {
                 retryCount.put(id, count + 1);
                 Order o = activeOrders.get(id);
                 Contract c = activeContracts.get(id);
 
                 if (o != null && c != null) {
-                    double adj = o.action().equals("BUY") ? -0.01 : 0.01;
-                    o.lmtPrice(o.lmtPrice() + adj);
-                    System.out.println("Retry PostOnly #" + (count + 1) + " for " + c.symbol());
+                    // Logic: If buying, we bid 0.01 higher. If selling, we ask 0.01 lower.
+                    double adj = o.action().equals("BUY") ? 0.01 : -0.01;
+                    double newPrice = o.lmtPrice() + adj;
+                    o.lmtPrice(newPrice);
+
+                    System.out.printf("⚠️ Post-Only Retry #%d for %s. Adjusting price to: %.2f%n",
+                            (count + 1), c.symbol(), newPrice);
+
                     client.placeOrder(id, c, o);
                 }
             } else {
-                TelegramService.sendSimpleMessage("PostOnly failed after 3 retries for Order ID " + id);
+                TelegramService.sendSimpleMessage("❌ Post-Only failed after 3 retries for " + id + ": " + errorMsg);
+                retryCount.remove(id); // Clean up counter
             }
+            return; // Exit to avoid double-logging the error
+        }
+
+        // 2. Handle System / Connectivity Errors
+        // Error codes like 2104, 2106, 2158 are just "Connectivity OK" status messages
+        List<Integer> silenceCodes = List.of(2104, 2106, 2158, 2107);
+        if (silenceCodes.contains(errorCode)) return;
+
+        // 3. Log actual trading errors
+        if (id != -1) {
+            System.err.println("❌ IBKR Error [" + id + "] Code: " + errorCode + " | " + errorMsg);
         }
     }
 
@@ -250,7 +277,7 @@ public class IbkrService extends DefaultEWrapper {
     }
 
     @Override
-    public void commissionReport(CommissionReport report) {
+    public void commissionAndFeesReport(CommissionAndFeesReport report) {
         ExecutionDetails details = pendingReports.remove(report.execId());
         if (details != null) {
             accountManager.removeActiveTrade(); // Free up a concurrency slot
@@ -259,10 +286,42 @@ public class IbkrService extends DefaultEWrapper {
                     details.ref(),
                     details.price(),
                     report.realizedPNL(),
-                    report.commission()
+                    report.commissionAndFees()
             );
         }
     }
 
     private record ExecutionDetails(String ticker, String ref, double price) {}
+
+    @Override
+    public void historicalNews(int requestId, String time, String providerCode, String articleId, String headline) {
+        System.out.println("📰 Live News Received [" + providerCode + "]: " + headline);
+
+        if (newsInterpreter != null && marketRadar != null) {
+            // Spin up a virtual thread so the AI HTTP request doesn't block IBKR price ticks
+            Thread.ofVirtual().start(() -> {
+                try {
+                    com.fgiaquinta.optionsquant.models.AnalysisResult result = newsInterpreter.analyzeHeadline(headline);
+
+                    if (result != null && "BULLISH".equalsIgnoreCase(result.bias)) {
+                        for (String ticker : result.tickers) {
+                            marketRadar.addHotTicker(ticker);
+
+                            // Optional: Automatically start tracking data for the newly discovered ticker
+                            // startMarketDataTracking(ticker);
+                        }
+                    }
+                } catch (Exception e) {
+                    System.err.println("❌ Failed to process live news via AI: " + e.getMessage());
+                }
+            });
+        }
+    }
+
+    public void disconnect() {
+        if (client != null && client.isConnected()) {
+            client.eDisconnect();
+            System.out.println("🔌 Disconnected from IBKR Gateway.");
+        }
+    }
 }

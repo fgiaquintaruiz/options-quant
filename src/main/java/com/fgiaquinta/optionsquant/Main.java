@@ -9,11 +9,51 @@ import java.util.Arrays;
 import java.util.List;
 
 public class Main {
-    public static void main(String[] args) {
+    static void main(String[] args) {
+        System.setOut(new java.io.PrintStream(System.out, true, java.nio.charset.StandardCharsets.UTF_8));
         System.out.println("🚀 Starting Hybrid Quant Trading Engine...");
 
         // 1. Load Configuration
         ConfigLoader.getConfig();
+
+        // ==========================================
+        // 🧪 AI PIPELINE TEST BLOCK
+        // ==========================================
+        System.out.println("🧪 Running AI Pipeline Diagnostics...");
+
+        if (ConfigLoader.getConfig().ai.enabled) {
+
+            // Test 1: News Interpretation
+            System.out.println("\n--- Testing AiNewsInterpreter ---");
+            AiNewsInterpreter testInterpreter = new AiNewsInterpreter();
+            String fakeHeadline = "Nvidia shatters earnings expectations with massive demand for new Blackwell AI chips.";
+            System.out.println("Headline: " + fakeHeadline);
+
+            com.fgiaquinta.optionsquant.models.AnalysisResult newsResult = testInterpreter.analyzeHeadline(fakeHeadline);
+            if (newsResult != null) {
+                System.out.println("✅ AI Response: " + newsResult);
+            } else {
+                System.err.println("❌ AI News Interpreter failed to return a result.");
+            }
+
+            // Test 2: Strategy Optimization
+            System.out.println("\n--- Testing AiStrategyOptimizer ---");
+            AiStrategyOptimizer testOptimizer = new AiStrategyOptimizer();
+            String fakeBacktestMetrics = "{\"ticker\": \"NVDA\", \"strategy\": \"C5_CONTINUATION\", \"totalTrades\": 10, \"winRate\": 0.30, \"totalProfitPct\": -0.05, \"maxDrawdown\": 0.08}";
+            System.out.println("Metrics fed to AI: " + fakeBacktestMetrics);
+
+            com.fgiaquinta.optionsquant.models.OptimizationResult optResult = testOptimizer.analyzeBacktest(fakeBacktestMetrics);
+            if (optResult != null) {
+                System.out.println("✅ AI Recommendation: " + optResult);
+            } else {
+                System.err.println("❌ AI Strategy Optimizer failed to return a result.");
+            }
+
+            System.out.println("==========================================\n");
+        } else {
+            System.out.println("⚠️ AI is disabled in config.yaml. Skipping tests.");
+        }
+        // ==========================================
 
         // 2. Initialize Core Modules (Dependency Injection)
         AccountManager accountManager = new AccountManager();
@@ -23,6 +63,9 @@ public class Main {
         // 3. Initialize Tactical Managers
         TradeManager tradeManager = new TradeManager(ibkrService, marketRadar, accountManager);
         AiNewsInterpreter aiNewsInterpreter = new AiNewsInterpreter();
+
+        // 🔌 Wire the AI News Interpreter and Radar into the IBKR data stream
+        ibkrService.setNewsRouting(aiNewsInterpreter, marketRadar);
 
         // 4. Initialize Strategies and Strategy Engine
         List<TradingStrategy> strategies = Arrays.asList(
@@ -39,6 +82,7 @@ public class Main {
         );
 
         StrategyEngine strategyEngine = new StrategyEngine(ibkrService, strategies, tradeManager);
+        strategyEngine.startMaintenanceScheduler();
 
         // Wire the engine to the IBKR Service so historicalDataEnd triggers onBarAdded
         ibkrService.setStrategyEngine(strategyEngine);
@@ -59,6 +103,14 @@ public class Main {
             ibkrService.startMarketDataTracking(ticker);
         }
 
-        System.out.println("✅ System Online and waiting for market events.");
+        // 8. Add Graceful Shutdown Hook
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("\n🛑 Shutting down engine...");
+            strategyEngine.shutdown();
+            ibkrService.disconnect(); // Ensure you have a disconnect method in IbkrService
+            System.out.println("👋 Shutdown complete. All threads closed.");
+        }));
+
+        System.out.println("🚀 System Online and waiting for market events.");
     }
 }

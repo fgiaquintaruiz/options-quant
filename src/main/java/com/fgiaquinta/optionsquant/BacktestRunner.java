@@ -1,24 +1,42 @@
 package com.fgiaquinta.optionsquant;
 
+import com.fgiaquinta.optionsquant.engine.AccountManager;
 import com.fgiaquinta.optionsquant.engine.ForensicEngine;
 import com.fgiaquinta.optionsquant.services.IbkrService;
 import com.fgiaquinta.optionsquant.strategies.*;
 import com.fgiaquinta.optionsquant.models.TimeFrame;
+import com.fgiaquinta.optionsquant.utils.ConfigLoader;
 import org.ta4j.core.BarSeries;
+
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class BacktestRunner {
     static void main(String[] args) {
+        System.setOut(new java.io.PrintStream(System.out, true, java.nio.charset.StandardCharsets.UTF_8));
         try {
             PrintStream outConsole = System.out;
             System.setOut(new PrintStream(new MultiOutputStream(outConsole), true, StandardCharsets.UTF_8));
 
-            System.out.println("INICIANDO BACKTEST ULTRA-RAPIDO (JAVA 25)");
+            System.out.println("🚀 STARTING ULTRA-FAST BACKTEST (JAVA 25)");
 
+            // 1. Load Configuration
+            ConfigLoader.getConfig();
+
+            // 2. Initialize Core Modules to satisfy SRP architecture
+            AccountManager accountManager = new AccountManager();
+            IbkrService ibkr = new IbkrService(accountManager);
+
+            // 3. Connect to IBKR with a random client ID to avoid conflicts with Main.java
             int randomClientId = new java.util.Random().nextInt(99999) + 1;
-            IbkrService ibkr = new IbkrService(randomClientId);
+            ibkr.connect(
+                    ConfigLoader.getConfig().ibkr.host,
+                    ConfigLoader.getConfig().ibkr.port,
+                    randomClientId
+            );
+
+            // 4. Initialize Strategies
             List<TradingStrategy> strategies = List.of(
                     new C1SqueezeCallStrategy(ibkr),
                     new C2TrendCallStrategy(ibkr),
@@ -37,19 +55,22 @@ public class BacktestRunner {
             String[] tickers = {"SPY", "NVDA", "AAPL", "TSLA", "AMD", "MSFT"};
             for (String t : tickers) ibkr.startMarketDataTracking(t);
 
-            Thread.sleep(2000); // Espera para carga de CSV
+            Thread.sleep(2000); // Wait for CSV data loading
 
             long start = System.currentTimeMillis();
+
             Arrays.stream(tickers).parallel().filter(t -> !t.equals("SPY")).forEach(ticker -> {
-                // AQUÍ ESTÁ LA CORRECCIÓN: Usamos el Enum TimeFrame.HOUR_1
+                // We use the TimeFrame.HOUR_1 Enum
                 BarSeries s1h = ibkr.getSeries(ticker, TimeFrame.HOUR_1);
 
                 if (s1h != null) auditor.runFullAudit(ticker, s1h);
             });
 
-            System.out.println("\nTIEMPO TOTAL: " + (System.currentTimeMillis() - start) + "ms");
+            System.out.println("\nTOTAL TIME: " + (System.currentTimeMillis() - start) + "ms");
             System.exit(0);
-        } catch (Exception e) { e.printStackTrace(); }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private static class MultiOutputStream extends OutputStream {

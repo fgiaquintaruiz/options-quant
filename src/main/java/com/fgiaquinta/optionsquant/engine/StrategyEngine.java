@@ -24,12 +24,6 @@ public class StrategyEngine {
         this.ibkrService = ibkr;
         this.strategies = strategies;
         this.tradeManager = tradeManager;
-
-        // Auto-maintenance: Clear inventory every 24 hours for the new trading day
-        scheduler.scheduleAtFixedRate(() -> {
-            clearInventory();
-            System.out.println("🧹 [MAINTENANCE] Daily inventory cleared. Ready for the next session.");
-        }, 12, 24, TimeUnit.HOURS);
     }
 
     public void onBarAdded(String ticker, BarSeries series1h) {
@@ -59,5 +53,12 @@ public class StrategyEngine {
 
     public void shutdown() {
         scheduler.shutdownNow();
+    }
+
+    public void startMaintenanceScheduler() {
+        scheduler.scheduleAtFixedRate(() -> {
+            clearInventory();
+            System.out.println("🧹 [MAINTENANCE] Daily inventory cleared.");
+        }, 12, 24, TimeUnit.HOURS);
     }
 }
