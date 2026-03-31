@@ -2,6 +2,7 @@ ibkr:
   host: "127.0.0.1"
   port: 7497
   accountId: "DUN598126"
+  syncTimeout: 30
   autoExecute: false
   postOnly: true
   tickers: ["SPY", "QQQ"]

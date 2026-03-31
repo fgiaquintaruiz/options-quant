@@ -7,7 +7,8 @@ ibkr:
   host: "127.0.0.1"
   port: 7497              # 7497 for Paper Trading (TWS/Gateway), 7496 for Live
   accountId: "DU1234567"  # Replace with your actual IBKR account ID (DU... for paper)
-
+  syncTimeout: 30
+  
   # Execution Modes
   autoExecute: false      # FALSE: Sends Telegram button. TRUE: Fully autonomous execution
   postOnly: true          # TRUE: Uses limit orders to earn maker fees. FALSE: Aggressive market/limit

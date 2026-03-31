@@ -5,121 +5,97 @@ import com.fgiaquinta.optionsquant.services.IbkrService;
 import com.fgiaquinta.optionsquant.services.TelegramService;
 import com.fgiaquinta.optionsquant.utils.ConfigLoader;
 import com.fgiaquinta.optionsquant.strategies.*;
+import com.fgiaquinta.optionsquant.utils.LogManager;
+import com.fgiaquinta.optionsquant.utils.TunnelManager;
+import com.sun.net.httpserver.HttpServer;
 
-import java.util.Arrays;
-import java.util.List;
+import java.net.InetSocketAddress;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class Main {
-    static void main(String[] args) {
-        System.setOut(new java.io.PrintStream(System.out, true, java.nio.charset.StandardCharsets.UTF_8) {
-            @Override
-            public void println(String x) {
-                String timestamp = java.time.LocalDateTime.now()
-                        .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-                super.println("[" + timestamp + "] " + x);
-            }
-        });
-        TelegramService.sendSimpleMessage("🚀 Quant Engine Connection Test: OK");
-        System.out.println("🚀 Starting Hybrid Quant Trading Engine...");
+    private static final TunnelManager tunnelManager = new TunnelManager();
+    private static HttpServer httpServer;
 
-        // 1. Load Configuration
+    public static void main(String[] args) {
+        LogManager.initialize();
+        tunnelManager.start("http://localhost:8080");
+
+        System.out.println("🚀 Starting Hybrid Quant Trading Engine...");
         ConfigLoader.getConfig();
 
-        // ==========================================
-        // 🧪 AI PIPELINE TEST BLOCK
-        // ==========================================
-        System.out.println("🧪 Running AI Pipeline Diagnostics...");
-
-        if (ConfigLoader.getConfig().ai.enabled) {
-
-            // Test 1: News Interpretation
-            System.out.println("\n--- Testing AiNewsInterpreter ---");
-            AiNewsInterpreter testInterpreter = new AiNewsInterpreter();
-            String fakeHeadline = "Nvidia shatters earnings expectations with massive demand for new Blackwell AI chips.";
-            System.out.println("Headline: " + fakeHeadline);
-
-            com.fgiaquinta.optionsquant.models.AnalysisResult newsResult = testInterpreter.analyzeHeadline(fakeHeadline);
-            if (newsResult != null) {
-                System.out.println("✅ AI Response: " + newsResult);
-            } else {
-                System.err.println("❌ AI News Interpreter failed to return a result.");
-            }
-
-            // Test 2: Strategy Optimization
-            System.out.println("\n--- Testing AiStrategyOptimizer ---");
-            AiStrategyOptimizer testOptimizer = new AiStrategyOptimizer();
-            String fakeBacktestMetrics = "{\"ticker\": \"NVDA\", \"strategy\": \"C5_CONTINUATION\", \"totalTrades\": 10, \"winRate\": 0.30, \"totalProfitPct\": -0.05, \"maxDrawdown\": 0.08}";
-            System.out.println("Metrics fed to AI: " + fakeBacktestMetrics);
-
-            com.fgiaquinta.optionsquant.models.OptimizationResult optResult = testOptimizer.analyzeBacktest(fakeBacktestMetrics);
-            if (optResult != null) {
-                System.out.println("✅ AI Recommendation: " + optResult);
-            } else {
-                System.err.println("❌ AI Strategy Optimizer failed to return a result.");
-            }
-
-            System.out.println("==========================================\n");
-        } else {
-            System.out.println("⚠️ AI is disabled in config.yaml. Skipping tests.");
-        }
-        // ==========================================
-
-        // 2. Initialize Core Modules (Dependency Injection)
         AccountManager accountManager = new AccountManager();
         IbkrService ibkrService = new IbkrService(accountManager);
         MarketRadar marketRadar = new MarketRadar();
-
-        // 3. Initialize Tactical Managers
         TradeManager tradeManager = new TradeManager(ibkrService, marketRadar, accountManager);
-        AiNewsInterpreter aiNewsInterpreter = new AiNewsInterpreter();
 
-        // 🔌 Wire the AI News Interpreter and Radar into the IBKR data stream
-        ibkrService.setNewsRouting(aiNewsInterpreter, marketRadar);
+        startHttpServer(ibkrService);
 
-        // 4. Initialize Strategies and Strategy Engine
         List<TradingStrategy> strategies = Arrays.asList(
-                new C1SqueezeCallStrategy(ibkrService),
-                new C2TrendCallStrategy(ibkrService),
-                new C3BounceCallStrategy(ibkrService),
-                new C4OpeningCallStrategy(ibkrService),
-                new C5ContinuationCallStrategy(ibkrService),
-                new P1SqueezePutStrategy(ibkrService),
-                new P2TrendPutStrategy(ibkrService),
-                new P3BouncePutStrategy(ibkrService),
-                new P4OpeningPutStrategy(ibkrService),
-                new P5ContinuationPutStrategy(ibkrService)
+                new C1SqueezeCallStrategy(ibkrService), new C2TrendCallStrategy(ibkrService),
+                new P1SqueezePutStrategy(ibkrService), new P2TrendPutStrategy(ibkrService)
         );
 
         StrategyEngine strategyEngine = new StrategyEngine(ibkrService, strategies, tradeManager);
-        strategyEngine.startMaintenanceScheduler();
-
-        // Wire the engine to the IBKR Service so historicalDataEnd triggers onBarAdded
         ibkrService.setStrategyEngine(strategyEngine);
 
-        // 5. Connect to IBKR Gateway/TWS
-        ibkrService.connect(
-                ConfigLoader.getConfig().ibkr.host,
-                ConfigLoader.getConfig().ibkr.port,
-                1 // Client ID
-        );
+        // 1. Connect
+        ibkrService.connect(ConfigLoader.getConfig().ibkr.host, ConfigLoader.getConfig().ibkr.port, 1);
 
-        // 6. Start Account Sync (Using the dynamic account ID from config)
-        ibkrService.startAccountSync(ConfigLoader.getConfig().ibkr.accountId);
+        // 2. Wait for API Handshake
+        try {
+            if (!ibkrService.awaitConnection(10)) {
+                System.err.println("❌ IBKR Handshake failed. Shutting down.");
+                System.exit(1);
+            }
+        } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
 
-        // 7. Request base market data and news subscriptions
+        // 3. Request Metadata and Wait for Sync
+        List<String> tickers = ConfigLoader.getConfig().ibkr.tickers;
+        ibkrService.prepareInitialization(tickers.size());
+        ibkrService.requestInitialMetadata(tickers);
         ibkrService.subscribeToNewsProviders();
-        for (String ticker : ConfigLoader.getConfig().ibkr.tickers) {
+
+        try {
+            int timeout = ConfigLoader.getConfig().ibkr.syncTimeout;
+            ibkrService.awaitInitialization(timeout);
+        } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
+        // 4. Start Live Tracking
+        for (String ticker : tickers) {
             ibkrService.startMarketDataTracking(ticker);
         }
 
-        // 8. Add Graceful Shutdown Hook
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("\n🛑 Shutting down engine...");
+            System.out.println("\n🛑 Emergency Stop Initiated...");
+            if (httpServer != null) httpServer.stop(0);
+            tunnelManager.shutdown();
             strategyEngine.shutdown();
-            ibkrService.disconnect(); // Ensure you have a disconnect method in IbkrService
-            System.out.println("👋 Shutdown complete. All threads closed.");
+            ibkrService.disconnect();
         }));
 
         System.out.println("🚀 System Online and waiting for market events.");
+    }
+
+    private static void startHttpServer(IbkrService ibkr) {
+        try {
+            httpServer = HttpServer.create(new InetSocketAddress(8080), 0);
+            httpServer.createContext("/execute", exchange -> {
+                Map<String, String> params = Arrays.stream(exchange.getRequestURI().getQuery().split("&"))
+                        .map(s -> s.split("="))
+                        .collect(Collectors.toMap(a -> a[0], a -> a[1]));
+
+                ibkr.placeOrder(params.get("ticker"), params.get("side"),
+                        Integer.parseInt(params.get("qty")), Double.parseDouble(params.get("lmt")),
+                        Double.parseDouble(params.get("tp")), Double.parseDouble(params.get("sl")), "Telegram-Manual");
+
+                String response = "Order Sent to IBKR!";
+                exchange.sendResponseHeaders(200, response.length());
+                exchange.getResponseBody().write(response.getBytes());
+                exchange.close();
+            });
+            httpServer.start();
+            System.out.println("🌐 Web Callback Server started on port 8080.");
+        } catch (Exception e) { System.err.println("❌ Web Server Error: " + e.getMessage()); }
     }
 }

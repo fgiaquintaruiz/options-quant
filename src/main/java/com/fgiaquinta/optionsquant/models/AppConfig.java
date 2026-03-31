@@ -20,7 +20,8 @@ public class AppConfig {
         public boolean autoExecute;
         public boolean postOnly;
         public List<String> tickers;
-        public String accountId; // <-- ADDED THIS TO FIX THE ERROR
+        public String accountId;
+        public int syncTimeout = 30;// <-- ADDED THIS TO FIX THE ERROR
     }
 
     public static class TelegramConfig {
