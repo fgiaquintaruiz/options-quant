@@ -47,4 +47,4 @@ data/*.csv
 logs/*.txt
 
 # Sensitive Config
-.env
+config.yaml

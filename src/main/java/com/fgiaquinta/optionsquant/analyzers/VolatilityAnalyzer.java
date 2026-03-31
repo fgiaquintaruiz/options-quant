@@ -1,6 +1,7 @@
 package com.fgiaquinta.optionsquant.analyzers;
 
 import org.ta4j.core.BarSeries;
+import org.ta4j.core.indicators.ATRIndicator;
 import org.ta4j.core.num.Num; // IMPORTANTE: Importar la interfaz Num
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.bollinger.BollingerBandsLowerIndicator;
@@ -38,5 +39,10 @@ public class VolatilityAnalyzer {
         if (middle == 0) return 0;
 
         return ((upper - lower) / middle) * 100.0;
+    }
+    
+    public static double calculateATR(BarSeries series, int period) {
+        if (series.getBarCount() < period) return 0.0;
+        return new ATRIndicator(series, period).getValue(series.getEndIndex()).doubleValue();
     }
 }

@@ -7,16 +7,20 @@ import java.util.Map;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class AppConfig {
     public IbkrConfig ibkr;
+    public RiskConfig risk;
     public TelegramConfig telegram;
+    public AiConfig ai; // Added so the bot can read the Gemini API Key
 
-    // Usamos Object para capturar cualquier tipo de valor (número o mapa erróneo)
+    // We use Object to capture any type of value
     public Map<String, Map<String, Object>> strategies;
 
     public static class IbkrConfig {
         public String host;
         public int port;
         public boolean autoExecute;
+        public boolean postOnly;
         public List<String> tickers;
+        public String accountId; // <-- ADDED THIS TO FIX THE ERROR
     }
 
     public static class TelegramConfig {
@@ -25,21 +29,31 @@ public class AppConfig {
         public String masterKey;
     }
 
+    public static class AiConfig {
+        public String geminiApiKey;
+        public boolean enabled;
+    }
+
+    public static class RiskConfig {
+        public double riskPerTradePct;
+        public int maxConcurrentTrades;
+    }
+
     public double getParam(String category, String key) {
         if (strategies == null || !strategies.containsKey(category)) {
-            throw new RuntimeException("❌ Categoría '" + category + "' no encontrada en config.yaml");
+            throw new RuntimeException("❌ Category '" + category + "' not found in config.yaml");
         }
 
         Object value = strategies.get(category).get(key);
         if (value == null) {
-            throw new RuntimeException("❌ Parámetro '" + key + "' no encontrado en " + category);
+            throw new RuntimeException("❌ Parameter '" + key + "' not found in " + category);
         }
 
-        // Conversión segura: acepta tanto 10 como 10.0
+        // Safe conversion
         if (value instanceof Number) {
             return ((Number) value).doubleValue();
         }
 
-        throw new RuntimeException("❌ El parámetro '" + key + "' en " + category + " no es un número. Revisa la indentación del YAML.");
+        throw new RuntimeException("❌ Parameter '" + key + "' in " + category + " is not a number. Check YAML indentation.");
     }
 }

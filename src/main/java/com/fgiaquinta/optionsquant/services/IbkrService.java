@@ -1,6 +1,7 @@
 package com.fgiaquinta.optionsquant.services;
 
 import com.ib.client.*;
+import com.fgiaquinta.optionsquant.engine.AccountManager;
 import com.fgiaquinta.optionsquant.factories.ContractFactory;
 import com.fgiaquinta.optionsquant.factories.OrderFactory;
 import com.fgiaquinta.optionsquant.engine.StrategyEngine;
@@ -24,10 +25,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class IbkrService extends DefaultEWrapper {
     private final EClientSocket client;
     private final EJavaSignal signal;
+    private final AccountManager accountManager;
+    private final Map<Integer, Order> activeOrders = new ConcurrentHashMap<>();
+    private final Map<Integer, Contract> activeContracts = new ConcurrentHashMap<>();
+    private final Map<Integer, Integer> retryCount = new ConcurrentHashMap<>();
+    private final Map<String, ExecutionDetails> pendingReports = new ConcurrentHashMap<>();
 
-    // DOBLE CONTADOR PARA EVITAR CONFLICTOS
-    private final AtomicInteger nextId = new AtomicInteger(1000); // Para peticiones de datos
-    private final AtomicInteger nextOrderId = new AtomicInteger(0); // Para órdenes (sincronizado por TWS)
+    // DOUBLE COUNTERS TO AVOID CONFLICTS
+    private final AtomicInteger nextId = new AtomicInteger(1000); // For data requests
+    private final AtomicInteger nextOrderId = new AtomicInteger(0); // For orders (synced by TWS)
 
     private final CountDownLatch initialSync = new CountDownLatch(1);
     private final Map<Integer, MarketRequest> activeRequests = new ConcurrentHashMap<>();
@@ -41,24 +47,52 @@ public class IbkrService extends DefaultEWrapper {
 
     private StrategyEngine strategyEngine;
 
-    public IbkrService(int clientId) {
+    // --- CORRECTED CONSTRUCTOR ---
+    public IbkrService(AccountManager accountManager) {
+        this.accountManager = accountManager;
         this.signal = new EJavaSignal();
         this.client = new EClientSocket(this, signal);
-        client.eConnect("127.0.0.1", 7497, clientId);
+    }
+
+    // --- CONNECTION ---
+    public void connect(String host, int port, int clientId) {
+        client.eConnect(host, port, clientId);
 
         Thread.ofVirtual().start(() -> {
             final EReader reader = new EReader(client, signal);
             reader.start();
             while (client.isConnected()) {
                 signal.waitForSignal();
-                try { reader.processMsgs(); } catch (Exception e) { e.printStackTrace(); }
+                try {
+                    reader.processMsgs();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
         });
     }
 
+    // --- ACCOUNT SYNCHRONIZATION ---
+    public void startAccountSync(String accountId) {
+        accountManager.setAccountId(accountId);
+        client.reqAccountUpdates(true, accountId);
+        System.out.println("🔄 Subscribed to live account updates for: " + accountId);
+    }
+
+    // --- NEWS SUBSCRIPTION ---
+    public void subscribeToNewsProviders() {
+        client.reqNewsProviders();
+        System.out.println("📰 Requested News Providers list from IBKR");
+    }
+
+    @Override
+    public void updateAccountValue(String key, String value, String currency, String accountName) {
+        accountManager.updateBalance(key, value, accountName);
+    }
+
     @Override
     public void nextValidId(int orderId) {
-        nextOrderId.set(orderId); // Sincronizamos el contador de órdenes oficial
+        nextOrderId.set(orderId); // Sync the official order counter
         initialSync.countDown();
         System.out.println("🆔 Sincronizado OrderID inicial: " + orderId);
     }
@@ -151,24 +185,28 @@ public class IbkrService extends DefaultEWrapper {
 
             if (subConId == null || expiry == null || validStrikes == null) return false;
 
-            // Encontrar el strike más cercano
+            // Find the closest strike
             double finalStrike = validStrikes.stream()
                     .min(Comparator.comparingDouble(s -> Math.abs(s - entry))).get();
 
             boolean isCall = strategyName.contains("CALL");
             Contract contract = ContractFactory.createOptionContract(ticker, expiry, finalStrike, isCall ? "C" : "P");
 
-            // IDs para la orden Bracket (Parent, TP y SL)
+            // IDs for the Bracket order (Parent, TP, SL)
             int pId = nextOrderId.getAndIncrement();
             int tpId = nextOrderId.getAndIncrement();
             int slId = nextOrderId.getAndIncrement();
 
-            // Crear la estructura de la orden
+            // Create the order structure
             List<Order> bracket = OrderFactory.createOptionBracket(
                     pId, tpId, slId, qty, subConId, tickerToPrimaryExch.get(ticker), entry, tp, sl, isCall
             );
 
-            // Enviar las órdenes a IBKR
+            // Save active orders/contracts to memory before sending, required for the Auto-Retry logic
+            activeOrders.put(pId, bracket.get(0));
+            activeContracts.put(pId, contract);
+
+            // Send orders to IBKR
             for (Order o : bracket) {
                 client.placeOrder(o.orderId(), contract, o);
             }
@@ -182,9 +220,49 @@ public class IbkrService extends DefaultEWrapper {
     }
 
     @Override
-    public void error(int id, long time, int errorCode, String errorMsg, String advancedOrderRejectJson) {
-        // SILENCIAR AVISOS INFORMATIVOS (Incluyendo el 399 de mercado cerrado)
-        if (errorCode >= 2000 || errorCode == 399 || errorCode == 2104 || errorCode == 2106) return;
-        System.err.println("⚠️ [IBKR " + errorCode + "] " + errorMsg);
+    public void error(int id, int errorCode, String errorMsg, String advancedOrderRejectJson) {
+        // Auto-Retry logic for Post-Only limits
+        if (errorMsg != null && errorMsg.toLowerCase().contains("post only")) {
+            int count = retryCount.getOrDefault(id, 0);
+            if (count < 3) {
+                retryCount.put(id, count + 1);
+                Order o = activeOrders.get(id);
+                Contract c = activeContracts.get(id);
+
+                if (o != null && c != null) {
+                    double adj = o.action().equals("BUY") ? -0.01 : 0.01;
+                    o.lmtPrice(o.lmtPrice() + adj);
+                    System.out.println("Retry PostOnly #" + (count + 1) + " for " + c.symbol());
+                    client.placeOrder(id, c, o);
+                }
+            } else {
+                TelegramService.sendSimpleMessage("PostOnly failed after 3 retries for Order ID " + id);
+            }
+        }
     }
+
+    @Override
+    public void execDetails(int reqId, Contract contract, Execution execution) {
+        String ref = execution.orderRef();
+        if (ref != null && (ref.contains("TP") || ref.contains("SL"))) {
+            pendingReports.put(execution.execId(), new ExecutionDetails(contract.symbol(), ref, execution.price()));
+        }
+    }
+
+    @Override
+    public void commissionReport(CommissionReport report) {
+        ExecutionDetails details = pendingReports.remove(report.execId());
+        if (details != null) {
+            accountManager.removeActiveTrade(); // Free up a concurrency slot
+            TelegramService.sendTradeClosedAlert(
+                    details.ticker(),
+                    details.ref(),
+                    details.price(),
+                    report.realizedPNL(),
+                    report.commission()
+            );
+        }
+    }
+
+    private record ExecutionDetails(String ticker, String ref, double price) {}
 }

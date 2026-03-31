@@ -6,9 +6,6 @@ import com.fgiaquinta.optionsquant.utils.ConfigLoader;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
-import org.ta4j.core.indicators.bollinger.BollingerBandsLowerIndicator;
-import org.ta4j.core.indicators.bollinger.BollingerBandsMiddleIndicator;
-import org.ta4j.core.indicators.statistics.StandardDeviationIndicator;
 
 public class C3BounceCallStrategy implements TradingStrategy {
     private final IbkrService ibkrService;

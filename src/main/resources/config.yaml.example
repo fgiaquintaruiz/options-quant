@@ -1,0 +1,44 @@
+# ==========================================
+# HYBRID QUANT TRADING ENGINE CONFIGURATION
+# ==========================================
+
+ibkr:
+  # Connection Settings
+  host: "127.0.0.1"
+  port: 7497              # 7497 for Paper Trading (TWS/Gateway), 7496 for Live
+  accountId: "DU1234567"  # Replace with your actual IBKR account ID (DU... for paper)
+
+  # Execution Modes
+  autoExecute: false      # FALSE: Sends Telegram button. TRUE: Fully autonomous execution
+  postOnly: true          # TRUE: Uses limit orders to earn maker fees. FALSE: Aggressive market/limit
+
+  # Base Watchlist (AI will dynamically add more tickers here via MarketRadar)
+  tickers: ["SPY", "QQQ"]
+
+risk:
+  riskPerTradePct: 0.02   # 0.02 = 2% of NetLiquidation risked per trade
+  maxConcurrentTrades: 4  # Maximum number of positions allowed open at the exact same time
+
+telegram:
+  botToken: "YOUR_TELEGRAM_BOT_TOKEN"
+  chatId: "YOUR_CHAT_ID"
+
+ai:
+  geminiApiKey: "YOUR_GEMINI_API_KEY"
+  enabled: true           # Set to false if you want to run purely on technicals without news/AI
+
+# ==========================================
+# STRATEGY PARAMETERS & AI OVERRIDES
+# ==========================================
+strategies:
+
+  # Baseline targets applied to all tickers
+  global:
+    tpAtrMultiplier: 1.2  # Take Profit distance (e.g., 1.2x the 14-period ATR)
+    slAtrMultiplier: 0.8  # Stop Loss distance
+
+  # Example of how the PreMarketRoutine might store ticker-specific AI overrides
+  overrides:
+    TSLA:
+      tpAtrMultiplier: 1.5
+      slAtrMultiplier: 1.2
