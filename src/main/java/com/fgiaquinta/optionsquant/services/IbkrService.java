@@ -95,14 +95,22 @@ public class IbkrService extends DefaultEWrapper {
 
     @Override
     public void updateAccountValue(String key, String value, String currency, String accountName) {
-        accountManager.updateBalance(key, value, accountName);
+        // Filter for NetLiquidation in EUR for European accounts
+        if ("NetLiquidation".equals(key) && "EUR".equals(currency)) {
+            try {
+                // Pass the parsed value directly to the manager
+                accountManager.updateBalance(Double.parseDouble(value));
+            } catch (NumberFormatException e) {
+                System.err.println("❌ [Account] Error parsing equity value: " + value);
+            }
+        }
     }
 
     @Override
     public void nextValidId(int orderId) {
         nextOrderId.set(orderId); // Sync the official order counter
         initialSync.countDown();
-        System.out.println("🆔 Sincronizado OrderID inicial: " + orderId);
+        System.out.println("🆔 Initial OrderID synced: " + orderId);
     }
 
     public void setStrategyEngine(StrategyEngine engine) { this.strategyEngine = engine; }
@@ -179,7 +187,7 @@ public class IbkrService extends DefaultEWrapper {
         if (bestDate != null) {
             tickerToBestExpiration.put(tradingClass, bestDate);
             tickerToStrikes.put(tradingClass, new TreeSet<>(strikes));
-            System.out.println("📅 Vencimiento optimo detectado para " + tradingClass + ": " + bestDate);
+            System.out.println("📅 Optimal expiration detected for " + tradingClass + ": " + bestDate);
         }
     }
 
@@ -280,7 +288,18 @@ public class IbkrService extends DefaultEWrapper {
     public void commissionAndFeesReport(CommissionAndFeesReport report) {
         ExecutionDetails details = pendingReports.remove(report.execId());
         if (details != null) {
-            accountManager.removeActiveTrade(); // Free up a concurrency slot
+            accountManager.removeActiveTrade();
+
+            // Register the execution in the local log file
+            ForensicLogger.logExecution(
+                    details.ticker(),
+                    "FILL",
+                    details.price(),
+                    0, // Quantity can be extracted from the execution detail if needed
+                    report.commissionAndFees(),
+                    report.execId()
+            );
+
             TelegramService.sendTradeClosedAlert(
                     details.ticker(),
                     details.ref(),
@@ -288,6 +307,8 @@ public class IbkrService extends DefaultEWrapper {
                     report.realizedPNL(),
                     report.commissionAndFees()
             );
+
+            System.out.println("✅ [Trade] Execution logged and reported for " + details.ticker());
         }
     }
 
@@ -323,5 +344,14 @@ public class IbkrService extends DefaultEWrapper {
             client.eDisconnect();
             System.out.println("🔌 Disconnected from IBKR Gateway.");
         }
+    }
+
+    /**
+     * Returns the best expiration date discovered during the pre-market
+     * scan for a specific ticker.
+     */
+    public String getOptimalExpiry(String ticker) {
+        // We use the internal map populated by the option chain request
+        return tickerToBestExpiration.get(ticker);
     }
 }

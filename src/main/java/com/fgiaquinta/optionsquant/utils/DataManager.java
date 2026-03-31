@@ -47,7 +47,7 @@ public class DataManager {
                     series.addBar(time, open, high, low, close, volume);
                 }
             }
-            System.out.println("💾 Cargando " + cacheKey + " desde CSV local...");
+            System.out.println("💾 Loading " + cacheKey + " from local CSV...");
         } catch (Exception e) {
             System.err.println("❌ Error leyendo CSV para " + cacheKey + ": " + e.getMessage());
         }
@@ -75,9 +75,9 @@ public class DataManager {
                         bar.getClosePrice().doubleValue(),
                         bar.getVolume().doubleValue());
             }
-            System.out.println("💾 Guardado correctamente: data/" + cacheKey + ".csv");
+            System.out.println("💾 Successfully saved: data/" + cacheKey + ".csv");
         } catch (IOException e) {
-            System.err.println("❌ Error guardando CSV para " + cacheKey + ": " + e.getMessage());
+            System.err.println("❌ Error saving CSV for " + cacheKey + ": " + e.getMessage());
         }
     }
 }

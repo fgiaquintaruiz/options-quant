@@ -103,22 +103,33 @@ public class TelegramService {
      */
     private static void sendJsonPayload(String jsonPayload) {
         try {
+            // 1. Define the target URL
             String url = "https://api.telegram.org/bot" + BOT_TOKEN + "/sendMessage";
+
+            // 2. Build the Request (Ensure this variable name matches the one used in sendAsync)
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
                     .build();
 
+            // 3. Dispatch Asynchronously
             HttpClient.newHttpClient().sendAsync(request, HttpResponse.BodyHandlers.ofString())
                     .thenAccept(response -> {
-                        if (response.statusCode() != 200) {
-                            System.err.println("[Telegram] Error sending message. HTTP Code: " + response.statusCode());
-                            System.err.println("[Telegram] Response body: " + response.body());
+                        if (response.statusCode() == 200) {
+                            System.out.println("✅ Telegram message dispatched successfully.");
+                        } else {
+                            System.err.println("❌ Telegram API Error: " + response.statusCode() + " - " + response.body());
                         }
+                    })
+                    .exceptionally(ex -> {
+                        System.err.println("❌ Network Error sending to Telegram: " + ex.getMessage());
+                        return null;
                     });
+
         } catch (Exception e) {
-            System.err.println("Error dispatching Telegram HTTP Request: " + e.getMessage());
+            System.err.println("❌ Critical Error in Telegram Service: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }

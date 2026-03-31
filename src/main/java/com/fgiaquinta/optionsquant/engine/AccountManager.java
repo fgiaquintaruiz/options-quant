@@ -13,10 +13,19 @@ public class AccountManager {
     }
 
     // Updates balance directly from IBKR's NetLiquidation stream
-    public void updateBalance(String key, String value, String accountName) {
-        if ("NetLiquidation".equals(key) && accountName.equals(this.accountId)) {
-            this.currentBalance = Double.parseDouble(value);
-        }
+    /**
+     * Updates the account equity and prints the risk status.
+     * @param balance The total net liquidation value in the base currency.
+     */
+    public void updateBalance(double balance) {
+        this.currentBalance = balance;
+
+        // Calculate the risk limit based on the new balance
+        double riskPerTrade = balance * ConfigLoader.getConfig().risk.riskPerTradePct;
+
+        // English log for balance synchronization
+        System.out.printf("💰 [Account] Equity Synced: %.2f EUR | Strategy Risk Limit: %.2f EUR%n",
+                balance, riskPerTrade);
     }
 
     public void addActiveTrade() {

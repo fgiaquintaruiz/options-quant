@@ -62,7 +62,7 @@ public class ForensicLogger {
                 if (!dir.exists()) dir.mkdirs();
 
                 PrintStream ps = new PrintStream(new FileOutputStream(fileName, true), true, StandardCharsets.UTF_8);
-                System.out.println("💾 Reporte de estrategia guardado: " + fileName);
+                System.out.println("💾 Strategy report saved: " + fileName);
                 return ps;
             } catch (Exception e) {
                 return System.out;
@@ -80,9 +80,9 @@ public class ForensicLogger {
         try {
             Files.createDirectories(Paths.get("logs"));
             Files.write(Paths.get(fileName), entry.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-            System.out.println("📝 Ejecución registrada en Forensic Log: " + ticker);
+            System.out.println("📝 Execution registered: " + ticker);
         } catch (IOException e) {
-            System.err.println("❌ Error escribiendo en Forensic Log: " + e.getMessage());
+            System.err.println("❌ Error subscribing in Forensic Log: " + e.getMessage());
         }
     }
 }

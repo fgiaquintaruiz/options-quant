@@ -2,6 +2,7 @@ package com.fgiaquinta.optionsquant;
 
 import com.fgiaquinta.optionsquant.engine.*;
 import com.fgiaquinta.optionsquant.services.IbkrService;
+import com.fgiaquinta.optionsquant.services.TelegramService;
 import com.fgiaquinta.optionsquant.utils.ConfigLoader;
 import com.fgiaquinta.optionsquant.strategies.*;
 
@@ -10,7 +11,15 @@ import java.util.List;
 
 public class Main {
     static void main(String[] args) {
-        System.setOut(new java.io.PrintStream(System.out, true, java.nio.charset.StandardCharsets.UTF_8));
+        System.setOut(new java.io.PrintStream(System.out, true, java.nio.charset.StandardCharsets.UTF_8) {
+            @Override
+            public void println(String x) {
+                String timestamp = java.time.LocalDateTime.now()
+                        .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                super.println("[" + timestamp + "] " + x);
+            }
+        });
+        TelegramService.sendSimpleMessage("🚀 Quant Engine Connection Test: OK");
         System.out.println("🚀 Starting Hybrid Quant Trading Engine...");
 
         // 1. Load Configuration
