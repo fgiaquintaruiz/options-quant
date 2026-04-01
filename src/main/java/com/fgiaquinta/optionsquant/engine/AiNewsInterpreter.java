@@ -1,50 +1,76 @@
 package com.fgiaquinta.optionsquant.engine;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fgiaquinta.optionsquant.models.AnalysisResult;
 import com.fgiaquinta.optionsquant.utils.ConfigLoader;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 
 public class AiNewsInterpreter {
-    private static final String GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=";
-    private final ObjectMapper mapper = new ObjectMapper();
-    private final HttpClient client = HttpClient.newHttpClient();
+    private final HttpClient httpClient;
 
-    public AnalysisResult analyzeHeadline(String headline) {
-        String apiKey = ConfigLoader.getConfig().ai.geminiApiKey;
-        if (apiKey == null || apiKey.isEmpty()) return null;
+    public AiNewsInterpreter() {
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .build();
+    }
 
-        String prompt = "Act as a quantitative analyst. Analyze this news headline: '" + headline + "'. " +
-                "1. Classify sentiment (BULLISH, BEARISH, NEUTRAL). " +
-                "2. Identify the primary industry affected. " +
-                "3. Provide the top 3 relevant US tickers. " +
-                "Respond ONLY with valid JSON: {\"bias\": \"BULLISH\", \"industry\": \"Semiconductors\", \"tickers\": [\"NVDA\", \"AMD\", \"TSM\"]}";
+    // Real Implementation: Gemini Sentiment Analysis
+    public boolean isSentimentFavorable(boolean isCall) {
+        System.out.println("🧠 [AiNewsInterpreter] Consulting Gemini for real-time macro sentiment...");
 
         try {
-            String jsonBody = "{\"contents\": [{\"parts\":[{\"text\": \"" + prompt.replace("\"", "\\\"") + "\"}]}]}";
+            // Replace "geminiApiKey" with the exact key name you use in your config.yaml
+            String apiKey = String.valueOf(ConfigLoader.getConfig().getParam("global", "geminiApiKey"));
+
+            if (apiKey == null || apiKey.isEmpty()) {
+                System.out.println("⚠️ [AiNewsInterpreter] No Gemini API key found in config. Bypassing AI check.");
+                return true;
+            }
+
+            // Using Gemini 1.5 Flash for rapid, low-latency trading decisions
+            String endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey;
+
+            // Prompt engineering for a strict quantitative response
+            String prompt = "You are a quantitative trading AI. Based on the current macroeconomic news and market sentiment today, respond with exactly one word: BULLISH, BEARISH, or NEUTRAL.";
+            String jsonBody = "{ \"contents\": [{\"parts\":[{\"text\": \"" + prompt + "\"}]}] }";
 
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(GEMINI_URL + apiKey))
+                    .uri(URI.create(endpoint))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
                     .build();
 
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-            JsonNode rootNode = mapper.readTree(response.body());
-            String aiText = rootNode.path("candidates").get(0).path("content").path("parts").get(0).path("text").asText();
-            aiText = aiText.replaceAll("```json", "").replaceAll("```", "").trim();
+            if (response.statusCode() == 200) {
+                String responseBody = response.body().toUpperCase();
 
-            return mapper.readValue(aiText, AnalysisResult.class);
+                // Extract the exact sentiment word from the JSON response
+                boolean isBullish = responseBody.contains("BULLISH");
+                boolean isBearish = responseBody.contains("BEARISH");
+
+                System.out.print("🤖 [Gemini Verdict] ");
+                if (isBullish) System.out.println("BULLISH 📈");
+                else if (isBearish) System.out.println("BEARISH 📉");
+                else System.out.println("NEUTRAL ⚖️");
+
+                if (isCall) {
+                    return !isBearish; // Allow CALLs if sentiment is BULLISH or NEUTRAL
+                } else {
+                    return !isBullish; // Allow PUTs if sentiment is BEARISH or NEUTRAL
+                }
+            } else {
+                System.err.println("❌ [AiNewsInterpreter] Gemini API HTTP Error: " + response.statusCode());
+            }
 
         } catch (Exception e) {
-            System.err.println("AI Error: " + e.getMessage());
-            return null;
+            System.err.println("❌ [AiNewsInterpreter] Exception calling Gemini: " + e.getMessage());
         }
+
+        // Fallback to true so the trading engine doesn't halt if the API fails or times out
+        return true;
     }
 }

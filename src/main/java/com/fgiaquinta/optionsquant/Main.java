@@ -1,6 +1,7 @@
 package com.fgiaquinta.optionsquant;
 
 import com.fgiaquinta.optionsquant.engine.*;
+import com.fgiaquinta.optionsquant.models.AppConfig;
 import com.fgiaquinta.optionsquant.services.IbkrService;
 import com.fgiaquinta.optionsquant.services.TelegramService;
 import com.fgiaquinta.optionsquant.utils.ConfigLoader;
@@ -22,52 +23,62 @@ public class Main {
         tunnelManager.start("http://localhost:8080");
 
         System.out.println("🚀 Starting Hybrid Quant Trading Engine...");
-        ConfigLoader.getConfig();
+        AppConfig config = ConfigLoader.getConfig();
 
+        // 6. Run the Pre-Market AI Routine safely
+        System.out.println("🤖 Initiating AI Pre-Market Routine with Gemini...");
+        FastBacktester backtester = new FastBacktester();
+        AiStrategyOptimizer strategyOptimizer = new AiStrategyOptimizer();
+
+        // 1. Initialize core services first
         AccountManager accountManager = new AccountManager();
         IbkrService ibkrService = new IbkrService(accountManager);
-        MarketRadar marketRadar = new MarketRadar();
-        TradeManager tradeManager = new TradeManager(ibkrService, marketRadar, accountManager);
+        PreMarketRoutine preMarket = new PreMarketRoutine(backtester, strategyOptimizer, ibkrService);
+        MarketRadar marketRadar = new MarketRadar(ibkrService);
+        TradeManager tradeManager = new TradeManager(ibkrService, marketRadar, accountManager, preMarket);
 
-        startHttpServer(ibkrService);
-
+        // 2. Define strategies
         List<TradingStrategy> strategies = Arrays.asList(
-                new C1SqueezeCallStrategy(ibkrService), new C2TrendCallStrategy(ibkrService),
-                new P1SqueezePutStrategy(ibkrService), new P2TrendPutStrategy(ibkrService)
+                new C1SqueezeCallStrategy(ibkrService),
+                new C2TrendCallStrategy(ibkrService),
+                new C3BounceCallStrategy(ibkrService),
+                new C4OpeningCallStrategy(ibkrService),
+                new C5ContinuationCallStrategy(ibkrService),
+                new P1SqueezePutStrategy(ibkrService),
+                new P2TrendPutStrategy(ibkrService),
+                new P3BouncePutStrategy(ibkrService),
+                new P4OpeningPutStrategy(ibkrService),
+                new P5ContinuationPutStrategy(ibkrService)
         );
-
         StrategyEngine strategyEngine = new StrategyEngine(ibkrService, strategies, tradeManager);
+
         ibkrService.setStrategyEngine(strategyEngine);
+        // 3. Connect to IBKR
+        AppConfig.IbkrConfig ibkr = config.ibkr;
+        ibkrService.connect(ibkr.host, ibkr.port, new Random().nextInt());
 
-        // 1. Connect
-        ibkrService.connect(ConfigLoader.getConfig().ibkr.host, ConfigLoader.getConfig().ibkr.port, 1);
-
-        // 2. Wait for API Handshake
-        try {
-            if (!ibkrService.awaitConnection(10)) {
-                System.err.println("❌ IBKR Handshake failed. Shutting down.");
-                System.exit(1);
-            }
-        } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-
-        // 3. Request Metadata and Wait for Sync
-        List<String> tickers = ConfigLoader.getConfig().ibkr.tickers;
-        ibkrService.prepareInitialization(tickers.size());
-        ibkrService.requestInitialMetadata(tickers);
-        ibkrService.subscribeToNewsProviders();
-
-        try {
-            int timeout = ConfigLoader.getConfig().ibkr.syncTimeout;
-            ibkrService.awaitInitialization(timeout);
-        } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-
-        // 4. Start Live Tracking
+        // 4. Start market data tracking to load CSVs and initiate Backfill
+        List<String> tickers = Arrays.asList("SPY", "QQQ");
         for (String ticker : tickers) {
             ibkrService.startMarketDataTracking(ticker);
         }
 
+        // 5. EVENT-DRIVEN WAIT: Replaces the while loop
+        // This will block until all historicalDataEnd events are received
+        ibkrService.waitForBackfillCompletion();
+
+        try {
+            System.out.println("🧠 Gemini is analyzing market sentiment and optimizing strategies...");
+            preMarket.runDailyAnalysis("SPY", ibkrService, strategies);
+        } catch (Exception e) {
+            System.err.println("❌ AI Analysis failed: " + e.getMessage());
+        }
+
+        // 7. Start HTTP Server and setup Shutdown Hook
+        startHttpServer(ibkrService);
+
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("\n🛑 Emergency Stop Initiated...");
+            System.out.println("🛑 Shutting down...");
             if (httpServer != null) httpServer.stop(0);
             tunnelManager.shutdown();
             strategyEngine.shutdown();

@@ -27,10 +27,11 @@ public class IbkrService extends DefaultEWrapper {
     private final Map<Integer, MarketRequest> activeRequests = new ConcurrentHashMap<>();
     private final Map<String, BarSeries> marketData = new ConcurrentHashMap<>();
     private final Map<String, String> tickerToBestExpiration = new ConcurrentHashMap<>();
+    private final java.util.Set<Integer> pendingBackfills = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
+    private CountDownLatch initializationLatch = new CountDownLatch(1);
     private StrategyEngine strategyEngine;
     private final CountDownLatch connectionLatch = new CountDownLatch(1);
-    private CountDownLatch initializationLatch;
     private boolean accountSynced = false;
 
     // Formatter for fallback parsing if IBKR returns strings despite formatDate=2
@@ -100,6 +101,8 @@ public class IbkrService extends DefaultEWrapper {
 
     public void startMarketDataTracking(String ticker) {
         Contract contract = ContractFactory.createStockDefinition(ticker);
+        System.out.println("📡 Requesting live data for: " + ticker);
+
         for (TimeFrame tf : TimeFrame.values()) {
             MarketRequest request = new MarketRequest(ticker, tf);
             String cacheKey = request.getCacheKey();
@@ -110,6 +113,10 @@ public class IbkrService extends DefaultEWrapper {
 
             int reqId = nextId.getAndIncrement();
             activeRequests.put(reqId, request);
+            // ADD THIS: Register the request as pending
+            pendingBackfills.add(reqId);
+
+            System.out.println("   -> Subscribing to " + tf + " (ID: " + reqId + ")");
 
             // FIX: Set the 9th parameter (keepUpToDate) to TRUE
             // This tells IBKR to keep sending us new bars as they close.
@@ -123,29 +130,55 @@ public class IbkrService extends DefaultEWrapper {
      */
     @Override
     public void historicalDataUpdate(int reqId, com.ib.client.Bar bar) {
+        // Log every single entry attempt
+        System.out.println("🔎 [IbkrService] historicalDataUpdate triggered for reqId: " + reqId);
+
         MarketRequest request = activeRequests.get(reqId);
-        if (request == null || strategyEngine == null) return;
+        if (request == null) {
+            System.out.println("⚠️ [IbkrService] Ignored: No active request found for reqId " + reqId);
+            return;
+        }
+
+        if (strategyEngine == null) {
+            System.out.println("⚠️ [IbkrService] Ignored: StrategyEngine is null.");
+            return;
+        }
 
         BarSeries series = marketData.get(request.getCacheKey());
-        if (series == null) return;
+        if (series == null) {
+            System.out.println("⚠️ [IbkrService] Ignored: BarSeries is null for cacheKey " + request.getCacheKey());
+            return;
+        }
 
         try {
+            long timestamp;
+            try {
+                timestamp = Long.parseLong(bar.time());
+            } catch (NumberFormatException e) {
+                System.out.println("⚠️ [IbkrService] Ignored: bar.time() is not a valid timestamp string: " + bar.time());
+                return;
+            }
+
             ZonedDateTime time = ZonedDateTime.ofInstant(
-                    Instant.ofEpochSecond(Long.parseLong(bar.time())),
+                    Instant.ofEpochSecond(timestamp),
                     ZoneId.of("America/New_York")
             );
 
-            // 1. Update the series
+            System.out.println("📊 [IbkrService] Parsed bar time: " + time + " for " + request.ticker() + " [" + request.timeFrame() + "]");
+
+            // Update the series only if new
             if (series.getBarCount() == 0 || time.isAfter(series.getLastBar().getEndTime())) {
+                System.out.println("✅ [IbkrService] Adding new bar to series for " + request.ticker());
                 series.addBar(time, bar.open(), bar.high(), bar.low(), bar.close(), bar.volume().value().doubleValue());
 
-                // 2. TRIGGER: Tell the engine to evaluate the strategy immediately
-                strategyEngine.onBarAdded(request.ticker(), request.tf(), series);
-
-                System.out.println("📥 [Live] New " + request.tf() + " bar added for " + request.ticker() + " | Price: " + bar.close());
+                System.out.println("🚀 [IbkrService] Calling StrategyEngine.onBarAdded...");
+                strategyEngine.onBarAdded(request.ticker(), request.timeFrame(), series);
+            } else {
+                System.out.println("⏭️ [IbkrService] Skipped: Bar is older or equal to last bar. Current bar: " + time + " | Last bar: " + series.getLastBar().getEndTime());
             }
         } catch (Exception e) {
-            // Silently handle parsing if needed
+            System.err.println("❌ [IbkrService] Fatal error processing bar for " + request.ticker() + ": " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -205,6 +238,7 @@ public class IbkrService extends DefaultEWrapper {
 
             if (series.getBarCount() == 0 || time.isAfter(series.getLastBar().getEndTime())) {
                 series.addBar(time, bar.open(), bar.high(), bar.low(), bar.close(), bar.volume().value().doubleValue());
+//                System.out.println("⏳ [BACKFILL] Loading historical bar for " + request.ticker() + " [" + request.timeFrame() + "] @ " + bar.close());
             }
         } catch (Exception e) {
             System.err.println("❌ Error parsing bar time: " + bar.time());
@@ -219,6 +253,8 @@ public class IbkrService extends DefaultEWrapper {
         if (errorCode != 2104 && errorCode != 2106 && errorCode != 2158) {
             System.err.println("❌ [IBKR Error] " + errorCode + ": " + errorMsg);
             if (initializationLatch != null && id >= 1000) initializationLatch.countDown();
+        } else {
+            System.err.println("❌ IBKR ERROR [" + id + "] Code " + errorCode + ": " + errorMsg);
         }
     }
 
@@ -227,4 +263,33 @@ public class IbkrService extends DefaultEWrapper {
     }
 
     public void disconnect() { client.eDisconnect(); }
+
+    @Override
+    public void historicalDataEnd(int reqId, String startDateStr, String endDateStr) {
+        MarketRequest request = activeRequests.get(reqId);
+        if (request != null) {
+            org.ta4j.core.BarSeries series = marketData.get(request.getCacheKey());
+            int totalBars = (series != null) ? series.getBarCount() : 0;
+
+            System.out.println("✅ [BACKFILL COMPLETE] Loaded " + totalBars + " historical bars for " + request.ticker() + " [" + request.timeFrame() + "]. Now tracking LIVE.");
+            // ADD THIS: Remove from pending list when done
+            pendingBackfills.remove(reqId);
+        }
+    }
+
+    /**
+     * Blocks the main thread until all requested historical backfills have fired 'historicalDataEnd'
+     */
+    public void waitForBackfillCompletion() {
+        System.out.println("⏳ Waiting for IBKR to finish all historical data downloads...");
+        while (!pendingBackfills.isEmpty()) {
+            try {
+                // Sleep for a tiny fraction of a second, then check again
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        System.out.println("✅ All background data downloads are complete!");
+    }
 }

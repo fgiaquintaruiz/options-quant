@@ -26,23 +26,51 @@ public class StrategyEngine {
         this.tradeManager = tradeManager;
     }
 
-    public void onBarAdded(String ticker, BarSeries series1h) {
-        BarSeries spy = ibkrService.getSeries("SPY", TimeFrame.HOUR_1);
-        if (spy == null || spy.isEmpty()) return;
+    public void onBarAdded(String ticker, com.fgiaquinta.optionsquant.models.TimeFrame timeFrame, org.ta4j.core.BarSeries series) {
+        System.out.println("⚙️ [StrategyEngine] onBarAdded entered for " + ticker + " [" + timeFrame + "]");
 
-        int lastIdx = series1h.getEndIndex();
+        // Only evaluate on the 1-minute chart
+        if (timeFrame != com.fgiaquinta.optionsquant.models.TimeFrame.MIN_1) {
+            System.out.println("⏭️ [StrategyEngine] Skipped: TimeFrame is not MIN_1 (Current: " + timeFrame + ")");
+            return;
+        }
+
+        // Avoid double entries
+        if (activeOrders != null && activeOrders.contains(ticker)) {
+            System.out.println("⏭️ [StrategyEngine] Skipped: Active order already exists for " + ticker);
+            return;
+        }
+
+        // Benchmark check
+        org.ta4j.core.BarSeries spy = ibkrService.getSeries("SPY", com.fgiaquinta.optionsquant.models.TimeFrame.HOUR_1);
+        if (spy == null) {
+            System.out.println("⏳ [StrategyEngine] Skipped: SPY Hour_1 series is NULL.");
+            return;
+        }
+        if (spy.isEmpty()) {
+            System.out.println("⏳ [StrategyEngine] Skipped: SPY Hour_1 series is EMPTY.");
+            return;
+        }
+
+        int lastIdx = series.getEndIndex();
+        System.out.println("🔍 [StrategyEngine] Evaluating " + strategies.size() + " strategies for " + ticker + " at index " + lastIdx);
 
         for (TradingStrategy strategy : strategies) {
-            if (strategy.isTriggered(lastIdx, series1h, spy)) {
+            System.out.println("   -> Testing strategy: " + strategy.getName());
 
-                double entry = series1h.getBar(lastIdx).getClosePrice().doubleValue();
+            if (strategy.isTriggered(lastIdx, series, spy)) {
+                System.out.println("🎯 [StrategyEngine] SIGNAL TRIGGERED by " + strategy.getName() + " on " + ticker);
 
-                System.out.println("🎯 TECHNICAL SIGNAL DETECTED: " + strategy.getName() + " on " + ticker);
+                double entry = series.getBar(lastIdx).getClosePrice().doubleValue();
 
-                // DELEGATE TO TRADE MANAGER:
-                // TradeManager will calculate ATR, check Capital/Risk limits,
-                // handle Staircase Re-entry, and route the order (Auto vs Manual)
-                tradeManager.evaluateSignal(ticker, strategy.getName(), entry, series1h);
+                if (activeOrders != null) {
+                    activeOrders.add(ticker);
+                }
+
+                System.out.println("🚀 [StrategyEngine] Delegating to TradeManager...");
+                tradeManager.evaluateSignal(ticker, strategy.getName(), entry);
+            } else {
+                System.out.println("   -> Conditions not met for " + strategy.getName());
             }
         }
     }

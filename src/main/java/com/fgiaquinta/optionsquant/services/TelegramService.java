@@ -13,7 +13,7 @@ public class TelegramService {
 
     public static void setExternalUrl(String url) {
         externalUrl = url;
-        sendSimpleMessage("🌐 Cloudflare Tunnel Online: " + url);
+        System.out.println("🌐 Cloudflare Tunnel Online: " + url);
     }
 
     public static void sendSimpleMessage(String text) {

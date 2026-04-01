@@ -29,6 +29,7 @@ public class C1SqueezeCallStrategy implements TradingStrategy {
         // =========================================================================
         // Exigimos que las 4 medias móviles estén comprimidas en un margen máximo del 2.5%
         if (!ChannelAnalyzer.isSmaLateralChannel(series1h, index, 70, 2.5)) {
+//            System.out.println("   ❌ [C1Squeeze] Rejected: isSmaLateralChannel");
             return false;
         }
 
@@ -52,6 +53,7 @@ public class C1SqueezeCallStrategy implements TradingStrategy {
         boolean isBullishBreakout = (currentClose > currentOpen) && (currentClose > maxSma);
 
         if (!isBullishBreakout) {
+//            System.out.println("   ❌ [C1Squeeze] Rejected: isBullishBreakout");
             return false;
         }
 
@@ -60,6 +62,7 @@ public class C1SqueezeCallStrategy implements TradingStrategy {
         // =========================================================================
         BarSeries series15m = ibkrService.getSeries(ticker, TimeFrame.MIN_15);
         if (series15m == null || series15m.isEmpty()) {
+//            System.out.println("   ❌ [C1Squeeze] Rejected: series15m == null || series15m.isEmpty()");
             return false; // Sin datos de 15m no podemos confirmar, abortamos
         }
 
