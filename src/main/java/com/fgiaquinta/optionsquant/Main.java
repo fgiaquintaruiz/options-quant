@@ -81,6 +81,12 @@ public class Main {
         // 3. Request ALL Data (Live & Historical) using your master method
         for (String ticker : activeTickers) {
             ibkrService.startMarketDataTracking(ticker);
+            // 👉 FIX: Añadir un retraso de 100ms para evitar el límite de 50 msgs/seg de IBKR
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
 
         // 4. Block the main thread until the pendingBackfills list is empty
