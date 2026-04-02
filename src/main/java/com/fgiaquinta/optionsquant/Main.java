@@ -18,12 +18,13 @@ public class Main {
     private static final TunnelManager tunnelManager = new TunnelManager();
     private static HttpServer httpServer;
 
-    public static void main(String[] args) {
+    static void main(String[] args) {
         LogManager.initialize();
-        tunnelManager.start("http://localhost:8080");
+        tunnelManager.start("http://localhost:9090");
 
         System.out.println("🚀 Starting Hybrid Quant Trading Engine...");
         AppConfig config = ConfigLoader.getConfig();
+        List<String> activeTickers = config.getList("ibkr", "tickers");
 
         // 6. Run the Pre-Market AI Routine safely
         System.out.println("🤖 Initiating AI Pre-Market Routine with Gemini...");
@@ -32,10 +33,13 @@ public class Main {
 
         // 1. Initialize core services first
         AccountManager accountManager = new AccountManager();
+        accountManager.setAccountId(config.getString("ibkr", "accountId"));
         IbkrService ibkrService = new IbkrService(accountManager);
-        PreMarketRoutine preMarket = new PreMarketRoutine(backtester, strategyOptimizer, ibkrService);
         MarketRadar marketRadar = new MarketRadar(ibkrService);
-        TradeManager tradeManager = new TradeManager(ibkrService, marketRadar, accountManager, preMarket);
+        ibkrService.setMarketRadar(marketRadar);
+        ibkrService.startMarketScreener();
+        PreMarketRoutine preMarketRoutine = new PreMarketRoutine(backtester, strategyOptimizer, ibkrService, marketRadar);
+        TradeManager tradeManager = new TradeManager(ibkrService, marketRadar, accountManager, preMarketRoutine);
 
         // 2. Define strategies
         List<TradingStrategy> strategies = Arrays.asList(
@@ -53,28 +57,47 @@ public class Main {
         StrategyEngine strategyEngine = new StrategyEngine(ibkrService, strategies, tradeManager);
 
         ibkrService.setStrategyEngine(strategyEngine);
-        // 3. Connect to IBKR
-        AppConfig.IbkrConfig ibkr = config.ibkr;
-        ibkrService.connect(ibkr.host, ibkr.port, new Random().nextInt());
+        String host = config.getString("ibkr", "host");
+        int port = Integer.parseInt(config.getString("ibkr", "port"));
+        int randomClientId = new java.util.Random().nextInt(99999) + 1;
+        ibkrService.connect(host, port, randomClientId);
 
-        // 4. Start market data tracking to load CSVs and initiate Backfill
-        List<String> tickers = Arrays.asList("SPY", "QQQ");
-        for (String ticker : tickers) {
+        System.out.println("⏳ Waiting for IBKR handshake...");
+        if (!ibkrService.waitForConnection(15)) {
+            System.err.println("❌ FAILED to connect to TWS. Check your settings!");
+            System.exit(1);
+        }
+
+        if (activeTickers == null || activeTickers.isEmpty()) {
+            System.err.println("❌ ERROR: No tickers found in config.yaml! Defaulting to SPY, QQQ.");
+            activeTickers = List.of("SPY","QQQ");
+        }
+
+        // 2. Request Contract Metadata (CRITICAL FOR OPTIONS TRADING!)
+        System.out.println("🔗 Requesting options chains and contract details...");
+        ibkrService.requestInitialMetadata(activeTickers);
+        ibkrService.subscribeToNewsProviders();
+
+        // 3. Request ALL Data (Live & Historical) using your master method
+        for (String ticker : activeTickers) {
             ibkrService.startMarketDataTracking(ticker);
         }
 
-        // 5. EVENT-DRIVEN WAIT: Replaces the while loop
-        // This will block until all historicalDataEnd events are received
+        // 4. Block the main thread until the pendingBackfills list is empty
         ibkrService.waitForBackfillCompletion();
 
+        // 5. Run the Pre-Market AI routine on ALL tickers
         try {
-            System.out.println("🧠 Gemini is analyzing market sentiment and optimizing strategies...");
-            preMarket.runDailyAnalysis("SPY", ibkrService, strategies);
+            System.out.println("🤖 Initiating AI Pre-Market Routine...");
+            for (String ticker : activeTickers) {
+                // 👉 CALL THE METHOD HERE
+                preMarketRoutine.runDailyAnalysis(ticker, ibkrService, strategies);
+            }
+            preMarketRoutine.setSafeToTrade(true);
         } catch (Exception e) {
             System.err.println("❌ AI Analysis failed: " + e.getMessage());
         }
 
-        // 7. Start HTTP Server and setup Shutdown Hook
         startHttpServer(ibkrService);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -86,11 +109,21 @@ public class Main {
         }));
 
         System.out.println("🚀 System Online and waiting for market events.");
+
+        boolean isSimulation = ConfigLoader.getConfig().getBoolean("global", "simulationMode");
+
+        if (isSimulation) {
+            System.out.println("⚠️ WARNING: Running in SIMULATION MODE. Injecting fake data...");
+            MarketSimulator simulator = new MarketSimulator(ibkrService, strategyEngine);
+
+            // Assume reqId 1000 is the 1-Minute timeframe request for SPY
+            simulator.runSyntheticTest("SPY", 1000);
+        }
     }
 
     private static void startHttpServer(IbkrService ibkr) {
         try {
-            httpServer = HttpServer.create(new InetSocketAddress(8080), 0);
+            httpServer = HttpServer.create(new InetSocketAddress(9090), 0);
             httpServer.createContext("/execute", exchange -> {
                 Map<String, String> params = Arrays.stream(exchange.getRequestURI().getQuery().split("&"))
                         .map(s -> s.split("="))
@@ -107,6 +140,8 @@ public class Main {
             });
             httpServer.start();
             System.out.println("🌐 Web Callback Server started on port 8080.");
-        } catch (Exception e) { System.err.println("❌ Web Server Error: " + e.getMessage()); }
+        } catch (Exception e) {
+            System.err.println("❌ Web Server Error: " + e.getMessage());
+        }
     }
 }

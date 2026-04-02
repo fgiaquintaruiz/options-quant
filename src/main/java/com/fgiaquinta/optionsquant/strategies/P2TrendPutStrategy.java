@@ -27,13 +27,13 @@ public class P2TrendPutStrategy implements TradingStrategy {
 
     @Override
     public double calculateTP(double entryPrice) {
-        double tpMult = ConfigLoader.getConfig().getParam("trend", "tp");
+        double tpMult = ConfigLoader.getConfig().getDouble("global", "tpAtrMultiplier");
         return Math.round((entryPrice * (1 - tpMult)) * 100.0) / 100.0;
     }
 
     @Override
     public double calculateSL(double entryPrice, String ticker) {
-        double slMult = ConfigLoader.getConfig().getParam("trend", "sl");
+        double slMult = ConfigLoader.getConfig().getDouble("global", "slAtrMultiplier");
         return Math.round((entryPrice * (1 + slMult)) * 100.0) / 100.0;
     }
 

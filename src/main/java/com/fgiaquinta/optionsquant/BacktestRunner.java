@@ -31,8 +31,8 @@ public class BacktestRunner {
             // 3. Connect to IBKR with a random client ID to avoid conflicts with Main.java
             int randomClientId = new java.util.Random().nextInt(99999) + 1;
             ibkr.connect(
-                    ConfigLoader.getConfig().ibkr.host,
-                    ConfigLoader.getConfig().ibkr.port,
+                    ConfigLoader.getConfig().getString("ibkr", "host"),
+                    (int) ConfigLoader.getConfig().getDouble("ibkr", "port"),
                     randomClientId
             );
 

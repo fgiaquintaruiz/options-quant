@@ -20,11 +20,13 @@ public class PreMarketRoutine {
     private final FastBacktester backtester;
     private final AiStrategyOptimizer optimizer;
     private final IbkrService ibkrService;
+    private final MarketRadar marketRadar;
 
-    public PreMarketRoutine(FastBacktester backtester, AiStrategyOptimizer optimizer, IbkrService ibkrService) {
+    public PreMarketRoutine(FastBacktester backtester, AiStrategyOptimizer optimizer, IbkrService ibkrService, MarketRadar marketRadar) {
         this.backtester = backtester;
         this.optimizer = optimizer;
         this.ibkrService = ibkrService;
+        this.marketRadar = marketRadar;
     }
 
     /**
@@ -49,6 +51,7 @@ public class PreMarketRoutine {
     // We now pass the IbkrService and the strategies list to fetch the required arguments
     // PreMarketRoutine.java
 
+    // Change the signature to take the ticker and the strategy list
     public void runDailyAnalysis(String ticker, IbkrService ibkrService, List<TradingStrategy> strategies) {
         System.out.println("🧠 [PreMarket] Starting batch optimization for " + ticker);
 
@@ -58,31 +61,30 @@ public class PreMarketRoutine {
             return;
         }
 
-        // Map to collect: StrategyName -> MetricsJson
         Map<String, String> allMetrics = new HashMap<>();
-
         for (TradingStrategy strategy : strategies) {
-            // Use the refactored method to get metrics
             String json = generateMetrics(ticker, strategy.getName(), historicalSeries, strategy);
             allMetrics.put(strategy.getName(), json);
-
-            // Throttling local para no estresar la CPU
-            try { Thread.sleep(100); } catch (InterruptedException e) {}
         }
 
-        // 3. ONE SINGLE CALL to Gemini for all strategies
+        // 1. One batch call to Gemini for this specific ticker
         List<OptimizationResult> optimizedResults = optimizer.analyzeBatch(allMetrics);
 
-        // 4. Save results to dailyOverrides
-        if (optimizedResults != null) {
+        if (optimizedResults != null && !optimizedResults.isEmpty()) {
             for (OptimizationResult res : optimizedResults) {
                 String key = ticker + "_" + res.strategy;
                 dailyOverrides.put(key, res);
-                System.out.printf("✅ [AI Tuned] %s: TP %.2f | SL %.2f%n", res.strategy, res.recommendedTpAtr, res.recommendedSlAtr);
-            }
-        }
 
-        this.safeToTrade = true;
+                // 👉 RADAR FILTER: If Gemini gives a high confidence score (e.g., > 70)
+                // add the ticker to the MarketRadar hot list.
+                if (res.score >= 70) {
+                    marketRadar.addHotTicker(ticker);
+                    System.out.println("🔥 [Radar] High Confidence: " + ticker + " (Score: " + res.score + ")");
+                }
+            }
+        } else {
+            System.out.println("⚠️ [PreMarket] AI optimization failed for " + ticker + ". Using defaults.");
+        }
     }
 
     // Update your getOverridesFor method to accept the exact composite key
@@ -94,6 +96,10 @@ public class PreMarketRoutine {
     // Método que el Main usa para saber si debe continuar o abortar
     public boolean isSafeToTrade() {
         return safeToTrade;
+    }
+
+    public void setSafeToTrade(boolean safeToTrade) {
+        this.safeToTrade = safeToTrade;
     }
 
     /**

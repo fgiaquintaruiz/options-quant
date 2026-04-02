@@ -7,9 +7,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
 public class TelegramService {
-    private static final String BOT_TOKEN = ConfigLoader.getConfig().telegram.botToken;
-    private static final String CHAT_ID = ConfigLoader.getConfig().telegram.chatId;
-    private static String externalUrl = "http://localhost:8080";
+    private static final String BOT_TOKEN = ConfigLoader.getConfig().getString("telegram", "botToken");
+    private static final String CHAT_ID = ConfigLoader.getConfig().getString("telegram", "chatId");
+    private static String externalUrl = "http://localhost:9090";
 
     public static void setExternalUrl(String url) {
         externalUrl = url;

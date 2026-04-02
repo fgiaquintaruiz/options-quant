@@ -2,8 +2,7 @@ package com.fgiaquinta.optionsquant.engine;
 
 import com.fgiaquinta.optionsquant.services.IbkrService;
 import com.fgiaquinta.optionsquant.strategies.TradingStrategy;
-import com.fgiaquinta.optionsquant.models.TimeFrame;
-import org.ta4j.core.BarSeries;
+
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;

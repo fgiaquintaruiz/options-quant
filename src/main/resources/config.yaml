@@ -5,7 +5,11 @@ ibkr:
   syncTimeout: 30
   autoExecute: false
   postOnly: true
-  tickers: ["SPY", "QQQ"]
+  tickers: ["SPY", "AAPL", "MSFT", "AMZN", "NVDA", "TSLA", "META", "AMD", "PLTR", "LLY", "ABNB", "COST", "MARA", "RIOT",
+            "BITX", "MSTR", "MU", "URA", "TSM", "OKLO", "COIN", "GOOGL", "GOOG", "BABA", "ALB", "AMDL", "NFLX", "IWM",
+            "NVO", "PEP", "INTC", "GM", "MDB", "CVX", "KDP", "CCL", "LOW", "DECK", "DIA", "TNA", "XPEV", "MO", "ACN",
+            "WMT", "DELL", "AES", "KO", "BYND", "SMCI", "AVGO", "ARM", "QCOM", "CRWD", "SHOP", "XYZ", "DDOG", "CVNA",
+            "UPST", "HOOD", "AFRM", "RIVN", "NIO", "PDD", "JD", "SOXL", "TQQQ", "ARKK"]
 
 risk:
   riskPerTradePct: 0.02   # 2% max risk per trade
@@ -14,6 +18,7 @@ risk:
 ai:
   geminiApiKey: "REDACTED_GOOGLE_API_KEY"
   enabled: true
+  endpointBase: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key="
 
 telegram:
   botToken: "REDACTED_TELEGRAM_BOT_TOKEN"
@@ -24,6 +29,7 @@ strategies:
   global:
     tpAtrMultiplier: 1.2
     slAtrMultiplier: 0.8
+    simulationMode: true
   opening:
     bandWidth: 1.2
     callMinGap: -1.5

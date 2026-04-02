@@ -1,17 +1,22 @@
 package com.fgiaquinta.optionsquant.models;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class AppConfig {
+    // Campos de configuración de primer nivel
     public IbkrConfig ibkr;
     public RiskConfig risk;
     public TelegramConfig telegram;
-    public AiConfig ai; // Added so the bot can read the Gemini API Key
+    public AiConfig ai;
 
-    // We use Object to capture any type of value
+    // Mapa dinámico para las estrategias (global, opening, etc.)
     public Map<String, Map<String, Object>> strategies;
 
     public static class IbkrConfig {
@@ -19,9 +24,9 @@ public class AppConfig {
         public int port;
         public boolean autoExecute;
         public boolean postOnly;
-        public List<String> tickers;
+        public java.util.List<String> tickers;
         public String accountId;
-        public int syncTimeout = 30;// <-- ADDED THIS TO FIX THE ERROR
+        public int syncTimeout = 30;
     }
 
     public static class TelegramConfig {
@@ -33,6 +38,7 @@ public class AppConfig {
     public static class AiConfig {
         public String geminiApiKey;
         public boolean enabled;
+        public String endpointBase;
     }
 
     public static class RiskConfig {
@@ -40,21 +46,84 @@ public class AppConfig {
         public int maxConcurrentTrades;
     }
 
-    public double getParam(String category, String key) {
-        if (strategies == null || !strategies.containsKey(category)) {
-            throw new RuntimeException("❌ Category '" + category + "' not found in config.yaml");
-        }
-
-        Object value = strategies.get(category).get(key);
-        if (value == null) {
-            throw new RuntimeException("❌ Parameter '" + key + "' not found in " + category);
-        }
-
-        // Safe conversion
+    /**
+     * Método universal para obtener parámetros numéricos (double).
+     * Busca primero en 'strategies' y luego intenta en campos de primer nivel.
+     */
+    public double getDouble(String category, String key) {
+        Object value = getRawValue(category, key);
         if (value instanceof Number) {
             return ((Number) value).doubleValue();
         }
+        throw new RuntimeException("❌ El parámetro '" + key + "' en '" + category + "' no es un número.");
+    }
 
-        throw new RuntimeException("❌ Parameter '" + key + "' in " + category + " is not a number. Check YAML indentation.");
+    /**
+     * Método universal para obtener parámetros de texto (String).
+     */
+    public String getString(String category, String key) {
+        Object value = getRawValue(category, key);
+        return String.valueOf(value);
+    }
+
+    public boolean getBoolean(String category, String key) {
+        Object value = getRawValue(category, key);
+        return Boolean.getBoolean((String) value);
+    }
+
+    public List<String> getList(String section, String key) {
+        String value = getString(section, key);
+        if (value == null || value.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // 👉 STRIP BRACKETS: Remove [ and ] if they exist in the string
+        String cleanValue = value.replace("[", "").replace("]", "");
+
+        return Arrays.stream(cleanValue.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+    }
+
+    /**
+     * Lógica central de búsqueda en el YAML.
+     */
+    private Object getRawValue(String category, String key) {
+        // 1. Intentar buscar en el mapa dinámico de estrategias (global, opening, etc.)
+        if (strategies != null && strategies.containsKey(category)) {
+            Object val = strategies.get(category).get(key);
+            if (val != null) return val;
+        }
+
+        // 2. Intentar buscar en los objetos de primer nivel (ai, ibkr, risk)
+        if ("ai".equalsIgnoreCase(category)) {
+            if ("geminiApiKey".equals(key)) return ai.geminiApiKey;
+            if ("enabled".equals(key)) return ai.enabled;
+            if ("endpointBase".equals(key)) return ai.endpointBase; // <-- Add this line
+        }
+
+        if ("risk".equalsIgnoreCase(category)) {
+            if ("riskPerTradePct".equals(key)) return risk.riskPerTradePct;
+            if ("maxConcurrentTrades".equals(key)) return risk.maxConcurrentTrades;
+        }
+
+        if ("telegram".equalsIgnoreCase(category)) {
+            if ("botToken".equals(key)) return telegram.botToken;
+            if ("chatId".equals(key)) return telegram.chatId;
+            if ("masterKey".equals(key)) return telegram.masterKey;
+        }
+
+        if ("ibkr".equalsIgnoreCase(category)) {
+            if ("host".equals(key)) return ibkr.host;
+            if ("port".equals(key)) return ibkr.port;
+            if ("accountId".equals(key)) return ibkr.accountId;
+            if ("syncTimeout".equals(key)) return ibkr.syncTimeout;
+            if ("autoExecute".equals(key)) return ibkr.autoExecute;
+            if ("postOnly".equals(key)) return ibkr.postOnly;
+            if ("tickers".equals(key)) return ibkr.tickers;
+        }
+
+        throw new RuntimeException("❌ No se encontró la categoría '" + category + "' o la clave '" + key + "' en config.yaml");
     }
 }

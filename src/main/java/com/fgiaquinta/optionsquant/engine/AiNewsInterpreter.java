@@ -1,5 +1,6 @@
 package com.fgiaquinta.optionsquant.engine;
 
+import com.fgiaquinta.optionsquant.models.AppConfig;
 import com.fgiaquinta.optionsquant.utils.ConfigLoader;
 
 import java.net.URI;
@@ -23,7 +24,9 @@ public class AiNewsInterpreter {
 
         try {
             // Replace "geminiApiKey" with the exact key name you use in your config.yaml
-            String apiKey = String.valueOf(ConfigLoader.getConfig().getParam("global", "geminiApiKey"));
+            AppConfig config = ConfigLoader.getConfig();
+            String apiUrl = config.getString("ai", "endpointBase");
+            String apiKey = config.getString("ai", "geminiApiKey");
 
             if (apiKey == null || apiKey.isEmpty()) {
                 System.out.println("⚠️ [AiNewsInterpreter] No Gemini API key found in config. Bypassing AI check.");
@@ -31,7 +34,7 @@ public class AiNewsInterpreter {
             }
 
             // Using Gemini 1.5 Flash for rapid, low-latency trading decisions
-            String endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey;
+            String endpoint = apiUrl + apiKey;
 
             // Prompt engineering for a strict quantitative response
             String prompt = "You are a quantitative trading AI. Based on the current macroeconomic news and market sentiment today, respond with exactly one word: BULLISH, BEARISH, or NEUTRAL.";

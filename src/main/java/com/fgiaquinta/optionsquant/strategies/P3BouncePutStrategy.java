@@ -27,13 +27,13 @@ public class P3BouncePutStrategy implements TradingStrategy {
 
     @Override
     public double calculateTP(double entryPrice) {
-        double tpMult = ConfigLoader.getConfig().getParam("bounce", "tp");
+        double tpMult = ConfigLoader.getConfig().getDouble("bounce", "tp");
         return Math.round((entryPrice * (1 - tpMult)) * 100.0) / 100.0;
     }
 
     @Override
     public double calculateSL(double entryPrice, String ticker) {
-        double slMult = ConfigLoader.getConfig().getParam("bounce", "sl");
+        double slMult = ConfigLoader.getConfig().getDouble("bounce", "sl");
         return Math.round((entryPrice * (1 + slMult)) * 100.0) / 100.0;
     }
 

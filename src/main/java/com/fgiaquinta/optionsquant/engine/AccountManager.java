@@ -17,11 +17,17 @@ public class AccountManager {
      * Updates the account equity and prints the risk status.
      * @param balance The total net liquidation value in the base currency.
      */
-    public void updateBalance(double balance) {
+    // Notice the new 'incomingAccountId' parameter
+    public void updateBalance(String incomingAccountId, double balance) {
+        // If an account ID is configured, ignore updates from other accounts
+        if (this.accountId != null && !this.accountId.equals(incomingAccountId)) {
+            return;
+        }
+
         this.currentBalance = balance;
 
         // Calculate the risk limit based on the new balance
-        double riskPerTrade = balance * ConfigLoader.getConfig().risk.riskPerTradePct;
+        double riskPerTrade = balance * ConfigLoader.getConfig().getDouble("risk", "riskPerTradePct");
 
         // English log for balance synchronization
         System.out.printf("💰 [Account] Equity Synced: %.2f EUR | Strategy Risk Limit: %.2f EUR%n",
@@ -39,7 +45,7 @@ public class AccountManager {
     }
 
     public boolean canOpenNewTrade() {
-        int maxTrades = ConfigLoader.getConfig().risk.maxConcurrentTrades;
+        int maxTrades = (int) ConfigLoader.getConfig().getDouble("risk", "maxConcurrentTrades");
         return activeTrades.get() < maxTrades;
     }
 
@@ -47,7 +53,7 @@ public class AccountManager {
     public int calculateQuantity(double entryPrice, double slPrice) {
         if (currentBalance <= 0) return 0;
 
-        double riskPct = ConfigLoader.getConfig().risk.riskPerTradePct;
+        double riskPct = ConfigLoader.getConfig().getDouble("risk", "riskPerTradePct");
         double maxRiskDollars = currentBalance * riskPct;
 
         // Options multiplier is 100

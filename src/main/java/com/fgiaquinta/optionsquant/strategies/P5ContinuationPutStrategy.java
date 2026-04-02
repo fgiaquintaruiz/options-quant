@@ -10,6 +10,7 @@ import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
 
 public class P5ContinuationPutStrategy implements TradingStrategy {
+    public static final String CONTINUATION = "continuation";
     private final IbkrService ibkrService;
 
     public P5ContinuationPutStrategy(IbkrService ibkrService) {
@@ -21,8 +22,8 @@ public class P5ContinuationPutStrategy implements TradingStrategy {
         String ticker = series1h.getName().split("_")[0];
 
         // REGLA 1: Filtrado de Gap Down (Valores negativos desde config.yaml)
-        double minGap = ConfigLoader.getConfig().getParam("continuation", "putMinGap");
-        double maxGap = ConfigLoader.getConfig().getParam("continuation", "putMaxGap");
+        double minGap = ConfigLoader.getConfig().getDouble(CONTINUATION, "putMinGap");
+        double maxGap = ConfigLoader.getConfig().getDouble(CONTINUATION, "putMaxGap");
 
         double gapPct = GapAnalyzer.getGapPercentage(series1h, index);
 
@@ -30,7 +31,7 @@ public class P5ContinuationPutStrategy implements TradingStrategy {
         if (gapPct > minGap || gapPct < maxGap) return false;
 
         // REGLA 2: Worden Stochastic (Buscamos debilidad, ej: percentil < 45)
-        double threshold = ConfigLoader.getConfig().getParam("continuation", "putWordenThreshold");
+        double threshold = ConfigLoader.getConfig().getDouble(CONTINUATION, "putWordenThreshold");
         double wStoc = WordenAnalyzer.getWordenStochastic(series1h, index, 12, 3);
 
         if (wStoc > threshold) return false;
@@ -51,13 +52,13 @@ public class P5ContinuationPutStrategy implements TradingStrategy {
 
     @Override
     public double calculateTP(double entryPrice) {
-        double tpMult = ConfigLoader.getConfig().getParam("continuation", "tp");
+        double tpMult = ConfigLoader.getConfig().getDouble("global", "tpAtrMultiplier");
         return Math.round((entryPrice * (1 - tpMult)) * 100.0) / 100.0;
     }
 
     @Override
     public double calculateSL(double entryPrice, String ticker) {
-        double slMult = ConfigLoader.getConfig().getParam("continuation", "sl");
+        double slMult = ConfigLoader.getConfig().getDouble("global", "slAtrMultiplier");
         return Math.round((entryPrice * (1 + slMult)) * 100.0) / 100.0;
     }
 

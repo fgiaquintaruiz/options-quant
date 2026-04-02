@@ -12,6 +12,8 @@ import org.ta4j.core.BarSeries;
  * Busca una reversión (short) tras un salto de precio positivo excesivo.
  */
 public class P4OpeningPutStrategy implements TradingStrategy {
+    public static final String GLOBAL = "global";
+    public static final String OPENING = "opening";
     private final IbkrService ibkrService;
 
     public P4OpeningPutStrategy(IbkrService ibkrService) {
@@ -32,7 +34,7 @@ public class P4OpeningPutStrategy implements TradingStrategy {
         // =========================================================================
         // REGLA 1: Baja Volatilidad Previa (Desde config.yaml)
         // =========================================================================
-        double maxBandWidth = ConfigLoader.getConfig().getParam("opening", "bandWidth");
+        double maxBandWidth = ConfigLoader.getConfig().getDouble(OPENING, "bandWidth");
         double prevBandWidth = VolatilityAnalyzer.getBollingerBandWidthPct(series15m, idx15m - 1, 20, 2.0);
 
         if (prevBandWidth > maxBandWidth) return false;
@@ -40,8 +42,8 @@ public class P4OpeningPutStrategy implements TradingStrategy {
         // =========================================================================
         // REGLA 2: Gap Up (Salto alcista definido en config.yaml)
         // =========================================================================
-        double minGap = ConfigLoader.getConfig().getParam("opening", "putMinGap"); // e.g., 1.5
-        double maxGap = ConfigLoader.getConfig().getParam("opening", "putMaxGap"); // e.g., 4.0
+        double minGap = ConfigLoader.getConfig().getDouble(OPENING, "putMinGap"); // e.g., 1.5
+        double maxGap = ConfigLoader.getConfig().getDouble(OPENING, "putMaxGap"); // e.g., 4.0
 
         double gapPct = GapAnalyzer.getGapPercentage(series15m, idx15m);
 
@@ -59,14 +61,14 @@ public class P4OpeningPutStrategy implements TradingStrategy {
 
     @Override
     public double calculateTP(double entryPrice) {
-        double tpMult = ConfigLoader.getConfig().getParam("opening", "tp");
+        double tpMult = ConfigLoader.getConfig().getDouble(GLOBAL, "tpAtrMultiplier");
         // Para un PUT, el Take Profit está por debajo del precio de entrada
         return Math.round((entryPrice * (1 - tpMult)) * 100.0) / 100.0;
     }
 
     @Override
     public double calculateSL(double entryPrice, String ticker) {
-        double slMult = ConfigLoader.getConfig().getParam("opening", "sl");
+        double slMult = ConfigLoader.getConfig().getDouble(GLOBAL, "slAtrMultiplier");
         // Para un PUT, el Stop Loss está por encima del precio de entrada
         return Math.round((entryPrice * (1 + slMult)) * 100.0) / 100.0;
     }

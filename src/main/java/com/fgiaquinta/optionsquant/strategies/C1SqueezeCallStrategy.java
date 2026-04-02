@@ -88,13 +88,13 @@ public class C1SqueezeCallStrategy implements TradingStrategy {
 
     @Override
     public double calculateTP(double entryPrice) {
-        double tpMult = ConfigLoader.getConfig().getParam(SQUEEZE, "tp"); // Cambiar categoría según estrategia
+        double tpMult = ConfigLoader.getConfig().getDouble("global", "tpAtrMultiplier");
         return Math.round((entryPrice * (1 + tpMult)) * 100.0) / 100.0;
     }
 
     @Override
     public double calculateSL(double entryPrice, String ticker) {
-        double slMult = ConfigLoader.getConfig().getParam(SQUEEZE, "sl"); // Cambiar categoría según estrategia
+        double slMult = ConfigLoader.getConfig().getDouble("global", "slAtrMultiplier");
         return Math.round((entryPrice * (1 - slMult)) * 100.0) / 100.0;
     }
 

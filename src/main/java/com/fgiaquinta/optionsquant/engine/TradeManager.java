@@ -1,11 +1,9 @@
 package com.fgiaquinta.optionsquant.engine;
 
 import com.fgiaquinta.optionsquant.analyzers.VolatilityAnalyzer;
-import com.fgiaquinta.optionsquant.models.TimeFrame;
 import com.fgiaquinta.optionsquant.services.IbkrService;
-import com.fgiaquinta.optionsquant.services.TelegramService;
 import com.fgiaquinta.optionsquant.utils.ConfigLoader;
-import org.ta4j.core.BarSeries;
+
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -29,13 +27,46 @@ public class TradeManager {
     public void evaluateSignal(String ticker, String strategyName, double price) {
         System.out.println("🧐 [TradeManager] evaluateSignal entered for: " + strategyName + " on " + ticker + " at " + price);
 
+        if (!preMarket.isSafeToTrade()) {
+            System.out.println("🛑 [TradeManager] Trade Blocked: AI Pre-Market Routine is still running. Waiting for system readiness...");
+            return;
+        }
+        
+        // 1. RADAR CHECK: Only trade if the ticker made the "Hot List" today
+        if (!marketRadar.isHot(ticker)) {
+            System.out.println("⏭️ [TradeManager] Skipping " + ticker + ": Not in today's AI Hot List.");
+            return;
+        }
+
         // Determine direction based on strategy name
         boolean isCall = strategyName.toLowerCase().contains("call") || strategyName.toLowerCase().contains("long");
 
-        // 1. MACRO ENVIRONMENT & AI SENTIMENT CHECK (Calling the Radar)
+        // 2. MACRO ENVIRONMENT CHECK (Existing)
         if (!marketRadar.isEnvironmentFavorable(isCall)) {
-            System.out.println("🛑 [TradeManager] Trade Blocked: MarketRadar or Gemini detects unfavorable macro conditions.");
+            System.out.println("🛑 [TradeManager] Trade Blocked: Macro conditions unfavorable.");
             return;
+        }
+
+        // ==========================================
+        // 👉 ADDED: STAIRCASE LOGIC (RE-ENTRY FILTER)
+        // ==========================================
+        if (lastExits.containsKey(ticker)) {
+            double lastExitPrice = lastExits.get(ticker);
+
+            // For a CALL: Price must be LOWER than our last exit (we want a better entry)
+            if (isCall && price >= lastExitPrice) {
+                System.out.println("⏳ [TradeManager] Staircase Block: " + ticker + " Call price " + price +
+                        " is not better than last exit " + lastExitPrice);
+                return;
+            }
+            // For a PUT: Price must be HIGHER than our last exit
+            else if (!isCall && price <= lastExitPrice) {
+                System.out.println("⏳ [TradeManager] Staircase Block: " + ticker + " Put price " + price +
+                        " is not better than last exit " + lastExitPrice);
+                return;
+            } else {
+                System.out.println("✅ [TradeManager] Price improved since last exit. Allowing re-entry.");
+            }
         }
 
         // 2. Check Concurrency Limits
@@ -73,8 +104,8 @@ public class TradeManager {
             slDist = atr * aiParams.recommendedSlAtr;
         } else {
             // Fallback to the standard config.yaml if the AI has no overrides
-            tpDist = atr * com.fgiaquinta.optionsquant.utils.ConfigLoader.getConfig().getParam("global", "tpAtrMultiplier");
-            slDist = atr * com.fgiaquinta.optionsquant.utils.ConfigLoader.getConfig().getParam("global", "slAtrMultiplier");
+            tpDist = atr * ConfigLoader.getConfig().getDouble("global", "tpAtrMultiplier");
+            slDist = atr * ConfigLoader.getConfig().getDouble("global", "slAtrMultiplier");
         }
 
         double tp = Math.round((isCall ? price + tpDist : price - tpDist) * 100.0) / 100.0;
@@ -90,7 +121,7 @@ public class TradeManager {
             return;
         }
 
-        if (com.fgiaquinta.optionsquant.utils.ConfigLoader.getConfig().ibkr.autoExecute) {
+        if (ConfigLoader.getConfig().getBoolean("ibkr", "autoExecute")) {
             System.out.println("🚀 [TradeManager] Executing via IBKR -> " + (isCall ? "CALL" : "PUT") + " | Qty: " + qty);
             ibkrService.placeOrder(ticker, isCall ? "CALL" : "PUT", qty, price, tp, sl, strategyName);
             accountManager.addActiveTrade();
@@ -98,5 +129,14 @@ public class TradeManager {
             System.out.println("📩 [TradeManager] Auto-execute is false. Sending Telegram alert.");
             com.fgiaquinta.optionsquant.services.TelegramService.sendSignalConfirmation(ticker, strategyName, price, tp, sl, qty);
         }
+    }
+
+    /**
+     * Call this from your IBKR callback (execDetails or orderStatus)
+     * when a position is closed.
+     */
+    public void recordExit(String ticker, double price) {
+        lastExits.put(ticker, price);
+        System.out.println("💾 [TradeManager] recorded last exit for " + ticker + " at " + price);
     }
 }

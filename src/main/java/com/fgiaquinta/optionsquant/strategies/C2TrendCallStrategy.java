@@ -71,13 +71,13 @@ public class C2TrendCallStrategy implements TradingStrategy {
 
     @Override
     public double calculateTP(double entryPrice) {
-        double tpMult = ConfigLoader.getConfig().getParam("trend", "tp"); // Cambiar categoría según estrategia
+        double tpMult = ConfigLoader.getConfig().getDouble("global", "tpAtrMultiplier"); // Cambiar categoría según estrategia
         return Math.round((entryPrice * (1 + tpMult)) * 100.0) / 100.0;
     }
 
     @Override
     public double calculateSL(double entryPrice, String ticker) {
-        double slMult = ConfigLoader.getConfig().getParam("trend", "sl"); // Cambiar categoría según estrategia
+        double slMult = ConfigLoader.getConfig().getDouble("global", "slAtrMultiplier"); // Cambiar categoría según estrategia
         return Math.round((entryPrice * (1 - slMult)) * 100.0) / 100.0;
     }
 

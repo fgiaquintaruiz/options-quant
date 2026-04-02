@@ -23,14 +23,14 @@ public class C5ContinuationCallStrategy implements TradingStrategy {
         String ticker = series1h.getName().split("_")[0];
 
         // REGLA 1: Filtrado de Gap (Valores desde config.yaml)
-        double minGap = ConfigLoader.getConfig().getParam(CONTINUATION, "callMinGap");
-        double maxGap = ConfigLoader.getConfig().getParam(CONTINUATION, "callMaxGap");
+        double minGap = ConfigLoader.getConfig().getDouble(CONTINUATION, "callMinGap");
+        double maxGap = ConfigLoader.getConfig().getDouble(CONTINUATION, "callMaxGap");
 
         double gapPct = GapAnalyzer.getGapPercentage(series1h, index);
         if (gapPct < minGap || gapPct > maxGap) return false;
 
         // REGLA 2: Worden Stochastic (Percentil de fuerza desde config.yaml)
-        double threshold = ConfigLoader.getConfig().getParam(CONTINUATION, "callWordenThreshold");
+        double threshold = ConfigLoader.getConfig().getDouble(CONTINUATION, "callWordenThreshold");
         double wStoc = WordenAnalyzer.getWordenStochastic(series1h, index, 12, 3);
 
         if (wStoc < threshold) return false;
@@ -52,14 +52,14 @@ public class C5ContinuationCallStrategy implements TradingStrategy {
     @Override
     public double calculateTP(double entryPrice) {
         // Multiplicador de Take Profit desde config.yaml (ej: 0.045)
-        double tpMult = ConfigLoader.getConfig().getParam(CONTINUATION, "tp");
+        double tpMult = ConfigLoader.getConfig().getDouble("global", "tpAtrMultiplier");
         return Math.round((entryPrice * (1 + tpMult)) * 100.0) / 100.0;
     }
 
     @Override
     public double calculateSL(double entryPrice, String ticker) {
         // Multiplicador de Stop Loss desde config.yaml (ej: 0.025)
-        double slMult = ConfigLoader.getConfig().getParam(CONTINUATION, "sl");
+        double slMult = ConfigLoader.getConfig().getDouble("global", "slAtrMultiplier");
         return Math.round((entryPrice * (1 - slMult)) * 100.0) / 100.0;
     }
 

@@ -1,45 +1,44 @@
-# ==========================================
-# HYBRID QUANT TRADING ENGINE CONFIGURATION
-# ==========================================
-
 ibkr:
-  # Connection Settings
   host: "127.0.0.1"
-  port: 7497              # 7497 for Paper Trading (TWS/Gateway), 7496 for Live
-  accountId: "DU1234567"  # Replace with your actual IBKR account ID (DU... for paper)
+  port: 7497
+  accountId: "DUN123"
   syncTimeout: 30
-  
-  # Execution Modes
-  autoExecute: false      # FALSE: Sends Telegram button. TRUE: Fully autonomous execution
-  postOnly: true          # TRUE: Uses limit orders to earn maker fees. FALSE: Aggressive market/limit
-
-  # Base Watchlist (AI will dynamically add more tickers here via MarketRadar)
-  tickers: ["SPY", "QQQ"]
+  autoExecute: false
+  postOnly: true
+  tickers: ["SPY", "AAPL", "MSFT", "AMZN", "NVDA", "TSLA", "META", "AMD", "PLTR", "LLY", "ABNB", "COST", "MARA", "RIOT",
+            "BITX", "MSTR", "MU", "URA", "TSM", "OKLO", "COIN", "GOOGL", "GOOG", "BABA", "ALB", "AMDL", "NFLX", "IWM",
+            "NVO", "PEP", "INTC", "GM", "MDB", "CVX", "KDP", "CCL", "LOW", "DECK", "DIA", "TNA", "XPEV", "MO", "ACN",
+            "WMT", "DELL", "AES", "KO", "BYND", "SMCI", "AVGO", "ARM", "QCOM", "CRWD", "SHOP", "XYZ", "DDOG", "CVNA",
+            "UPST", "HOOD", "AFRM", "RIVN", "NIO", "PDD", "JD", "SOXL", "TQQQ", "ARKK"]
 
 risk:
-  riskPerTradePct: 0.02   # 0.02 = 2% of NetLiquidation risked per trade
-  maxConcurrentTrades: 4  # Maximum number of positions allowed open at the exact same time
-
-telegram:
-  botToken: "YOUR_TELEGRAM_BOT_TOKEN"
-  chatId: "YOUR_CHAT_ID"
+  riskPerTradePct: 0.02   # 2% max risk per trade
+  maxConcurrentTrades: 4
 
 ai:
-  geminiApiKey: "YOUR_GEMINI_API_KEY"
-  enabled: true           # Set to false if you want to run purely on technicals without news/AI
+  geminiApiKey: "key"
+  enabled: true
+  endpointBase: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key="
 
-# ==========================================
-# STRATEGY PARAMETERS & AI OVERRIDES
-# ==========================================
+telegram:
+  botToken: "token"
+  chatId: "chatId"
+  masterKey: "masterKey"
+
 strategies:
-
-  # Baseline targets applied to all tickers
   global:
-    tpAtrMultiplier: 1.2  # Take Profit distance (e.g., 1.2x the 14-period ATR)
-    slAtrMultiplier: 0.8  # Stop Loss distance
-
-  # Example of how the PreMarketRoutine might store ticker-specific AI overrides
-  overrides:
-    TSLA:
-      tpAtrMultiplier: 1.5
-      slAtrMultiplier: 1.2
+    tpAtrMultiplier: 1.2
+    slAtrMultiplier: 0.8
+  opening:
+    bandWidth: 1.2
+    callMinGap: -1.5
+    callMaxGap: -4.0
+    putMinGap: 1.5
+    putMaxGap: 4.0
+  continuation:
+    callMinGap: 0.4
+    callMaxGap: 1.8
+    callWordenThreshold: 55.0
+    putMinGap: -0.4
+    putMaxGap: -1.8
+    putWordenThreshold: 45.0

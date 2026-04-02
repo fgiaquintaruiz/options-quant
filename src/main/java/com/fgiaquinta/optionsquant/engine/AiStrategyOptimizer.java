@@ -42,10 +42,39 @@ public class AiStrategyOptimizer {
         int attempt = 0;
         while (attempt < MAX_RETRIES) {
             try {
-                String apiKey = String.valueOf(ConfigLoader.getConfig().getParam("global", "geminiApiKey"));
-                String endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey;
+                String apiKey = ConfigLoader.getConfig().getString("ai", "geminiApiKey");
+                String endpointBase = ConfigLoader.getConfig().getString("ai", "endpointBase"); // Fetch the base URL
+                String endpoint = endpointBase + apiKey;
 
-                String jsonBody = "{ \"contents\": [{\"parts\":[{\"text\": \"" + prompt.replace("\"", "\\\"").replace("\n", "\\n") + "\"}]}] }";
+                // 1. SAFELY construct the JSON request using Jackson to avoid manual escaping issues
+                // 1. SAFELY construct the JSON request and FORCE the schema
+                Map<String, Object> requestBodyMap = Map.of(
+                        "contents", List.of(
+                                Map.of("parts", List.of(
+                                        Map.of("text", prompt)
+                                ))
+                        ),
+                        "generationConfig", Map.of(
+                                "responseMimeType", "application/json",
+                                "responseSchema", Map.of(
+                                        "type", "ARRAY",
+                                        "items", Map.of(
+                                                "type", "OBJECT",
+                                                "properties", Map.of(
+                                                        "ticker", Map.of("type", "STRING"),
+                                                        "strategyName", Map.of("type", "STRING"),
+                                                        "recommendedTP_ATR_Multiplier", Map.of("type", "NUMBER"),
+                                                        "recommendedSL_ATR_Multiplier", Map.of("type", "NUMBER"),
+                                                        "comment", Map.of("type", "STRING")
+                                                ),
+                                                "required", List.of("ticker", "strategyName", "recommendedTP_ATR_Multiplier", "recommendedSL_ATR_Multiplier")
+                                        )
+                                )
+                        )
+                );
+
+                // mapper will safely escape all quotes, newlines, tabs, etc.
+                String jsonBody = mapper.writeValueAsString(requestBodyMap);
 
                 HttpRequest request = HttpRequest.newBuilder()
                         .uri(URI.create(endpoint))
@@ -57,11 +86,17 @@ public class AiStrategyOptimizer {
 
                 if (response.statusCode() == 200) {
                     JsonNode root = mapper.readTree(response.body());
-                    String rawResponse = root.path("candidates").path(0).path("content").path("parts").path(0).path("text").asText();
+                    String rawResponse = root.path("candidates").path(0)
+                            .path("content").path("parts").path(0)
+                            .path("text").asText();
 
-                    String cleanJson = rawResponse.replaceAll("(?s)```json\\s*(.*?)\\s*```", "$1").replaceAll("```", "").trim();
-                    return mapper.readValue(cleanJson, new TypeReference<>() {
-                    });
+                    // 2. Clean the response just in case Gemini includes markdown blocks
+                    String cleanJson = rawResponse.replaceAll("(?s)```json\\s*(.*?)\\s*```", "$1")
+                            .replaceAll("```", "")
+                            .trim();
+                    System.out.println("🔍 RAW AI JSON: " + cleanJson);
+                    // Specify the full type in TypeReference to avoid diamond operator issues
+                    return mapper.readValue(cleanJson, new TypeReference<List<OptimizationResult>>() {});
                 }
 
                 if (response.statusCode() == 429) {

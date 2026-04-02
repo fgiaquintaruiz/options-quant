@@ -32,7 +32,7 @@ public class C4OpeningCallStrategy implements TradingStrategy {
         // =========================================================================
         // REGLA 1: Baja Volatilidad Previa (Valor desde config.yaml)
         // =========================================================================
-        double maxBandWidth = ConfigLoader.getConfig().getParam("opening", "bandWidth");
+        double maxBandWidth = ConfigLoader.getConfig().getDouble("opening", "bandWidth");
         double prevBandWidth = VolatilityAnalyzer.getBollingerBandWidthPct(series15m, idx15m - 1, 20, 2.0);
 
         if (prevBandWidth > maxBandWidth) return false;
@@ -40,8 +40,8 @@ public class C4OpeningCallStrategy implements TradingStrategy {
         // =========================================================================
         // REGLA 2: Gap Down Extremo (Límites desde config.yaml)
         // =========================================================================
-        double minGap = ConfigLoader.getConfig().getParam("opening", "callMinGap"); // e.g., -1.5
-        double maxGap = ConfigLoader.getConfig().getParam("opening", "callMaxGap"); // e.g., -4.0
+        double minGap = ConfigLoader.getConfig().getDouble("opening", "callMinGap"); // e.g., -1.5
+        double maxGap = ConfigLoader.getConfig().getDouble("opening", "callMaxGap"); // e.g., -4.0
 
         double gapPct = GapAnalyzer.getGapPercentage(series15m, idx15m);
 
@@ -59,13 +59,13 @@ public class C4OpeningCallStrategy implements TradingStrategy {
 
     @Override
     public double calculateTP(double entryPrice) {
-        double tpMult = ConfigLoader.getConfig().getParam("opening", "tp");
+        double tpMult = ConfigLoader.getConfig().getDouble("global", "tpAtrMultiplier");
         return Math.round((entryPrice * (1 + tpMult)) * 100.0) / 100.0;
     }
 
     @Override
     public double calculateSL(double entryPrice, String ticker) {
-        double slMult = ConfigLoader.getConfig().getParam("opening", "sl");
+        double slMult = ConfigLoader.getConfig().getDouble("global", "slAtrMultiplier");
         return Math.round((entryPrice * (1 - slMult)) * 100.0) / 100.0;
     }
 
