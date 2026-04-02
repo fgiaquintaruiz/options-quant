@@ -5,7 +5,7 @@ ibkr:
   syncTimeout: 30
   autoExecute: false
   postOnly: true
-  tickers: ["SPY", "AAPL", "MSFT", "AMZN", "NVDA", "TSLA", "META", "AMD", "PLTR", "LLY", "ABNB", "COST", "RIOT",
+  tickers: ["SPY", "AAPL", "MSFT", "AMZN", "NVDA", "TSLA", "META", "AMD", "PLTR", "ABNB", "COST", "RIOT",
             "BITX", "MSTR", "MU", "URA", "TSM", "OKLO", "COIN", "GOOGL", "GOOG", "BABA", "ALB", "AMDL", "NFLX", "IWM",
             "NVO", "PEP", "INTC", "GM", "MDB", "CVX", "KDP", "CCL", "LOW", "DECK", "DIA", "TNA", "XPEV", "MO", "ACN",
             "WMT", "DELL", "AES", "KO", "BYND", "SMCI", "AVGO", "ARM", "QCOM", "CRWD", "SHOP", "XYZ", "DDOG", "CVNA",

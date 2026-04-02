@@ -503,7 +503,7 @@ public class IbkrService extends DefaultEWrapper {
     }
 
     // Default durations if no CSV exists
-    private String getDefaultDuration(com.fgiaquinta.optionsquant.models.TimeFrame tf) {
+    private String getDefaultDuration(TimeFrame tf) {
         switch (tf) {
             case MIN_1: return "5 D";
             case MIN_15: return "20 D";

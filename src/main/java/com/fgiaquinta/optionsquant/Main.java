@@ -59,7 +59,7 @@ public class Main {
 
         if (isSimulation) {
             System.out.println("⚠️ WARNING: Running in SIMULATION MODE. Awaiting manual input...");
-            MarketSimulator simulator = new MarketSimulator(ibkrService, strategyEngine);
+            MarketSimulator simulator = new MarketSimulator(ibkrService, strategyEngine, tradeManager);
 
             // Start the interactive console for AAPL (Assuming reqId 1000 for the timeframe)
             simulator.runInteractiveSimulation("AAPL", 1000);

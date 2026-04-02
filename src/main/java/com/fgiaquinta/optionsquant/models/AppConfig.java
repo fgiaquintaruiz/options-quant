@@ -68,7 +68,17 @@ public class AppConfig {
 
     public boolean getBoolean(String category, String key) {
         Object value = getRawValue(category, key);
-        return Boolean.getBoolean((String) value);
+
+        // If Jackson correctly parsed it as a Boolean object from the YAML
+        if (value instanceof Boolean) {
+            return (Boolean) value;
+        }
+        // If it was parsed as a String (e.g., wrapped in quotes in the YAML)
+        else if (value != null) {
+            return Boolean.parseBoolean(String.valueOf(value));
+        }
+
+        throw new RuntimeException("❌ Parameter '" + key + "' in '" + category + "' is missing or not a boolean.");
     }
 
     public List<String> getList(String section, String key) {
