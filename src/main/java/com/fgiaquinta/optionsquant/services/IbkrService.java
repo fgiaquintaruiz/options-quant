@@ -32,6 +32,7 @@ public class IbkrService extends DefaultEWrapper {
     private final Map<String, Integer> tickerToConId = new ConcurrentHashMap<>();
     private final Map<Integer, String> orderIdToTicker = new ConcurrentHashMap<>();
     private final CountDownLatch initializationLatch = new CountDownLatch(1);
+    private final CountDownLatch accountLatch = new CountDownLatch(1);
     private boolean accountSynced = false;
     private final Map<String, Set<Double>> tickerToValidStrikes = new ConcurrentHashMap<>();
     private static final DateTimeFormatter IB_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd HH:mm:ss z");
@@ -76,6 +77,10 @@ public class IbkrService extends DefaultEWrapper {
         // This is the signal that the connection is 100% ready to send requests
         System.out.println("✅ [IBKR] System Ready. Next Valid Order ID: " + orderId);
         nextId.set(orderId);
+
+        // 👉 THE MISSING LINE: Subscribe to the account balance stream!
+        // Passing "" (empty string) tells TWS to send data for your default active account.
+        client.reqAccountUpdates(true, "");
         initializationLatch.countDown(); // 👈 This releases the "Wait"
     }
 
@@ -186,17 +191,6 @@ public class IbkrService extends DefaultEWrapper {
     public String getOptimalExpiry(String ticker) { return tickerToBestExpiration.get(ticker); }
 
     @Override
-    public void updateAccountValue(String key, String value, String currency, String accountName) {
-        if ("NetLiquidation".equals(key) && "EUR".equals(currency)) {
-            accountManager.updateBalance(accountName, Double.parseDouble(value));
-            if (!accountSynced) {
-                accountSynced = true;
-                initializationLatch.countDown();
-            }
-        }
-    }
-
-    @Override
     public void contractDetails(int reqId, ContractDetails details) {
         String ticker = details.contract().symbol();
         int conId = details.contract().conid();
@@ -295,18 +289,22 @@ public class IbkrService extends DefaultEWrapper {
      */
     @Override
     public void error(int id, long timestamp, int errorCode, String errorMsg, String advancedOrderRejectJson) {
-        // Look up the ticker/context from the ID we saved
         String context = requestTracker.getOrDefault(id, "Unknown Request");
 
-        // Filter out the "OK" messages
         if (errorCode == 2104 || errorCode == 2106 || errorCode == 2158) return;
 
         System.err.println("❌ [IBKR Error]");
         System.err.println("   ID:       " + id);
-        System.err.println("   Context:  " + context); // This tells you: "Order: TSLA"
+        System.err.println("   Context:  " + context);
         System.err.println("   Code:     " + errorCode);
         System.err.println("   Message:  " + errorMsg);
         System.err.println("--------------------------------------------------");
+
+        // 👉 THE FIX: Si falla un Request, elimínalo de los pendingBackfills para no congelar el bot
+        if (id != -1 && pendingBackfills.contains(id)) {
+            pendingBackfills.remove(id);
+            System.err.println("⚠️ [Sistema Salvado] Soltando el request " + id + " (" + context + ") de la cola de espera por error.");
+        }
     }
 
     public void placeOrder(String ticker, String side, int qty, double entry, double tp, double sl, String strategy) {
@@ -352,9 +350,18 @@ public class IbkrService extends DefaultEWrapper {
         requestTracker.put(tpId, "Take-Profit: " + ticker);
         requestTracker.put(slId, "Stop-Loss: " + ticker);
 
-        // 6. Use OrderFactory to create the bracket
+        // 👉 FIX ERROR 398: Determinar el Exchange real para el Trigger de Precio
+        com.ib.client.Contract stockDef = com.fgiaquinta.optionsquant.factories.ContractFactory.createStockDefinition(ticker);
+        String triggerExchange = stockDef.primaryExch();
+
+        // Fallback de seguridad por si ContractFactory devuelve algo inválido
+        if (triggerExchange == null || triggerExchange.isEmpty() || triggerExchange.equals("SMART")) {
+            triggerExchange = "ISLAND";
+        }
+
+        // 6. Use OrderFactory to create the bracket (Pasando triggerExchange en lugar de "SMART")
         List<com.ib.client.Order> bracket = com.fgiaquinta.optionsquant.factories.OrderFactory.createOptionBracket(
-                pId, tpId, slId, qty, underlyingConId, "SMART", entry, tp, sl, side.equalsIgnoreCase("CALL")
+                pId, tpId, slId, qty, underlyingConId, triggerExchange, entry, tp, sl, side.equalsIgnoreCase("CALL")
         );
 
         // --- DEEP INSPECTION LOG ---
@@ -385,15 +392,27 @@ public class IbkrService extends DefaultEWrapper {
      */
     public void waitForBackfillCompletion() {
         System.out.println("⏳ Waiting for IBKR to finish all historical data downloads...");
+
+        long startTime = System.currentTimeMillis();
+        long timeoutMillis = 45000; // 45 Segundos de tiempo límite (Timeout)
+
+        // Bucle que espera a que la lista se vacíe, PERO con un límite de tiempo
         while (!pendingBackfills.isEmpty()) {
+            if (System.currentTimeMillis() - startTime > timeoutMillis) {
+                System.err.println("⚠️ [TIMEOUT] IBKR tardó demasiado. Ignorando " + pendingBackfills.size() + " descargas pendientes para evitar que el bot se congele.");
+                pendingBackfills.clear(); // Limpiamos la cola a la fuerza
+                break; // Rompemos el bucle infinito
+            }
+
             try {
-                // Sleep for a tiny fraction of a second, then check again
-                Thread.sleep(200);
+                Thread.sleep(200); // Pausa breve para no saturar la CPU
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+                break;
             }
         }
-        System.out.println("✅ All background data downloads are complete!");
+
+        System.out.println("✅ All background data downloads are complete (or timed out)!");
     }
 
     @Override
@@ -539,7 +558,7 @@ public class IbkrService extends DefaultEWrapper {
 
             // 4. Lanzar la petición histórica a IBKR
             // Nota: Asegúrate de que tf.toIbString() devuelve el formato correcto (ej: "1 min", "15 mins", "1 hour", "1 day")
-            client.reqHistoricalData(id, contract, "", deltaDuration, tf.toIbString(), "TRADES", 1, 1, false, null);
+            client.reqHistoricalData(id, contract, "", deltaDuration, tf.getIbkrBarSize(), "TRADES", 1, 1, false, null);
         }
     }
 
@@ -559,6 +578,26 @@ public class IbkrService extends DefaultEWrapper {
 
             // Remove from pending list when done
             pendingBackfills.remove(reqId);
+        }
+    }
+
+    @Override
+    public void updateAccountValue(String key, String value, String currency, String accountName) {
+        if ("NetLiquidation".equals(key)) {
+            System.out.println("🏦 [IBKR] Received Account Update: " + key + " = " + value + " " + currency);
+            accountManager.updateBalance(accountName, Double.parseDouble(value));
+
+            accountLatch.countDown();
+        }
+    }
+
+    public boolean waitForAccountSync(int timeoutSeconds) {
+        try {
+            System.out.println("⏳ Waiting for Account Balance from IBKR...");
+            return accountLatch.await(timeoutSeconds, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            System.out.println("InterruptedException in waitForAccountSync...");
+            return false;
         }
     }
 }

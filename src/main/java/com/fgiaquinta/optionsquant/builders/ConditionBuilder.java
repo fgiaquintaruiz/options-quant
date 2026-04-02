@@ -21,6 +21,11 @@ public class ConditionBuilder {
         p.isMore(isMore);
         p.price(Math.round(price * 100.0) / 100.0);
         p.triggerMethod(2); // Last Price
+
+        // 👉 CORRECCIÓN LÓGICA DE SALIDA:
+        // Al establecer false, le decimos a IBKR que esta condición se une con un "OR" a la siguiente.
+        p.conjunctionConnection(false);
+
         return p;
     }
 
@@ -28,11 +33,11 @@ public class ConditionBuilder {
         TimeCondition tc = (TimeCondition) OrderCondition.create(OrderConditionType.Time);
         String today = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
 
-        // CORRECCIÓN CRÍTICA: IBKR exige un ESPACIO entre la fecha y la hora, no un guion.
-        tc.time(today + " " + timeHms);
+        // CORRECCIÓN CRÍTICA: IBKR exige un ESPACIO entre la fecha y la hora, y la zona horaria.
+        tc.time(today + " " + timeHms + " US/Eastern");
 
         tc.isMore(true);
-        tc.conjunctionConnection(false); // Lógica OR (Precio o Tiempo)
+        tc.conjunctionConnection(false); // Lógica OR
         return tc;
     }
 }

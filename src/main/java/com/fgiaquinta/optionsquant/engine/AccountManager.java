@@ -20,9 +20,9 @@ public class AccountManager {
     // Notice the new 'incomingAccountId' parameter
     public void updateBalance(String incomingAccountId, double balance) {
         // If an account ID is configured, ignore updates from other accounts
-        if (this.accountId != null && !this.accountId.equals(incomingAccountId)) {
-            return;
-        }
+//        if (this.accountId != null && !this.accountId.equals(incomingAccountId)) {
+//            return;
+//        }
 
         this.currentBalance = balance;
 
@@ -38,22 +38,19 @@ public class AccountManager {
         activeTrades.incrementAndGet();
     }
 
-    public void removeActiveTrade() {
-        if (activeTrades.get() > 0) {
-            activeTrades.decrementAndGet();
-        }
-    }
-
     public boolean canOpenNewTrade() {
         int maxTrades = (int) ConfigLoader.getConfig().getDouble("risk", "maxConcurrentTrades");
         return activeTrades.get() < maxTrades;
     }
 
-    // Calculates exactly how many contracts you can afford while respecting the 2% rule
     public int calculateQuantity(double entryPrice, double slPrice) {
-        if (currentBalance <= 0) return 0;
+        // 👉 FIX: Using currentBalance instead of availableFunds
+        if (currentBalance <= 0) {
+            System.out.println("⚠️ [AccountManager] Balance is 0! (Waiting for IBKR sync or simulation fund injection)");
+            return 0;
+        }
 
-        double riskPct = ConfigLoader.getConfig().getDouble("risk", "riskPerTradePct");
+        double riskPct = com.fgiaquinta.optionsquant.utils.ConfigLoader.getConfig().getDouble("risk", "riskPerTradePct");
         double maxRiskDollars = currentBalance * riskPct;
 
         // Options multiplier is 100
@@ -61,7 +58,13 @@ public class AccountManager {
 
         if (riskPerContract == 0) return 0;
 
-        return (int) Math.floor(maxRiskDollars / riskPerContract);
+        int qty = (int) Math.floor(maxRiskDollars / riskPerContract);
+
+        // Deep logging to expose the math
+        System.out.printf("   -> [AccountManager Math] Funds: $%.2f | Max Risk: $%.2f | Risk/Contract: $%.2f | Result Qty: %d%n",
+                currentBalance, maxRiskDollars, riskPerContract, qty);
+
+        return qty;
     }
 
     public double getCurrentBalance() {

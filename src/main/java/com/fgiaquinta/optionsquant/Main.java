@@ -62,6 +62,7 @@ public class Main {
             marketRadar.setForceMacroFavorable(true);
             CommandServer remoteConsole = new CommandServer(tradeManager, preMarketRoutine, marketRadar);
             remoteConsole.start();
+            System.out.println("XXX SimulationMode is enabled");
         }
         ibkrService.setStrategyEngine(strategyEngine);
         String host = config.getString("ibkr", "host");
@@ -80,11 +81,6 @@ public class Main {
             activeTickers = List.of("SPY","QQQ");
         }
 
-        // 2. Request Contract Metadata (CRITICAL FOR OPTIONS TRADING!)
-        System.out.println("🔗 Requesting options chains and contract details...");
-        ibkrService.requestInitialMetadata(activeTickers);
-        ibkrService.subscribeToNewsProviders();
-
         // 3. Request ALL Data (Live & Historical) using your master method
         for (String ticker : activeTickers) {
             ibkrService.startMarketDataTracking(ticker);
@@ -98,17 +94,27 @@ public class Main {
 
         // 4. Block the main thread until the pendingBackfills list is empty
         ibkrService.waitForBackfillCompletion();
+        if (!ibkrService.waitForAccountSync(15)) {
+            System.err.println("⚠️ Warning: Account balance didn't arrive in time!");
+        }
+        System.out.println("🔗 Requesting options chains and contract details...");
+        ibkrService.requestInitialMetadata(activeTickers);
+        ibkrService.subscribeToNewsProviders();
 
-        // 5. Run the Pre-Market AI routine on ALL tickers
-        try {
-            System.out.println("🤖 Initiating AI Pre-Market Routine...");
-            for (String ticker : activeTickers) {
-                // 👉 CALL THE METHOD HERE
-                preMarketRoutine.runDailyAnalysis(ticker, ibkrService, strategies);
+        // 5. Run the Pre-Market AI routine (ONLY IF NOT IN SIMULATION)
+        if (!isSimulation) {
+            try {
+                System.out.println("🤖 Initiating AI Pre-Market Routine...");
+                for (String ticker : activeTickers) {
+                    preMarketRoutine.runDailyAnalysis(ticker, ibkrService, strategies);
+                }
+                preMarketRoutine.setSafeToTrade(true);
+            } catch (Exception e) {
+                System.err.println("❌ AI Analysis failed: " + e.getMessage());
             }
-            preMarketRoutine.setSafeToTrade(true);
-        } catch (Exception e) {
-            System.err.println("❌ AI Analysis failed: " + e.getMessage());
+        } else {
+            System.out.println("⚡ Skipping AI Pre-Market Routine (Simulation Mode Active)");
+            // It's already marked as safeToTrade because of forceReady() above
         }
 
         startHttpServer(ibkrService);
@@ -137,13 +143,39 @@ public class Main {
                         Integer.parseInt(params.get("qty")), Double.parseDouble(params.get("lmt")),
                         Double.parseDouble(params.get("tp")), Double.parseDouble(params.get("sl")), "Telegram-Manual");
 
-                String response = "Order Sent to IBKR!";
-                exchange.sendResponseHeaders(200, response.length());
-                exchange.getResponseBody().write(response.getBytes());
+                // 👉 APLICAMOS EL "BOUNCE-BACK" HACK
+                String htmlResponse = """
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <title>Executing...</title>
+                    </head>
+                    <body style="background-color: #121212; color: #00FF00; text-align: center; font-family: monospace; padding-top: 50px;">
+                        <h2>🚀 Order Dispatched!</h2>
+                        <p>Returning to Telegram...</p>
+                        <script>
+                            setTimeout(function() {
+                                // Redirige forzosamente de vuelta a la app de Telegram usando su esquema nativo
+                                window.location.href = "tg://"; 
+                                // Intenta cerrar la pestaña del navegador (Chrome)
+                                window.close();
+                            }, 500);
+                        </script>
+                    </body>
+                    </html>
+                    """;
+
+                byte[] responseBytes = htmlResponse.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
+                // Le decimos al navegador explícitamente que esto es una página web HTML
+                exchange.getResponseHeaders().add("Content-Type", "text/html; charset=UTF-8");
+                exchange.sendResponseHeaders(200, responseBytes.length);
+                exchange.getResponseBody().write(responseBytes);
                 exchange.close();
             });
             httpServer.start();
-            System.out.println("🌐 Web Callback Server started on port 8080.");
+            System.out.println("🌐 Web Callback Server started on port 9090.");
         } catch (Exception e) {
             System.err.println("❌ Web Server Error: " + e.getMessage());
         }

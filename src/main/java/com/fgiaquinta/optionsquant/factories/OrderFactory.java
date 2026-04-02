@@ -25,7 +25,8 @@ public class OrderFactory {
         parent.orderType("MKT");
         parent.totalQuantity(Decimal.get(qty));
         parent.transmit(false);
-        parent.conditions().add(ConditionBuilder.createPriceCondition(subConId, primaryExch, entry, isCall));
+        // 👉 CORRECCIÓN ERROR 135: Hemos eliminado parent.conditions().add(...)
+        // Las órdenes MKT de opciones no deben llevar condiciones de precio en la entrada.
 
         // 2. Take Profit (transmit false)
         Order takeProfit = createExitOrder(tpId, pId, qty, oca, subConId, primaryExch, tp, isCall);
