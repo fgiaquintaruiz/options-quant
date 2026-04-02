@@ -1,75 +1,29 @@
-# 🚀 Options Quant Engine v1.3.24
+# 🚀 Options Quant Engine v1.3.29
 
-### "The Vanilla Quant" - Java 25 High-Performance Trading Bot
+### "The Vanilla Quant" - Java 21+ High-Performance Trading Bot
 
-An ultra-low latency algorithmic trading engine designed for **Financial Options** on Interactive Brokers (TWS/Gateway). This project prioritizes performance using native technologies and AI-driven risk management.
-
----
-
-## 🛠 Tech Stack & Architecture
-
-- **Runtime:** Java 25 (OpenJDK).
-- **Concurrency:** Virtual Threads (Project Loom) for massive I/O handling.
-- **AI Engine:** Google Gemini Pro for daily TP/SL optimization and sentiment-based hot-lists.
-- **Network:** Native `jdk.httpserver` (no heavy frameworks) and TCP Socket for remote commands.
-- **API:** IBKR TWS API v10.19+.
-- **Analytics:** `ta4j` for technical indicator calculations.
+Un motor de trading algorítmico híbrido diseñado para Interactive Brokers (TWS/Gateway). Diseñado para una ejecución ultrarrápida, gestión de riesgo estricta y uso eficiente de la API de IBKR.
 
 ---
 
-## 🔄 System Execution Flow
+## 🌟 Características Avanzadas (Core Architecture)
 
-The engine follows a strict lifecycle to ensure data integrity and AI alignment:
-
-1.  **Initialization:** Loads `config.yaml` and starts the Cloudflare Tunnel for secure Telegram callbacks.
-2.  **Smart Connectivity:** Establishes connection with TWS/Gateway and validates account permissions.
-3.  **Delta Fetching:** Loads historical data from local CSVs first. It calculates the "Delta" (missing time) and only requests those specific candles from IBKR to bypass pacing violations.
-4.  **AI Pre-Market Routine:** Once backfills are complete, the engine runs a batch analysis via Gemini. The AI optimizes Take Profit (TP) and Stop Loss (SL) multipliers based on 14-day ATR and recent strategy performance.
-5.  **Live Monitoring:** The `StrategyEngine` monitors incoming ticks. If a strategy triggers, it passes through the **MarketRadar** and **Staircase Filter**.
-6.  **Trade Execution:** Orders are routed to IBKR. If `autoExecute` is off, a Telegram message is sent with an interactive "🚀 EXECUTE" button.
-
----
-
-## 🌟 Advanced Features
-
-- **Staircase Re-entry Filter:** Prevents "chopping" by requiring a better entry price than the previous exit (Lower for Calls, Higher for Puts).
-- **AI Hot-List:** Only tickers with a high Gemini confidence score (>70) are permitted for daily trading.
-- **Dynamic Option Picker:** Automatically selects the nearest expiry > 48 hours to avoid gamma risk.
-- **Delta Caching:** Minimizes startup time by using a hybrid CSV + Live API data loading strategy.
+- **Delta Fetching Híbrido & Anti-Deadlock:** El bot prioriza la lectura de datos históricos desde archivos CSV locales. Calcula dinámicamente el tiempo transcurrido desde la última vela y solicita a IBKR solo el Delta faltante. Incluye un sistema **Anti-Deadlock con Timeout de 45 segundos** que evita congelamientos si la API de IBKR pierde peticiones.
+- **Hard Caps Anti-Error 162:** Limitación inteligente de peticiones de datos históricos. Previene baneos automáticos de IBKR limitando descargas máximas según el marco temporal.
+- **Ticker Sanitization & Smart Routing:** Limpieza extrema de símbolos (`replaceAll("[^a-zA-Z]", "")`) y enrutamiento dinámico de `primaryExch` (NASDAQ vs NYSE) para garantizar un rechazo del 0% por "Error 200: No security definition".
+- **Opciones "Exchange-Aware":** Selección dinámica del *Strike Price* validado directamente por la exchange. El bot no adivina el strike, lo machea con las opciones reales disponibles.
+- **Sincronización de Equidad en Tiempo Real:** El `AccountManager` detiene la ejecución de simulaciones hasta que el balance real de la cuenta (NetLiquidation) se sincronice, calculando con precisión matemática la cantidad de contratos permitidos según el riesgo por trade (Options Multiplier Aware).
+- **Staircase Filter:** Bloquea re-entradas perdedoras si el precio de la acción no ha mejorado respecto al último Stop Loss ejecutado.
+- **Advanced Bracket Orders (OCA):** Enrutamiento institucional de órdenes. La entrada se lanza directamente a mercado (MKT/LMT) sin bloqueos condicionales, mientras que el riesgo se delega 100% a los servidores de IBKR usando algoritmos "One-Cancels-All" con lógica condicional híbrida (Precio OR Tiempo "Golden Rule").
 
 ---
 
-## 📟 Developer Tools: Remote Command Console
+## 📟 Consola de Control Remoto & Telegram
 
-The engine features a dedicated TCP Command Server on **Port 7070** for real-time control without log interference.
+El bot incluye dos vías de control remoto sin necesidad de detener el motor:
 
-**How to connect:**
+### 1. Servidor de Comandos Local (Puerto `7070`)
+Ideal para testing desde la terminal. Cómo conectar (Git Bash / Linux / macOS):
 ```bash
 curl telnet://localhost:7070
-````
-
-### Comandos Disponibles:
-skip: Omite la espera del análisis de IA y activa el sistema inmediatamente (estado "Ready").
-
-trigger <TICKER> <ESTRATEGIA> <PRECIO>: Fuerza una señal manual para probar el flujo completo (Cálculos -> Telegram -> Ejecución).
-
-Ejemplo: trigger AAPL C1SqueezeCallStrategy 150.0
-
-exit: Cierra la conexión de la consola remota.
-
-🌟 Filtros de Seguridad Avanzados
-Staircase Filter: Bloquea re-entradas si el precio no ha mejorado respecto al último cierre (más bajo en Calls / más alto en Puts) para evitar el "chopping".
-
-AI Hot-List: Solo se operan activos con alta probabilidad de movimiento según el análisis de sentimiento y volatilidad matutino de Gemini.
-
-Dynamic Picker: Selección automática de contratos de opciones con vencimiento > 48 horas para mitigar riesgos de asignación.
-
-🚀 Instalación rápida
-Configuración: Edita el archivo config.yaml. Para pruebas de desarrollo, asegúrate de poner simulationMode: true.
-
-Ejecución: - Desde terminal: ./gradlew run
-
-Desde IDE: Inicia Main.java (Click derecho -> Run Main).
-
-Control: Abre una terminal aparte (Git Bash) y conéctate vía:
-curl telnet://localhost:7070
+ComandoDescripciónskipHace un bypass del análisis Pre-Market de la IA y pone el bot en estado "LIVE" instantáneamente.macro greenFuerza los filtros macroeconómicos (MarketRadar) a estado FAVORABLE. Ideal para testing.trigger <TICKER> <PRICE>[Quick Test] Dispara automáticamente la C1SqueezeCallStrategy para el ticker indicado.trigger <TICK> <STRAT> <PRICE>Ejecuta manualmente una estrategia específica saltándose las condiciones de tiempo.exitCierra la conexión de la consola remota.

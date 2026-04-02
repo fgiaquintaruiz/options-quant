@@ -22,7 +22,8 @@ public class OrderFactory {
         Order parent = new Order();
         parent.orderId(pId);
         parent.action("BUY");
-        parent.orderType("MKT");
+        parent.orderType("LMT");
+        parent.lmtPrice(entry);
         parent.totalQuantity(Decimal.get(qty));
         parent.transmit(false);
         // 👉 CORRECCIÓN ERROR 135: Hemos eliminado parent.conditions().add(...)
