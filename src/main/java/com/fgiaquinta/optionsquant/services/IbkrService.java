@@ -4,6 +4,7 @@ import com.ib.client.*;
 import com.fgiaquinta.optionsquant.engine.AccountManager;
 import com.fgiaquinta.optionsquant.engine.StrategyEngine;
 import com.fgiaquinta.optionsquant.engine.TradeManager;
+import com.fgiaquinta.optionsquant.engine.MarketRadar;
 import com.fgiaquinta.optionsquant.factories.ContractFactory;
 import com.fgiaquinta.optionsquant.models.MarketRequest;
 import com.fgiaquinta.optionsquant.models.TimeFrame;
@@ -41,8 +42,13 @@ public class IbkrService extends DefaultEWrapper {
     private final EJavaSignal signal;
     private final AccountManager accountManager;
     private StrategyEngine strategyEngine;
-    private com.fgiaquinta.optionsquant.engine.MarketRadar marketRadar;
+    private MarketRadar marketRadar;
+    private TradeManager tradeManager;
 
+    // Required to prevent circular dependency at initialization
+    public void setTradeManager(TradeManager tradeManager) {
+        this.tradeManager = tradeManager;
+    }
     public IbkrService(AccountManager accountManager) {
         this.accountManager = accountManager;
         this.signal = new EJavaSignal();
@@ -230,17 +236,23 @@ public class IbkrService extends DefaultEWrapper {
     @Override
     public void orderStatus(int orderId, String status, com.ib.client.Decimal var3, com.ib.client.Decimal var4,
                             double var5, long var7, int parentId, double lastFillPrice, int var12, String var13, double var14) {
+
         if ("Filled".equalsIgnoreCase(status) && parentId != 0) {
             String ticker = orderIdToTicker.get(orderId);
 
             if (ticker != null) {
                 System.out.println("📉 [IbkrService] Exit filled for " + ticker + " at $" + lastFillPrice);
 
-                // 👉 Notify TradeManager to update the Staircase Filter
-                tradeManager.recordExit(ticker, lastFillPrice);
+                // 👉 Safely notify TradeManager to update the Staircase Filter
+                if (this.tradeManager != null) {
+                    this.tradeManager.recordExit(ticker, lastFillPrice);
+                } else {
+                    System.err.println("⚠️ [IbkrService] TradeManager is not linked. Cannot record exit for forensic filter.");
+                }
 
                 // Clean up memory
-                orderIdToTicker.values().removeIf(val -> val.equals(ticker));            }
+                orderIdToTicker.values().removeIf(val -> val.equals(ticker));
+            }
         }
     }
 
@@ -428,7 +440,7 @@ public class IbkrService extends DefaultEWrapper {
         String ticker = contract.symbol();
         String side = execution.side(); // "BOT" (Comprado) o "SLD" (Vendido)
         double price = execution.price();
-        int shares = (int) execution.shares();
+        int shares = execution.shares().value().intValue();
 
         System.out.println("✅ [EJECUCIÓN IBKR] " + side + " " + shares + " " + ticker + " @ " + price);
 

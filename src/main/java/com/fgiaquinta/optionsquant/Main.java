@@ -40,7 +40,7 @@ public class Main {
         ibkrService.startMarketScreener();
         PreMarketRoutine preMarketRoutine = new PreMarketRoutine(backtester, strategyOptimizer, ibkrService, marketRadar);
         TradeManager tradeManager = new TradeManager(ibkrService, marketRadar, accountManager, preMarketRoutine);
-
+        ibkrService.setTradeManager(tradeManager);
         // 2. Define strategies
         List<TradingStrategy> strategies = Arrays.asList(
                 new C1SqueezeCallStrategy(ibkrService),
@@ -114,7 +114,7 @@ public class Main {
 
         if (isSimulation) {
             System.out.println("⚠️ WARNING: Running in SIMULATION MODE. Injecting fake data...");
-            MarketSimulator simulator = new MarketSimulator(ibkrService, strategyEngine);
+            MarketSimulator simulator = new MarketSimulator(ibkrService);
 
             // Assume reqId 1000 is the 1-Minute timeframe request for SPY
             simulator.runSyntheticTest("SPY", 1000);
