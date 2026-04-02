@@ -41,7 +41,6 @@ public class IbkrService extends DefaultEWrapper {
     private final EJavaSignal signal;
     private final AccountManager accountManager;
     private StrategyEngine strategyEngine;
-    private TradeManager tradeManager;
     private com.fgiaquinta.optionsquant.engine.MarketRadar marketRadar;
 
     public IbkrService(AccountManager accountManager) {
@@ -51,10 +50,6 @@ public class IbkrService extends DefaultEWrapper {
     }
 
     public void setStrategyEngine(StrategyEngine engine) { this.strategyEngine = engine; }
-
-    public void setTradeManager(TradeManager tradeManager) {
-        this.tradeManager = tradeManager;
-    }
 
     public void setMarketRadar(com.fgiaquinta.optionsquant.engine.MarketRadar radar) {
         this.marketRadar = radar;
@@ -448,15 +443,21 @@ public class IbkrService extends DefaultEWrapper {
     }
 
     public void startMarketScreener() {
-        System.out.println("📡 [Screener] Iniciando búsqueda de Top Gainers en el mercado...");
+        System.out.println("📡 [Screener] Starting scan for Top Gainers (CALLs) and Top Losers (PUTs)...");
 
-        com.ib.client.ScannerSubscription scanSub = new com.ib.client.ScannerSubscription();
-        scanSub.instrument("STK"); // Acciones
-        scanSub.locationCode("STK.US.MAJOR"); // Mercado de EEUU (NYSE, NASDAQ)
-        scanSub.scanCode("TOP_PERC_GAIN"); // Las que más porcentaje suben
+        // 1. Gainers Scan (For Call Strategies)
+        com.ib.client.ScannerSubscription scanGainers = new com.ib.client.ScannerSubscription();
+        scanGainers.instrument("STK");
+        scanGainers.locationCode("STK.US.MAJOR");
+        scanGainers.scanCode("TOP_PERC_GAIN");
+        client.reqScannerSubscription(7000, scanGainers, null, null);
 
-        // Pide los 10 mejores resultados. El ID 7000 es arbitrario para identificar el escáner.
-        client.reqScannerSubscription(7000, scanSub, null, null);
+        // 2. Losers Scan (For Put Strategies)
+        com.ib.client.ScannerSubscription scanLosers = new com.ib.client.ScannerSubscription();
+        scanLosers.instrument("STK");
+        scanLosers.locationCode("STK.US.MAJOR");
+        scanLosers.scanCode("TOP_PERC_LOSE"); // IBKR code for biggest drops
+        client.reqScannerSubscription(7001, scanLosers, null, null);
     }
 
     @Override
@@ -465,20 +466,23 @@ public class IbkrService extends DefaultEWrapper {
 
         String ticker = contractDetails.contract().symbol();
 
-        // Si el ticker no está ya en tu MarketRadar, lo añadimos y lo guardamos
+        // Identify the context based on the request ID we assigned
+        String trendType = (reqId == 7000) ? "BULLISH 🟢" : "BEARISH 🔴";
+
         if (marketRadar != null && !marketRadar.isHot(ticker)) {
-            System.out.println("🔥 [Screener Hit] Ticker en tendencia detectado: " + ticker + " (Rank: " + rank + ")");
+            System.out.println("🔥 [Screener] " + trendType + " Ticker detected: " + ticker + " (Rank: " + rank + ")");
             marketRadar.addHotTicker(ticker);
 
-            // Opcional: Empezar a seguir el precio en vivo para este nuevo ticker
-            // startMarketDataTracking(ticker);
+            startMarketDataTracking(ticker);
         }
     }
 
     @Override
     public void scannerDataEnd(int reqId) {
-        System.out.println("✅ [Screener] Escaneo completado.");
-        // Cancelamos la suscripción para que no siga consumiendo recursos infinitamente
+        if (reqId == 7000) System.out.println("✅ [Screener] Top Gainers scan complete.");
+        if (reqId == 7001) System.out.println("✅ [Screener] Top Losers scan complete.");
+
+        // Free up API resources once the lists are populated
         client.cancelScannerSubscription(reqId);
     }
 }
