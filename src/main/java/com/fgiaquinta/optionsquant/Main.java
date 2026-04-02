@@ -26,6 +26,16 @@ public class Main {
         AppConfig config = ConfigLoader.getConfig();
         List<String> activeTickers = config.getList("ibkr", "tickers");
 
+        boolean isSimulation = config.getBoolean("global", "simulationMode");
+
+        if (isSimulation) {
+            System.out.println("⚠️ WARNING: Running in SIMULATION MODE. Awaiting manual input...");
+            MarketSimulator simulator = new MarketSimulator(ibkrService);
+
+            // Start the interactive console for AAPL (Assuming reqId 1000 for the timeframe)
+            simulator.runInteractiveSimulation("AAPL", 1000);
+        }
+
         // 6. Run the Pre-Market AI Routine safely
         System.out.println("🤖 Initiating AI Pre-Market Routine with Gemini...");
         FastBacktester backtester = new FastBacktester();
@@ -116,15 +126,6 @@ public class Main {
 
         System.out.println("🚀 System Online and waiting for market events.");
 
-        boolean isSimulation = ConfigLoader.getConfig().getBoolean("global", "simulationMode");
-
-        if (isSimulation) {
-            System.out.println("⚠️ WARNING: Running in SIMULATION MODE. Injecting fake data...");
-            MarketSimulator simulator = new MarketSimulator(ibkrService);
-
-            // Assume reqId 1000 is the 1-Minute timeframe request for SPY
-            simulator.runSyntheticTest("SPY", 1000);
-        }
     }
 
     private static void startHttpServer(IbkrService ibkr) {

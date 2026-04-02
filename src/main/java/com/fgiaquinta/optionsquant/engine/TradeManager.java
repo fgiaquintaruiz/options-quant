@@ -8,14 +8,12 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class TradeManager {
+    private final Map<String, Double> lastExits = new ConcurrentHashMap<>();
+
     private final IbkrService ibkrService;
     private final MarketRadar marketRadar;
     private final AccountManager accountManager;
     private final PreMarketRoutine preMarket;
-
-
-    // Memory map to ensure we only re-enter at better prices (Staircase Logic)
-    private final Map<String, Double> lastExits = new ConcurrentHashMap<>();
 
     public TradeManager(IbkrService ibkrService, MarketRadar marketRadar, AccountManager accountManager, PreMarketRoutine preMarket) {
         this.ibkrService = ibkrService;
@@ -31,7 +29,7 @@ public class TradeManager {
             System.out.println("🛑 [TradeManager] Trade Blocked: AI Pre-Market Routine is still running. Waiting for system readiness...");
             return;
         }
-        
+
         // 1. RADAR CHECK: Only trade if the ticker made the "Hot List" today
         if (!marketRadar.isHot(ticker)) {
             System.out.println("⏭️ [TradeManager] Skipping " + ticker + ": Not in today's AI Hot List.");
@@ -40,6 +38,7 @@ public class TradeManager {
 
         // Determine direction based on strategy name
         boolean isCall = strategyName.toLowerCase().contains("call") || strategyName.toLowerCase().contains("long");
+        Double lastExitPrice = lastExits.get(ticker);
 
         // 2. MACRO ENVIRONMENT CHECK (Existing)
         if (!marketRadar.isEnvironmentFavorable(isCall)) {
@@ -50,9 +49,7 @@ public class TradeManager {
         // ==========================================
         // 👉 ADDED: STAIRCASE LOGIC (RE-ENTRY FILTER)
         // ==========================================
-        if (lastExits.containsKey(ticker)) {
-            double lastExitPrice = lastExits.get(ticker);
-
+        if (lastExitPrice != null && lastExits.containsKey(ticker)) {
             // For a CALL: Price must be LOWER than our last exit (we want a better entry)
             if (isCall && price >= lastExitPrice) {
                 System.out.println("⏳ [TradeManager] Staircase Block: " + ticker + " Call price " + price +

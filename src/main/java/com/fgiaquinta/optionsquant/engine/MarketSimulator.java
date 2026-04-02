@@ -1,43 +1,85 @@
 package com.fgiaquinta.optionsquant.engine;
 
 import com.fgiaquinta.optionsquant.services.IbkrService;
+import com.fgiaquinta.optionsquant.strategies.TradingStrategy;
+import java.util.Scanner;
 
 public class MarketSimulator {
     private final IbkrService ibkrService;
+    private final StrategyEngine strategyEngine;
+    private final TradeManager tradeManager;
 
-    public MarketSimulator(IbkrService ibkrService) {
+    // Inject the required dependencies
+    public MarketSimulator(IbkrService ibkrService, StrategyEngine strategyEngine, TradeManager tradeManager) {
         this.ibkrService = ibkrService;
+        this.strategyEngine = strategyEngine;
+        this.tradeManager = tradeManager;
     }
 
-    /**
-     * Feeds a handcrafted list of candles into the system to force a strategy trigger.
-     */
-    public void runSyntheticTest(String ticker, int reqId) {
-        System.out.println("🧪 [Simulator] Starting synthetic market feed for " + ticker);
-
-        // 1. Create a fake sequence of closing prices designed to trigger a strategy
-        double[] mockCloses = { 150.0, 148.0, 145.0, 144.0, 144.5, 146.0, 149.0, 152.0, 155.0 };
+    public void runInteractiveSimulation(String ticker, int reqId) {
+        System.out.println("🧪 [Simulator] INTERACTIVE MODE started for " + ticker);
+        System.out.println("👉 Type a price (e.g., '150.5') to inject a candle.");
+        System.out.println("👉 Type 'trigger <ticker> <strategy> <price>' to force a trade.");
+        System.out.println("👉 Type 'exit' to close.");
 
         new Thread(() -> {
-            for (int i = 0; i < mockCloses.length; i++) {
-                double price = mockCloses[i];
+            Scanner scanner = new Scanner(System.in);
+            int tickCount = 0;
 
-                String fakeTime = "20260402  10:0" + i + ":00";
+            while (true) {
+                String input = scanner.nextLine().trim();
 
-                // Format: time, open, high, low, close, volume, count, wap
-                com.ib.client.Bar mockBar = new com.ib.client.Bar(
-                        fakeTime, price - 1, price + 1, price - 2, price, com.ib.client.Decimal.get(100), 100, com.ib.client.Decimal.get(price)
-                );
+                if ("exit".equalsIgnoreCase(input)) {
+                    System.out.println("🛑 [Simulator] Interactive session ended.");
+                    break;
+                }
 
-                System.out.println("📈 [Simulator] Injecting Tick: " + price);
+                // Command Parser: Handle forced strategy triggers
+                if (input.toLowerCase().startsWith("trigger ")) {
+                    try {
+                        String[] parts = input.split(" ");
+                        String targetTicker = parts[1].toUpperCase();
+                        String strategyName = parts[2];
+                        double entryPrice = Double.parseDouble(parts[3]);
 
-                // 2. Inject the fake bar directly into the IbkrService event handler
-                ibkrService.historicalDataUpdate(reqId, mockBar);
+                        System.out.println("⚡ [Simulator] Forcing signal for " + strategyName + " on " + targetTicker);
 
-                // Wait 2 seconds between candles to simulate live market speed
-                try { Thread.sleep(2000); } catch (InterruptedException e) {}
+                        // Find the strategy object by name in the engine
+                        TradingStrategy targetStrategy = strategyEngine.getStrategies().stream()
+                                .filter(s -> s.getClass().getSimpleName().equalsIgnoreCase(strategyName) ||
+                                        s.getName().equalsIgnoreCase(strategyName))
+                                .findFirst()
+                                .orElse(null);
+
+                        if (targetStrategy != null) {
+                            // Bypass technical evaluation and send directly to TradeManager
+                            tradeManager.evaluateSignal(targetTicker, strategyName, entryPrice);
+                        } else {
+                            System.err.println("⚠️ Strategy not found. Please check the name.");
+                        }
+                    } catch (Exception e) {
+                        System.err.println("⚠️ Invalid command format. Use: trigger <ticker> <strategy> <price>");
+                    }
+                    continue; // Skip the standard candle injection below
+                }
+
+                // Standard Candle Injection Logic
+                try {
+                    double price = Double.parseDouble(input);
+                    String fakeTime = "20260402  10:" + String.format("%02d", tickCount % 60) + ":00";
+
+                    com.ib.client.Bar mockBar = new com.ib.client.Bar(
+                            fakeTime, price - 1, price + 1, price - 2, price,
+                            com.ib.client.Decimal.get(100), 100, com.ib.client.Decimal.get(price)
+                    );
+
+                    System.out.println("📈 [Simulator] Injecting Tick -> " + ticker + " @ $" + price);
+                    ibkrService.historicalDataUpdate(reqId, mockBar);
+                    tickCount++;
+                } catch (NumberFormatException e) {
+                    System.err.println("⚠️ Invalid input. Enter a number or a valid command.");
+                }
             }
-            System.out.println("🧪 [Simulator] End of synthetic feed.");
         }).start();
     }
 }

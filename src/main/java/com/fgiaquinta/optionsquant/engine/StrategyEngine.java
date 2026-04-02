@@ -25,6 +25,10 @@ public class StrategyEngine {
         this.tradeManager = tradeManager;
     }
 
+    public List<TradingStrategy> getStrategies() {
+        return strategies;
+    }
+    
     public void onBarAdded(String ticker, com.fgiaquinta.optionsquant.models.TimeFrame timeFrame, org.ta4j.core.BarSeries series) {
         System.out.println("⚙️ [StrategyEngine] onBarAdded entered for " + ticker + " [" + timeFrame + "]");
 
