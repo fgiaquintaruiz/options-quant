@@ -459,9 +459,6 @@ public class IbkrService extends DefaultEWrapper {
         client.cancelScannerSubscription(reqId);
     }
 
-    // Helper to determine the gap between the last saved candle and now
-    // Helper para determinar cuánto tiempo ha pasado desde la última vela guardada
-    // Helper para determinar cuánto tiempo ha pasado desde la última vela guardada
     private String calculateDeltaDuration(org.ta4j.core.BarSeries series, com.fgiaquinta.optionsquant.models.TimeFrame tf) {
         if (series == null || series.isEmpty()) {
             return tf.getIbkrDuration(); // Fallback: Descarga inicial
@@ -514,29 +511,35 @@ public class IbkrService extends DefaultEWrapper {
     }
 
     public void startMarketDataTracking(String ticker) {
-        com.ib.client.Contract contract = com.fgiaquinta.optionsquant.factories.ContractFactory.createStockDefinition(ticker);
-        System.out.println("📡 Requesting live data for: " + ticker);
+        System.out.println("📡 Iniciando tracking para: " + ticker);
+        com.ib.client.Contract contract = ContractFactory.createStockDefinition(ticker);
 
-        for (com.fgiaquinta.optionsquant.models.TimeFrame tf : com.fgiaquinta.optionsquant.models.TimeFrame.values()) {
-            com.fgiaquinta.optionsquant.models.MarketRequest request = new com.fgiaquinta.optionsquant.models.MarketRequest(ticker, tf);
+        for (TimeFrame tf : TimeFrame.values()) {
+            MarketRequest request = new MarketRequest(ticker, tf);
             String cacheKey = request.getCacheKey();
 
-            // 1. Cargar el histórico local primero
-            org.ta4j.core.BarSeries series = DataManager.loadSeries(cacheKey);
-            marketData.put(cacheKey, series);
+            // 1. Intentar cargar los datos históricos desde el CSV local
+            org.ta4j.core.BarSeries localSeries = DataManager.loadSeries(cacheKey);
 
-            int reqId = nextId.getAndIncrement();
-            requestTracker.put(reqId, "Live-Data [" + tf + "]: " + ticker);
-            activeRequests.put(reqId, request);
-            pendingBackfills.add(reqId);
+            // Guardar la serie en memoria (solo si existe, si no, se inicializará luego)
+            if (localSeries != null) {
+                marketData.put(cacheKey, localSeries);
+            }
 
-            // 2. Calcular cuánto tiempo falta por descargar
-            String durationStr = calculateDeltaDuration(series, tf);
-            System.out.println("   -> Subscribing to " + tf + " (ID: " + reqId + ") | Delta: " + durationStr);
+            // 2. Calcular el Delta usando TU MÉTODO con Hard Caps
+            // Tu método ya maneja internamente si series es null o está vacía
+            String deltaDuration = calculateDeltaDuration(localSeries, tf);
 
-            // 3. Solicitar SOLO el delta (keepUpToDate = true)
-            client.reqHistoricalData(reqId, contract, "",
-                    durationStr, tf.getIbkrBarSize(), "TRADES", 1, 2, true, null);
+            // 3. Preparar la petición a IBKR
+            int id = nextId.getAndIncrement();
+            activeRequests.put(id, request); // Guardamos la petición para saber qué nos devuelve IBKR
+            requestTracker.put(id, "Live-Data [" + tf + "]: " + ticker); // Para el log de errores
+
+            System.out.println("🔄 [" + tf + "] " + ticker + " Pidiendo Delta: " + deltaDuration);
+
+            // 4. Lanzar la petición histórica a IBKR
+            // Nota: Asegúrate de que tf.toIbString() devuelve el formato correcto (ej: "1 min", "15 mins", "1 hour", "1 day")
+            client.reqHistoricalData(id, contract, "", deltaDuration, tf.toIbString(), "TRADES", 1, 1, false, null);
         }
     }
 

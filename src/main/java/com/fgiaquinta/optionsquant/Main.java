@@ -58,6 +58,8 @@ public class Main {
         boolean isSimulation = config.getBoolean("global", "simulationMode");
 
         if (config.getBoolean("global", "simulationMode")) {
+            preMarketRoutine.forceReady();
+            marketRadar.setForceMacroFavorable(true);
             CommandServer remoteConsole = new CommandServer(tradeManager, preMarketRoutine, marketRadar);
             remoteConsole.start();
         }
