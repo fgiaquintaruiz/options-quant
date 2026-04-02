@@ -49,6 +49,8 @@ public class IbkrService extends DefaultEWrapper {
     public void setTradeManager(TradeManager tradeManager) {
         this.tradeManager = tradeManager;
     }
+
+    @SuppressWarnings("this-escape")
     public IbkrService(AccountManager accountManager) {
         this.accountManager = accountManager;
         this.signal = new EJavaSignal();
@@ -458,22 +460,44 @@ public class IbkrService extends DefaultEWrapper {
     }
 
     // Helper to determine the gap between the last saved candle and now
+    // Helper para determinar cuánto tiempo ha pasado desde la última vela guardada
+    // Helper para determinar cuánto tiempo ha pasado desde la última vela guardada
     private String calculateDeltaDuration(org.ta4j.core.BarSeries series, com.fgiaquinta.optionsquant.models.TimeFrame tf) {
         if (series == null || series.isEmpty()) {
-            return getDefaultDuration(tf); // No cache, full download
+            return tf.getIbkrDuration(); // Fallback: Descarga inicial
         }
 
-        java.time.ZonedDateTime lastBarTime = series.getBar(series.getBarCount() - 1).getEndTime();
+        java.time.ZonedDateTime lastBarTime = series.getLastBar().getEndTime();
         java.time.ZonedDateTime now = java.time.ZonedDateTime.now(lastBarTime.getZone());
         long secondsBetween = java.time.Duration.between(lastBarTime, now).getSeconds();
 
-        if (secondsBetween <= 0) return "60 S"; // Minimum request
+        if (secondsBetween <= 0) return "60 S"; // Mínimo permitido por IBKR
 
-        // Convert the gap into an IBKR valid duration string format
+        long days = (secondsBetween / 86400) + 1; // +1 día por margen de seguridad
+
+        // 👉 FIX: Límites máximos absolutos (Hard Caps) para evitar el Error 162
+        switch (tf) {
+            case MIN_1:
+                if (days > 5) return "5 D";   // IBKR solo suele dar ~5-7 días de velas de 1 min
+                break;
+            case MIN_15:
+                if (days > 20) return "20 D"; // Max ~20 días para 15 min
+                break;
+            case HOUR_1:
+                if (days > 60) return "2 M";  // Max ~2 meses para 1 hora
+                break;
+            case DAY_1:
+                if (days > 1825) return "5 Y"; // Max 5 años para diarias
+                break;
+        }
+
+        // Convertir la diferencia al formato estricto de IBKR
         if (secondsBetween < 86400) {
-            return secondsBetween + " S"; // Request in seconds if less than a day
+            return secondsBetween + " S";
+        } else if (days > 365) {
+            long years = (days / 365) + 1;
+            return years + " Y";
         } else {
-            long days = (secondsBetween / 86400) + 1; // Add 1 day as a safety buffer
             return days + " D";
         }
     }
@@ -513,25 +537,6 @@ public class IbkrService extends DefaultEWrapper {
             // 3. Solicitar SOLO el delta (keepUpToDate = true)
             client.reqHistoricalData(reqId, contract, "",
                     durationStr, tf.getIbkrBarSize(), "TRADES", 1, 2, true, null);
-        }
-    }
-
-    @Override
-    public void historicalDataEnd(int reqId, String startDateStr, String endDateStr) {
-        com.fgiaquinta.optionsquant.models.MarketRequest request = activeRequests.get(reqId);
-        if (request != null) {
-            org.ta4j.core.BarSeries series = marketData.get(request.getCacheKey());
-            int totalBars = (series != null) ? series.getBarCount() : 0;
-
-            System.out.println("✅ [BACKFILL COMPLETE] Loaded " + totalBars + " historical bars for " + request.ticker() + " [" + request.timeFrame() + "]. Now tracking LIVE.");
-
-            // 👉 AÑADIR ESTO: Guardar el histórico actualizado en disco
-            if (series != null) {
-                DataManager.saveToCsv(series);
-            }
-
-            // Remove from pending list when done
-            pendingBackfills.remove(reqId);
         }
     }
 
