@@ -13,9 +13,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class PreMarketRoutine {
-    // Memory map storing today's custom AI parameters per ticker
     private final Map<String, OptimizationResult> dailyOverrides = new ConcurrentHashMap<>();
-    private boolean safeToTrade = true; // Por defecto asumimos que es seguro
+    private boolean safeToTrade = false;
 
     private final FastBacktester backtester;
     private final AiStrategyOptimizer optimizer;
@@ -27,6 +26,14 @@ public class PreMarketRoutine {
         this.optimizer = optimizer;
         this.ibkrService = ibkrService;
         this.marketRadar = marketRadar;
+    }
+
+    /**
+     * Bypasses the AI analysis wait and goes live immediately.
+     */
+    public void forceReady() {
+        this.safeToTrade = true;
+        System.out.println("⚡ [PreMarket] System manually forced to READY state.");
     }
 
     /**

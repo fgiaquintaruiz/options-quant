@@ -8,12 +8,14 @@ public class MarketSimulator {
     private final IbkrService ibkrService;
     private final StrategyEngine strategyEngine;
     private final TradeManager tradeManager;
+    private final MarketRadar marketRadar;
 
     // Inject the required dependencies
-    public MarketSimulator(IbkrService ibkrService, StrategyEngine strategyEngine, TradeManager tradeManager) {
+    public MarketSimulator(IbkrService ibkrService, StrategyEngine strategyEngine, TradeManager tradeManager, MarketRadar marketRadar) {
         this.ibkrService = ibkrService;
         this.strategyEngine = strategyEngine;
         this.tradeManager = tradeManager;
+        this.marketRadar = marketRadar;
     }
 
     public void runInteractiveSimulation(String ticker, int reqId) {
@@ -52,6 +54,7 @@ public class MarketSimulator {
                                 .orElse(null);
 
                         if (targetStrategy != null) {
+                            marketRadar.addHotTicker(targetTicker);
                             // Bypass technical evaluation and send directly to TradeManager
                             tradeManager.evaluateSignal(targetTicker, strategyName, entryPrice);
                         } else {

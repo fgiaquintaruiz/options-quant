@@ -57,12 +57,9 @@ public class Main {
         StrategyEngine strategyEngine = new StrategyEngine(ibkrService, strategies, tradeManager);
         boolean isSimulation = config.getBoolean("global", "simulationMode");
 
-        if (isSimulation) {
-            System.out.println("⚠️ WARNING: Running in SIMULATION MODE. Awaiting manual input...");
-            MarketSimulator simulator = new MarketSimulator(ibkrService, strategyEngine, tradeManager);
-
-            // Start the interactive console for AAPL (Assuming reqId 1000 for the timeframe)
-            simulator.runInteractiveSimulation("AAPL", 1000);
+        if (config.getBoolean("global", "simulationMode")) {
+            CommandServer remoteConsole = new CommandServer(tradeManager, preMarketRoutine);
+            remoteConsole.start();
         }
         ibkrService.setStrategyEngine(strategyEngine);
         String host = config.getString("ibkr", "host");
