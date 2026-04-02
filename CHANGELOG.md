@@ -1,28 +1,21 @@
----
+[1.3.29] - 2026-04-02 (Estabilidad Institucional & UX)
+Added
+Anti-Deadlock Backfill Barrier: Implementado un Timeout de 45 segundos en la carga de datos históricos (waitForBackfillCompletion) y una purga activa de IDs de peticiones fantasma en caso de errores de API, asegurando que el bot siempre arranque incluso si TWS pierde paquetes.
 
-## 📅 CHANGELOG.md
+Telegram Bounce-Back UX: Modificado el HttpServer (Puerto 9090) para devolver un payload HTML/JS que ejecuta window.location.href = "tg://";. Esto evita que la pestaña de Chrome se quede abierta inútilmente tras confirmar una orden desde el móvil.
 
-```markdown
-# Changelog
+Fixed
+IBKR Error 135 (Bracket Rejection): Eliminada la condición de precio en la orden Padre (OrderType: MKT) dentro de OrderFactory. Esto soluciona el rechazo instantáneo que provocaba que las órdenes hijas (Take Profit / Stop Loss) fallaran por orfandad.
 
-## [1.3.24] - 2026-04-02
-### Added
-- **TCP Command Server**: Servidor de comandos en puerto 7070 para controlar el bot desde una terminal externa (Git Bash/Telnet).
-- **Comandos de Consola**: Soporte para `skip` (AI Bypass), `trigger` (Manual signal) y `exit`.
-- **AI Pre-Market Routine**: Optimización dinámica de multiplicadores TP/SL vía Gemini Pro.
-- **Filtro de Reentrada Staircase**: Lógica en `TradeManager` para evitar compras repetidas a precios desfavorables.
-- **Delta Fetching Logic**: Sistema de carga híbrida CSV + API que reduce el tiempo de arranque y evita errores 321/162 de IBKR.
+Bracket Logic (AND to OR): Corregido el ConditionBuilder seteando conjunctionConnection(false). Ahora IBKR entiende correctamente que el bot debe salir del trade si toca el Stop Loss/Take Profit O si se alcanza la hora límite de la Golden Rule (21:55), en lugar de exigir que ambas condiciones ocurran simultáneamente.
 
-### Fixed
-- **ClassCastException**: Corregido error crítico de lectura de booleanos en la configuración.
-- **IBKR Pacing Violations**: Implementado un "throttle" de 100ms entre peticiones de tickers para evitar desconexiones (Error 504).
-- **Gemini Rate Limiting**: Añadido delay de 4s y lógica de reintento para errores de cuota 429.
-- **Circular Dependency**: Resuelto el enlace entre `IbkrService` y `TradeManager` mediante inyección por setter.
+[1.3.28] - 2026-04-02
+Added
+Command Server V2: Añadido soporte para macro green y modo "Quick Trigger".
 
-## [1.0.4] - 2026-03-30
-### Added
-- **ForensicLogger**: Auditoría de fills, slippage y comisiones.
-- **Time Parsing**: Soporte para formatos de fecha duales de la API de IBKR.
+Account Latch: Barrera de sincronización en el arranque para garantizar capital neto real (NetLiquidation).
 
-## [1.0.1] - 2026-02-15
-- Implementación inicial de estrategias C1, C2, P1, P2 y DataManager base.
+Changed
+Contract Factory: Mejorado enrutamiento asignando NYSE a tickers conocidos e ISLAND a los demás.
+
+Account Manager: Corregido cálculo Qty integrando multiplicador de opciones (x100) vs USD/Riesgo.
