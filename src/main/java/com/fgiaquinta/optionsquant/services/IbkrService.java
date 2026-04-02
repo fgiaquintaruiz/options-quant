@@ -124,34 +124,6 @@ public class IbkrService extends DefaultEWrapper {
         }
     }
 
-    public void startMarketDataTracking(String ticker) {
-        Contract contract = ContractFactory.createStockDefinition(ticker);
-        System.out.println("📡 Requesting live data for: " + ticker);
-
-        for (TimeFrame tf : TimeFrame.values()) {
-            MarketRequest request = new MarketRequest(ticker, tf);
-            String cacheKey = request.getCacheKey();
-
-            // Load what we have locally first
-            BarSeries series = DataManager.loadSeries(cacheKey);
-            marketData.put(cacheKey, series);
-
-            int reqId = nextId.getAndIncrement();
-            // 👉 ADD THIS LINE TO FIX (Unknown Request)
-            requestTracker.put(reqId, "Live-Data [" + tf + "]: " + ticker);
-            activeRequests.put(reqId, request);
-            // ADD THIS: Register the request as pending
-            pendingBackfills.add(reqId);
-
-            System.out.println("   -> Subscribing to " + tf + " (ID: " + reqId + ")");
-
-            // FIX: Set the 9th parameter (keepUpToDate) to TRUE
-            // This tells IBKR to keep sending us new bars as they close.
-            client.reqHistoricalData(reqId, contract, "",
-                    tf.getIbkrDuration(), tf.getIbkrBarSize(), "TRADES", 1, 2, true, null);
-        }
-    }
-
     /**
      * This method is called by IBKR whenever a LIVE bar is updated or closed.
      */
@@ -406,19 +378,6 @@ public class IbkrService extends DefaultEWrapper {
 
     public void disconnect() { client.eDisconnect(); }
 
-    @Override
-    public void historicalDataEnd(int reqId, String startDateStr, String endDateStr) {
-        MarketRequest request = activeRequests.get(reqId);
-        if (request != null) {
-            org.ta4j.core.BarSeries series = marketData.get(request.getCacheKey());
-            int totalBars = (series != null) ? series.getBarCount() : 0;
-
-            System.out.println("✅ [BACKFILL COMPLETE] Loaded " + totalBars + " historical bars for " + request.ticker() + " [" + request.timeFrame() + "]. Now tracking LIVE.");
-            // ADD THIS: Remove from pending list when done
-            pendingBackfills.remove(reqId);
-        }
-    }
-
     /**
      * Blocks the main thread until all requested historical backfills have fired 'historicalDataEnd'
      */
@@ -496,5 +455,102 @@ public class IbkrService extends DefaultEWrapper {
 
         // Free up API resources once the lists are populated
         client.cancelScannerSubscription(reqId);
+    }
+
+    // Helper to determine the gap between the last saved candle and now
+    private String calculateDeltaDuration(org.ta4j.core.BarSeries series, com.fgiaquinta.optionsquant.models.TimeFrame tf) {
+        if (series == null || series.isEmpty()) {
+            return getDefaultDuration(tf); // No cache, full download
+        }
+
+        java.time.ZonedDateTime lastBarTime = series.getBar(series.getBarCount() - 1).getEndTime();
+        java.time.ZonedDateTime now = java.time.ZonedDateTime.now(lastBarTime.getZone());
+        long secondsBetween = java.time.Duration.between(lastBarTime, now).getSeconds();
+
+        if (secondsBetween <= 0) return "60 S"; // Minimum request
+
+        // Convert the gap into an IBKR valid duration string format
+        if (secondsBetween < 86400) {
+            return secondsBetween + " S"; // Request in seconds if less than a day
+        } else {
+            long days = (secondsBetween / 86400) + 1; // Add 1 day as a safety buffer
+            return days + " D";
+        }
+    }
+
+    // Default durations if no CSV exists
+    private String getDefaultDuration(com.fgiaquinta.optionsquant.models.TimeFrame tf) {
+        switch (tf) {
+            case MIN_1: return "5 D";
+            case MIN_15: return "20 D";
+            case HOUR_1: return "2 M";
+            case DAY_1: return "2 Y";
+            default: return "1 M";
+        }
+    }
+
+    public void startMarketDataTracking(String ticker) {
+        com.ib.client.Contract contract = com.fgiaquinta.optionsquant.factories.ContractFactory.createStockDefinition(ticker);
+        System.out.println("📡 Requesting live data for: " + ticker);
+
+        for (com.fgiaquinta.optionsquant.models.TimeFrame tf : com.fgiaquinta.optionsquant.models.TimeFrame.values()) {
+            com.fgiaquinta.optionsquant.models.MarketRequest request = new com.fgiaquinta.optionsquant.models.MarketRequest(ticker, tf);
+            String cacheKey = request.getCacheKey();
+
+            // 1. Cargar el histórico local primero
+            org.ta4j.core.BarSeries series = DataManager.loadSeries(cacheKey);
+            marketData.put(cacheKey, series);
+
+            int reqId = nextId.getAndIncrement();
+            requestTracker.put(reqId, "Live-Data [" + tf + "]: " + ticker);
+            activeRequests.put(reqId, request);
+            pendingBackfills.add(reqId);
+
+            // 2. Calcular cuánto tiempo falta por descargar
+            String durationStr = calculateDeltaDuration(series, tf);
+            System.out.println("   -> Subscribing to " + tf + " (ID: " + reqId + ") | Delta: " + durationStr);
+
+            // 3. Solicitar SOLO el delta (keepUpToDate = true)
+            client.reqHistoricalData(reqId, contract, "",
+                    durationStr, tf.getIbkrBarSize(), "TRADES", 1, 2, true, null);
+        }
+    }
+
+    @Override
+    public void historicalDataEnd(int reqId, String startDateStr, String endDateStr) {
+        com.fgiaquinta.optionsquant.models.MarketRequest request = activeRequests.get(reqId);
+        if (request != null) {
+            org.ta4j.core.BarSeries series = marketData.get(request.getCacheKey());
+            int totalBars = (series != null) ? series.getBarCount() : 0;
+
+            System.out.println("✅ [BACKFILL COMPLETE] Loaded " + totalBars + " historical bars for " + request.ticker() + " [" + request.timeFrame() + "]. Now tracking LIVE.");
+
+            // 👉 AÑADIR ESTO: Guardar el histórico actualizado en disco
+            if (series != null) {
+                DataManager.saveToCsv(series);
+            }
+
+            // Remove from pending list when done
+            pendingBackfills.remove(reqId);
+        }
+    }
+
+    @Override
+    public void historicalDataEnd(int reqId, String startDateStr, String endDateStr) {
+        com.fgiaquinta.optionsquant.models.MarketRequest request = activeRequests.get(reqId);
+        if (request != null) {
+            org.ta4j.core.BarSeries series = marketData.get(request.getCacheKey());
+            int totalBars = (series != null) ? series.getBarCount() : 0;
+
+            System.out.println("✅ [BACKFILL COMPLETE] Loaded " + totalBars + " historical bars for " + request.ticker() + " [" + request.timeFrame() + "]. Now tracking LIVE.");
+
+            // 👉 AÑADIR ESTO: Guardar el histórico actualizado en disco
+            if (series != null) {
+                DataManager.saveToCsv(series);
+            }
+
+            // Remove from pending list when done
+            pendingBackfills.remove(reqId);
+        }
     }
 }
