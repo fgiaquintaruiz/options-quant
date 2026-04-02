@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class MarketRadar {
+    private boolean forceMacroFavorable = false;
+
     private final List<String> hotTickers = new CopyOnWriteArrayList<>();
     private final AiNewsInterpreter newsInterpreter = new AiNewsInterpreter();
     private final IbkrService ibkrService;
@@ -25,15 +27,18 @@ public class MarketRadar {
         }
     }
 
+    public void setForceMacroFavorable(boolean force) {
+        this.forceMacroFavorable = force;
+        System.out.println("🌐 [MarketRadar] Macro Environment Force: " + (force ? "ON (Always Green)" : "OFF"));
+    }
+
     public boolean isHot(String ticker) {
         return hotTickers.contains(ticker);
     }
 
-    public List<String> getHotTickers() {
-        return hotTickers;
-    }
-
     public boolean isEnvironmentFavorable(boolean isCall) {
+        if (forceMacroFavorable) return true;
+
         boolean technicalFavorable = checkTechnicalEnvironment(isCall);
 
         System.out.println("🧠 Asking Gemini for real-time sentiment approval...");
@@ -78,4 +83,5 @@ public class MarketRadar {
             return true;
         }
     }
+
 }

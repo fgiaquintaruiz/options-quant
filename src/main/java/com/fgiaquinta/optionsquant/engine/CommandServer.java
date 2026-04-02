@@ -4,13 +4,16 @@ import java.io.*;
 import java.net.*;
 
 public class CommandServer {
-    private final TradeManager tradeManager;
-    private final PreMarketRoutine preMarketRoutine;
     private final int port = 7070;
 
-    public CommandServer(TradeManager tradeManager, PreMarketRoutine preMarketRoutine) {
+    private final TradeManager tradeManager;
+    private final PreMarketRoutine preMarketRoutine;
+    private final MarketRadar marketRadar;
+
+    public CommandServer(TradeManager tradeManager, PreMarketRoutine preMarketRoutine, MarketRadar marketRadar) {
         this.tradeManager = tradeManager;
         this.preMarketRoutine = preMarketRoutine;
+        this.marketRadar = marketRadar;
     }
 
     public void start() {
@@ -38,6 +41,9 @@ public class CommandServer {
                             if (lowerInput.equals("skip")) {
                                 preMarketRoutine.forceReady();
                                 out.println("⚡ AI Bypass activated. System is now LIVE.");
+                            } else if (lowerInput.equals("macro green")) { // 👈 NUEVO COMANDO
+                                marketRadar.setForceMacroFavorable(true);
+                                out.println("🌐 Macro filters disabled. All environments are now FAVORABLE.");
                             } else if (lowerInput.startsWith("trigger ")) {
                                 handleTrigger(input, out);
                             } else if (lowerInput.equals("exit")) {
@@ -71,7 +77,7 @@ public class CommandServer {
             String ticker = parts[1].toUpperCase();
             String strategy = parts[2];
             double price = Double.parseDouble(parts[3]);
-
+            marketRadar.addHotTicker(ticker);
             out.println("🚀 Dispatching manual trigger for " + ticker + "...");
 
             // Calls evaluateSignal directly in TradeManager

@@ -58,7 +58,7 @@ public class Main {
         boolean isSimulation = config.getBoolean("global", "simulationMode");
 
         if (config.getBoolean("global", "simulationMode")) {
-            CommandServer remoteConsole = new CommandServer(tradeManager, preMarketRoutine);
+            CommandServer remoteConsole = new CommandServer(tradeManager, preMarketRoutine, marketRadar);
             remoteConsole.start();
         }
         ibkrService.setStrategyEngine(strategyEngine);
