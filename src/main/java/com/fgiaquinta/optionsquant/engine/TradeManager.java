@@ -15,25 +15,40 @@ public class TradeManager {
     private final AccountManager accountManager;
     private final PreMarketRoutine preMarket;
 
-    public TradeManager(IbkrService ibkrService, MarketRadar marketRadar, AccountManager accountManager, PreMarketRoutine preMarket) {
+    public TradeManager(IbkrService ibkrService, MarketRadar marketRadar, AccountManager accountManager,
+                        PreMarketRoutine preMarket) {
         this.ibkrService = ibkrService;
         this.marketRadar = marketRadar;
         this.accountManager = accountManager;
         this.preMarket = preMarket;
     }
 
+    // ==========================================
+    // 👉 MÉTODO NORMAL (Llamado por las estrategias automáticamente)
+    // ==========================================
     public void evaluateSignal(String ticker, String strategyName, double price) {
-        System.out.println("🧐 [TradeManager] evaluateSignal entered for: " + strategyName + " on " + ticker + " at " + price);
+        // Llama al método principal asumiendo que NO es una ejecución forzada
+        evaluateSignal(ticker, strategyName, price, false);
+    }
 
-        if (!preMarket.isSafeToTrade()) {
-            System.out.println("🛑 [TradeManager] Trade Blocked: AI Pre-Market Routine is still running. Waiting for system readiness...");
-            return;
-        }
+    // ==========================================
+    // 👉 MÉTODO PRINCIPAL (Llamado por el Webhook de Telegram)
+    // ==========================================
+    public void evaluateSignal(String ticker, String strategyName, double price, boolean forceExecution) {
+        System.out.println("🧐 [TradeManager] evaluateSignal entered for: " + strategyName + " on " + ticker + " at " + price + (forceExecution ? " (MANUAL OVERRIDE)" : ""));
 
-        // 1. RADAR CHECK: Only trade if the ticker made the "Hot List" today
-        if (!marketRadar.isHot(ticker)) {
-            System.out.println("⏭️ [TradeManager] Skipping " + ticker + ": Not in today's AI Hot List.");
-            return;
+        // Si es una ejecución forzada por Telegram, saltamos los bloqueos de pre-market y radar para obedecerte inmediatamente
+        if (!forceExecution) {
+            if (!preMarket.isSafeToTrade()) {
+                System.out.println("🛑 [TradeManager] Trade Blocked: AI Pre-Market Routine is still running. Waiting for system readiness...");
+                return;
+            }
+
+            // 1. RADAR CHECK: Only trade if the ticker made the "Hot List" today
+            if (!marketRadar.isHot(ticker)) {
+                System.out.println("⏭️ [TradeManager] Skipping " + ticker + ": Not in today's AI Hot List.");
+                return;
+            }
         }
 
         // Determine direction based on strategy name
@@ -41,7 +56,7 @@ public class TradeManager {
         Double lastExitPrice = lastExits.get(ticker);
 
         // 2. MACRO ENVIRONMENT CHECK (Existing)
-        if (!marketRadar.isEnvironmentFavorable(isCall)) {
+        if (!forceExecution && !marketRadar.isEnvironmentFavorable(isCall)) {
             System.out.println("🛑 [TradeManager] Trade Blocked: Macro conditions unfavorable.");
             return;
         }
@@ -49,7 +64,7 @@ public class TradeManager {
         // ==========================================
         // 👉 ADDED: STAIRCASE LOGIC (RE-ENTRY FILTER)
         // ==========================================
-        if (lastExitPrice != null && lastExits.containsKey(ticker)) {
+        if (!forceExecution && lastExitPrice != null && lastExits.containsKey(ticker)) {
             // For a CALL: Price must be LOWER than our last exit (we want a better entry)
             if (isCall && price >= lastExitPrice) {
                 System.out.println("⏳ [TradeManager] Staircase Block: " + ticker + " Call price " + price +
@@ -66,8 +81,8 @@ public class TradeManager {
             }
         }
 
-        // 2. Check Concurrency Limits
-        if (!accountManager.canOpenNewTrade()) {
+        // 3. Check Concurrency Limits
+        if (!forceExecution && !accountManager.canOpenNewTrade()) {
             System.out.println("🚫 [TradeManager] Trade blocked: Maximum concurrent trades reached.");
             return;
         }
@@ -76,14 +91,11 @@ public class TradeManager {
         org.ta4j.core.BarSeries dailySeries = ibkrService.getSeries(ticker, com.fgiaquinta.optionsquant.models.TimeFrame.DAY_1);
 
         double atr;
-        if (dailySeries == null) {
-            System.out.println("⚠️ [TradeManager] Warning: Daily series is NULL for " + ticker + ". Falling back to 2% fixed ATR.");
-            atr = price * 0.02;
-        } else if (dailySeries.isEmpty()) {
-            System.out.println("⚠️ [TradeManager] Warning: Daily series is EMPTY for " + ticker + ". Falling back to 2% fixed ATR.");
+        if (dailySeries == null || dailySeries.isEmpty()) {
+            System.out.println("⚠️ [TradeManager] Warning: Daily series is NULL or EMPTY for " + ticker + ". Falling back to 2% fixed ATR.");
             atr = price * 0.02;
         } else {
-            atr = VolatilityAnalyzer.calculateATR(dailySeries, 14);
+            atr = com.fgiaquinta.optionsquant.analyzers.VolatilityAnalyzer.calculateATR(dailySeries, 14);
             System.out.println("📊 [TradeManager] Calculated ATR(14): " + atr);
         }
 
@@ -101,8 +113,8 @@ public class TradeManager {
             slDist = atr * aiParams.recommendedSlAtr;
         } else {
             // Fallback to the standard config.yaml if the AI has no overrides
-            tpDist = atr * ConfigLoader.getConfig().getDouble("global", "tpAtrMultiplier");
-            slDist = atr * ConfigLoader.getConfig().getDouble("global", "slAtrMultiplier");
+            tpDist = atr * com.fgiaquinta.optionsquant.utils.ConfigLoader.getConfig().getDouble("global", "tpAtrMultiplier");
+            slDist = atr * com.fgiaquinta.optionsquant.utils.ConfigLoader.getConfig().getDouble("global", "slAtrMultiplier");
         }
 
         double tp = Math.round((isCall ? price + tpDist : price - tpDist) * 100.0) / 100.0;
@@ -118,7 +130,12 @@ public class TradeManager {
             return;
         }
 
-        if (ConfigLoader.getConfig().getBoolean("ibkr", "autoExecute")) {
+        // ==========================================
+        // 👉 AQUI APLICAMOS LA LÓGICA DEL WEBHOOK
+        // ==========================================
+        if (forceExecution || com.fgiaquinta.optionsquant.utils.ConfigLoader.getConfig().getBoolean("ibkr", "autoExecute")) {
+            System.out.printf("📊 [Forensic] Trade disparado. Balance actual: %.2f | Estrategia: %s%n",
+                    accountManager.getCurrentBalance(), strategyName);
             System.out.println("🚀 [TradeManager] Executing via IBKR -> " + (isCall ? "CALL" : "PUT") + " | Qty: " + qty);
             ibkrService.placeOrder(ticker, isCall ? "CALL" : "PUT", qty, price, tp, sl, strategyName);
             accountManager.addActiveTrade();

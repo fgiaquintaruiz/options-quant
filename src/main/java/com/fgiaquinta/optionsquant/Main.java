@@ -10,7 +10,10 @@ import com.fgiaquinta.optionsquant.utils.LogManager;
 import com.fgiaquinta.optionsquant.utils.TunnelManager;
 import com.sun.net.httpserver.HttpServer;
 
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -20,13 +23,16 @@ public class Main {
 
     static void main(String[] args) {
         LogManager.initialize();
+
+        // 👉 NUEVO: Inicializamos Telegram Service e inyectamos al TunnelManager
+        TelegramService telegramService = new TelegramService();
+        tunnelManager.setTelegramService(telegramService);
         tunnelManager.start("http://localhost:9090");
 
         System.out.println("🚀 Starting Hybrid Quant Trading Engine...");
         AppConfig config = ConfigLoader.getConfig();
         List<String> activeTickers = config.getList("ibkr", "tickers");
 
-        // 6. Run the Pre-Market AI Routine safely
         System.out.println("🤖 Initiating AI Pre-Market Routine with Gemini...");
         FastBacktester backtester = new FastBacktester();
         AiStrategyOptimizer strategyOptimizer = new AiStrategyOptimizer();
@@ -41,6 +47,7 @@ public class Main {
         PreMarketRoutine preMarketRoutine = new PreMarketRoutine(backtester, strategyOptimizer, ibkrService, marketRadar);
         TradeManager tradeManager = new TradeManager(ibkrService, marketRadar, accountManager, preMarketRoutine);
         ibkrService.setTradeManager(tradeManager);
+
         // 2. Define strategies
         List<TradingStrategy> strategies = Arrays.asList(
                 new C1SqueezeCallStrategy(ibkrService),
@@ -55,15 +62,7 @@ public class Main {
                 new P5ContinuationPutStrategy(ibkrService)
         );
         StrategyEngine strategyEngine = new StrategyEngine(ibkrService, strategies, tradeManager);
-        boolean isSimulation = config.getBoolean("global", "simulationMode");
 
-        if (config.getBoolean("global", "simulationMode")) {
-            preMarketRoutine.forceReady();
-            marketRadar.setForceMacroFavorable(true);
-            CommandServer remoteConsole = new CommandServer(tradeManager, preMarketRoutine, marketRadar);
-            remoteConsole.start();
-            System.out.println("XXX SimulationMode is enabled");
-        }
         ibkrService.setStrategyEngine(strategyEngine);
         String host = config.getString("ibkr", "host");
         int port = Integer.parseInt(config.getString("ibkr", "port"));
@@ -83,6 +82,7 @@ public class Main {
 
         // 3. Request ALL Data (Live & Historical) using your master method
         for (String ticker : activeTickers) {
+            marketRadar.addHotTicker(ticker); // 👈 CRÍTICO: Si no haces esto, el bot nunca operará esos tickers
             ibkrService.startMarketDataTracking(ticker);
             // 👉 FIX: Añadir un retraso de 100ms para evitar el límite de 50 msgs/seg de IBKR
             try {
@@ -101,10 +101,15 @@ public class Main {
         ibkrService.requestInitialMetadata(activeTickers);
         ibkrService.subscribeToNewsProviders();
 
+        boolean isSimulation = config.getBoolean("global", "simulationMode");
+        boolean useAi = config.getBoolean("global", "useAiAnalysis");
+
         // 5. Run the Pre-Market AI routine (ONLY IF NOT IN SIMULATION)
-        if (!isSimulation) {
+        marketRadar.setForceMacroFavorable(true);
+        if (!isSimulation && useAi) {
             try {
                 System.out.println("🤖 Initiating AI Pre-Market Routine...");
+
                 for (String ticker : activeTickers) {
                     preMarketRoutine.runDailyAnalysis(ticker, ibkrService, strategies);
                 }
@@ -114,10 +119,15 @@ public class Main {
             }
         } else {
             System.out.println("⚡ Skipping AI Pre-Market Routine (Simulation Mode Active)");
-            // It's already marked as safeToTrade because of forceReady() above
+            preMarketRoutine.forceReady();
+            marketRadar.setForceMacroFavorable(true);
+            CommandServer remoteConsole = new CommandServer(tradeManager, preMarketRoutine, marketRadar);
+            remoteConsole.start();
+            preMarketRoutine.setSafeToTrade(true);
         }
 
-        startHttpServer(ibkrService);
+        // 👉 Pasamos los servicios necesarios al servidor HTTP
+        startHttpServer(telegramService, tradeManager);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.out.println("🛑 Shutting down...");
@@ -127,57 +137,97 @@ public class Main {
             ibkrService.disconnect();
         }));
 
-        System.out.println("🚀 System Online and waiting for market events.");
+        // 👉 NUEVO: Esperar 2 segundos para que los hilos asíncronos de IBKR terminen de imprimir
+        try {
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
 
+        // 👉 NUEVO: Log visual prominente
+        System.out.println("=========================================================");
+        System.out.println("✅ SYSTEM FULLY INITIALIZED AND READY TO TRADE");
+        System.out.println("=========================================================");
+
+        // 👉 NUEVO: REGISTRAR EL WEBHOOK CUANDO TODO ESTÁ REALMENTE LISTO
+        // Usamos un pequeño hilo asíncrono para no bloquear la ejecución principal
+        new Thread(() -> {
+            try {
+                // Le damos 2 segunditos extra de gracia al servidor 9090 para estabilizarse
+                Thread.sleep(2000);
+                String currentTunnelUrl = com.fgiaquinta.optionsquant.services.TelegramService.getExternalUrl();
+                if (currentTunnelUrl != null && !currentTunnelUrl.contains("localhost")) {
+                    System.out.println("🌐 Registrando Webhook en Telegram de forma diferida...");
+                    telegramService.registerWebhook(currentTunnelUrl);
+                } else {
+                    System.err.println("⚠️ No se pudo registrar Webhook: La URL del túnel no está lista.");
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
     }
 
-    private static void startHttpServer(IbkrService ibkr) {
+    private static void startHttpServer(TelegramService telegramService, TradeManager tradeManager) {
         try {
             httpServer = HttpServer.create(new InetSocketAddress(9090), 0);
-            httpServer.createContext("/execute", exchange -> {
-                Map<String, String> params = Arrays.stream(exchange.getRequestURI().getQuery().split("&"))
-                        .map(s -> s.split("="))
-                        .collect(Collectors.toMap(a -> a[0], a -> a[1]));
 
-                ibkr.placeOrder(params.get("ticker"), params.get("side"),
-                        Integer.parseInt(params.get("qty")), Double.parseDouble(params.get("lmt")),
-                        Double.parseDouble(params.get("tp")), Double.parseDouble(params.get("sl")), "Telegram-Manual");
+            // 👉 NUEVO: Contexto Webhook True-Silent
+            httpServer.createContext("/webhook", exchange -> {
+                if ("POST".equals(exchange.getRequestMethod())) {
+                    try {
+                        InputStream is = exchange.getRequestBody();
+                        String body = new String(is.readAllBytes(), StandardCharsets.UTF_8);
 
-                // 👉 APLICAMOS EL "BOUNCE-BACK" HACK
-                String htmlResponse = """
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <title>Executing...</title>
-                    </head>
-                    <body style="background-color: #121212; color: #00FF00; text-align: center; font-family: monospace; padding-top: 50px;">
-                        <h2>🚀 Order Dispatched!</h2>
-                        <p>Returning to Telegram...</p>
-                        <script>
-                            setTimeout(function() {
-                                // Redirige forzosamente de vuelta a la app de Telegram usando su esquema nativo
-                                window.location.href = "tg://"; 
-                                // Intenta cerrar la pestaña del navegador (Chrome)
-                                window.close();
-                            }, 500);
-                        </script>
-                    </body>
-                    </html>
-                    """;
+                        java.util.regex.Matcher dataMatcher = java.util.regex.Pattern.compile("\"data\":\"([^\"]+)\"").matcher(body);
+                        java.util.regex.Matcher idMatcher = java.util.regex.Pattern.compile("\"id\":\"([^\"]+)\"").matcher(body);
 
-                byte[] responseBytes = htmlResponse.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                        if (dataMatcher.find() && idMatcher.find()) {
+                            String callbackData = dataMatcher.group(1);
+                            String callbackQueryId = idMatcher.group(1);
 
-                // Le decimos al navegador explícitamente que esto es una página web HTML
-                exchange.getResponseHeaders().add("Content-Type", "text/html; charset=UTF-8");
-                exchange.sendResponseHeaders(200, responseBytes.length);
-                exchange.getResponseBody().write(responseBytes);
-                exchange.close();
+                            System.out.println("📲 Señal silenciosa recibida desde Telegram: " + callbackData);
+
+                            // Responder a Telegram inmediatamente con HTTP 200
+                            String response = "OK";
+                            exchange.sendResponseHeaders(200, response.length());
+                            OutputStream os = exchange.getResponseBody();
+                            os.write(response.getBytes());
+                            os.close();
+
+                            // Detener la animación de carga del botón en Telegram
+                            telegramService.answerCallbackQuery(callbackQueryId, "Orden enviada a IBKR 🚀");
+
+                            // Procesar la orden
+                            String[] parts = callbackData.split("\\|");
+                            if (parts.length >= 4 && parts[0].equals("E")) {
+                                String ticker = parts[1];
+                                String type = parts[2];
+                                double price = Double.parseDouble(parts[3]);
+
+                                System.out.println("🎯 Ejecutando trade manual por Webhook: " + ticker + " " + type + " $" + price);
+                                tradeManager.evaluateSignal(ticker, type, price, true);
+                            }
+                        } else {
+                            exchange.sendResponseHeaders(200, 0);
+                            exchange.getResponseBody().close();
+                        }
+                    } catch (Exception e) {
+                        System.err.println("❌ Error procesando Webhook: " + e.getMessage());
+                        exchange.sendResponseHeaders(500, -1);
+                        exchange.close();
+                    }
+                } else {
+                    exchange.sendResponseHeaders(405, -1);
+                    exchange.close();
+                }
             });
+
             httpServer.start();
-            System.out.println("🌐 Web Callback Server started on port 9090.");
+            System.out.println("🌐 True-Silent Webhook Server started on port 9090. Listening on /webhook");
         } catch (Exception e) {
             System.err.println("❌ Web Server Error: " + e.getMessage());
         }
     }
+
 }

@@ -47,7 +47,6 @@ public class CommandServer {
                             if (input.isEmpty()) { continue; }
 
                             String lowerInput = input.toLowerCase();
-
                             if (lowerInput.equals("skip")) {
                                 preMarketRoutine.forceReady();
                                 out.println("⚡ AI Bypass activated. System is now LIVE.");
@@ -57,20 +56,20 @@ public class CommandServer {
                             } else if (lowerInput.startsWith("trigger ")) {
                                 handleTrigger(input, out);
                             } else if (lowerInput.equals("exit")) {
-                                out.println("Goodbye.");
+                                out.println("👋 Disconnecting...");
                                 break;
                             } else {
-                                out.println("❓ Unknown command. Type 'trigger' or 'skip'.");
+                                out.println("⚠️ Unknown command.");
                             }
                             out.print("> ");
                             out.flush();
                         }
                     } catch (IOException e) {
-                        System.err.println("❌ [Remote Console] Connection lost.");
+                        System.err.println("⚠️ Remote Console Error: " + e.getMessage());
                     }
                 }
             } catch (IOException e) {
-                System.err.println("❌ [Remote Console] Server Error: " + e.getMessage());
+                System.err.println("❌ Could not start Remote Console on port " + port);
             }
         }).start();
     }
@@ -79,7 +78,6 @@ public class CommandServer {
         try {
             String[] parts = input.split("\\s+");
 
-            // Allow 3 parts (trigger TICK PRICE) or 4 parts (trigger TICK STRAT PRICE)
             if (parts.length < 3) {
                 out.println("⚠️ Format error. Use: trigger <TICKER> <PRICE>");
                 return;
@@ -89,7 +87,6 @@ public class CommandServer {
             String strategy;
             double price;
 
-            // 👉 QUICK TRIGGER LOGIC
             if (parts.length == 3) {
                 strategy = "C1SqueezeCallStrategy"; // Default test strategy
                 price = Double.parseDouble(parts[2]);
@@ -103,7 +100,7 @@ public class CommandServer {
             out.println("🚀 Dispatching manual trigger for " + ticker + " at $" + price + "...");
 
             // Calls evaluateSignal directly in TradeManager
-            tradeManager.evaluateSignal(ticker, strategy, price);
+            tradeManager.evaluateSignal(ticker, strategy, price, false);
 
             out.println("✅ Processed.");
         } catch (NumberFormatException e) {

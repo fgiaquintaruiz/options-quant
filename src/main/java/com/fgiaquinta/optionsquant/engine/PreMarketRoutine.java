@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PreMarketRoutine {
     private final Map<String, OptimizationResult> dailyOverrides = new ConcurrentHashMap<>();
     private boolean safeToTrade = false;
+    private boolean skipAiAnalysis = true; // 👈 Cambia a true para saltar Gemini
 
     private final FastBacktester backtester;
     private final AiStrategyOptimizer optimizer;
@@ -50,13 +51,6 @@ public class PreMarketRoutine {
         // 2. Run simulation and return the raw JSON metrics
         return backtester.runSimulation(ticker, strategyName, historicalSeries, ta4jStrategy);
     }
-
-    public OptimizationResult getOverridesFor(String ticker, String strategyName) {
-        return dailyOverrides.get(ticker + "_" + strategyName);
-    }
-
-    // We now pass the IbkrService and the strategies list to fetch the required arguments
-    // PreMarketRoutine.java
 
     // Change the signature to take the ticker and the strategy list
     public void runDailyAnalysis(String ticker, IbkrService ibkrService, List<TradingStrategy> strategies) {

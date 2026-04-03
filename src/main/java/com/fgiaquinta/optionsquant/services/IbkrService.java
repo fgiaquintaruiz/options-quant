@@ -558,7 +558,7 @@ public class IbkrService extends DefaultEWrapper {
             pendingBackfills.add(id);
             // 4. Lanzar la petición histórica a IBKR
             // Nota: Asegúrate de que tf.toIbString() devuelve el formato correcto (ej: "1 min", "15 mins", "1 hour", "1 day")
-            client.reqHistoricalData(id, contract, "", deltaDuration, tf.getIbkrBarSize(), "TRADES", 1, 1, false, null);
+            client.reqHistoricalData(id, contract, "", deltaDuration, tf.getIbkrBarSize(), "TRADES", 0, 1, false, null);
         }
     }
 

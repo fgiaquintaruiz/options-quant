@@ -2,6 +2,7 @@ package com.fgiaquinta.optionsquant.factories;
 
 import com.ib.client.Decimal;
 import com.ib.client.Order;
+import com.ib.client.TagValue;
 import com.fgiaquinta.optionsquant.builders.ConditionBuilder;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,10 +23,14 @@ public class OrderFactory {
         Order parent = new Order();
         parent.orderId(pId);
         parent.action("BUY");
-        parent.orderType("LMT");
-        parent.lmtPrice(entry);
+        parent.orderType("MKT");
         parent.totalQuantity(Decimal.get(qty));
         parent.transmit(false);
+        parent.algoStrategy("Adaptive");
+        parent.algoParams(new ArrayList<>());
+        parent.algoParams().add(new TagValue("adaptivePriority", "Normal"));
+//        parent.conditions().add(ConditionBuilder.createPriceCondition(subConId, primaryExch, isCall, entry));
+
         // 👉 CORRECCIÓN ERROR 135: Hemos eliminado parent.conditions().add(...)
         // Las órdenes MKT de opciones no deben llevar condiciones de precio en la entrada.
 
@@ -54,7 +59,7 @@ public class OrderFactory {
         o.transmit(false);
 
         // Price trigger and Golden Rule (21:55)
-        o.conditions().add(ConditionBuilder.createPriceCondition(conId, primaryExch, price, isMore));
+        o.conditions().add(ConditionBuilder.createPriceCondition(conId, primaryExch, isMore, price));
         o.conditions().add(ConditionBuilder.createGoldenRuleCondition("21:55:00"));
 
         return o;

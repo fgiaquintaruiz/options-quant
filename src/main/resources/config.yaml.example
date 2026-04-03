@@ -4,7 +4,6 @@ ibkr:
   accountId: "DUN123"
   syncTimeout: 30
   autoExecute: false
-  postOnly: true
   tickers: ["SPY", "AAPL", "MSFT", "AMZN", "NVDA", "TSLA", "META", "AMD", "PLTR", "LLY", "ABNB", "COST", "MARA", "RIOT",
             "BITX", "MSTR", "MU", "URA", "TSM", "OKLO", "COIN", "GOOGL", "GOOG", "BABA", "ALB", "AMDL", "NFLX", "IWM",
             "NVO", "PEP", "INTC", "GM", "MDB", "CVX", "KDP", "CCL", "LOW", "DECK", "DIA", "TNA", "XPEV", "MO", "ACN",

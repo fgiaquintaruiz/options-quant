@@ -7,6 +7,12 @@ import java.util.concurrent.CompletableFuture;
 
 public class TunnelManager {
     private Process process;
+    private TelegramService telegramService;
+
+    // Inyectamos el servicio para poder registrar el webhook en vivo
+    public void setTelegramService(TelegramService telegramService) {
+        this.telegramService = telegramService;
+    }
 
     public void start(String localUrl) {
         CompletableFuture.runAsync(() -> {
@@ -26,7 +32,8 @@ public class TunnelManager {
                                 if (word.startsWith("https://")) {
                                     String url = word.trim();
                                     System.out.println("🔗 Tunnel established: " + url);
-                                    TelegramService.setExternalUrl(url);
+                                    com.fgiaquinta.optionsquant.services.TelegramService.setExternalUrl(url);
+                                    // HEMOS QUITADO EL REGISTRO DE AQUÍ
                                     break;
                                 }
                             }

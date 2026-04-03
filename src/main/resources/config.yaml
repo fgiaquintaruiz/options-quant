@@ -4,7 +4,6 @@ ibkr:
   accountId: "DUN598126"
   syncTimeout: 30
   autoExecute: false
-  postOnly: true
   tickers: ["SPY", "AAPL", "MSFT", "AMZN", "NVDA", "TSLA", "META", "AMD", "PLTR", "ABNB", "COST", "RIOT",
             "BITX", "MSTR", "MU", "URA", "TSM", "OKLO", "COIN", "GOOGL", "GOOG", "BABA", "ALB", "AMDL", "NFLX", "IWM",
             "NVO", "PEP", "INTC", "GM", "MDB", "CVX", "KDP", "CCL", "LOW", "DECK", "DIA", "TNA", "XPEV", "MO", "ACN",
@@ -13,7 +12,7 @@ ibkr:
 
 risk:
   riskPerTradePct: 0.02   # 2% max risk per trade
-  maxConcurrentTrades: 4
+  maxConcurrentTrades: 50
 
 ai:
   geminiApiKey: "REDACTED_GOOGLE_API_KEY"
@@ -29,7 +28,8 @@ strategies:
   global:
     tpAtrMultiplier: 1.2
     slAtrMultiplier: 0.8
-    simulationMode: true
+    simulationMode: false
+    useAiAnalysis: false
   opening:
     bandWidth: 1.2
     callMinGap: -1.5

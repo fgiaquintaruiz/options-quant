@@ -13,20 +13,21 @@ public class ConditionBuilder {
         // This utility class should not be instantiated
     }
 
-    public static PriceCondition createPriceCondition(int conId, String exchange, double price, boolean isMore) {
-        PriceCondition p = (PriceCondition) OrderCondition.create(OrderConditionType.Price);
-        p.conId(conId);
-        // Use the primary exchange to avoid IBKR 398 error. If null or SMART, leave empty.
-        p.exchange((exchange == null || exchange.equalsIgnoreCase("SMART")) ? "" : exchange);
-        p.isMore(isMore);
-        p.price(Math.round(price * 100.0) / 100.0);
-        p.triggerMethod(2); // Last Price
-
-        // 👉 CORRECCIÓN LÓGICA DE SALIDA:
-        // Al establecer false, le decimos a IBKR que esta condición se une con un "OR" a la siguiente.
-        p.conjunctionConnection(false);
-
-        return p;
+    /**
+     * Crea una condición de precio basada en la acción subyacente.
+     * @param underlyingConId El ID del contrato de la ACCIÓN (ej. el conId de MSFT).
+     * @param exchange El exchange de la acción (usualmente "SMART").
+     * @param isMore True si el precio debe ser MAYOR O IGUAL al trigger. False si debe ser MENOR O IGUAL.
+     * @param triggerPrice El precio objetivo (tu TP o SL calculado).
+     */
+    public static PriceCondition createPriceCondition(int underlyingConId, String exchange, boolean isMore, double triggerPrice) {
+        PriceCondition condition = (PriceCondition) OrderCondition.create(OrderConditionType.Price);
+        condition.conId(underlyingConId);
+        condition.exchange(exchange);
+        condition.isMore(isMore);
+        condition.price(triggerPrice);
+        // condition.isDefault(true); // Opcional: Para usar la sesión regular de trading
+        return condition;
     }
 
     public static TimeCondition createGoldenRuleCondition(String timeHms) {

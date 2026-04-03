@@ -23,7 +23,6 @@ public class AppConfig {
         public String host;
         public int port;
         public boolean autoExecute;
-        public boolean postOnly;
         public java.util.List<String> tickers;
         public String accountId;
         public int syncTimeout = 30;
@@ -130,7 +129,6 @@ public class AppConfig {
             if ("accountId".equals(key)) return ibkr.accountId;
             if ("syncTimeout".equals(key)) return ibkr.syncTimeout;
             if ("autoExecute".equals(key)) return ibkr.autoExecute;
-            if ("postOnly".equals(key)) return ibkr.postOnly;
             if ("tickers".equals(key)) return ibkr.tickers;
         }
 

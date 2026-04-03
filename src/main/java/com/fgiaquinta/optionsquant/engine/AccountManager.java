@@ -40,6 +40,9 @@ public class AccountManager {
 
     public boolean canOpenNewTrade() {
         int maxTrades = (int) ConfigLoader.getConfig().getDouble("risk", "maxConcurrentTrades");
+        if (maxTrades <= 0) {
+            return true;
+        }
         return activeTrades.get() < maxTrades;
     }
 
