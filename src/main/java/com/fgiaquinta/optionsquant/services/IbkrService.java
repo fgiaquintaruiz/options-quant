@@ -10,6 +10,7 @@ import com.fgiaquinta.optionsquant.models.MarketRequest;
 import com.fgiaquinta.optionsquant.models.TimeFrame;
 import com.fgiaquinta.optionsquant.utils.ConfigLoader;
 import com.fgiaquinta.optionsquant.utils.DataManager;
+import com.fgiaquinta.optionsquant.utils.MarketTimeUtils;
 import org.ta4j.core.BarSeries;
 
 import java.time.Instant;
@@ -33,9 +34,7 @@ public class IbkrService extends DefaultEWrapper {
     private final Map<Integer, String> orderIdToTicker = new ConcurrentHashMap<>();
     private final CountDownLatch initializationLatch = new CountDownLatch(1);
     private final CountDownLatch accountLatch = new CountDownLatch(1);
-    private boolean accountSynced = false;
     private final Map<String, Set<Double>> tickerToValidStrikes = new ConcurrentHashMap<>();
-    private static final DateTimeFormatter IB_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd HH:mm:ss z");
     // Maps Request ID -> Description (e.g., "Metadata: AAPL" or "Options: TSLA")
     private final Map<Integer, String> requestTracker = new ConcurrentHashMap<>();
 
@@ -157,18 +156,7 @@ public class IbkrService extends DefaultEWrapper {
         }
 
         try {
-            long timestamp;
-            try {
-                timestamp = Long.parseLong(bar.time());
-            } catch (NumberFormatException e) {
-                System.out.println("⚠️ [IbkrService] Ignored: bar.time() is not a valid timestamp string: " + bar.time());
-                return;
-            }
-
-            ZonedDateTime time = ZonedDateTime.ofInstant(
-                    Instant.ofEpochSecond(timestamp),
-                    ZoneId.of("America/New_York")
-            );
+            ZonedDateTime time = MarketTimeUtils.parseIbkrDate(bar.time());
 
             System.out.println("📊 [IbkrService] Parsed bar time: " + time + " for " + request.ticker() + " [" + request.timeFrame() + "]");
 
@@ -264,20 +252,10 @@ public class IbkrService extends DefaultEWrapper {
         if (series == null) return;
 
         try {
-            ZonedDateTime time;
-            String timeStr = bar.time();
-
-            // Robust parsing: check if it's a timestamp or a formatted string
-            if (timeStr.matches("\\d+")) {
-                time = ZonedDateTime.ofInstant(Instant.ofEpochSecond(Long.parseLong(timeStr)), ZoneId.of("America/New_York"));
-            } else {
-                // IBKR sometimes returns strings for Daily bars even with formatDate=2
-                time = ZonedDateTime.parse(timeStr.replace(" US/Eastern", " EST"), IB_DATE_FORMAT);
-            }
+            ZonedDateTime time = MarketTimeUtils.parseIbkrDate(bar.time());
 
             if (series.getBarCount() == 0 || time.isAfter(series.getLastBar().getEndTime())) {
                 series.addBar(time, bar.open(), bar.high(), bar.low(), bar.close(), bar.volume().value().doubleValue());
-//                System.out.println("⏳ [BACKFILL] Loading historical bar for " + request.ticker() + " [" + request.timeFrame() + "] @ " + bar.close());
             }
         } catch (Exception e) {
             System.err.println("❌ Error parsing bar time: " + bar.time());

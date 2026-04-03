@@ -5,20 +5,15 @@ import org.ta4j.core.BaseBarSeriesBuilder;
 import org.ta4j.core.Bar;
 
 import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
 
 public class DataManager {
     private static final String DATA_DIR = "data/";
-    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ISO_ZONED_DATE_TIME;
 
     private DataManager() {
         // Utility class
     }
 
-    // Nota: Asegúrate de que IbkrService llame a este método pasando el cacheKey (ej. "AAPL_1hour")
     public static BarSeries loadSeries(String cacheKey) {
         BarSeries series = new BaseBarSeriesBuilder().withName(cacheKey).build();
         File file = new File(DATA_DIR + cacheKey + ".csv");
@@ -37,7 +32,12 @@ public class DataManager {
                 }
                 String[] values = line.split(",");
                 if (values.length >= 6) {
-                    ZonedDateTime time = ZonedDateTime.parse(values[0], FORMATTER);
+                    // Use centralized configuration for parsing
+                    ZonedDateTime time = ZonedDateTime.parse(values[0], MarketTimeUtils.CSV_FORMATTER);
+
+                    // Explicitly bind the loaded time to the market timezone
+                    time = time.withZoneSameInstant(MarketTimeUtils.MARKET_ZONE);
+
                     double open = Double.parseDouble(values[1]);
                     double high = Double.parseDouble(values[2]);
                     double low = Double.parseDouble(values[3]);
@@ -57,7 +57,7 @@ public class DataManager {
     public static void saveToCsv(BarSeries series) {
         if (series == null || series.getBarCount() == 0) return;
 
-        String cacheKey = series.getName(); // El nombre de la serie ahora es "AAPL_1hour", etc.
+        String cacheKey = series.getName();
         File dir = new File(DATA_DIR);
         if (!dir.exists()) dir.mkdirs();
 
@@ -68,7 +68,8 @@ public class DataManager {
             for (int i = 0; i < series.getBarCount(); i++) {
                 Bar bar = series.getBar(i);
                 pw.printf(java.util.Locale.US, "%s,%.2f,%.2f,%.2f,%.2f,%.0f%n",
-                        bar.getEndTime().format(FORMATTER),
+                        // Use centralized configuration for saving
+                        bar.getEndTime().format(MarketTimeUtils.CSV_FORMATTER),
                         bar.getOpenPrice().doubleValue(),
                         bar.getHighPrice().doubleValue(),
                         bar.getLowPrice().doubleValue(),
