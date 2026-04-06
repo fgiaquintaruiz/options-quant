@@ -35,6 +35,9 @@ public class IbkrService extends DefaultEWrapper {
     private final Map<String, Set<Double>> tickerToValidStrikes = new ConcurrentHashMap<>();
     // Maps Request ID -> Description (e.g., "Metadata: AAPL" or "Options: TSLA")
     private final Map<Integer, String> requestTracker = new ConcurrentHashMap<>();
+    // 👉 NUEVO: Memoria para poder modificar Bracket Orders sin romper el Grupo OCA
+    private final Map<Integer, com.ib.client.Contract> activeContracts = new ConcurrentHashMap<>();
+    private final Map<Integer, com.ib.client.Order> activeOrders = new ConcurrentHashMap<>();
 
     private final EClientSocket client;
     private final EJavaSignal signal;
@@ -246,34 +249,34 @@ public class IbkrService extends DefaultEWrapper {
         }
     }
 
-    public void placeOrder(String ticker, String side, int qty, double entry, double tp, double sl, String strategy) {
+    public int placeOrder(String ticker, String side, int qty, double entry, double tp, double sl, String strategy) {
         System.out.println("🚀 [IBKR] Placing " + side + " order for " + ticker + " | Qty: " + qty + " | Strategy: " + strategy);
 
         // 1. Get the dynamic expiration
         String expiration = getOptimalExpiry(ticker);
         if (expiration == null) {
             System.err.println("❌ Aborting: No expiration found for " + ticker);
-            return;
+            return -1; // 👉 Modificado para devolver -1 en error
         }
 
         // 2. Get the Underlying Contract ID
         Integer underlyingConId = tickerToConId.get(ticker);
         if (underlyingConId == null) {
             System.err.println("❌ Aborting: Underlying Contract ID not found for " + ticker);
-            return;
+            return -1; // 👉 Modificado
         }
 
         // 3. FIND THE REAL STRIKE (Fix for Error 200)
-        Set<Double> strikes = tickerToValidStrikes.get(ticker);
+        java.util.Set<Double> strikes = tickerToValidStrikes.get(ticker);
         if (strikes == null || strikes.isEmpty()) {
             System.err.println("❌ Aborting: No valid strikes loaded for " + ticker + ". Check metadata loading.");
-            return;
+            return -1; // 👉 Modificado
         }
 
         // Use Java Streams to find the strike with the smallest difference from the entry price
         double bestStrike = strikes.stream()
-                .min(Comparator.comparingDouble(s -> Math.abs(s - entry)))
-                .orElse((double) Math.round(entry)); // Fallback to rounding if the set is somehow empty
+                .min(java.util.Comparator.comparingDouble(s -> Math.abs(s - entry)))
+                .orElse((double) Math.round(entry));
 
         String right = side.equalsIgnoreCase("CALL") ? "C" : "P";
 
@@ -293,20 +296,18 @@ public class IbkrService extends DefaultEWrapper {
         com.ib.client.Contract stockDef = com.fgiaquinta.optionsquant.factories.ContractFactory.createStockDefinition(ticker);
         String triggerExchange = stockDef.primaryExch();
 
-        // Fallback de seguridad por si ContractFactory devuelve algo inválido
         if (triggerExchange == null || triggerExchange.isEmpty() || triggerExchange.equals("SMART")) {
             triggerExchange = "ISLAND";
         }
 
-        // 6. Use OrderFactory to create the bracket (Pasando triggerExchange en lugar de "SMART")
-        List<com.ib.client.Order> bracket = com.fgiaquinta.optionsquant.factories.OrderFactory.createOptionBracket(
+        // 6. Use OrderFactory to create the bracket
+        java.util.List<com.ib.client.Order> bracket = com.fgiaquinta.optionsquant.factories.OrderFactory.createOptionBracket(
                 pId, tpId, slId, qty, underlyingConId, triggerExchange, entry, tp, sl, side.equalsIgnoreCase("CALL")
         );
 
-        // --- DEEP INSPECTION LOG ---
         System.out.println("--------------------------------------------------");
         System.out.println("📝 [Inspection] Preparing Order for: " + ticker);
-        System.out.println("   • Final Ticker: [" + contract.symbol() + "]"); // Brackets help see hidden spaces
+        System.out.println("   • Final Ticker: [" + contract.symbol() + "]");
         System.out.println("   • Expiration:   [" + contract.lastTradeDateOrContractMonth() + "]");
         System.out.println("   • Strike:       [" + contract.strike() + "]");
         System.out.println("   • Right:        [" + contract.right() + "]");
@@ -318,10 +319,51 @@ public class IbkrService extends DefaultEWrapper {
         // 7. Send all three to IBKR
         for (com.ib.client.Order order : bracket) {
             orderIdToTicker.put(order.orderId(), ticker);
+
+            // 👉 NUEVO: Guardamos el contrato y la orden intacta para poder modificarla luego
+            activeContracts.put(order.orderId(), contract);
+            activeOrders.put(order.orderId(), order);
+
             client.placeOrder(order.orderId(), contract, order);
         }
 
         System.out.println("✅ [IBKR] Bracket sent! Parent ID: " + pId + " | Expiry: " + expiration + " | Strike: " + bestStrike + right);
+
+        // 👉 NUEVO: Devolvemos el ID del Stop Loss al TradeManager
+        return slId;
+    }
+
+    // 👉 NUEVO MÉTODO: Actualiza el Stop Loss dinámicamente en Wall Street
+    public void modifyStopLossCondition(int slOrderId, String ticker, double newPriceCondition) {
+        // 1. Recuperamos la orden y el contrato original de nuestra caché
+        com.ib.client.Order slOrder = activeOrders.get(slOrderId);
+        com.ib.client.Contract contract = activeContracts.get(slOrderId);
+        Integer underlyingConId = tickerToConId.get(ticker);
+
+        if (slOrder == null || contract == null || underlyingConId == null) {
+            System.err.println("⚠️ [IBKR] No se pudo modificar el SL " + slOrderId + ". Orden no encontrada en memoria.");
+            return;
+        }
+
+        System.out.printf("🔧 [IBKR Trailing Stop] Subiendo Stop Loss de %s al nuevo precio: $%.2f%n", ticker, newPriceCondition);
+
+        // 2. Limpiamos las condiciones de precio anteriores que tenía esta orden
+        slOrder.conditions().clear();
+
+        // 3. Calculamos la nueva condición:
+        // Si es CALL (Right = "C"), el SL se activa si la acción CAE por debajo (isMore = false)
+        // Si es PUT (Right = "P"), el SL se activa si la acción SUBE por encima (isMore = true)
+        boolean isCall = contract.right().equals("C");
+        boolean isMore = !isCall;
+
+        // 4. Agregamos la nueva condición de precio de la acción
+        com.ib.client.OrderCondition newCondition = com.fgiaquinta.optionsquant.builders.ConditionBuilder.createPriceCondition(
+                underlyingConId, "SMART", isMore, newPriceCondition
+        );
+        slOrder.conditions().add(newCondition);
+
+        // 5. Reenviamos a IBKR con el MISMO orderId. IBKR interpretará esto como un "Update" y no romperá el Bracket.
+        client.placeOrder(slOrderId, contract, slOrder);
     }
 
     public void disconnect() { client.eDisconnect(); }

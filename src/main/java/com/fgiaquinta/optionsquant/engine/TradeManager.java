@@ -6,11 +6,13 @@ import com.fgiaquinta.optionsquant.services.IbkrService;
 import com.fgiaquinta.optionsquant.utils.ConfigLoader;
 import com.fgiaquinta.optionsquant.utils.RiskCalculator;
 
+import java.time.ZonedDateTime;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class TradeManager {
     private final Map<String, Double> lastExits = new ConcurrentHashMap<>();
+    private final Map<String, ActiveTrade> openPositions = new ConcurrentHashMap<>();
 
     private final IbkrService ibkrService;
     private final MarketRadar marketRadar;
@@ -155,5 +157,54 @@ public class TradeManager {
     public void recordExit(String ticker, double price) {
         lastExits.put(ticker, price);
         System.out.println("💾 [TradeManager] recorded last exit for " + ticker + " at " + price);
+    }
+
+    // 👉 NUEVO: El monitor dinámico
+    public void monitorActivePositions(com.fgiaquinta.optionsquant.utils.DataManager dataManager) {
+        java.time.ZonedDateTime now = java.time.ZonedDateTime.now(java.time.ZoneId.of("America/New_York"));
+
+        for (ActiveTrade trade : openPositions.values()) {
+            org.ta4j.core.BarSeries series5m = dataManager.getSeries(trade.ticker, com.fgiaquinta.optionsquant.models.TimeFrame.MIN_15); // O MIN_5 según prefieras
+            if (series5m == null || series5m.isEmpty()) continue;
+
+            double currentPrice = series5m.getLastBar().getClosePrice().doubleValue();
+
+            // 1. TIME STOP (Mata-Zombies de 90 min)
+            long minutesHeld = java.time.Duration.between(trade.entryTime, now).toMinutes();
+            if (minutesHeld >= 90) {
+                System.out.println("⏳ [Time Stop] 90 mins superados para " + trade.ticker + ". Ajustando SL al precio actual para forzar salida.");
+                // Forzamos salida ajustando la condición al precio actual
+                ibkrService.modifyStopLossCondition(trade.slOrderId, trade.ticker, currentPrice);
+                openPositions.remove(trade.ticker);
+                continue;
+            }
+
+            // 2. TRAILING STOP INTELIGENTE
+            double profitPct = trade.isCall ?
+                    ((currentPrice - trade.entryPrice) / trade.entryPrice) * 100 :
+                    ((trade.entryPrice - currentPrice) / trade.entryPrice) * 100;
+
+            if (profitPct > 0.35) {
+                org.ta4j.core.indicators.SMAIndicator sma20 = new org.ta4j.core.indicators.SMAIndicator(new org.ta4j.core.indicators.helpers.ClosePriceIndicator(series5m), 20);
+                double currentSma = sma20.getValue(series5m.getEndIndex()).doubleValue();
+
+                // Si la SMA está más a nuestro favor que el precio original, actualizamos
+                ibkrService.modifyStopLossCondition(trade.slOrderId, trade.ticker, currentSma);
+            }
+        }
+    }
+
+    // 👉 NUEVO: Limpieza cuando IBKR confirma la venta (Córrelo en tu callback de orderStatus)
+    public void removeClosedPosition(String ticker) {
+        openPositions.remove(ticker);
+    }
+
+    public static class ActiveTrade {
+        public String ticker;
+        public boolean isCall;
+        public double entryPrice;
+        public ZonedDateTime entryTime;
+        public int slOrderId; // ¡CRÍTICO! El ID del Stop Loss en IBKR
+        public int qty;
     }
 }

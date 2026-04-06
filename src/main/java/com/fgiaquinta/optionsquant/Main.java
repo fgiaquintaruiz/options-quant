@@ -16,6 +16,9 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public class Main {
@@ -112,6 +115,21 @@ public class Main {
                 tunnelManager.shutdown();;
             }));
 
+            System.out.println("⏱️ Iniciando reloj de monitoreo de Trailing Stops...");
+            ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+
+            scheduler.scheduleAtFixedRate(() -> {
+                try {
+                    // 1. Asegurarnos de que los datos de la última vela estén frescos
+                    // (Si usas Webhooks o Sockets de IBKR, la data ya debería estar fresca en DataManager)
+
+                    // 2. Ejecutar la revisión de Trailing Stop y Time Stop
+                    tradeManager.monitorActivePositions(dataManager);
+
+                } catch (Exception e) {
+                    System.err.println("❌ Error en el hilo de monitoreo: " + e.getMessage());
+                }
+            }, 1, 1, TimeUnit.MINUTES); // Revisa cada 1 minuto
         } catch (Exception e) {
             System.err.println("❌ Critical System Failure: " + e.getMessage());
             e.printStackTrace();
