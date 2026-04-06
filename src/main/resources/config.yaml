@@ -28,8 +28,6 @@ telegram:
 
 strategies:
   global:
-    tpAtrMultiplier: 1.2
-    slAtrMultiplier: 0.8
     simulationMode: false
     useAiAnalysis: false
   opening:

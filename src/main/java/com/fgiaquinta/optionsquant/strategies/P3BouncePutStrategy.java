@@ -35,7 +35,7 @@ public class P3BouncePutStrategy implements TradingStrategy {
         }
 
         // =========================================================================
-        // REGLA 0.2: COOLDOWN DE 2 HORAS (Bloqueador de re-entradas)
+        // REGLA 0.3: COOLDOWN DE 2 HORAS (Bloqueador de re-entradas)
         // =========================================================================
         ZonedDateTime lastTrigger = lastTriggerMap.get(ticker);
         if (lastTrigger != null && Duration.between(lastTrigger, currentTime).toHours() < 2) {
