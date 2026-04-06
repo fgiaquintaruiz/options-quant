@@ -1,0 +1,843 @@
+[2026-04-06 09:59:53] 🚀 STARTING MULTI-TIMEFRAME PORTFOLIO BACKTEST (OPTIONSQUANT STRATEGIES)
+⚙️ Configuration loaded successfully from resources.
+🔌 Connecting to IBKR (127.0.0.1:7497)...
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: SPY
+✅ [IBKR] System Ready. Next Valid Order ID: 1
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for SPY_1day
+🏦 [IBKR] Received Account Update: NetLiquidation = 979796.05 EUR
+💰 [Account] Equity Synced: 979796.05 EUR | Strategy Risk Limit: 19595.92 EUR
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for SPY_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for SPY_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for SPY_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: MSFT
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for MSFT_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for MSFT_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for MSFT_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for MSFT_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: AAPL
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for AAPL_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for AAPL_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for AAPL_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for AAPL_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: AMZN
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for AMZN_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for AMZN_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for AMZN_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for AMZN_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: NVDA
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for NVDA_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for NVDA_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for NVDA_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for NVDA_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: TSLA
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for TSLA_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for TSLA_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for TSLA_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for TSLA_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: META
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for META_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for META_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for META_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for META_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: AMD
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for AMD_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for AMD_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for AMD_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for AMD_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: PLTR
+[2026-04-06 09:59:53] 💾 Loaded 499 bars from local CSV for PLTR_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for PLTR_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for PLTR_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for PLTR_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: ABNB
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for ABNB_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for ABNB_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for ABNB_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for ABNB_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: COST
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for COST_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for COST_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for COST_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for COST_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: RIOT
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for RIOT_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for RIOT_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for RIOT_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for RIOT_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: BITX
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for BITX_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for BITX_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for BITX_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for BITX_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: MSTR
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for MSTR_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for MSTR_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for MSTR_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for MSTR_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: MU
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for MU_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for MU_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for MU_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for MU_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: URA
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for URA_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for URA_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for URA_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for URA_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: TSM
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for TSM_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for TSM_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for TSM_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for TSM_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: OKLO
+[2026-04-06 09:59:53] 💾 Loaded 499 bars from local CSV for OKLO_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for OKLO_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for OKLO_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for OKLO_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: COIN
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for COIN_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for COIN_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for COIN_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for COIN_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: GOOGL
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for GOOGL_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for GOOGL_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for GOOGL_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for GOOGL_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: GOOG
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for GOOG_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for GOOG_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for GOOG_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for GOOG_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: BABA
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for BABA_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for BABA_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for BABA_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for BABA_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: ALB
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for ALB_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for ALB_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for ALB_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for ALB_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: AMDL
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for AMDL_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for AMDL_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for AMDL_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for AMDL_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: NFLX
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for NFLX_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for NFLX_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for NFLX_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for NFLX_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: IWM
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for IWM_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for IWM_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for IWM_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for IWM_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: NVO
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for NVO_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for NVO_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for NVO_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for NVO_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: PEP
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for PEP_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for PEP_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for PEP_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for PEP_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: INTC
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for INTC_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for INTC_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for INTC_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for INTC_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: GM
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for GM_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for GM_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for GM_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for GM_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: MDB
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for MDB_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for MDB_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for MDB_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for MDB_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: CVX
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for CVX_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for CVX_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for CVX_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for CVX_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: KDP
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for KDP_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for KDP_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for KDP_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for KDP_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: CCL
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for CCL_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for CCL_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for CCL_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for CCL_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: LOW
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for LOW_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for LOW_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for LOW_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for LOW_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: DECK
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for DECK_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for DECK_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for DECK_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for DECK_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: DIA
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for DIA_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for DIA_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for DIA_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for DIA_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: TNA
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for TNA_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for TNA_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for TNA_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for TNA_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: XPEV
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for XPEV_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for XPEV_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for XPEV_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for XPEV_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: MO
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for MO_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for MO_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for MO_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for MO_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: ACN
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for ACN_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for ACN_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for ACN_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for ACN_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: WMT
+[2026-04-06 09:59:53] 💾 Loaded 499 bars from local CSV for WMT_1day
+[2026-04-06 09:59:53] 💾 Loaded 876 bars from local CSV for WMT_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for WMT_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for WMT_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: DELL
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for DELL_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for DELL_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for DELL_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for DELL_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: AES
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for AES_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for AES_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for AES_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for AES_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: KO
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for KO_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for KO_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for KO_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for KO_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: BYND
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for BYND_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for BYND_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for BYND_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for BYND_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: SMCI
+[2026-04-06 09:59:53] 💾 Loaded 499 bars from local CSV for SMCI_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for SMCI_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for SMCI_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for SMCI_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: AVGO
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for AVGO_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for AVGO_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for AVGO_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for AVGO_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: ARM
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for ARM_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for ARM_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for ARM_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for ARM_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: QCOM
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for QCOM_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for QCOM_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for QCOM_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for QCOM_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: CRWD
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for CRWD_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for CRWD_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for CRWD_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for CRWD_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: SHOP
+[2026-04-06 09:59:53] 💾 Loaded 499 bars from local CSV for SHOP_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for SHOP_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for SHOP_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for SHOP_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: XYZ
+[2026-04-06 09:59:53] 💾 Loaded 499 bars from local CSV for XYZ_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for XYZ_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for XYZ_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for XYZ_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: DDOG
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for DDOG_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for DDOG_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for DDOG_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for DDOG_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: CVNA
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for CVNA_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for CVNA_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for CVNA_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for CVNA_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: UPST
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for UPST_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for UPST_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for UPST_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for UPST_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: HOOD
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for HOOD_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for HOOD_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for HOOD_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for HOOD_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: AFRM
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for AFRM_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for AFRM_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for AFRM_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for AFRM_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: RIVN
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for RIVN_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for RIVN_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for RIVN_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for RIVN_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: NIO
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for NIO_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for NIO_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for NIO_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for NIO_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: PDD
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for PDD_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for PDD_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for PDD_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for PDD_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: JD
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for JD_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for JD_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for JD_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for JD_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: SOXL
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for SOXL_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for SOXL_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for SOXL_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for SOXL_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: TQQQ
+[2026-04-06 09:59:53] 💾 Loaded 502 bars from local CSV for TQQQ_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for TQQQ_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for TQQQ_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for TQQQ_5min
+[2026-04-06 09:59:53] 💾 Intentando cargar historial local para: ARKK
+[2026-04-06 09:59:53] 💾 Loaded 499 bars from local CSV for ARKK_1day
+[2026-04-06 09:59:53] 💾 Loaded 862 bars from local CSV for ARKK_1hour
+[2026-04-06 09:59:53] 💾 Loaded 572 bars from local CSV for ARKK_15min
+[2026-04-06 09:59:53] 💾 Loaded 780 bars from local CSV for ARKK_5min
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en SPY
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL SPY -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en MSFT
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL MSFT -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en AAPL
+=========================================================
+🎯 TRADE #1 [c1squeezecall | AAPL]
+   🟢 ENTRADA: 2026-03-31 18:00 | Precio: $249.04 
+   🔴 SALIDA:  2026-03-31 18:35 | Precio: $251.74 
+   ✅ RESULTADO: +1.08%
+---------------------------------------------------------
+📊 PARCIAL AAPL -> Trades: 1 | Aciertos: 1 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en AMZN
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL AMZN -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en NVDA
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL NVDA -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en TSLA
+=========================================================
+🎯 TRADE #1 [c1squeezecall | TSLA]
+   🟢 ENTRADA: 2026-03-31 18:00 | Precio: $363.15 
+   🔴 SALIDA:  2026-03-31 18:35 | Precio: $368.30 
+   ✅ RESULTADO: +1.42%
+---------------------------------------------------------
+📊 PARCIAL TSLA -> Trades: 1 | Aciertos: 1 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en META
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL META -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en AMD
+=========================================================
+🎯 TRADE #1 [c1squeezecall | AMD]
+   🟢 ENTRADA: 2026-03-31 18:00 | Precio: $197.42 
+   🔴 SALIDA:  2026-03-31 18:35 | Precio: $200.30 
+   ✅ RESULTADO: +1.46%
+---------------------------------------------------------
+📊 PARCIAL AMD -> Trades: 1 | Aciertos: 1 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en PLTR
+=========================================================
+🎯 TRADE #1 [c1squeezecall | PLTR]
+   🟢 ENTRADA: 2026-03-31 18:00 | Precio: $142.18 
+   🔴 SALIDA:  2026-03-31 18:35 | Precio: $143.72 
+   ✅ RESULTADO: +1.08%
+---------------------------------------------------------
+📊 PARCIAL PLTR -> Trades: 1 | Aciertos: 1 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en ABNB
+=========================================================
+🎯 TRADE #1 [c1squeezecall | ABNB]
+   🟢 ENTRADA: 2026-03-24 19:45 | Precio: $130.71 
+   🔴 SALIDA:  2026-03-24 20:50 | Precio: $129.97 
+   ❌ RESULTADO: -0.57%
+🎯 TRADE #2 [c1squeezecall | ABNB]
+   🟢 ENTRADA: 2026-03-31 18:15 | Precio: $124.05 
+   🔴 SALIDA:  2026-03-31 18:40 | Precio: $126.01 
+   ✅ RESULTADO: +1.58%
+---------------------------------------------------------
+📊 PARCIAL ABNB -> Trades: 2 | Aciertos: 1 | Fallos: 1
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en COST
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL COST -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en RIOT
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL RIOT -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en BITX
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL BITX -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en MSTR
+=========================================================
+🎯 TRADE #1 [c1squeezecall | MSTR]
+   🟢 ENTRADA: 2026-03-31 21:00 | Precio: $123.85 
+   🔴 SALIDA:  2026-03-31 21:50 | Precio: $125.08 
+   ✅ RESULTADO: +0.99%
+---------------------------------------------------------
+📊 PARCIAL MSTR -> Trades: 1 | Aciertos: 1 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en MU
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL MU -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en URA
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL URA -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en TSM
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL TSM -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en OKLO
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL OKLO -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en COIN
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL COIN -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en GOOGL
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL GOOGL -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en GOOG
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL GOOG -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en BABA
+=========================================================
+🎯 TRADE #1 [c1squeezecall | BABA]
+   🟢 ENTRADA: 2026-03-31 18:00 | Precio: $122.39 
+   🔴 SALIDA:  2026-03-31 18:40 | Precio: $124.66 
+   ✅ RESULTADO: +1.85%
+---------------------------------------------------------
+📊 PARCIAL BABA -> Trades: 1 | Aciertos: 1 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en ALB
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL ALB -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en AMDL
+=========================================================
+🎯 TRADE #1 [c1squeezecall | AMDL]
+   🟢 ENTRADA: 2026-03-31 18:00 | Precio: $11.53 
+   🔴 SALIDA:  2026-03-31 18:35 | Precio: $11.86 
+   ✅ RESULTADO: +2.86%
+---------------------------------------------------------
+📊 PARCIAL AMDL -> Trades: 1 | Aciertos: 1 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en NFLX
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL NFLX -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en IWM
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL IWM -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en NVO
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL NVO -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en PEP
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL PEP -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en INTC
+=========================================================
+🎯 TRADE #1 [c1squeezecall | INTC]
+   🟢 ENTRADA: 2026-03-31 18:00 | Precio: $42.80 
+   🔴 SALIDA:  2026-03-31 18:40 | Precio: $43.55 
+   ✅ RESULTADO: +1.75%
+---------------------------------------------------------
+📊 PARCIAL INTC -> Trades: 1 | Aciertos: 1 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en GM
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL GM -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en MDB
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL MDB -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en CVX
+=========================================================
+🎯 TRADE #1 [c1squeezecall | CVX]
+   🟢 ENTRADA: 2026-03-26 15:30 | Precio: $206.39 
+   🔴 SALIDA:  2026-03-26 16:30 | Precio: $208.23 
+   ✅ RESULTADO: +0.89%
+---------------------------------------------------------
+📊 PARCIAL CVX -> Trades: 1 | Aciertos: 1 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en KDP
+=========================================================
+🎯 TRADE #1 [c1squeezecall | KDP]
+   🟢 ENTRADA: 2026-03-27 16:30 | Precio: $26.39 
+   🔴 SALIDA:  2026-03-27 18:00 | Precio: $26.35 
+   ❌ RESULTADO: -0.15%
+---------------------------------------------------------
+📊 PARCIAL KDP -> Trades: 1 | Aciertos: 0 | Fallos: 1
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en CCL
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL CCL -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en LOW
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL LOW -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en DECK
+=========================================================
+🎯 TRADE #1 [c1squeezecall | DECK]
+   🟢 ENTRADA: 2026-03-23 19:00 | Precio: $102.34 
+   🔴 SALIDA:  2026-03-23 19:35 | Precio: $103.40 
+   ✅ RESULTADO: +1.04%
+🎯 TRADE #2 [c1squeezecall | DECK]
+   🟢 ENTRADA: 2026-03-30 21:15 | Precio: $94.51 
+   🔴 SALIDA:  2026-03-30 21:50 | Precio: $95.02 
+   ✅ RESULTADO: +0.54%
+---------------------------------------------------------
+📊 PARCIAL DECK -> Trades: 2 | Aciertos: 2 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en DIA
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL DIA -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en TNA
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL TNA -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en XPEV
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL XPEV -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en MO
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL MO -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en ACN
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL ACN -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en WMT
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL WMT -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en DELL
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL DELL -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en AES
+=========================================================
+🎯 TRADE #1 [c1squeezecall | AES]
+   🟢 ENTRADA: 2026-03-27 15:45 | Precio: $14.03 
+   🔴 SALIDA:  2026-03-27 17:15 | Precio: $14.06 
+   ✅ RESULTADO: +0.21%
+---------------------------------------------------------
+📊 PARCIAL AES -> Trades: 1 | Aciertos: 1 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en KO
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL KO -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en BYND
+=========================================================
+🎯 TRADE #1 [c1squeezecall | BYND]
+   🟢 ENTRADA: 2026-03-23 18:00 | Precio: $0.70 
+   🔴 SALIDA:  2026-03-23 19:30 | Precio: $0.72 
+   ✅ RESULTADO: +2.86%
+🎯 TRADE #2 [c1squeezecall | BYND]
+   🟢 ENTRADA: 2026-03-25 20:45 | Precio: $0.68 
+   🔴 SALIDA:  2026-03-25 20:50 | Precio: $0.69 
+   ✅ RESULTADO: +1.47%
+---------------------------------------------------------
+📊 PARCIAL BYND -> Trades: 2 | Aciertos: 2 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en SMCI
+=========================================================
+🎯 TRADE #1 [c1squeezecall | SMCI]
+   🟢 ENTRADA: 2026-03-24 19:00 | Precio: $22.01 
+   🔴 SALIDA:  2026-03-24 19:30 | Precio: $22.41 
+   ✅ RESULTADO: +1.82%
+🎯 TRADE #2 [c1squeezecall | SMCI]
+   🟢 ENTRADA: 2026-03-31 18:00 | Precio: $21.56 
+   🔴 SALIDA:  2026-03-31 18:35 | Precio: $21.92 
+   ✅ RESULTADO: +1.67%
+---------------------------------------------------------
+📊 PARCIAL SMCI -> Trades: 2 | Aciertos: 2 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en AVGO
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL AVGO -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en ARM
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL ARM -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en QCOM
+=========================================================
+🎯 TRADE #1 [c1squeezecall | QCOM]
+   🟢 ENTRADA: 2026-03-31 19:00 | Precio: $128.19 
+   🔴 SALIDA:  2026-03-31 20:30 | Precio: $128.39 
+   ✅ RESULTADO: +0.16%
+---------------------------------------------------------
+📊 PARCIAL QCOM -> Trades: 1 | Aciertos: 1 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en CRWD
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL CRWD -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en SHOP
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL SHOP -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en XYZ
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL XYZ -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en DDOG
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL DDOG -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en CVNA
+=========================================================
+🎯 TRADE #1 [c1squeezecall | CVNA]
+   🟢 ENTRADA: 2026-03-31 18:00 | Precio: $289.11 
+   🔴 SALIDA:  2026-03-31 18:20 | Precio: $292.38 
+   ✅ RESULTADO: +1.13%
+---------------------------------------------------------
+📊 PARCIAL CVNA -> Trades: 1 | Aciertos: 1 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en UPST
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL UPST -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en HOOD
+=========================================================
+🎯 TRADE #1 [c1squeezecall | HOOD]
+   🟢 ENTRADA: 2026-03-31 18:00 | Precio: $66.10 
+   🔴 SALIDA:  2026-03-31 18:30 | Precio: $66.73 
+   ✅ RESULTADO: +0.95%
+---------------------------------------------------------
+📊 PARCIAL HOOD -> Trades: 1 | Aciertos: 1 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en AFRM
+=========================================================
+🎯 TRADE #1 [c1squeezecall | AFRM]
+   🟢 ENTRADA: 2026-03-30 17:00 | Precio: $43.84 
+   🔴 SALIDA:  2026-03-30 18:30 | Precio: $43.78 
+   ❌ RESULTADO: -0.14%
+---------------------------------------------------------
+📊 PARCIAL AFRM -> Trades: 1 | Aciertos: 0 | Fallos: 1
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en RIVN
+=========================================================
+🎯 TRADE #1 [c1squeezecall | RIVN]
+   🟢 ENTRADA: 2026-03-31 18:00 | Precio: $14.72 
+   🔴 SALIDA:  2026-03-31 18:40 | Precio: $15.03 
+   ✅ RESULTADO: +2.11%
+---------------------------------------------------------
+📊 PARCIAL RIVN -> Trades: 1 | Aciertos: 1 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en NIO
+=========================================================
+🎯 TRADE #1 [c1squeezecall | NIO]
+   🟢 ENTRADA: 2026-03-23 15:00 | Precio: $5.70 
+   🔴 SALIDA:  2026-03-23 16:30 | Precio: $5.77 
+   ✅ RESULTADO: +1.23%
+🎯 TRADE #2 [c1squeezecall | NIO]
+   🟢 ENTRADA: 2026-03-30 17:00 | Precio: $5.54 
+   🔴 SALIDA:  2026-03-30 18:30 | Precio: $5.57 
+   ✅ RESULTADO: +0.54%
+---------------------------------------------------------
+📊 PARCIAL NIO -> Trades: 2 | Aciertos: 2 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en PDD
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL PDD -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en JD
+=========================================================
+🎯 TRADE #1 [c1squeezecall | JD]
+   🟢 ENTRADA: 2026-03-24 19:30 | Precio: $27.47 
+   🔴 SALIDA:  2026-03-24 20:50 | Precio: $27.51 
+   ✅ RESULTADO: +0.15%
+---------------------------------------------------------
+📊 PARCIAL JD -> Trades: 1 | Aciertos: 1 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en SOXL
+=========================================================
+🎯 TRADE #1 [c1squeezecall | SOXL]
+   🟢 ENTRADA: 2026-03-31 18:00 | Precio: $43.63 
+   🔴 SALIDA:  2026-03-31 18:05 | Precio: $43.94 
+   ✅ RESULTADO: +0.71%
+---------------------------------------------------------
+📊 PARCIAL SOXL -> Trades: 1 | Aciertos: 1 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en TQQQ
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL TQQQ -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+=========================================================
+🔍 AUDITORÍA: c1squeezecall en ARKK
+=========================================================
+---------------------------------------------------------
+📊 PARCIAL ARKK -> Trades: 0 | Aciertos: 0 | Fallos: 0
+
+#########################################################
+🏆 RESUMEN GLOBAL DEL PORTAFOLIO (65 TICKERS)
+#########################################################
+   Total Trades Ejecutados : 28
+   Operaciones Ganadoras   : 25
+   Operaciones Perdedoras  : 3
+   🎯 Win Rate Global      : 89.29%
+   💰 Rendimiento Neto     : +30.70%
+#########################################################

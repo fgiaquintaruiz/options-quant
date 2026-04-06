@@ -5,15 +5,16 @@ import com.fgiaquinta.optionsquant.services.IbkrService;
 import com.fgiaquinta.optionsquant.utils.DataManager;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
-import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
-import org.ta4j.core.indicators.bollinger.BollingerBandsMiddleIndicator;
-import org.ta4j.core.indicators.bollinger.BollingerBandsUpperIndicator;
-import org.ta4j.core.indicators.statistics.StandardDeviationIndicator;
+import org.ta4j.core.indicators.helpers.*;
 
+import java.time.Duration;
 import java.time.ZonedDateTime;
+import java.util.HashMap;
+import java.util.Map;
 
 public class C1SqueezeCallStrategy implements TradingStrategy {
     private final IbkrService ibkrService;
+    private final Map<String, ZonedDateTime> lastTriggerMap = new HashMap<>();
 
     public C1SqueezeCallStrategy(IbkrService ibkrService) {
         this.ibkrService = ibkrService;
@@ -21,65 +22,100 @@ public class C1SqueezeCallStrategy implements TradingStrategy {
 
     @Override
     public boolean isTriggered(String ticker, DataManager dataManager, ZonedDateTime currentTime) {
-        // 1. Extraemos las gráficas necesarias
+
+        ZonedDateTime nyTime = currentTime.withZoneSameInstant(java.time.ZoneId.of("America/New_York"));
+        if (nyTime.getHour() == 9) return false;
+
+        ZonedDateTime lastTrigger = lastTriggerMap.get(ticker);
+        if (lastTrigger != null && Duration.between(lastTrigger, currentTime).toHours() < 2) return false;
+
+        BarSeries series1D = dataManager.getSeries(ticker, TimeFrame.DAY_1);
         BarSeries series1h = dataManager.getSeries(ticker, TimeFrame.HOUR_1);
         BarSeries series15m = dataManager.getSeries(ticker, TimeFrame.MIN_15);
 
-        if (series1h == null || series15m == null) return false;
+        if (series1D == null || series1h == null || series15m == null ||
+                series1D.isEmpty() || series1h.isEmpty() || series15m.isEmpty()) {
+            return false;
+        }
 
-        // 2. Sincronización de índices
+        int idx1D = getIndexForTime(series1D, currentTime);
         int idx1h = getIndexForTime(series1h, currentTime);
         int idx15m = getIndexForTime(series15m, currentTime);
 
-        // Necesitamos al menos 70 velas para validar el canal de 10 días (Regra 2 del libro)
-        if (idx1h < 70 || idx15m < 1) return false;
+        if (idx1D < 20 || idx1h < 20 || idx15m < 20) return false;
 
-        // =========================================================================
-        // REGLAS 1 y 2: CANAL LATERAL (SQUEEZE) - 10 DÍAS O MÁS
-        // =========================================================================
-        // Calculamos el ancho de las bandas de Bollinger en 1H para ver si hay "Squeeze"
         ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
-        SMAIndicator sma1h20 = new SMAIndicator(close1h, 20);
-        StandardDeviationIndicator sd1h = new StandardDeviationIndicator(close1h, 20);
-
-        double upper1h = sma1h20.getValue(idx1h).doubleValue() + (2 * sd1h.getValue(idx1h).doubleValue());
-        double lower1h = sma1h20.getValue(idx1h).doubleValue() - (2 * sd1h.getValue(idx1h).doubleValue());
-        double bandwidth = ((upper1h - lower1h) / sma1h20.getValue(idx1h).doubleValue()) * 100;
-
-        // Si el ancho es mayor al 2%, no es un canal lateral lo suficientemente estrecho
-        if (bandwidth > 2.0) return false;
+        OpenPriceIndicator open1h = new OpenPriceIndicator(series1h);
+        HighPriceIndicator high1h = new HighPriceIndicator(series1h);
+        LowPriceIndicator low1h = new LowPriceIndicator(series1h);
+        SMAIndicator sma20_1h = new SMAIndicator(close1h, 20);
 
         // =========================================================================
-        // REGLA 3: SEÑAL ALCISTA (Ruptura del canal en 1H)
+        // REGLA 1: TENDENCIA BAJISTA CLARA (Filtro de Asfixia en 1H)
+        // El precio debe haber cerrado POR DEBAJO de la SMA20 durante al menos las 3 horas previas.
         // =========================================================================
-        double currentPrice1h = series1h.getBar(idx1h).getClosePrice().doubleValue();
-        double openPrice1h = series1h.getBar(idx1h).getOpenPrice().doubleValue();
-
-        // Debe ser una vela alcista que cierre por encima de la media de 20 en 1H
-        boolean isBreakout1h = currentPrice1h > openPrice1h && currentPrice1h > sma1h20.getValue(idx1h).doubleValue();
-        if (!isBreakout1h) return false;
+        boolean wasClearDowntrend = true;
+        for (int i = 1; i <= 3; i++) {
+            if (close1h.getValue(idx1h - i).doubleValue() >= sma20_1h.getValue(idx1h - i).doubleValue()) {
+                wasClearDowntrend = false;
+                break;
+            }
+        }
+        if (!wasClearDowntrend) return false;
 
         // =========================================================================
-        // REGLA 4: CONFIRMACIÓN EN 15 MINUTOS (Alta Volatilidad en Bollinger)
+        // REGLAS 2 y 3: ROTURA DE MM20 Y VELA FUERTE
+        // =========================================================================
+        double currentClose1h = close1h.getValue(idx1h).doubleValue();
+        double currentOpen1h = open1h.getValue(idx1h).doubleValue();
+        double currentHigh1h = high1h.getValue(idx1h).doubleValue();
+        double currentLow1h = low1h.getValue(idx1h).doubleValue();
+        double currentSma1h = sma20_1h.getValue(idx1h).doubleValue();
+
+        // Cruzó hacia arriba
+        boolean crossedAboveSma = currentClose1h > currentSma1h;
+        // Es vela verde
+        boolean isBullishCandle = currentClose1h > currentOpen1h;
+
+        // 👉 NUEVO FILTRO: La vela debe cerrar en su 35% superior (sin mechas largas arriba)
+        double candleRange = currentHigh1h - currentLow1h;
+        boolean closedNearHigh = (currentHigh1h - currentClose1h) <= (candleRange * 0.35);
+
+        if (!crossedAboveSma || !isBullishCandle || !closedNearHigh) return false;
+
+        // 👉 NUEVO FILTRO: Volumen de rotura debe ser decente (>= 90% del promedio)
+        VolumeIndicator vol1h = new VolumeIndicator(series1h);
+        SMAIndicator avgVol1h = new SMAIndicator(vol1h, 10);
+        double currentVol = vol1h.getValue(idx1h).doubleValue();
+        double avgVol = avgVol1h.getValue(idx1h).doubleValue();
+        if (currentVol < (avgVol * 0.90)) return false;
+
+        // =========================================================================
+        // REGLA 4: CONFIRMACIÓN EN 15 MINUTOS
         // =========================================================================
         ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
-        SMAIndicator sma15m20 = new SMAIndicator(close15m, 20);
-        BollingerBandsMiddleIndicator bbMid15 = new BollingerBandsMiddleIndicator(sma15m20);
-        StandardDeviationIndicator sd15 = new StandardDeviationIndicator(close15m, 20);
-        BollingerBandsUpperIndicator bbUpper15 = new BollingerBandsUpperIndicator(bbMid15, sd15);
+        SMAIndicator sma20_15m = new SMAIndicator(close15m, 20);
 
-        double close15 = series15m.getBar(idx15m).getClosePrice().doubleValue();
-        double upper15 = bbUpper15.getValue(idx15m).doubleValue();
+        double currentPrice15m = close15m.getValue(idx15m).doubleValue();
+        double currentSma15m = sma20_15m.getValue(idx15m).doubleValue();
+        double prevSma15m = sma20_15m.getValue(idx15m - 1).doubleValue();
 
-        // El precio en 15m debe estar rompiendo la banda superior con fuerza
-        return close15 >= (upper15 * 0.999); // 0.1% de margen de toque
+        boolean isUptrend15m = (currentPrice15m > currentSma15m) && (currentSma15m > prevSma15m);
+
+        if (isUptrend15m) {
+            lastTriggerMap.put(ticker, currentTime);
+            return true;
+        }
+
+        return false;
     }
 
-    private int getIndexForTime(BarSeries series, ZonedDateTime targetTime) {
-        if (targetTime == null) return series.getEndIndex();
-        for (int i = series.getEndIndex(); i >= 0; i--) {
-            if (!series.getBar(i).getEndTime().isAfter(targetTime)) return i;
+    private int getIndexForTime(BarSeries series, ZonedDateTime time) {
+        for (int i = series.getEndIndex(); i >= Math.max(0, series.getEndIndex() - 500); i--) {
+            if (!series.getBar(i).getEndTime().isAfter(time)) {
+                return i;
+            }
         }
-        return 0;
+        return -1;
     }
 }

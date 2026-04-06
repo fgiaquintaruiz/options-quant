@@ -37,8 +37,30 @@ public class BacktestRunner {
     }
 
     public static void main(String[] args) {
-        System.setOut(new java.io.PrintStream(System.out, true, StandardCharsets.UTF_8));
         try {
+            // =========================================================
+            // 👉 NUEVO: CONFIGURACIÓN DE LOGS DUAL (Consola + Archivo)
+            // =========================================================
+            java.io.PrintStream consoleOut = System.out;
+            java.io.PrintStream fileOut = new java.io.PrintStream(new java.io.FileOutputStream("backtest_resultados.log"), true, "UTF-8");
+
+            java.io.PrintStream dualStream = new java.io.PrintStream(new java.io.OutputStream() {
+                @Override
+                public void write(int b) {
+                    consoleOut.write(b);
+                    fileOut.write(b);
+                }
+
+                @Override
+                public void write(byte[] b, int off, int len) {
+                    consoleOut.write(b, off, len);
+                    fileOut.write(b, off, len);
+                }
+            }, true, "UTF-8");
+
+            System.setOut(dualStream);
+            System.setErr(dualStream); // También guardamos los errores
+
             logInfo("🚀 STARTING MULTI-TIMEFRAME PORTFOLIO BACKTEST (OPTIONSQUANT STRATEGIES)");
 
             ConfigLoader.getConfig();
@@ -84,7 +106,10 @@ public class BacktestRunner {
                     ibkr.startMarketDataTracking(ticker);
                     needsBackfill = true;
                     // Retraso de 1 segundo para evitar que IBKR nos penalice por descargar muy rápido
-                    try { Thread.sleep(1000); } catch (InterruptedException e) {}
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                    }
                 }
             }
 
@@ -195,7 +220,7 @@ public class BacktestRunner {
             System.out.println("   Operaciones Ganadoras   : " + globalAciertos);
             System.out.println("   Operaciones Perdedoras  : " + globalFallos);
             if (globalTrades > 0) {
-                System.out.printf("   🎯 Win Rate Global      : %.2f%%\n", ((double)globalAciertos / globalTrades) * 100.0);
+                System.out.printf("   🎯 Win Rate Global      : %.2f%%\n", ((double) globalAciertos / globalTrades) * 100.0);
                 System.out.printf("   💰 Rendimiento Neto     : %s%.2f%%\n", (globalRendimiento > 0 ? "+" : ""), globalRendimiento);
             } else {
                 System.out.println("   ⚠️ No se dispararon trades en este periodo.");
@@ -216,12 +241,22 @@ public class BacktestRunner {
      */
     private static boolean loadLocalDataToCache(String ticker, TimeFrame timeFrame, DataManager dataManager) {
         String suffix;
-        switch(timeFrame) {
-            case MIN_5: suffix = "5min"; break;
-            case MIN_15: suffix = "15min"; break;
-            case HOUR_1: suffix = "1hour"; break;
-            case DAY_1: suffix = "1day"; break;
-            default: suffix = timeFrame.name(); break;
+        switch (timeFrame) {
+            case MIN_5:
+                suffix = "5min";
+                break;
+            case MIN_15:
+                suffix = "15min";
+                break;
+            case HOUR_1:
+                suffix = "1hour";
+                break;
+            case DAY_1:
+                suffix = "1day";
+                break;
+            default:
+                suffix = timeFrame.name();
+                break;
         }
 
         String cacheKey = ticker + "_" + suffix;
