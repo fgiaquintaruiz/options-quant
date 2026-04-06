@@ -6,11 +6,18 @@ import com.fgiaquinta.optionsquant.utils.DataManager;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
+import org.ta4j.core.indicators.helpers.LowPriceIndicator;
 
+import java.time.Duration;
 import java.time.ZonedDateTime;
+import java.util.HashMap;
+import java.util.Map;
 
 public class C3BounceCallStrategy implements TradingStrategy {
     private final IbkrService ibkrService;
+
+    // 👉 ANTI-AMETRALLADORA: Cooldown de 2 horas
+    private final Map<String, ZonedDateTime> lastTriggerMap = new HashMap<>();
 
     public C3BounceCallStrategy(IbkrService ibkrService) {
         this.ibkrService = ibkrService;
@@ -18,66 +25,92 @@ public class C3BounceCallStrategy implements TradingStrategy {
 
     @Override
     public boolean isTriggered(String ticker, DataManager dataManager, ZonedDateTime currentTime) {
-        // 1. Extraemos las gráficas necesarias (Diaria, 1H y 15m)
-        BarSeries seriesDaily = dataManager.getSeries(ticker, TimeFrame.DAY_1);
+
+        // =========================================================================
+        // REGLA 0.1: FILTRO DE APERTURA (Bloquear 9 AM de NY)
+        // =========================================================================
+        ZonedDateTime nyTime = currentTime.withZoneSameInstant(java.time.ZoneId.of("America/New_York"));
+        if (nyTime.getHour() == 9) {
+            return false;
+        }
+
+        // =========================================================================
+        // REGLA 0.2: COOLDOWN DE 2 HORAS (Bloqueador de re-entradas)
+        // =========================================================================
+        ZonedDateTime lastTrigger = lastTriggerMap.get(ticker);
+        if (lastTrigger != null && Duration.between(lastTrigger, currentTime).toHours() < 2) {
+            return false;
+        }
+
+        BarSeries series1D = dataManager.getSeries(ticker, TimeFrame.DAY_1);
         BarSeries series1h = dataManager.getSeries(ticker, TimeFrame.HOUR_1);
         BarSeries series15m = dataManager.getSeries(ticker, TimeFrame.MIN_15);
 
-        if (seriesDaily == null || series1h == null || series15m == null) return false;
+        if (series1D == null || series1h == null || series15m == null ||
+                series1D.isEmpty() || series1h.isEmpty() || series15m.isEmpty()) {
+            return false;
+        }
 
-        // 2. Sincronización de índices para el Backtest
-        int idxDaily = getIndexForTime(seriesDaily, currentTime);
+        int idx1D = getIndexForTime(series1D, currentTime);
         int idx1h = getIndexForTime(series1h, currentTime);
         int idx15m = getIndexForTime(series15m, currentTime);
 
-        if (idxDaily < 20 || idx1h < 1 || idx15m < 1) return false;
+        if (idx1D < 20 || idx1h < 20 || idx15m < 20) return false;
 
         // =========================================================================
-        // REGLA 2: APROXIMACIÓN AL SOPORTE (Temporalidad Diaria - MM20)
+        // REGLA 1: Tendencia Alcista Principal (1 Día)
         // =========================================================================
-        ClosePriceIndicator closeDaily = new ClosePriceIndicator(seriesDaily);
-        SMAIndicator sma20Daily = new SMAIndicator(closeDaily, 20);
-
-        double sma20DailyVal = sma20Daily.getValue(idxDaily).doubleValue();
-        double currentPrice = series1h.getBar(idx1h).getClosePrice().doubleValue();
-        double low1h = series1h.getBar(idx1h).getLowPrice().doubleValue();
-
-        // El precio debe estar cerca o haber tocado la MM20 diaria (margen 0.5%)
-        boolean isTouchingDailySupport = low1h <= (sma20DailyVal * 1.005);
-        if (!isTouchingDailySupport) return false;
+        ClosePriceIndicator close1D = new ClosePriceIndicator(series1D);
+        // Exigimos que el cierre de ayer sea MAYOR que el cierre de anteayer
+        boolean isUptrend = close1D.getValue(idx1D - 1).isGreaterThan(close1D.getValue(idx1D - 2));
+        if (!isUptrend) return false;
 
         // =========================================================================
-        // REGLA 1: CONTEXTO (Temporalidad 1 Hora - Tendencia Bajista Previa)
+        // REGLA 2: Retroceso (Bounce) al soporte de la media de 20 en 1 Hora
         // =========================================================================
-        // Según el libro, venimos de una caída hacia la media.
-        // Verificamos que el precio esté por debajo de la apertura de la vela anterior (caída)
-        double prevClose1h = series1h.getBar(idx1h - 1).getClosePrice().doubleValue();
-        double prevOpen1h = series1h.getBar(idx1h - 1).getOpenPrice().doubleValue();
+        ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
+        LowPriceIndicator low1h = new LowPriceIndicator(series1h);
+        SMAIndicator sma20_1h = new SMAIndicator(close1h, 20);
 
-        if (prevClose1h > prevOpen1h) return false; // Queremos venir de debilidad
+        double currentLow1h = low1h.getValue(idx1h).doubleValue();
+        double currentClose1h = close1h.getValue(idx1h).doubleValue();
+        double sma20Val1h = sma20_1h.getValue(idx1h).doubleValue();
+
+        // Tocó el soporte (Margen del 0.2% por encima)
+        boolean touchedSupport = currentLow1h <= (sma20Val1h * 1.002);
+        // Rechazó caer y el cuerpo cerró por encima del soporte
+        boolean rejectedSupport = currentClose1h > sma20Val1h;
+
+        if (!touchedSupport || !rejectedSupport) {
+            return false;
+        }
 
         // =========================================================================
-        // REGLA 3: VERIFICACIÓN DEL REBOTE (Temporalidad 15 Minutos)
+        // REGLA 3: Confirmación de Reversión en 15 Minutos
         // =========================================================================
-        double close15m = series15m.getBar(idx15m).getClosePrice().doubleValue();
-        double open15m = series15m.getBar(idx15m).getOpenPrice().doubleValue();
+        ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
+        SMAIndicator sma20_15m = new SMAIndicator(close15m, 20);
 
-        // El precio debe respetar la MM20 Diaria (no cerró por debajo) y ser vela verde
-        boolean isBouncingUp15m = (close15m > open15m) && (close15m > sma20DailyVal);
-        if (!isBouncingUp15m) return false;
+        double currentPrice15m = close15m.getValue(idx15m).doubleValue();
+        double sma20Val15m = sma20_15m.getValue(idx15m).doubleValue();
 
-        // =========================================================================
-        // REGLA 4: ENTRADA (Temporalidad 1 Hora - Vela de Confirmación Alcista)
-        // =========================================================================
-        double open1h = series1h.getBar(idx1h).getOpenPrice().doubleValue();
-        return currentPrice > open1h; // Vela de 1H actual es verde (confirmación)
+        // En 15m, el precio ya cruzó y se mantiene por encima de la SMA20
+        boolean confirmedUptrend15m = currentPrice15m > sma20Val15m;
+
+        if (confirmedUptrend15m) {
+            lastTriggerMap.put(ticker, currentTime);
+            return true;
+        }
+
+        return false;
     }
 
-    private int getIndexForTime(BarSeries series, ZonedDateTime targetTime) {
-        if (targetTime == null) return series.getEndIndex();
-        for (int i = series.getEndIndex(); i >= 0; i--) {
-            if (!series.getBar(i).getEndTime().isAfter(targetTime)) return i;
+    private int getIndexForTime(BarSeries series, ZonedDateTime time) {
+        for (int i = series.getEndIndex(); i >= Math.max(0, series.getEndIndex() - 500); i--) {
+            if (!series.getBar(i).getEndTime().isAfter(time)) {
+                return i;
+            }
         }
-        return 0;
+        return -1;
     }
 }

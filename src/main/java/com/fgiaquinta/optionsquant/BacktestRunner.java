@@ -106,7 +106,7 @@ public class BacktestRunner {
             // FASE 2: SIMULACIÓN DE PORTAFOLIO
             // =========================================================
             List<TradingStrategy> customStrategies = Arrays.asList(
-                    new P3BouncePutStrategy(ibkr) // <--- Cambia esto por la estrategia que quieras probar
+                    new C3BounceCallStrategy(ibkr)
             );
 
             int globalTrades = 0;
