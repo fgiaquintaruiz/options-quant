@@ -1,10 +1,10 @@
 package com.fgiaquinta.optionsquant.models;
 
 public enum TimeFrame {
-    MIN_1("1 min", "1 D", "1min"),
-    MIN_15("15 mins", "10 D", "15min"),
-    HOUR_1("1 hour", "30 D", "1hour"),
-    DAY_1("1 day", "2 Y", "1day");
+    MIN_5("5 mins", "10 D", "5min"),    // Reemplazado 1min por 5min
+    MIN_15("15 mins", "1 M", "15min"),  // 1 mes de historia para 15m
+    HOUR_1("1 hour", "6 M", "1hour"),   // 6 meses para que la SMA200 sea exacta
+    DAY_1("1 day", "2 Y", "1day");      // 2 años para diario
 
     private final String ibkrBarSize;
     private final String ibkrDuration;

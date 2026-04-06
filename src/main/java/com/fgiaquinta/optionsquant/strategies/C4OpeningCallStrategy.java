@@ -1,16 +1,14 @@
 package com.fgiaquinta.optionsquant.strategies;
 
-import com.fgiaquinta.optionsquant.analyzers.GapAnalyzer;
-import com.fgiaquinta.optionsquant.analyzers.VolatilityAnalyzer;
 import com.fgiaquinta.optionsquant.models.TimeFrame;
 import com.fgiaquinta.optionsquant.services.IbkrService;
-import com.fgiaquinta.optionsquant.utils.ConfigLoader;
+import com.fgiaquinta.optionsquant.utils.DataManager;
 import org.ta4j.core.BarSeries;
+import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
+import org.ta4j.core.indicators.statistics.StandardDeviationIndicator;
 
-/**
- * Estrategia C4: Apertura Alcista tras Gap Down.
- * Busca una reversión tras un salto de precio negativo en la apertura.
- */
+import java.time.ZonedDateTime;
+
 public class C4OpeningCallStrategy implements TradingStrategy {
     private final IbkrService ibkrService;
 
@@ -19,58 +17,56 @@ public class C4OpeningCallStrategy implements TradingStrategy {
     }
 
     @Override
-    public boolean isTriggered(int index, BarSeries series1h, BarSeries spySeries) {
-        String ticker = series1h.getName().split("_")[0];
+    public boolean isTriggered(String ticker, DataManager dataManager, ZonedDateTime currentTime) {
+        // 1. En apertura usamos principalmente 15 Minutos y 5 Minutos
+        BarSeries series15m = dataManager.getSeries(ticker, TimeFrame.MIN_15);
+        BarSeries series5m = dataManager.getSeries(ticker, TimeFrame.MIN_5);
 
-        // Esta estrategia se valida principalmente en 15 Minutos (Apertura)
-        BarSeries series15m = ibkrService.getSeries(ticker, TimeFrame.MIN_15);
-        if (series15m == null || series15m.isEmpty()) return false;
+        if (series15m == null || series5m == null) return false;
 
-        int idx15m = series15m.getEndIndex();
-        if (idx15m < 1) return false;
+        // Sincronización
+        int idx15m = getIndexForTime(series15m, currentTime);
+        int idx5m = getIndexForTime(series5m, currentTime);
 
-        // =========================================================================
-        // REGLA 1: Baja Volatilidad Previa (Valor desde config.yaml)
-        // =========================================================================
-        double maxBandWidth = ConfigLoader.getConfig().getDouble("opening", "bandWidth");
-        double prevBandWidth = VolatilityAnalyzer.getBollingerBandWidthPct(series15m, idx15m - 1, 20, 2.0);
+        if (idx15m < 1 || idx5m < 1) return false;
 
-        if (prevBandWidth > maxBandWidth) return false;
-
-        // =========================================================================
-        // REGLA 2: Gap Down Extremo (Límites desde config.yaml)
-        // =========================================================================
-        double minGap = ConfigLoader.getConfig().getDouble("opening", "callMinGap"); // e.g., -1.5
-        double maxGap = ConfigLoader.getConfig().getDouble("opening", "callMaxGap"); // e.g., -4.0
-
-        double gapPct = GapAnalyzer.getGapPercentage(series15m, idx15m);
-
-        // Verificamos que el Gap esté dentro del rango negativo definido
-        if (gapPct > minGap || gapPct < maxGap) return false;
+        // Solo operamos en la ventana de apertura (9:30 AM a 10:00 AM NY)
+        int hour = series15m.getBar(idx15m).getEndTime().getHour();
+        int minute = series15m.getBar(idx15m).getEndTime().getMinute();
+        if (hour != 9 || minute > 50) return false;
 
         // =========================================================================
-        // REGLA 3: Reversión Alcista en Apertura (Vela verde en 15m)
+        // REGLA 1 y 2: GAP DOWN (Salto a la baja)
         // =========================================================================
-        double currentClose15m = series15m.getBar(idx15m).getClosePrice().doubleValue();
-        double currentOpen15m = series15m.getBar(idx15m).getOpenPrice().doubleValue();
+        double closePrevDay = series15m.getBar(idx15m - 1).getClosePrice().doubleValue();
+        double openToday = series15m.getBar(idx15m).getOpenPrice().doubleValue();
 
-        return currentClose15m > currentOpen15m;
+        double gapPct = ((openToday - closePrevDay) / closePrevDay) * 100;
+
+        // El libro sugiere un Gap Down de entre -1.5% y -4% para una reversión probable
+        if (gapPct > -1.5 || gapPct < -4.0) return false;
+
+        // =========================================================================
+        // REGLA 3: VOLATILIDAD BAJA PREVIA
+        // =========================================================================
+        // Verificamos que el día anterior no haya sido una locura de volatilidad
+        StandardDeviationIndicator sd = new StandardDeviationIndicator(new ClosePriceIndicator(series15m), 20);
+        if (sd.getValue(idx15m - 1).doubleValue() > (closePrevDay * 0.02)) return false;
+
+        // =========================================================================
+        // REGLA 4: VELA DE REVERSIÓN (Vela verde en 5m o 15m)
+        // =========================================================================
+        double currentClose = series5m.getBar(idx5m).getClosePrice().doubleValue();
+        double currentOpen = series5m.getBar(idx5m).getOpenPrice().doubleValue();
+
+        return currentClose > currentOpen; // Confirmación de que el Gap se está empezando a llenar
     }
 
-    @Override
-    public double calculateTP(double entryPrice) {
-        double tpMult = ConfigLoader.getConfig().getDouble("global", "tpAtrMultiplier");
-        return Math.round((entryPrice * (1 + tpMult)) * 100.0) / 100.0;
-    }
-
-    @Override
-    public double calculateSL(double entryPrice, String ticker) {
-        double slMult = ConfigLoader.getConfig().getDouble("global", "slAtrMultiplier");
-        return Math.round((entryPrice * (1 - slMult)) * 100.0) / 100.0;
-    }
-
-    @Override
-    public String getName() {
-        return "C4_OPENING_CALL";
+    private int getIndexForTime(BarSeries series, ZonedDateTime targetTime) {
+        if (targetTime == null) return series.getEndIndex();
+        for (int i = series.getEndIndex(); i >= 0; i--) {
+            if (!series.getBar(i).getEndTime().isAfter(targetTime)) return i;
+        }
+        return 0;
     }
 }

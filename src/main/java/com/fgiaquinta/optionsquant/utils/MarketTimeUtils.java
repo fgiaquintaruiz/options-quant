@@ -11,8 +11,8 @@ public class MarketTimeUtils {
     // Single Source of Truth for timezone: New York Market Time
     public static final ZoneId MARKET_ZONE = ZoneId.of("America/New_York");
 
-    // Formatter for saving and reading local CSV files
-    public static final DateTimeFormatter CSV_FORMATTER = DateTimeFormatter.ISO_ZONED_DATE_TIME;
+    // CAMBIO: Usamos un formato limpio y legible (ej: 2026-03-24 09:30:00)
+    public static final DateTimeFormatter CSV_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     /**
      * Converts the IBKR date string into a ZonedDateTime strictly bound to MARKET_ZONE.

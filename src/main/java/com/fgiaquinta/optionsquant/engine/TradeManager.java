@@ -1,8 +1,10 @@
 package com.fgiaquinta.optionsquant.engine;
 
 import com.fgiaquinta.optionsquant.analyzers.VolatilityAnalyzer;
+import com.fgiaquinta.optionsquant.models.TradePlan;
 import com.fgiaquinta.optionsquant.services.IbkrService;
 import com.fgiaquinta.optionsquant.utils.ConfigLoader;
+import com.fgiaquinta.optionsquant.utils.RiskCalculator;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -87,42 +89,41 @@ public class TradeManager {
             return;
         }
 
-        // Get daily series for ATR
-        org.ta4j.core.BarSeries dailySeries = ibkrService.getSeries(ticker, com.fgiaquinta.optionsquant.models.TimeFrame.DAY_1);
+        // ==========================================
+        // 👉 1. ELEGIR LA TEMPORALIDAD PARA EL RIESGO
+        // ==========================================
+        // Usamos MIN_15 (o HOUR_1) para que el Stop Loss sea sólido y no salte por ruido.
+        org.ta4j.core.BarSeries seriesForRisk = ibkrService.getSeries(ticker, com.fgiaquinta.optionsquant.models.TimeFrame.MIN_15);
 
-        double atr;
-        if (dailySeries == null || dailySeries.isEmpty()) {
-            System.out.println("⚠️ [TradeManager] Warning: Daily series is NULL or EMPTY for " + ticker + ". Falling back to 2% fixed ATR.");
-            atr = price * 0.02;
-        } else {
-            atr = com.fgiaquinta.optionsquant.analyzers.VolatilityAnalyzer.calculateATR(dailySeries, 14);
-            System.out.println("📊 [TradeManager] Calculated ATR(14): " + atr);
+        if (seriesForRisk == null || seriesForRisk.isEmpty()) {
+            System.out.println("❌ [TradeManager] Error: No se encontraron datos de MIN_15 para " + ticker + " para calcular el riesgo. Abortando...");
+            return;
         }
 
-        // Fetch the AI-optimized settings using the exact composite key used in PreMarketRoutine
-        String compositeKey = ticker + "_" + strategyName;
-        com.fgiaquinta.optionsquant.models.OptimizationResult aiParams = preMarket.getOverridesFor(compositeKey);
+        // ==========================================
+        // 👉 2. GENERAR EL PLAN DE TRADE (CEREBRO)
+        // ==========================================
+        int lastIndex = seriesForRisk.getEndIndex();
+        // 1. Extraemos la hora de la vela actual en la que estamos entrando
+        java.time.ZonedDateTime entryTime = seriesForRisk.getBar(lastIndex).getEndTime();
 
-        double tpDist;
-        double slDist;
+// 2. Generamos el plan pasándole el DataManager para que pueda leer la volatilidad (ATR) en la temporalidad macro de 1 Hora
+        com.fgiaquinta.optionsquant.models.TradePlan plan = com.fgiaquinta.optionsquant.utils.RiskCalculator.generatePlan(
+                ibkrService.getDataManager(), // Pasamos el caché central
+                ticker,                       // El nombre de la acción
+                entryTime,                    // La hora de entrada
+                isCall,                       // Si es Call o Put
+                price                         // Precio de entrada
+        );
 
-        if (aiParams != null) {
-            System.out.println("🧠 [TradeManager] Applying AI-optimized parameters for " + ticker + " (" + strategyName + ")");
-            // Access the public variables directly instead of getters
-            tpDist = atr * aiParams.recommendedTpAtr;
-            slDist = atr * aiParams.recommendedSlAtr;
-        } else {
-            // Fallback to the standard config.yaml if the AI has no overrides
-            tpDist = atr * com.fgiaquinta.optionsquant.utils.ConfigLoader.getConfig().getDouble("global", "tpAtrMultiplier");
-            slDist = atr * com.fgiaquinta.optionsquant.utils.ConfigLoader.getConfig().getDouble("global", "slAtrMultiplier");
-        }
+        // Imprimimos el plan para auditoría
+        System.out.printf("📋 [TradeManager] Plan Generado -> Entrada: %.2f | TP: %.2f | SL: %.2f%n",
+                plan.entryPrice, plan.takeProfit, plan.stopLoss);
 
-        double tp = Math.round((isCall ? price + tpDist : price - tpDist) * 100.0) / 100.0;
-        double sl = Math.round((isCall ? price - slDist : price + slDist) * 100.0) / 100.0;
-
-        System.out.println("🎯 [TradeManager] Levels Calculated -> TP: " + tp + " | SL: " + sl);
-
-        int qty = accountManager.calculateQuantity(price, sl);
+        // ==========================================
+        // 👉 3. CALCULAR CANTIDAD (MONEY MANAGEMENT)
+        // ==========================================
+        int qty = accountManager.calculateQuantity(plan.entryPrice, plan.stopLoss);
         System.out.println("⚖️ [TradeManager] Calculated Position Qty: " + qty);
 
         if (qty < 1) {
@@ -131,17 +132,19 @@ public class TradeManager {
         }
 
         // ==========================================
-        // 👉 AQUI APLICAMOS LA LÓGICA DEL WEBHOOK
+        // 👉 4. EJECUCIÓN (MANDAR ORDEN A TWS)
         // ==========================================
         if (forceExecution || com.fgiaquinta.optionsquant.utils.ConfigLoader.getConfig().getBoolean("ibkr", "autoExecute")) {
             System.out.printf("📊 [Forensic] Trade disparado. Balance actual: %.2f | Estrategia: %s%n",
                     accountManager.getCurrentBalance(), strategyName);
             System.out.println("🚀 [TradeManager] Executing via IBKR -> " + (isCall ? "CALL" : "PUT") + " | Qty: " + qty);
-            ibkrService.placeOrder(ticker, isCall ? "CALL" : "PUT", qty, price, tp, sl, strategyName);
+
+            // Usamos las variables exactas del 'plan' generado
+            ibkrService.placeOrder(ticker, isCall ? "CALL" : "PUT", qty, plan.entryPrice, plan.takeProfit, plan.stopLoss, strategyName);
             accountManager.addActiveTrade();
         } else {
             System.out.println("📩 [TradeManager] Auto-execute is false. Sending Telegram alert.");
-            com.fgiaquinta.optionsquant.services.TelegramService.sendSignalConfirmation(ticker, strategyName, price, tp, sl, qty);
+            com.fgiaquinta.optionsquant.services.TelegramService.sendSignalConfirmation(ticker, strategyName, plan.entryPrice, plan.takeProfit, plan.stopLoss, qty);
         }
     }
 

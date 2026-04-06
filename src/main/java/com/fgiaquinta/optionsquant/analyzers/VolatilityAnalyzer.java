@@ -45,4 +45,15 @@ public class VolatilityAnalyzer {
         if (series.getBarCount() < period) return 0.0;
         return new ATRIndicator(series, period).getValue(series.getEndIndex()).doubleValue();
     }
+
+    public static double calculateATR(BarSeries series, int period, int targetIndex) {
+        // 1. Si no hay suficientes datos históricos hasta este índice, el ATR es 0
+        // (Restamos 1 porque los índices en ta4j empiezan en 0)
+        if (targetIndex < period - 1 || series.getBarCount() < period) {
+            return 0.0;
+        }
+
+        // 2. Calcula el ATR y extrae matemáticamente el valor que tenía en esa vela específica
+        return new org.ta4j.core.indicators.ATRIndicator(series, period).getValue(targetIndex).doubleValue();
+    }
 }

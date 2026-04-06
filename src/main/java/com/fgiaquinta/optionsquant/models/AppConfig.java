@@ -43,6 +43,8 @@ public class AppConfig {
     public static class RiskConfig {
         public double riskPerTradePct;
         public int maxConcurrentTrades;
+        public double tpMultiplier;
+        public double slMultiplier;
     }
 
     /**
@@ -115,6 +117,8 @@ public class AppConfig {
         if ("risk".equalsIgnoreCase(category)) {
             if ("riskPerTradePct".equals(key)) return risk.riskPerTradePct;
             if ("maxConcurrentTrades".equals(key)) return risk.maxConcurrentTrades;
+            if ("tpMultiplier".equals(key)) return risk.tpMultiplier;
+            if ("slMultiplier".equals(key)) return risk.slMultiplier;
         }
 
         if ("telegram".equalsIgnoreCase(category)) {
@@ -133,5 +137,15 @@ public class AppConfig {
         }
 
         throw new RuntimeException("❌ No se encontró la categoría '" + category + "' o la clave '" + key + "' en config.yaml");
+    }
+
+    public int getInt(String category, String key) {
+        Object value = getRawValue(category, key);
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        } else if (value instanceof String) {
+            return Integer.parseInt((String) value);
+        }
+        throw new RuntimeException("No se pudo convertir a int la clave '" + key + "' en " + category);
     }
 }

@@ -13,9 +13,7 @@ import com.fgiaquinta.optionsquant.utils.DataManager;
 import com.fgiaquinta.optionsquant.utils.MarketTimeUtils;
 import org.ta4j.core.BarSeries;
 
-import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -41,9 +39,20 @@ public class IbkrService extends DefaultEWrapper {
     private final EClientSocket client;
     private final EJavaSignal signal;
     private final AccountManager accountManager;
-    private StrategyEngine strategyEngine;
     private MarketRadar marketRadar;
     private TradeManager tradeManager;
+
+    public DataManager getDataManager() {
+        return dataManager;
+    }
+
+    // 👉 AÑADE ESTA VARIABLE (junto al resto de tus Maps)
+    private DataManager dataManager;
+
+    // 👉 AÑADE ESTE MÉTODO (Puedes ponerlo debajo del constructor)
+    public void setDataManager(DataManager dataManager) {
+        this.dataManager = dataManager;
+    }
 
     // Required to prevent circular dependency at initialization
     public void setTradeManager(TradeManager tradeManager) {
@@ -56,8 +65,6 @@ public class IbkrService extends DefaultEWrapper {
         this.signal = new EJavaSignal();
         this.client = new EClientSocket(this, signal);
     }
-
-    public void setStrategyEngine(StrategyEngine engine) { this.strategyEngine = engine; }
 
     public void setMarketRadar(com.fgiaquinta.optionsquant.engine.MarketRadar radar) {
         this.marketRadar = radar;
@@ -130,52 +137,6 @@ public class IbkrService extends DefaultEWrapper {
         }
     }
 
-    /**
-     * This method is called by IBKR whenever a LIVE bar is updated or closed.
-     */
-    @Override
-    public void historicalDataUpdate(int reqId, com.ib.client.Bar bar) {
-        // Log every single entry attempt
-        System.out.println("🔎 [IbkrService] historicalDataUpdate triggered for reqId: " + reqId);
-
-        MarketRequest request = activeRequests.get(reqId);
-        if (request == null) {
-            System.out.println("⚠️ [IbkrService] Ignored: No active request found for reqId " + reqId);
-            return;
-        }
-
-        if (strategyEngine == null) {
-            System.out.println("⚠️ [IbkrService] Ignored: StrategyEngine is null.");
-            return;
-        }
-
-        BarSeries series = marketData.get(request.getCacheKey());
-        if (series == null) {
-            System.out.println("⚠️ [IbkrService] Ignored: BarSeries is null for cacheKey " + request.getCacheKey());
-            return;
-        }
-
-        try {
-            ZonedDateTime time = MarketTimeUtils.parseIbkrDate(bar.time());
-
-            System.out.println("📊 [IbkrService] Parsed bar time: " + time + " for " + request.ticker() + " [" + request.timeFrame() + "]");
-
-            // Update the series only if new
-            if (series.getBarCount() == 0 || time.isAfter(series.getLastBar().getEndTime())) {
-                System.out.println("✅ [IbkrService] Adding new bar to series for " + request.ticker());
-                series.addBar(time, bar.open(), bar.high(), bar.low(), bar.close(), bar.volume().value().doubleValue());
-
-                System.out.println("🚀 [IbkrService] Calling StrategyEngine.onBarAdded...");
-                strategyEngine.onBarAdded(request.ticker(), request.timeFrame(), series);
-            } else {
-                System.out.println("⏭️ [IbkrService] Skipped: Bar is older or equal to last bar. Current bar: " + time + " | Last bar: " + series.getLastBar().getEndTime());
-            }
-        } catch (Exception e) {
-            System.err.println("❌ [IbkrService] Fatal error processing bar for " + request.ticker() + ": " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-
     public String getOptimalExpiry(String ticker) { return tickerToBestExpiration.get(ticker); }
 
     @Override
@@ -229,7 +190,7 @@ public class IbkrService extends DefaultEWrapper {
             List<String> validExps = expirations.stream()
                     .filter(exp -> exp.compareTo(minAllowedDate) >= 0)
                     .sorted()
-                    .collect(Collectors.toList());
+                    .toList();
 
             if (!validExps.isEmpty()) {
                 tickerToBestExpiration.put(ticker, validExps.get(0));
@@ -372,9 +333,8 @@ public class IbkrService extends DefaultEWrapper {
         System.out.println("⏳ Waiting for IBKR to finish all historical data downloads...");
 
         long startTime = System.currentTimeMillis();
-        long timeoutMillis = 45000; // 45 Segundos de tiempo límite (Timeout)
+        long timeoutMillis = 1200000; // 45 Segundos de tiempo límite (Timeout)
 
-        // Bucle que espera a que la lista se vacíe, PERO con un límite de tiempo
         while (!pendingBackfills.isEmpty()) {
             if (System.currentTimeMillis() - startTime > timeoutMillis) {
                 System.err.println("⚠️ [TIMEOUT] IBKR tardó demasiado. Ignorando " + pendingBackfills.size() + " descargas pendientes para evitar que el bot se congele.");
@@ -471,7 +431,7 @@ public class IbkrService extends DefaultEWrapper {
 
         // 👉 FIX: Límites máximos absolutos (Hard Caps) para evitar el Error 162
         switch (tf) {
-            case MIN_1:
+            case MIN_5:
                 if (days > 5) return "5 D";   // IBKR solo suele dar ~5-7 días de velas de 1 min
                 break;
             case MIN_15:
@@ -499,7 +459,7 @@ public class IbkrService extends DefaultEWrapper {
     // Default durations if no CSV exists
     private String getDefaultDuration(TimeFrame tf) {
         switch (tf) {
-            case MIN_1: return "5 D";
+            case MIN_5: return "5 D";
             case MIN_15: return "20 D";
             case HOUR_1: return "2 M";
             case DAY_1: return "2 Y";
@@ -534,9 +494,7 @@ public class IbkrService extends DefaultEWrapper {
 
             System.out.println("🔄 [" + tf + "] " + ticker + " Pidiendo Delta: " + deltaDuration);
             pendingBackfills.add(id);
-            // 4. Lanzar la petición histórica a IBKR
-            // Nota: Asegúrate de que tf.toIbString() devuelve el formato correcto (ej: "1 min", "15 mins", "1 hour", "1 day")
-            client.reqHistoricalData(id, contract, "", deltaDuration, tf.getIbkrBarSize(), "TRADES", 0, 1, false, null);
+            client.reqHistoricalData(id, contract, "", deltaDuration, tf.getIbkrBarSize(), "TRADES", 1, 1, false, null);
         }
     }
 
@@ -547,15 +505,21 @@ public class IbkrService extends DefaultEWrapper {
             org.ta4j.core.BarSeries series = marketData.get(request.getCacheKey());
             int totalBars = (series != null) ? series.getBarCount() : 0;
 
-            System.out.println("✅ [BACKFILL COMPLETE] Loaded " + totalBars + " historical bars for " + request.ticker() + " [" + request.timeFrame() + "]. Now tracking LIVE.");
+            System.out.println("✅ [BACKFILL COMPLETE] Loaded " + totalBars + " historical bars for " + request.ticker() + " [" + request.timeFrame() + "].");
 
-            // 👉 AÑADIR ESTO: Guardar el histórico actualizado en disco
             if (series != null) {
-                DataManager.saveToCsv(series);
+                // 1. Guardamos el histórico en disco (Mantiene tu lógica intacta)
+                com.fgiaquinta.optionsquant.utils.DataManager.saveToCsv(series);
+
+                // 2. 👉 NUEVO: Guardamos la serie en la memoria RAM del motor
+                if (this.dataManager != null) {
+                    this.dataManager.putSeries(request.ticker(), request.timeFrame(), series);
+                }
             }
 
-            // Remove from pending list when done
+            // Limpiamos las colas para liberar memoria
             pendingBackfills.remove(reqId);
+            activeRequests.remove(reqId);
         }
     }
 
@@ -577,5 +541,35 @@ public class IbkrService extends DefaultEWrapper {
             System.out.println("InterruptedException in waitForAccountSync...");
             return false;
         }
+    }
+
+    // 👉 AÑADE ESTE NUEVO MÉTODO COMPLETO
+    public void requestHistoricalDataForCache(String ticker, com.fgiaquinta.optionsquant.models.TimeFrame timeFrame) {
+        int reqId = nextId.getAndIncrement();
+
+        // Guardamos la petición para saber qué hacer cuando IBKR responda
+        activeRequests.put(reqId, new MarketRequest(ticker, timeFrame));
+
+        com.ib.client.Contract contract = com.fgiaquinta.optionsquant.factories.ContractFactory.createStockDefinition(ticker);
+
+        // Mapeo exacto de las 4 temporalidades del libro de the course author
+        String duration = "2 D";
+        String barSize = "5 mins";
+
+        if (timeFrame == com.fgiaquinta.optionsquant.models.TimeFrame.MIN_15) {
+            duration = "5 D";
+            barSize = "15 mins";
+        } else if (timeFrame == com.fgiaquinta.optionsquant.models.TimeFrame.HOUR_1) {
+            duration = "10 D";
+            barSize = "1 hour";
+        } else if (timeFrame == com.fgiaquinta.optionsquant.models.TimeFrame.DAY_1) {
+            duration = "1 Y"; // Un año de historia para la MM20 y MM200 diaria
+            barSize = "1 day";
+        }
+
+        System.out.println("🔄 [Poller] Solicitando " + barSize + " (" + timeFrame + ") para " + ticker + "...");
+
+        // Petición de datos estática (El 9º parámetro es 'false' para no mantener el socket abierto)
+        client.reqHistoricalData(reqId, contract, "", duration, barSize, "TRADES", 1, 1, false, null);
     }
 }

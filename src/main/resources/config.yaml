@@ -4,7 +4,7 @@ ibkr:
   accountId: "DUN598126"
   syncTimeout: 30
   autoExecute: false
-  tickers: ["SPY", "AAPL", "MSFT", "AMZN", "NVDA", "TSLA", "META", "AMD", "PLTR", "ABNB", "COST", "RIOT",
+  tickers: ["SPY", "MSFT", "AAPL", "AMZN", "NVDA", "TSLA", "META", "AMD", "PLTR", "ABNB", "COST", "RIOT",
             "BITX", "MSTR", "MU", "URA", "TSM", "OKLO", "COIN", "GOOGL", "GOOG", "BABA", "ALB", "AMDL", "NFLX", "IWM",
             "NVO", "PEP", "INTC", "GM", "MDB", "CVX", "KDP", "CCL", "LOW", "DECK", "DIA", "TNA", "XPEV", "MO", "ACN",
             "WMT", "DELL", "AES", "KO", "BYND", "SMCI", "AVGO", "ARM", "QCOM", "CRWD", "SHOP", "XYZ", "DDOG", "CVNA",
@@ -13,7 +13,9 @@ ibkr:
 risk:
   riskPerTradePct: 0.02   # 2% max risk per trade
   maxConcurrentTrades: 50
-
+  # 👉 AÑADE ESTAS DOS LÍNEAS AQUÍ:
+  tpMultiplier: 2.0  # Multiplicador del ATR para el Take Profit (Ej: 2.0 = 2 veces el ATR)
+  slMultiplier: 1.0  # M
 ai:
   geminiApiKey: "REDACTED_GOOGLE_API_KEY"
   enabled: true

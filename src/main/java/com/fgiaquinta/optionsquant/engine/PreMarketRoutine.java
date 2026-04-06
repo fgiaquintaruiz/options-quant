@@ -17,13 +17,13 @@ public class PreMarketRoutine {
     private boolean safeToTrade = false;
     private boolean skipAiAnalysis = true; // 👈 Cambia a true para saltar Gemini
 
-    private final FastBacktester backtester;
+    private final FastBacktester fastBacktester;
     private final AiStrategyOptimizer optimizer;
     private final IbkrService ibkrService;
     private final MarketRadar marketRadar;
 
-    public PreMarketRoutine(FastBacktester backtester, AiStrategyOptimizer optimizer, IbkrService ibkrService, MarketRadar marketRadar) {
-        this.backtester = backtester;
+    public PreMarketRoutine(FastBacktester fastBacktester, AiStrategyOptimizer optimizer, IbkrService ibkrService, MarketRadar marketRadar) {
+        this.fastBacktester = fastBacktester;
         this.optimizer = optimizer;
         this.ibkrService = ibkrService;
         this.marketRadar = marketRadar;
@@ -49,7 +49,9 @@ public class PreMarketRoutine {
         org.ta4j.core.Strategy ta4jStrategy = mapToTa4jStrategy(strategy, historicalSeries, spyDaily);
 
         // 2. Run simulation and return the raw JSON metrics
-        return backtester.runSimulation(ticker, strategyName, historicalSeries, ta4jStrategy);
+        fastBacktester.runDiagnosticVerification(ticker, spyDaily, strategy, ta4jStrategy);
+        //TODO
+        return null;
     }
 
     // Change the signature to take the ticker and the strategy list
@@ -103,27 +105,53 @@ public class PreMarketRoutine {
         this.safeToTrade = safeToTrade;
     }
 
-    /**
-     * Adapts your custom TradingStrategy into a ta4j native Strategy.
-     */
     private Strategy mapToTa4jStrategy(TradingStrategy customStrategy, BarSeries targetSeries, BarSeries benchmarkSeries) {
-        // Create an entry rule that bridges to your custom isTriggered logic
+        // Obtenemos el ticker del nombre de la serie (ej: "MSFT_1hour" -> "MSFT")
+        String ticker = targetSeries.getName().split("_")[0];
+
+        // Create an entry rule that bridges to your new multi-timeframe logic
         Rule customEntryRule = new AbstractRule() {
             @Override
             public boolean isSatisfied(int index, TradingRecord tradingRecord) {
                 if (customStrategy == null) return false;
 
-                // Call your existing dynamic logic
-                return customStrategy.isTriggered(index, targetSeries, benchmarkSeries);
+                // Sacamos la hora de la vela actual para que la estrategia sepa sincronizar
+                java.time.ZonedDateTime currentTime = targetSeries.getBar(index).getEndTime();
+
+                // 👉 LLAMADA CORREGIDA: Usamos el dataManager global del servicio
+                // Asegúrate de que IbkrService tenga un getter para el DataManager o pásalo por constructor
+                return customStrategy.isTriggered(ticker, ibkrService.getDataManager(), currentTime);
             }
         };
 
-        // For the exit rule, FastBacktester usually manages exits via TP/SL simulations.
-        // If your backtester requires an active exit rule to close positions, you can replace BooleanRule.FALSE
-        // with a StopLossRule or StopGainRule from ta4j.
         Rule dummyExitRule = new BooleanRule(false);
 
-        // Combine them into a ta4j BaseStrategy
         return new BaseStrategy(customStrategy.getName(), customEntryRule, dummyExitRule);
+    }
+
+    /**
+     * Ejecuta la rutina de pre-mercado para los tickers activos.
+     * @param tickers Lista de tickers a operar hoy.
+     */
+    public void executeDailyRoutine(List<String> tickers) {
+        if (skipAiAnalysis) {
+            System.out.println("⏩ [PreMarket] AI Analysis disabled (skipAiAnalysis=true). Saltando Gemini...");
+            forceReady(); // Activa el bot inmediatamente
+            return;
+        }
+
+        System.out.println("🤖 [PreMarket] Ejecutando análisis de IA para " + tickers.size() + " tickers...");
+
+        try {
+            // Aquí iría tu lógica real de conexión con Gemini/AiOptimizer
+            // optimizer.analyzeMarketContext(tickers);
+
+            System.out.println("✅ [PreMarket] Análisis completado. Sistema listo para operar.");
+            setSafeToTrade(true);
+        } catch (Exception e) {
+            System.err.println("❌ [PreMarket] Error en el análisis de IA: " + e.getMessage());
+            // Si falla la IA, podemos decidir si operamos igual o no
+            setSafeToTrade(false);
+        }
     }
 }

@@ -8,6 +8,7 @@ import com.fgiaquinta.optionsquant.utils.ConfigLoader;
 import com.fgiaquinta.optionsquant.strategies.*;
 import com.fgiaquinta.optionsquant.utils.LogManager;
 import com.fgiaquinta.optionsquant.utils.TunnelManager;
+import com.fgiaquinta.optionsquant.utils.DataManager;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.InputStream;
@@ -21,10 +22,10 @@ public class Main {
     private static final TunnelManager tunnelManager = new TunnelManager();
     private static HttpServer httpServer;
 
-    static void main(String[] args) {
+    public static void main(String[] args) {
         LogManager.initialize();
 
-        // 👉 NUEVO: Inicializamos Telegram Service e inyectamos al TunnelManager
+        // Inicializamos Telegram Service e inyectamos al TunnelManager
         TelegramService telegramService = new TelegramService();
         tunnelManager.setTelegramService(telegramService);
         tunnelManager.start("http://localhost:9090");
@@ -33,139 +34,88 @@ public class Main {
         AppConfig config = ConfigLoader.getConfig();
         List<String> activeTickers = config.getList("ibkr", "tickers");
 
-        System.out.println("🤖 Initiating AI Pre-Market Routine with Gemini...");
-        FastBacktester backtester = new FastBacktester();
-        AiStrategyOptimizer strategyOptimizer = new AiStrategyOptimizer();
+        try {
+            // 1. Inicializar Módulos Core
+            AccountManager accountManager = new AccountManager();
+            IbkrService ibkrService = new IbkrService(accountManager);
 
-        // 1. Initialize core services first
-        AccountManager accountManager = new AccountManager();
-        accountManager.setAccountId(config.getString("ibkr", "accountId"));
-        IbkrService ibkrService = new IbkrService(accountManager);
-        MarketRadar marketRadar = new MarketRadar(ibkrService);
-        ibkrService.setMarketRadar(marketRadar);
-        ibkrService.startMarketScreener();
-        PreMarketRoutine preMarketRoutine = new PreMarketRoutine(backtester, strategyOptimizer, ibkrService, marketRadar);
-        TradeManager tradeManager = new TradeManager(ibkrService, marketRadar, accountManager, preMarketRoutine);
-        ibkrService.setTradeManager(tradeManager);
+            DataManager dataManager = new DataManager();
+            ibkrService.setDataManager(dataManager);
 
-        // 2. Define strategies
-        List<TradingStrategy> strategies = Arrays.asList(
-                new C1SqueezeCallStrategy(ibkrService),
-                new C2TrendCallStrategy(ibkrService),
-                new C3BounceCallStrategy(ibkrService),
-                new C4OpeningCallStrategy(ibkrService),
-                new C5ContinuationCallStrategy(ibkrService),
-                new P1SqueezePutStrategy(ibkrService),
-                new P2TrendPutStrategy(ibkrService),
-                new P3BouncePutStrategy(ibkrService),
-                new P4OpeningPutStrategy(ibkrService),
-                new P5ContinuationPutStrategy(ibkrService)
-        );
-        StrategyEngine strategyEngine = new StrategyEngine(ibkrService, strategies, tradeManager);
+            MarketRadar marketRadar = new MarketRadar(ibkrService);
 
-        ibkrService.setStrategyEngine(strategyEngine);
-        String host = config.getString("ibkr", "host");
-        int port = Integer.parseInt(config.getString("ibkr", "port"));
-        int randomClientId = new java.util.Random().nextInt(99999) + 1;
-        ibkrService.connect(host, port, randomClientId);
+            // 2. 👉 CORRECCIÓN: Inicializar dependencias de IA y Pre-Mercado
+            FastBacktester fastBacktester = new FastBacktester();
+            AiStrategyOptimizer aiOptimizer = new AiStrategyOptimizer();
 
-        System.out.println("⏳ Waiting for IBKR handshake...");
-        if (!ibkrService.waitForConnection(15)) {
-            System.err.println("❌ FAILED to connect to TWS. Check your settings!");
-            System.exit(1);
-        }
+            // Ahora sí, instanciamos la rutina con todos sus parámetros
+            PreMarketRoutine preMarketRoutine = new PreMarketRoutine(fastBacktester, aiOptimizer, ibkrService, marketRadar);
 
-        if (activeTickers == null || activeTickers.isEmpty()) {
-            System.err.println("❌ ERROR: No tickers found in config.yaml! Defaulting to SPY, QQQ.");
-            activeTickers = List.of("SPY","QQQ");
-        }
-
-        // 3. Request ALL Data (Live & Historical) using your master method
-        for (String ticker : activeTickers) {
-            marketRadar.addHotTicker(ticker); // 👈 CRÍTICO: Si no haces esto, el bot nunca operará esos tickers
-            ibkrService.startMarketDataTracking(ticker);
-            // 👉 FIX: Añadir un retraso de 100ms para evitar el límite de 50 msgs/seg de IBKR
+            System.out.println("🤖 Initiating AI Pre-Market Routine with Gemini...");
             try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
-
-        // 4. Block the main thread until the pendingBackfills list is empty
-        ibkrService.waitForBackfillCompletion();
-        if (!ibkrService.waitForAccountSync(15)) {
-            System.err.println("⚠️ Warning: Account balance didn't arrive in time!");
-        }
-        System.out.println("🔗 Requesting options chains and contract details...");
-        ibkrService.requestInitialMetadata(activeTickers);
-        ibkrService.subscribeToNewsProviders();
-
-        boolean isSimulation = config.getBoolean("global", "simulationMode");
-        boolean useAi = config.getBoolean("global", "useAiAnalysis");
-
-        // 5. Run the Pre-Market AI routine (ONLY IF NOT IN SIMULATION)
-        marketRadar.setForceMacroFavorable(true);
-        if (!isSimulation && useAi) {
-            try {
-                System.out.println("🤖 Initiating AI Pre-Market Routine...");
-
-                for (String ticker : activeTickers) {
-                    preMarketRoutine.runDailyAnalysis(ticker, ibkrService, strategies);
-                }
-                preMarketRoutine.setSafeToTrade(true);
+                preMarketRoutine.executeDailyRoutine(activeTickers);
             } catch (Exception e) {
-                System.err.println("❌ AI Analysis failed: " + e.getMessage());
+                System.err.println("⚠️ AI Pre-Market Error: " + e.getMessage());
             }
-        } else {
-            System.out.println("⚡ Skipping AI Pre-Market Routine (Simulation Mode Active)");
-            preMarketRoutine.forceReady();
-            marketRadar.setForceMacroFavorable(true);
-            CommandServer remoteConsole = new CommandServer(tradeManager, preMarketRoutine, marketRadar);
-            remoteConsole.start();
-            preMarketRoutine.setSafeToTrade(true);
-        }
+
+            // 3. Inicializar Trade Manager
+            TradeManager tradeManager = new TradeManager(ibkrService, marketRadar, accountManager, preMarketRoutine);
+
+            // 4. Cargar Estrategias... (Aquí sigue la lista de tus estrategias)
+            List<TradingStrategy> strategies = Arrays.asList(
+                    new C1SqueezeCallStrategy(ibkrService),
+                    new C2TrendCallStrategy(ibkrService),
+                    new C3BounceCallStrategy(ibkrService),
+                    new C4OpeningCallStrategy(ibkrService),
+                    new C5ContinuationCallStrategy(ibkrService),
+                    new P1SqueezePutStrategy(ibkrService),
+                    new P2TrendPutStrategy(ibkrService),
+                    new P3BouncePutStrategy(ibkrService),
+                    new P4OpeningPutStrategy(ibkrService),
+                    new P5ContinuationPutStrategy(ibkrService)
+            );
+
+            // ========================================================
+            // 👉 NUEVO: 2. Pasar el DataManager al StrategyEngine
+            // ========================================================
+            StrategyEngine strategyEngine = new StrategyEngine(ibkrService, strategies, tradeManager, dataManager);
+
+            System.out.println("🔌 Connecting to IBKR (" + config.getString("ibkr", "host") + ":" + config.getInt("ibkr", "port") + ")...");
+            ibkrService.connect(
+                    config.getString("ibkr", "host"),
+                    config.getInt("ibkr", "port"),
+                    new Random().nextInt(1000)
+            );
+
+            if (!ibkrService.waitForAccountSync(15)) {
+                System.out.println("⚠️ Warning: Account sync timed out. Proceeding anyway...");
+            }
+
+            // ========================================================
+            // 👉 NUEVO: 3. Arrancar el Poller en lugar del viejo Tracking
+            // ========================================================
+            strategyEngine.startMaintenanceScheduler();
+            strategyEngine.setActiveTickers(activeTickers);
+            strategyEngine.startStaggeredPolling();
+
+            // NOTA: El viejo bucle "for" que hacía ibkrService.startMarketDataTracking
+            // ha sido eliminado porque el Poller ahora lo hace todo de forma inteligente.
 
         // 👉 Pasamos los servicios necesarios al servidor HTTP
         startHttpServer(telegramService, tradeManager);
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("🛑 Shutting down...");
-            if (httpServer != null) httpServer.stop(0);
-            tunnelManager.shutdown();
-            strategyEngine.shutdown();
-            ibkrService.disconnect();
-        }));
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                System.out.println("🛑 Shutting down system...");
+                strategyEngine.shutdown();
+                ibkrService.disconnect();
+                if (httpServer != null) httpServer.stop(0);
+                tunnelManager.shutdown();;
+            }));
 
-        // 👉 NUEVO: Esperar 2 segundos para que los hilos asíncronos de IBKR terminen de imprimir
-        try {
-            Thread.sleep(2000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            System.err.println("❌ Critical System Failure: " + e.getMessage());
+            e.printStackTrace();
         }
-
-        // 👉 NUEVO: Log visual prominente
-        System.out.println("=========================================================");
-        System.out.println("✅ SYSTEM FULLY INITIALIZED AND READY TO TRADE");
-        System.out.println("=========================================================");
-
-        // 👉 NUEVO: REGISTRAR EL WEBHOOK CUANDO TODO ESTÁ REALMENTE LISTO
-        // Usamos un pequeño hilo asíncrono para no bloquear la ejecución principal
-        new Thread(() -> {
-            try {
-                // Le damos 2 segunditos extra de gracia al servidor 9090 para estabilizarse
-                Thread.sleep(2000);
-                String currentTunnelUrl = com.fgiaquinta.optionsquant.services.TelegramService.getExternalUrl();
-                if (currentTunnelUrl != null && !currentTunnelUrl.contains("localhost")) {
-                    System.out.println("🌐 Registrando Webhook en Telegram de forma diferida...");
-                    telegramService.registerWebhook(currentTunnelUrl);
-                } else {
-                    System.err.println("⚠️ No se pudo registrar Webhook: La URL del túnel no está lista.");
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }).start();
     }
 
     private static void startHttpServer(TelegramService telegramService, TradeManager tradeManager) {
@@ -229,5 +179,4 @@ public class Main {
             System.err.println("❌ Web Server Error: " + e.getMessage());
         }
     }
-
 }
