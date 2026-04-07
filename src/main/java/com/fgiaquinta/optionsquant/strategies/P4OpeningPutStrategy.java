@@ -1,9 +1,7 @@
 package com.fgiaquinta.optionsquant.strategies;
 
-import com.fgiaquinta.optionsquant.analyzers.GapAnalyzer;
 import com.fgiaquinta.optionsquant.models.TimeFrame;
 import com.fgiaquinta.optionsquant.services.IbkrService;
-import com.fgiaquinta.optionsquant.utils.ConfigLoader;
 import com.fgiaquinta.optionsquant.utils.DataManager;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
@@ -11,13 +9,9 @@ import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
 import org.ta4j.core.indicators.statistics.StandardDeviationIndicator;
 
 import java.time.ZonedDateTime;
+import java.time.ZoneId;
 
-/**
- * Estrategia P4: Apertura Bajista tras Gap Up.
- * Busca una reversión (short) tras un salto de precio positivo excesivo.
- */
 public class P4OpeningPutStrategy implements TradingStrategy {
-    public static final String OPENING = "opening";
     private final IbkrService ibkrService;
 
     public P4OpeningPutStrategy(IbkrService ibkrService) {
@@ -26,56 +20,57 @@ public class P4OpeningPutStrategy implements TradingStrategy {
 
     @Override
     public boolean isTriggered(String ticker, DataManager dataManager, ZonedDateTime currentTime) {
-        // Extraemos las temporalidades
-        BarSeries series1h = dataManager.getSeries(ticker, TimeFrame.HOUR_1);
-        BarSeries series15m = dataManager.getSeries(ticker, TimeFrame.MIN_15);
+        ZonedDateTime nyTime = currentTime.withZoneSameInstant(ZoneId.of("America/New_York"));
 
-        if (series1h == null || series1h.isEmpty() || series15m == null || series15m.isEmpty()) {
-            return false;
+        // =========================================================================
+        // REGLA 3: EL FRANCOTIRADOR (Solo operar entre 9:30 y 9:35 AM)
+        // =========================================================================
+        if (nyTime.getHour() != 9 || nyTime.getMinute() < 30 || nyTime.getMinute() > 35) {
+            return false; // Pasados los 5 minutos, la estrategia queda sin efecto
         }
 
-        // Sincronización temporal de índices
-        int idx1h = getIndexForTime(series1h, currentTime);
+        BarSeries series15m = dataManager.getSeries(ticker, TimeFrame.MIN_15);
+        BarSeries series5m = dataManager.getSeries(ticker, TimeFrame.MIN_5);
+
+        if (series15m == null || series5m == null || series15m.isEmpty() || series5m.isEmpty()) return false;
+
         int idx15m = getIndexForTime(series15m, currentTime);
-
-        if (idx1h < 20 || idx15m < 20) return false;
-
-        // =========================================================================
-        // REGLA 1: Gap Up Excesivo (Salto fuerte al alza)
-        // =========================================================================
-        double minGap = ConfigLoader.getConfig().getDouble(OPENING, "putMinGap");
-        double maxGap = ConfigLoader.getConfig().getDouble(OPENING, "putMaxGap");
-
-        // Calculamos el Gap usando tu analizador en la gráfica de 1H o Diaria
-        double gapPct = GapAnalyzer.getGapPercentage(series1h, idx1h);
-        if (gapPct < minGap || gapPct > maxGap) return false;
+        int idx5m = getIndexForTime(series5m, currentTime);
+        if (idx15m < 20 || idx5m < 1) return false;
 
         // =========================================================================
-        // REGLA 2: Alejamiento de la Media Móvil (Bollinger Bands en 15m)
+        // REGLA 1: TENDENCIA TOTALMENTE LATERAL Y SIN VOLATILIDAD (El día anterior)
         // =========================================================================
         ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
         SMAIndicator sma20_15m = new SMAIndicator(close15m, 20);
         StandardDeviationIndicator sd15m = new StandardDeviationIndicator(close15m, 20);
 
-        double sma20Val = sma20_15m.getValue(idx15m).doubleValue();
-        double sdVal = sd15m.getValue(idx15m).doubleValue();
-        double upperBandVal = sma20Val + (sdVal * 2.0); // Banda superior clásica
+        // Leemos las Bandas de Bollinger en la vela ANTERIOR (el cierre de ayer)
+        double prevSma = sma20_15m.getValue(idx15m - 1).doubleValue();
+        double prevSd = sd15m.getValue(idx15m - 1).doubleValue();
+        double prevLowerBand = prevSma - (prevSd * 2);
+        double prevUpperBand = prevSma + (prevSd * 2);
 
-        double currentOpen15m = series15m.getBar(idx15m).getOpenPrice().doubleValue();
-
-        // La vela de 15m debe abrir por encima o muy cerca de la Banda de Bollinger Superior
-        boolean outsideBollinger = currentOpen15m >= upperBandVal;
+        // Verificamos si era lateral (Ancho de la banda menor al 1.5% del precio)
+        double bandWidthPct = (prevUpperBand - prevLowerBand) / prevSma;
+        if (bandWidthPct > 0.015) return false;
 
         // =========================================================================
-        // REGLA 3: Confirmación de Reversión Bajista (Vela Roja)
+        // REGLA 2: SALTO AL ALZA EXTREMO (Fuera de Bollinger) Y BAJANDO
         // =========================================================================
-        double currentClose15m = close15m.getValue(idx15m).doubleValue();
-        boolean isRedCandle = currentClose15m < currentOpen15m;
+        double openToday = series5m.getBar(idx5m).getOpenPrice().doubleValue();
 
-        return outsideBollinger && isRedCandle;
+        // ¿Amaneció muy por encima de la Banda Superior de ayer?
+        boolean isExtremeGapUp = openToday > prevUpperBand;
+        if (!isExtremeGapUp) return false;
+
+        // Confirmación: "observar que comience a bajar"
+        double currentPrice = series5m.getBar(idx5m).getClosePrice().doubleValue();
+        boolean isCrashingDown = currentPrice < openToday;
+
+        return isCrashingDown;
     }
 
-    // Helper method para la sincronización temporal
     private int getIndexForTime(BarSeries series, ZonedDateTime time) {
         for (int i = series.getEndIndex(); i >= Math.max(0, series.getEndIndex() - 500); i--) {
             if (!series.getBar(i).getEndTime().isAfter(time)) {

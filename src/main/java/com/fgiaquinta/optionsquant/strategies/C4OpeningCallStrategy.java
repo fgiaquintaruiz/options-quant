@@ -4,10 +4,12 @@ import com.fgiaquinta.optionsquant.models.TimeFrame;
 import com.fgiaquinta.optionsquant.services.IbkrService;
 import com.fgiaquinta.optionsquant.utils.DataManager;
 import org.ta4j.core.BarSeries;
+import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
 import org.ta4j.core.indicators.statistics.StandardDeviationIndicator;
 
 import java.time.ZonedDateTime;
+import java.time.ZoneId;
 
 public class C4OpeningCallStrategy implements TradingStrategy {
     private final IbkrService ibkrService;
@@ -18,55 +20,63 @@ public class C4OpeningCallStrategy implements TradingStrategy {
 
     @Override
     public boolean isTriggered(String ticker, DataManager dataManager, ZonedDateTime currentTime) {
-        // 1. En apertura usamos principalmente 15 Minutos y 5 Minutos
+        ZonedDateTime nyTime = currentTime.withZoneSameInstant(ZoneId.of("America/New_York"));
+
+        // =========================================================================
+        // REGLA 3: EL FRANCOTIRADOR (Solo operar entre 9:30 y 9:35 AM)
+        // =========================================================================
+        if (nyTime.getHour() != 9 || nyTime.getMinute() < 30 || nyTime.getMinute() > 35) {
+            return false; // Pasados los 5 minutos, la estrategia queda sin efecto
+        }
+
         BarSeries series15m = dataManager.getSeries(ticker, TimeFrame.MIN_15);
         BarSeries series5m = dataManager.getSeries(ticker, TimeFrame.MIN_5);
 
-        if (series15m == null || series5m == null) return false;
+        if (series15m == null || series5m == null || series15m.isEmpty() || series5m.isEmpty()) return false;
 
-        // Sincronización
         int idx15m = getIndexForTime(series15m, currentTime);
         int idx5m = getIndexForTime(series5m, currentTime);
-
-        if (idx15m < 1 || idx5m < 1) return false;
-
-        // Solo operamos en la ventana de apertura (9:30 AM a 10:00 AM NY)
-        int hour = series15m.getBar(idx15m).getEndTime().getHour();
-        int minute = series15m.getBar(idx15m).getEndTime().getMinute();
-        if (hour != 9 || minute > 50) return false;
+        if (idx15m < 20 || idx5m < 1) return false;
 
         // =========================================================================
-        // REGLA 1 y 2: GAP DOWN (Salto a la baja)
+        // REGLA 1: TENDENCIA TOTALMENTE LATERAL Y SIN VOLATILIDAD (El día anterior)
         // =========================================================================
-        double closePrevDay = series15m.getBar(idx15m - 1).getClosePrice().doubleValue();
-        double openToday = series15m.getBar(idx15m).getOpenPrice().doubleValue();
+        ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
+        SMAIndicator sma20_15m = new SMAIndicator(close15m, 20);
+        StandardDeviationIndicator sd15m = new StandardDeviationIndicator(close15m, 20);
 
-        double gapPct = ((openToday - closePrevDay) / closePrevDay) * 100;
+        // Leemos las Bandas de Bollinger en la vela ANTERIOR (el cierre de ayer)
+        double prevSma = sma20_15m.getValue(idx15m - 1).doubleValue();
+        double prevSd = sd15m.getValue(idx15m - 1).doubleValue();
+        double prevLowerBand = prevSma - (prevSd * 2);
+        double prevUpperBand = prevSma + (prevSd * 2);
 
-        // El libro sugiere un Gap Down de entre -1.5% y -4% para una reversión probable
-        if (gapPct > -1.5 || gapPct < -4.0) return false;
+        // Verificamos si era lateral (Ancho de la banda menor al 1.5% del precio)
+        double bandWidthPct = (prevUpperBand - prevLowerBand) / prevSma;
+        if (bandWidthPct > 0.015) return false;
 
         // =========================================================================
-        // REGLA 3: VOLATILIDAD BAJA PREVIA
+        // REGLA 2: SALTO A LA BAJA EXTREMO (Fuera de Bollinger) Y SUBIENDO
         // =========================================================================
-        // Verificamos que el día anterior no haya sido una locura de volatilidad
-        StandardDeviationIndicator sd = new StandardDeviationIndicator(new ClosePriceIndicator(series15m), 20);
-        if (sd.getValue(idx15m - 1).doubleValue() > (closePrevDay * 0.02)) return false;
+        double openToday = series5m.getBar(idx5m).getOpenPrice().doubleValue();
 
-        // =========================================================================
-        // REGLA 4: VELA DE REVERSIÓN (Vela verde en 5m o 15m)
-        // =========================================================================
-        double currentClose = series5m.getBar(idx5m).getClosePrice().doubleValue();
-        double currentOpen = series5m.getBar(idx5m).getOpenPrice().doubleValue();
+        // ¿Amaneció muy por debajo de la Banda Inferior de ayer?
+        boolean isExtremeGapDown = openToday < prevLowerBand;
+        if (!isExtremeGapDown) return false;
 
-        return currentClose > currentOpen; // Confirmación de que el Gap se está empezando a llenar
+        // Confirmación: "observar que comience a subir"
+        double currentPrice = series5m.getBar(idx5m).getClosePrice().doubleValue();
+        boolean isBouncingUp = currentPrice > openToday;
+
+        return isBouncingUp;
     }
 
-    private int getIndexForTime(BarSeries series, ZonedDateTime targetTime) {
-        if (targetTime == null) return series.getEndIndex();
-        for (int i = series.getEndIndex(); i >= 0; i--) {
-            if (!series.getBar(i).getEndTime().isAfter(targetTime)) return i;
+    private int getIndexForTime(BarSeries series, ZonedDateTime time) {
+        for (int i = series.getEndIndex(); i >= Math.max(0, series.getEndIndex() - 500); i--) {
+            if (!series.getBar(i).getEndTime().isAfter(time)) {
+                return i;
+            }
         }
-        return 0;
+        return -1;
     }
 }
