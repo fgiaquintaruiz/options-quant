@@ -252,8 +252,8 @@ public class IbkrService extends DefaultEWrapper {
         MarketRequest req = activeRequests.remove(reqId);
         if (req == null) return;
 
-        String ticker = req.getTicker();
-        com.fgiaquinta.optionsquant.models.TimeFrame timeFrame = req.getTimeFrame();
+        String ticker = req.ticker();
+        com.fgiaquinta.optionsquant.models.TimeFrame timeFrame = req.timeFrame();
 
         // Recuperamos los datos recién llegados
         org.ta4j.core.BarSeries ibkrSeries = marketData.remove(ticker + "_" + timeFrame.getFileSuffix());
