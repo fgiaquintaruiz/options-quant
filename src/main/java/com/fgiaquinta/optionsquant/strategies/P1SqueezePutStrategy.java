@@ -6,15 +6,13 @@ import com.fgiaquinta.optionsquant.utils.DataManager;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.*;
+import org.ta4j.core.indicators.statistics.StandardDeviationIndicator;
 
-import java.time.Duration;
 import java.time.ZonedDateTime;
-import java.util.HashMap;
-import java.util.Map;
+import java.time.ZoneId;
 
 public class P1SqueezePutStrategy implements TradingStrategy {
     private final IbkrService ibkrService;
-    private final Map<String, ZonedDateTime> lastTriggerMap = new HashMap<>();
 
     public P1SqueezePutStrategy(IbkrService ibkrService) {
         this.ibkrService = ibkrService;
@@ -22,93 +20,71 @@ public class P1SqueezePutStrategy implements TradingStrategy {
 
     @Override
     public boolean isTriggered(String ticker, DataManager dataManager, ZonedDateTime currentTime) {
-
-        ZonedDateTime nyTime = currentTime.withZoneSameInstant(java.time.ZoneId.of("America/New_York"));
-        if (nyTime.getHour() == 9) return false;
-
-        ZonedDateTime lastTrigger = lastTriggerMap.get(ticker);
-        if (lastTrigger != null && Duration.between(lastTrigger, currentTime).toHours() < 2) return false;
-
-        BarSeries series1D = dataManager.getSeries(ticker, TimeFrame.DAY_1);
         BarSeries series1h = dataManager.getSeries(ticker, TimeFrame.HOUR_1);
         BarSeries series15m = dataManager.getSeries(ticker, TimeFrame.MIN_15);
 
-        if (series1D == null || series1h == null || series15m == null ||
-                series1D.isEmpty() || series1h.isEmpty() || series15m.isEmpty()) {
-            return false;
-        }
+        if (series1h == null || series15m == null || series1h.isEmpty() || series15m.isEmpty()) return false;
 
-        int idx1D = getIndexForTime(series1D, currentTime);
         int idx1h = getIndexForTime(series1h, currentTime);
         int idx15m = getIndexForTime(series15m, currentTime);
 
-        if (idx1D < 20 || idx1h < 20 || idx15m < 20) return false;
+        if (idx1h < 200 || idx15m < 20) return false;
 
         ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
-        OpenPriceIndicator open1h = new OpenPriceIndicator(series1h);
-        HighPriceIndicator high1h = new HighPriceIndicator(series1h);
-        LowPriceIndicator low1h = new LowPriceIndicator(series1h);
-        SMAIndicator sma20_1h = new SMAIndicator(close1h, 20);
 
         // =========================================================================
-        // REGLA 1: TENDENCIA ALCISTA PREVIA (Filtro de "Estar por encima")
-        // El precio debe haber cerrado POR ENCIMA de la SMA20 durante las 3 horas previas.
+        // REGLA 1 y 2: CANAL LATERAL Y MEDIAS ENTRELAZADAS (10 DÍAS / ~70 HORAS)
         // =========================================================================
-        boolean wasClearUptrend = true;
-        for (int i = 1; i <= 3; i++) {
-            if (close1h.getValue(idx1h - i).doubleValue() <= sma20_1h.getValue(idx1h - i).doubleValue()) {
-                wasClearUptrend = false;
-                break;
-            }
+        SMAIndicator sma20 = new SMAIndicator(close1h, 20);
+        SMAIndicator sma40 = new SMAIndicator(close1h, 40);
+        SMAIndicator sma100 = new SMAIndicator(close1h, 100);
+        SMAIndicator sma200 = new SMAIndicator(close1h, 200);
+
+        int prevIdx = idx1h - 1;
+        double s20 = sma20.getValue(prevIdx).doubleValue();
+        double s40 = sma40.getValue(prevIdx).doubleValue();
+        double s100 = sma100.getValue(prevIdx).doubleValue();
+        double s200 = sma200.getValue(prevIdx).doubleValue();
+
+        double maxSma = Math.max(Math.max(s20, s40), Math.max(s100, s200));
+        double minSma = Math.min(Math.min(s20, s40), Math.min(s100, s200));
+
+        if ((maxSma - minSma) / minSma > 0.04) return false;
+
+        // Buscamos el PISO de ese canal de 10 días
+        double minPriceLast10Days = Double.MAX_VALUE;
+        for(int i = 1; i <= 70; i++) {
+            double low = series1h.getBar(idx1h - i).getLowPrice().doubleValue();
+            if(low < minPriceLast10Days) minPriceLast10Days = low;
         }
-        if (!wasClearUptrend) return false;
 
         // =========================================================================
-        // REGLAS 2 y 3: ROTURA DE MM20 HACIA ABAJO (PUT)
+        // REGLA 3: EL ROMPIMIENTO BAJISTA
         // =========================================================================
         double currentClose1h = close1h.getValue(idx1h).doubleValue();
-        double currentOpen1h = open1h.getValue(idx1h).doubleValue();
-        double currentHigh1h = high1h.getValue(idx1h).doubleValue();
-        double currentLow1h = low1h.getValue(idx1h).doubleValue();
-        double currentSma1h = sma20_1h.getValue(idx1h).doubleValue();
+        double currentOpen1h = series1h.getBar(idx1h).getOpenPrice().doubleValue();
 
-        // Cruzó hacia abajo (el precio de ahora es menor que la media)
-        boolean crossedBelowSma = currentClose1h < currentSma1h;
-        // Es vela roja (cierre menor que apertura)
-        boolean isBearishCandle = currentClose1h < currentOpen1h;
-
-        // 👉 FILTRO DE MECHA: La vela debe cerrar en su 35% INFERIOR (sin mechas largas abajo)
-        double candleRange = currentHigh1h - currentLow1h;
-        boolean closedNearLow = (currentClose1h - currentLow1h) <= (candleRange * 0.35);
-
-        if (!crossedBelowSma || !isBearishCandle || !closedNearLow) return false;
-
-        // 👉 FILTRO DE VOLUMEN: Al menos el 90% del promedio de las últimas 10 velas
-        VolumeIndicator vol1h = new VolumeIndicator(series1h);
-        SMAIndicator avgVol1h = new SMAIndicator(vol1h, 10);
-        double currentVol = vol1h.getValue(idx1h).doubleValue();
-        double avgVol = avgVol1h.getValue(idx1h).doubleValue();
-        if (currentVol < (avgVol * 0.90)) return false;
+        // Rompe el piso con fuerza roja
+        boolean isBreakoutDown = currentClose1h < minPriceLast10Days && currentClose1h < currentOpen1h;
+        if (!isBreakoutDown) return false;
 
         // =========================================================================
-        // REGLA 4: CONFIRMACIÓN EN 15 MINUTOS (Tendencia bajista total)
+        // REGLA 4: CONFIRMACIÓN DE ALTA VOLATILIDAD EN BOLLINGER 15 MINUTOS
         // =========================================================================
         ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
         SMAIndicator sma20_15m = new SMAIndicator(close15m, 20);
+        StandardDeviationIndicator sd15m = new StandardDeviationIndicator(close15m, 20);
 
-        double currentPrice15m = close15m.getValue(idx15m).doubleValue();
         double currentSma15m = sma20_15m.getValue(idx15m).doubleValue();
-        double prevSma15m = sma20_15m.getValue(idx15m - 1).doubleValue();
+        double currentSd15m = sd15m.getValue(idx15m).doubleValue();
+        double lowerBand15m = currentSma15m - (currentSd15m * 2);
 
-        // El precio está debajo de la media de 15m y la media apunta hacia abajo
-        boolean isDowntrend15m = (currentPrice15m < currentSma15m) && (currentSma15m < prevSma15m);
+        double currentClose15m = close15m.getValue(idx15m).doubleValue();
 
-        if (isDowntrend15m) {
-            lastTriggerMap.put(ticker, currentTime);
-            return true;
-        }
+        // Empujando la banda inferior hacia abajo
+        boolean isRidingLowerBand = currentClose15m <= (lowerBand15m * 1.005);
 
-        return false;
+        return isRidingLowerBand;
     }
 
     private int getIndexForTime(BarSeries series, ZonedDateTime time) {

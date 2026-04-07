@@ -19,7 +19,6 @@ import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 public class Main {
     private static final TunnelManager tunnelManager = new TunnelManager();
@@ -66,12 +65,12 @@ public class Main {
 
             // 4. Cargar Estrategias... (Aquí sigue la lista de tus estrategias)
             List<TradingStrategy> strategies = Arrays.asList(
-                    new C1SqueezeCallStrategy(ibkrService),
+                    new C6ReversalCallStrategy(ibkrService),
                     new C2TrendCallStrategy(ibkrService),
                     new C3BounceCallStrategy(ibkrService),
                     new C4OpeningCallStrategy(ibkrService),
                     new C5ContinuationCallStrategy(ibkrService),
-                    new P1SqueezePutStrategy(ibkrService),
+                    new P6ReversalPutStrategy(ibkrService),
                     new P2TrendPutStrategy(ibkrService),
                     new P3BouncePutStrategy(ibkrService),
                     new P4OpeningPutStrategy(ibkrService),
