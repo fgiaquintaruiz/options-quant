@@ -24,7 +24,7 @@ import java.util.*;
 public class BacktestRunner {
 
     // 👉 Variable para controlar cuántos tickers procesar. (Pon 999 para procesar todos)
-    private static final int MAX_TICKERS_TO_PROCESS = 65;
+    private static final int MAX_TICKERS_TO_PROCESS = 600;
 
     // Formato de hora para los logs del sistema
     private static final DateTimeFormatter LOG_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -131,7 +131,7 @@ public class BacktestRunner {
             // FASE 2: SIMULACIÓN DE PORTAFOLIO
             // =========================================================
             List<TradingStrategy> customStrategies = Arrays.asList(
-                    new C4OpeningCallStrategy(ibkr)
+                    new C5ContinuationCallStrategy(ibkr)
             );
 
             int globalTrades = 0;
