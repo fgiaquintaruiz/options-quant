@@ -23,10 +23,10 @@ public class P4OpeningPutStrategy implements TradingStrategy {
         ZonedDateTime nyTime = currentTime.withZoneSameInstant(ZoneId.of("America/New_York"));
 
         // =========================================================================
-        // REGLA 3: EL FRANCOTIRADOR (Solo operar entre 9:30 y 9:35 AM)
+        // REGLA 3: EL FRANCOTIRADOR (Solo operar de 9:30 a 9:35 AM)
         // =========================================================================
         if (nyTime.getHour() != 9 || nyTime.getMinute() < 30 || nyTime.getMinute() > 35) {
-            return false; // Pasados los 5 minutos, la estrategia queda sin efecto
+            return false;
         }
 
         BarSeries series15m = dataManager.getSeries(ticker, TimeFrame.MIN_15);
@@ -39,36 +39,44 @@ public class P4OpeningPutStrategy implements TradingStrategy {
         if (idx15m < 20 || idx5m < 1) return false;
 
         // =========================================================================
-        // REGLA 1: TENDENCIA TOTALMENTE LATERAL Y SIN VOLATILIDAD (El día anterior)
+        // REGLA 1: TENDENCIA LATERAL (El día anterior)
         // =========================================================================
         ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
         SMAIndicator sma20_15m = new SMAIndicator(close15m, 20);
         StandardDeviationIndicator sd15m = new StandardDeviationIndicator(close15m, 20);
 
-        // Leemos las Bandas de Bollinger en la vela ANTERIOR (el cierre de ayer)
         double prevSma = sma20_15m.getValue(idx15m - 1).doubleValue();
         double prevSd = sd15m.getValue(idx15m - 1).doubleValue();
         double prevLowerBand = prevSma - (prevSd * 2);
         double prevUpperBand = prevSma + (prevSd * 2);
 
-        // Verificamos si era lateral (Ancho de la banda menor al 1.5% del precio)
+        // Relajamos un poco el canal lateral (ancho de banda máximo del 2%)
         double bandWidthPct = (prevUpperBand - prevLowerBand) / prevSma;
-        if (bandWidthPct > 0.015) return false;
+        if (bandWidthPct > 0.02) return false;
 
         // =========================================================================
-        // REGLA 2: SALTO AL ALZA EXTREMO (Fuera de Bollinger) Y BAJANDO
+        // REGLA 2: LA ZONA DE ORO DEL SALTO AL ALZA (GAP UP)
         // =========================================================================
         double openToday = series5m.getBar(idx5m).getOpenPrice().doubleValue();
+        double closeYesterday = series5m.getBar(idx5m - 1).getClosePrice().doubleValue();
 
-        // ¿Amaneció muy por encima de la Banda Superior de ayer?
+        // ¿Amaneció por encima de la Banda Superior de ayer?
         boolean isExtremeGapUp = openToday > prevUpperBand;
         if (!isExtremeGapUp) return false;
 
-        // Confirmación: "observar que comience a bajar"
-        double currentPrice = series5m.getBar(idx5m).getClosePrice().doubleValue();
-        boolean isCrashingDown = currentPrice < openToday;
+        // 👉 FILTRO DE RANGO DE GAP: Entre +1.5% y +6.0% (Evitamos subidas por OPA o adquisiciones)
+        double gapPct = (openToday - closeYesterday) / closeYesterday;
+        if (gapPct < 0.015 || gapPct > 0.06) return false;
 
-        return isCrashingDown;
+        // =========================================================================
+        // REGLA 3: CONFIRMACIÓN SIMPLE (Vela Roja)
+        // =========================================================================
+        double currentClose = series5m.getBar(idx5m).getClosePrice().doubleValue();
+
+        // Sin filtros de mechas. Si cierra roja, la trampa atrapó a los novatos y nosotros vendemos.
+        boolean isRedCandle = currentClose < openToday;
+
+        return isRedCandle;
     }
 
     private int getIndexForTime(BarSeries series, ZonedDateTime time) {
