@@ -4,6 +4,7 @@ import com.fgiaquinta.optionsquant.services.IbkrService;
 import com.fgiaquinta.optionsquant.strategies.TradingStrategy;
 import com.fgiaquinta.optionsquant.utils.DataManager;
 import com.fgiaquinta.optionsquant.models.TimeFrame;
+import org.ta4j.core.BarSeries;
 
 import java.util.List;
 import java.util.Set;
@@ -16,137 +17,98 @@ public class StrategyEngine {
     private final IbkrService ibkrService;
     private final List<TradingStrategy> strategies;
     private final TradeManager tradeManager;
-    private final DataManager dataManager; // Inyectado
+    private final DataManager dataManager;
+    private final MarketRadar radar; // Inyectamos el radar para el filtro Macro
 
-    // Filtro de inventario: Guarda los tickers que ya tienen una orden activa hoy
     private final Set<String> activeOrders = ConcurrentHashMap.newKeySet();
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
 
-    private List<String> activeTickers;
-    private int currentMinuteTick = 0;
-
-    public StrategyEngine(IbkrService ibkr, List<TradingStrategy> strategies, TradeManager tradeManager, DataManager dataManager) {
+    public StrategyEngine(IbkrService ibkr, List<TradingStrategy> strategies, TradeManager tradeManager, DataManager dataManager, MarketRadar radar) {
         this.ibkrService = ibkr;
         this.strategies = strategies;
         this.tradeManager = tradeManager;
         this.dataManager = dataManager;
+        this.radar = radar;
     }
 
-    public List<TradingStrategy> getStrategies() {
-        return strategies;
-    }
-
-    public void setActiveTickers(List<String> tickers) {
-        this.activeTickers = tickers;
-    }
-
-    // ==========================================================
-    // 👉 NUEVO MOTOR: STAGGERED POLLER
-    // ==========================================================
-    public void startStaggeredPolling() {
-        System.out.println("⏱️ [StrategyEngine] Iniciando Staggered Poller (Loop de 1 minuto)...");
-
-        scheduler.scheduleAtFixedRate(() -> {
-            try {
-                executeMinuteTick();
-            } catch (Exception e) {
-                System.err.println("❌ [StrategyEngine] Error crítico en el Poller: " + e.getMessage());
-                e.printStackTrace();
-            }
-        }, 0, 1, TimeUnit.MINUTES);
-    }
-
-    private void executeMinuteTick() {
-        currentMinuteTick++;
-
-        if (activeTickers == null || activeTickers.isEmpty()) return;
-
-        // 1. ACTUALIZAR MAPA MAYOR (1 Día) - Minuto 1, y luego cada 4 horas (240 mins)
-        if (currentMinuteTick == 1 || currentMinuteTick % 240 == 0) {
-            System.out.println("🔄 [Poller] Actualizando mapa mayor de 1 DÍA...");
-            for (String ticker : activeTickers) {
-                ibkrService.requestHistoricalDataForCache(ticker, TimeFrame.DAY_1);
-            }
+    // =========================================================================
+    // 👉 EL NUEVO CORAZÓN: Evalúa un ticker solo si tiene la data completa
+    // =========================================================================
+    public void evaluate(String ticker) {
+        // 1. Filtro de seguridad: ¿Están las 4 temporalidades descargadas?
+        if (!dataManager.isTickerReady(ticker)) {
+            return;
         }
 
-        // 2. ACTUALIZAR CONTEXTO (1 Hora) - Cada 60 minutos
-        if (currentMinuteTick % 60 == 0) {
-            System.out.println("🔄 [Poller] Actualizando contexto de 1 HORA...");
-            for (String ticker : activeTickers) {
-                ibkrService.requestHistoricalDataForCache(ticker, TimeFrame.HOUR_1);
-            }
+        // 2. Filtro de inventario: ¿Ya operamos este ticker hoy?
+        if (activeOrders.contains(ticker)) {
+            return;
         }
 
-        // 3. ACTUALIZAR CONFIRMACIONES (15 Minutos) - Cada 15 minutos
-        if (currentMinuteTick % 15 == 0) {
-            System.out.println("🔄 [Poller] Actualizando confirmaciones de 15 MINUTOS...");
-            for (String ticker : activeTickers) {
-                ibkrService.requestHistoricalDataForCache(ticker, TimeFrame.MIN_15);
-            }
-        }
-
-        // 4. ACTUALIZAR GATILLO (5 Minutos) - STAGGERED (Escalonado)
-        // Dividimos la carga de tickers en 5 bloques para no saturar IBKR
-        int bucketSize = Math.max(1, activeTickers.size() / 5);
-        int startIndex = (currentMinuteTick % 5) * bucketSize;
-        int endIndex = Math.min(startIndex + bucketSize, activeTickers.size());
-
-        for (int i = startIndex; i < endIndex; i++) {
-            String ticker = activeTickers.get(i);
-
-            // Si ya entramos en un trade hoy para este ticker, lo ignoramos
-            if (activeOrders.contains(ticker)) continue;
-
-            // Pedimos gráfica rápida de 5 minutos
-            ibkrService.requestHistoricalDataForCache(ticker, TimeFrame.MIN_5);
-
-            // Verificamos si la caché ya descargó TODO (Día, 1H, 15m, 5m)
-            if (dataManager.hasAllRequiredData(ticker)) {
-                evaluateStrategiesForTicker(ticker);
-            }
-        }
-    }
-
-    private void evaluateStrategiesForTicker(String ticker) {
-        // 1. Obtenemos la serie rápida (5m) para saber el precio de ejecución
-        org.ta4j.core.BarSeries series5m = dataManager.getSeries(ticker, TimeFrame.MIN_5);
+        // 3. Obtenemos la serie de 5m (nuestro reloj para el precio actual)
+        BarSeries series5m = dataManager.getSeries(ticker, TimeFrame.MIN_5);
         if (series5m == null || series5m.isEmpty()) return;
 
         double currentPrice = series5m.getLastBar().getClosePrice().doubleValue();
-
-        // 2. Obtenemos el tiempo actual de la última vela (NY Time)
         java.time.ZonedDateTime currentTime = series5m.getLastBar().getEndTime();
 
+        // 4. Bucle de estrategias
         for (TradingStrategy strategy : strategies) {
 
-            // 👉 LLAMADA CORREGIDA: Ahora le pasamos el Ticker, el DataManager y el Tiempo
+            // Filtro Macro del Radar (Opcional pero recomendado)
+            boolean isCall = strategy.getName().toLowerCase().contains("call");
+            if (!radar.isMacroFavorable(isCall)) continue;
+
             if (strategy.isTriggered(ticker, dataManager, currentTime)) {
+                System.out.println("🎯 [SIGNAL] " + strategy.getName() + " en " + ticker + " a $" + currentPrice);
 
-                System.out.println("🎯 [StrategyEngine] SIGNAL TRIGGERED by " + strategy.getName() + " on " + ticker);
-
-                activeOrders.add(ticker); // Evita entrar múltiples veces en el mismo ticker hoy
-
-                System.out.println("🚀 [StrategyEngine] Delegating to TradeManager...");
+                activeOrders.add(ticker);
                 tradeManager.evaluateSignal(ticker, strategy.getName(), currentPrice);
             }
         }
     }
 
-    // ==========================================================
-    // 👉 INTACTO: MÉTODOS DE MANTENIMIENTO ORIGINALES
-    // ==========================================================
-    public void clearInventory() {
-        activeOrders.clear();
-    }
+    // =========================================================================
+    // 👉 EL POLLING CENTRALIZADO: Escanea todos los tickers activos
+    // =========================================================================
+    public void startLiveScanner(List<String> activeTickers) {
+        System.out.println("📡 [StrategyEngine] Iniciando escáner centralizado cada 60 segundos...");
 
-    public void shutdown() {
-        scheduler.shutdownNow();
+        scheduler.scheduleAtFixedRate(() -> {
+            for (String ticker : activeTickers) {
+                try {
+                    evaluate(ticker);
+                } catch (Exception e) {
+                    System.err.println("❌ Error evaluando " + ticker + ": " + e.getMessage());
+                }
+            }
+        }, 10, 60, TimeUnit.SECONDS); // Empieza en 10s, repite cada 60s
     }
 
     public void startMaintenanceScheduler() {
         scheduler.scheduleAtFixedRate(() -> {
-            clearInventory();
-            System.out.println("🧹 [MAINTENANCE] Daily inventory cleared.");
+            activeOrders.clear();
+            System.out.println("🧹 [MAINTENANCE] Inventario diario limpiado.");
         }, 1, 1, TimeUnit.DAYS);
+    }
+
+    // ... (resto del código del motor) ...
+
+    /**
+     * 👉 DETENCIÓN SEGURA: Apaga los hilos del escáner y mantenimiento.
+     * Es vital llamarlo al cerrar la aplicación para liberar memoria y sockets.
+     */
+    public void shutdown() {
+        System.out.println("🛑 [StrategyEngine] Apagando escáner y liberando recursos...");
+        try {
+            scheduler.shutdown(); // Intento de apagado suave
+            if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                scheduler.shutdownNow(); // Apagado forzoso si no responde en 5s
+            }
+            System.out.println("✅ [StrategyEngine] Hilos cerrados correctamente.");
+        } catch (InterruptedException e) {
+            scheduler.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 }

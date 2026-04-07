@@ -87,11 +87,7 @@ public class BacktestRunner {
 
             int tickersLimit = Math.min(MAX_TICKERS_TO_PROCESS, activeTickers.size());
             List<String> tickersToProcess = new ArrayList<>(activeTickers.subList(0, tickersLimit));
-
             List<String> tickersToDownload = new ArrayList<>(tickersToProcess);
-            if (!tickersToDownload.contains("SPY")) {
-                tickersToDownload.add("SPY");
-            }
 
             for (String ticker : tickersToDownload) {
                 logInfo("💾 Intentando cargar historial local para: " + ticker);
@@ -127,11 +123,24 @@ public class BacktestRunner {
                 logInfo("✅ Todos los datos han sido guardados en disco exitosamente.");
             }
 
+            IbkrService ibkrService = new IbkrService(accountManager);
+
             // =========================================================
             // FASE 2: SIMULACIÓN DE PORTAFOLIO
             // =========================================================
             List<TradingStrategy> customStrategies = Arrays.asList(
-                    new C5ContinuationCallStrategy(ibkr)
+                    new C1SqueezeCallStrategy(ibkrService),
+                    new C2TrendCallStrategy(ibkrService),
+                    new C3BounceCallStrategy(ibkrService),
+                    new C4OpeningCallStrategy(ibkrService),
+                    new C5ContinuationCallStrategy(ibkrService),
+                    new C6ReversalCallStrategy(ibkrService),
+                    new P1SqueezePutStrategy(ibkrService),
+                    new P2TrendPutStrategy(ibkrService),
+                    new P3BouncePutStrategy(ibkrService),
+                    new P4OpeningPutStrategy(ibkrService),
+                    new P5ContinuationPutStrategy(ibkrService),
+                    new P6ReversalPutStrategy(ibkrService)
             );
 
             int globalTrades = 0;

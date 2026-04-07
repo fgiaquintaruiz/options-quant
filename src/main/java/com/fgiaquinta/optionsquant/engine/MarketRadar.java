@@ -1,25 +1,65 @@
 package com.fgiaquinta.optionsquant.engine;
 
 import com.fgiaquinta.optionsquant.services.IbkrService;
+import com.fgiaquinta.optionsquant.utils.DataManager;
+import com.fgiaquinta.optionsquant.models.TimeFrame;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class MarketRadar {
     private boolean forceMacroFavorable = false;
 
     private final List<String> hotTickers = new CopyOnWriteArrayList<>();
     private final AiNewsInterpreter newsInterpreter = new AiNewsInterpreter();
-    private final IbkrService ibkrService;
 
-    // Inject IbkrService to fetch macro data
-    public MarketRadar(IbkrService ibkrService) {
+    // 👉 Nuevos componentes inyectados para el Live Trading
+    private final IbkrService ibkrService;
+    private final DataManager dataManager;
+    private final List<String> activeTickers;
+
+    // Constructor actualizado para recibir todo el motor
+    public MarketRadar(IbkrService ibkrService, DataManager dataManager, List<String> activeTickers) {
         this.ibkrService = ibkrService;
+        this.dataManager = dataManager;
+        this.activeTickers = activeTickers;
     }
 
+    // =========================================================================
+    // 👉 1. MOTOR ASÍNCRONO: Descarga de datos sin bloquear el sistema
+    // =========================================================================
+    public void prepareMarketDataAsync() {
+        System.out.println("🔄 [MarketRadar] Solicitando Base de Datos a IBKR en Segundo Plano...");
+
+        // Creamos un hilo paralelo
+        new Thread(() -> {
+            for (String ticker : activeTickers) {
+                // NOTA: Si tu IbkrService.requestHistoricalDataForCache recibe 2 o 3 parámetros,
+                // ajusta esto según cómo lo tengas en IbkrService.java
+                ibkrService.requestHistoricalDataForCache(ticker, TimeFrame.DAY_1);
+                ibkrService.requestHistoricalDataForCache(ticker, TimeFrame.HOUR_1);
+                ibkrService.requestHistoricalDataForCache(ticker, TimeFrame.MIN_15);
+                ibkrService.requestHistoricalDataForCache(ticker, TimeFrame.MIN_5);
+
+                try {
+                    Thread.sleep(150); // Pausa anti-saturación de API (50 peticiones / 10 seg)
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            System.out.println("✅ [MarketRadar] Todas las peticiones de historial fueron enviadas a IBKR.");
+        }, "DataFetcherThread").start();
+    }
+
+    // =========================================================================
+    // 👉 3. MÉTODOS ORIGINALES (Macro & Noticias)
+    // =========================================================================
     public void addHotTicker(String symbol) {
         if (!hotTickers.contains(symbol)) {
             hotTickers.add(symbol);
@@ -36,26 +76,12 @@ public class MarketRadar {
         return hotTickers.contains(ticker);
     }
 
-    public boolean isEnvironmentFavorable(boolean isCall) {
+    public boolean isMacroFavorable(boolean isCall) {
         if (forceMacroFavorable) return true;
 
-        boolean technicalFavorable = checkTechnicalEnvironment(isCall);
-
-        System.out.println("🧠 Asking Gemini for real-time sentiment approval...");
-        boolean aiFavorable = newsInterpreter.isSentimentFavorable(isCall);
-
-        if (!aiFavorable) {
-            System.out.println("🛑 Gemini blocked this trade due to conflicting news/sentiment.");
-        }
-
-        return technicalFavorable && aiFavorable;
-    }
-
-    // Real Implementation: Macro Trend Filter
-    private boolean checkTechnicalEnvironment(boolean isCall) {
-        System.out.println("📊 [MarketRadar] Checking macro technical environment (SPY 50-SMA Trend)...");
+        System.out.println("🌐 Checking Macro-Technical environment (SPY 50-SMA Trend)...");
         try {
-            BarSeries spy = ibkrService.getSeries("SPY", com.fgiaquinta.optionsquant.models.TimeFrame.DAY_1);
+            BarSeries spy = dataManager.getSeries("SPY", TimeFrame.DAY_1);
 
             // If we don't have enough data to calculate a 50 SMA, allow trade to proceed safely
             if (spy == null || spy.getBarCount() < 50) {
@@ -79,9 +105,8 @@ public class MarketRadar {
                 return favorable;
             }
         } catch (Exception e) {
-            System.err.println("❌ [MarketRadar] Error checking environment: " + e.getMessage());
-            return true;
+            System.err.println("❌ [MarketRadar] Error checking Macro: " + e.getMessage());
+            return true; // En caso de fallo, no bloqueamos la estrategia por defecto
         }
     }
-
 }

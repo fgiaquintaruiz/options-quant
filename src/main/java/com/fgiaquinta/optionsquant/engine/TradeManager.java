@@ -60,7 +60,7 @@ public class TradeManager {
         Double lastExitPrice = lastExits.get(ticker);
 
         // 2. MACRO ENVIRONMENT CHECK (Existing)
-        if (!forceExecution && !marketRadar.isEnvironmentFavorable(isCall)) {
+        if (!forceExecution && !marketRadar.isMacroFavorable(isCall)) {
             System.out.println("🛑 [TradeManager] Trade Blocked: Macro conditions unfavorable.");
             return;
         }

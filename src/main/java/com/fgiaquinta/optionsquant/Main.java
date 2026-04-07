@@ -44,43 +44,46 @@ public class Main {
             DataManager dataManager = new DataManager();
             ibkrService.setDataManager(dataManager);
 
-            MarketRadar marketRadar = new MarketRadar(ibkrService);
 
             // 2. 👉 CORRECCIÓN: Inicializar dependencias de IA y Pre-Mercado
             FastBacktester fastBacktester = new FastBacktester();
             AiStrategyOptimizer aiOptimizer = new AiStrategyOptimizer();
 
             // Ahora sí, instanciamos la rutina con todos sus parámetros
-            PreMarketRoutine preMarketRoutine = new PreMarketRoutine(fastBacktester, aiOptimizer, ibkrService, marketRadar);
 
+
+
+
+            // 4. Cargar Estrategias... (Aquí sigue la lista de tus estrategias)
+            List<TradingStrategy> strategies = Arrays.asList(
+                    new C1SqueezeCallStrategy(ibkrService),
+                    new C2TrendCallStrategy(ibkrService),
+                    new C3BounceCallStrategy(ibkrService),
+                    new C4OpeningCallStrategy(ibkrService),
+                    new C5ContinuationCallStrategy(ibkrService),
+                    new C6ReversalCallStrategy(ibkrService),
+                    new P1SqueezePutStrategy(ibkrService),
+                    new P2TrendPutStrategy(ibkrService),
+                    new P3BouncePutStrategy(ibkrService),
+                    new P4OpeningPutStrategy(ibkrService),
+                    new P5ContinuationPutStrategy(ibkrService),
+                    new P6ReversalPutStrategy(ibkrService)
+            );
+
+            // ========================================================
+            // 👉 NUEVO: 2. Pasar el DataManager al StrategyEngine
+            // ========================================================
+            MarketRadar marketRadar = new MarketRadar(ibkrService, dataManager, activeTickers);
+            PreMarketRoutine preMarketRoutine = new PreMarketRoutine(fastBacktester, aiOptimizer, ibkrService, marketRadar);
+            // 3. Inicializar Trade Manager
+            TradeManager tradeManager = new TradeManager(ibkrService, marketRadar, accountManager, preMarketRoutine);
             System.out.println("🤖 Initiating AI Pre-Market Routine with Gemini...");
             try {
                 preMarketRoutine.executeDailyRoutine(activeTickers);
             } catch (Exception e) {
                 System.err.println("⚠️ AI Pre-Market Error: " + e.getMessage());
             }
-
-            // 3. Inicializar Trade Manager
-            TradeManager tradeManager = new TradeManager(ibkrService, marketRadar, accountManager, preMarketRoutine);
-
-            // 4. Cargar Estrategias... (Aquí sigue la lista de tus estrategias)
-            List<TradingStrategy> strategies = Arrays.asList(
-                    new C6ReversalCallStrategy(ibkrService),
-                    new C2TrendCallStrategy(ibkrService),
-                    new C3BounceCallStrategy(ibkrService),
-                    new C4OpeningCallStrategy(ibkrService),
-                    new C5ContinuationCallStrategy(ibkrService),
-                    new P6ReversalPutStrategy(ibkrService),
-                    new P2TrendPutStrategy(ibkrService),
-                    new P3BouncePutStrategy(ibkrService),
-                    new P4OpeningPutStrategy(ibkrService),
-                    new P5ContinuationPutStrategy(ibkrService)
-            );
-
-            // ========================================================
-            // 👉 NUEVO: 2. Pasar el DataManager al StrategyEngine
-            // ========================================================
-            StrategyEngine strategyEngine = new StrategyEngine(ibkrService, strategies, tradeManager, dataManager);
+            StrategyEngine strategyEngine = new StrategyEngine(ibkrService, strategies, tradeManager, dataManager, marketRadar);
 
             System.out.println("🔌 Connecting to IBKR (" + config.getString("ibkr", "host") + ":" + config.getInt("ibkr", "port") + ")...");
             ibkrService.connect(
@@ -96,9 +99,9 @@ public class Main {
             // ========================================================
             // 👉 NUEVO: 3. Arrancar el Poller en lugar del viejo Tracking
             // ========================================================
+            marketRadar.prepareMarketDataAsync();
+            strategyEngine.startLiveScanner(activeTickers);
             strategyEngine.startMaintenanceScheduler();
-            strategyEngine.setActiveTickers(activeTickers);
-            strategyEngine.startStaggeredPolling();
 
             // NOTA: El viejo bucle "for" que hacía ibkrService.startMarketDataTracking
             // ha sido eliminado porque el Poller ahora lo hace todo de forma inteligente.

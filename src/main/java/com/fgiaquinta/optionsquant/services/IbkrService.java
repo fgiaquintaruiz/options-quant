@@ -210,19 +210,82 @@ public class IbkrService extends DefaultEWrapper {
 
     @Override
     public void historicalData(int reqId, com.ib.client.Bar bar) {
-        MarketRequest request = activeRequests.get(reqId);
-        if (request == null) return;
-        BarSeries series = marketData.get(request.getCacheKey());
-        if (series == null) return;
+        MarketRequest req = activeRequests.get(reqId);
+        if (req == null) return;
+
+        String ticker = req.ticker();
+        com.fgiaquinta.optionsquant.models.TimeFrame timeFrame = req.timeFrame();
+
+        // Usamos tu llave dinámica
+        String cacheKey = ticker + "_" + timeFrame.getFileSuffix();
+
+        // Obtenemos o creamos la "sala de espera" para este ticker
+        BarSeries series = marketData.computeIfAbsent(cacheKey, k -> new org.ta4j.core.BaseBarSeriesBuilder().withName(cacheKey).build());
+
+        // =========================================================
+        // 👉 ARREGLO DEL BUG DE 1970 (Parseo inteligente de fechas)
+        // =========================================================
+        String dateStr = bar.time();
+        java.time.ZonedDateTime zdt;
 
         try {
-            ZonedDateTime time = MarketTimeUtils.parseIbkrDate(bar.time());
-
-            if (series.getBarCount() == 0 || time.isAfter(series.getLastBar().getEndTime())) {
-                series.addBar(time, bar.open(), bar.high(), bar.low(), bar.close(), bar.volume().value().doubleValue());
+            if (dateStr.length() == 8) {
+                // Es una vela DIARIA (Formato: yyyyMMdd)
+                java.time.LocalDate date = java.time.LocalDate.parse(dateStr, java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"));
+                // Le asignamos el cierre oficial del mercado de NY (16:00) para evitar desfases
+                zdt = date.atTime(16, 0).atZone(java.time.ZoneId.of("America/New_York"));
+            } else {
+                // Es una vela INTRADÍA (Formato: yyyyMMdd  HH:mm:ss) - Ojo, son dos espacios en el medio
+                java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(dateStr, java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd  HH:mm:ss"));
+                zdt = ldt.atZone(java.time.ZoneId.of("America/New_York"));
             }
+
+            series.addBar(zdt, bar.open(), bar.high(), bar.low(), bar.close(), bar.volume().value().doubleValue());
+
         } catch (Exception e) {
-            System.err.println("❌ Error parsing bar time: " + bar.time());
+            System.err.println("❌ Error parseando fecha de IBKR '" + dateStr + "': " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void historicalDataEnd(int reqId, String startDateStr, String endDateStr) {
+        MarketRequest req = activeRequests.remove(reqId);
+        if (req == null) return;
+
+        String ticker = req.getTicker();
+        com.fgiaquinta.optionsquant.models.TimeFrame timeFrame = req.getTimeFrame();
+
+        // Recuperamos los datos recién llegados
+        org.ta4j.core.BarSeries ibkrSeries = marketData.remove(ticker + "_" + timeFrame.getFileSuffix());
+        org.ta4j.core.BarSeries localSeries = dataManager.getSeries(ticker, timeFrame);
+
+        if (localSeries != null && !localSeries.isEmpty()) {
+            // --- CASO A: EMPALME INTELIGENTE ---
+            if (ibkrSeries != null && !ibkrSeries.isEmpty()) {
+                int added = 0;
+                for (int i = 0; i < ibkrSeries.getBarCount(); i++) {
+                    org.ta4j.core.Bar newBar = ibkrSeries.getBar(i);
+                    if (newBar.getEndTime().isAfter(localSeries.getLastBar().getEndTime())) {
+                        localSeries.addBar(newBar.getEndTime(), newBar.getOpenPrice(), newBar.getHighPrice(), newBar.getLowPrice(), newBar.getClosePrice(), newBar.getVolume());
+                        added++;
+                    }
+                }
+
+                if (added > 0) {
+                    System.out.println("✅ [MERGE] " + ticker + " [" + timeFrame + "] -> " + added + " velas nuevas.");
+                    // 👉 ¡LA PIEZA FALTANTE! Guardamos los cambios en el archivo
+                    dataManager.saveSeriesToCsv(ticker, timeFrame);
+                }
+            }
+        } else {
+            // --- CASO B: DESCARGA DESDE CERO (No había CSV) ---
+            if (ibkrSeries != null && !ibkrSeries.isEmpty()) {
+                dataManager.putSeries(ticker, timeFrame, ibkrSeries);
+                System.out.println("✅ [BACKFILL] Creado historial para " + ticker + " [" + timeFrame + "].");
+
+                // 👉 Guardamos el nuevo archivo en la carpeta data/
+                dataManager.saveSeriesToCsv(ticker, timeFrame);
+            }
         }
     }
 
@@ -374,16 +437,7 @@ public class IbkrService extends DefaultEWrapper {
     public void waitForBackfillCompletion() {
         System.out.println("⏳ Waiting for IBKR to finish all historical data downloads...");
 
-        long startTime = System.currentTimeMillis();
-        long timeoutMillis = 1200000; // 45 Segundos de tiempo límite (Timeout)
-
         while (!pendingBackfills.isEmpty()) {
-            if (System.currentTimeMillis() - startTime > timeoutMillis) {
-                System.err.println("⚠️ [TIMEOUT] IBKR tardó demasiado. Ignorando " + pendingBackfills.size() + " descargas pendientes para evitar que el bot se congele.");
-                pendingBackfills.clear(); // Limpiamos la cola a la fuerza
-                break; // Rompemos el bucle infinito
-            }
-
             try {
                 Thread.sleep(200); // Pausa breve para no saturar la CPU
             } catch (InterruptedException e) {
@@ -392,7 +446,7 @@ public class IbkrService extends DefaultEWrapper {
             }
         }
 
-        System.out.println("✅ All background data downloads are complete (or timed out)!");
+        System.out.println("✅ All background data downloads are complete!");
     }
 
     @Override
@@ -541,31 +595,6 @@ public class IbkrService extends DefaultEWrapper {
     }
 
     @Override
-    public void historicalDataEnd(int reqId, String startDateStr, String endDateStr) {
-        com.fgiaquinta.optionsquant.models.MarketRequest request = activeRequests.get(reqId);
-        if (request != null) {
-            org.ta4j.core.BarSeries series = marketData.get(request.getCacheKey());
-            int totalBars = (series != null) ? series.getBarCount() : 0;
-
-            System.out.println("✅ [BACKFILL COMPLETE] Loaded " + totalBars + " historical bars for " + request.ticker() + " [" + request.timeFrame() + "].");
-
-            if (series != null) {
-                // 1. Guardamos el histórico en disco (Mantiene tu lógica intacta)
-                com.fgiaquinta.optionsquant.utils.DataManager.saveToCsv(series);
-
-                // 2. 👉 NUEVO: Guardamos la serie en la memoria RAM del motor
-                if (this.dataManager != null) {
-                    this.dataManager.putSeries(request.ticker(), request.timeFrame(), series);
-                }
-            }
-
-            // Limpiamos las colas para liberar memoria
-            pendingBackfills.remove(reqId);
-            activeRequests.remove(reqId);
-        }
-    }
-
-    @Override
     public void updateAccountValue(String key, String value, String currency, String accountName) {
         if ("NetLiquidation".equals(key)) {
             System.out.println("🏦 [IBKR] Received Account Update: " + key + " = " + value + " " + currency);
@@ -585,33 +614,54 @@ public class IbkrService extends DefaultEWrapper {
         }
     }
 
-    // 👉 AÑADE ESTE NUEVO MÉTODO COMPLETO
-    public void requestHistoricalDataForCache(String ticker, com.fgiaquinta.optionsquant.models.TimeFrame timeFrame) {
-        int reqId = nextId.getAndIncrement();
+    // 👉 MÉTODO ACTUALIZADO: Ahora es inteligente y revisa el disco primero
+    public void requestHistoricalDataForCache(String ticker, TimeFrame timeFrame) {
 
-        // Guardamos la petición para saber qué hacer cuando IBKR responda
+        // 1. PRIMERO REVISAMOS EL ARCHIVO LOCAL
+        boolean isLocalDataLoaded = dataManager.loadLocalDataFromCsv(ticker, timeFrame);
+
+        int reqId = nextId.getAndIncrement();
         activeRequests.put(reqId, new MarketRequest(ticker, timeFrame));
 
-        com.ib.client.Contract contract = com.fgiaquinta.optionsquant.factories.ContractFactory.createStockDefinition(ticker);
+        Contract contract = ContractFactory.createStockDefinition(ticker);
 
-        // Mapeo exacto de las 4 temporalidades del libro de the course author
-        String duration = "2 D";
-        String barSize = "5 mins";
+        String duration;
+        String barSize;
 
-        if (timeFrame == com.fgiaquinta.optionsquant.models.TimeFrame.MIN_15) {
-            duration = "5 D";
-            barSize = "15 mins";
-        } else if (timeFrame == com.fgiaquinta.optionsquant.models.TimeFrame.HOUR_1) {
-            duration = "10 D";
-            barSize = "1 hour";
-        } else if (timeFrame == com.fgiaquinta.optionsquant.models.TimeFrame.DAY_1) {
-            duration = "1 Y"; // Un año de historia para la MM20 y MM200 diaria
-            barSize = "1 day";
+        // 2. DECIDIMOS CUÁNTA INFORMACIÓN PEDIR A LA API
+        if (isLocalDataLoaded) {
+            // Si ya tenemos el pasado en el CSV, solo pedimos un "relleno" corto (2 Días)
+            // para conseguir las velas de hoy y empalmarlas con el historial de ayer.
+            duration = "2 D";
+            if (timeFrame == com.fgiaquinta.optionsquant.models.TimeFrame.MIN_15) {
+                barSize = "15 mins";
+            } else if (timeFrame == com.fgiaquinta.optionsquant.models.TimeFrame.HOUR_1) {
+                barSize = "1 hour";
+            } else if (timeFrame == com.fgiaquinta.optionsquant.models.TimeFrame.DAY_1) {
+                barSize = "1 day";
+            } else {
+                barSize = "5 mins";
+            }
+            System.out.println("🔄 [Local Cache OK] Pidiendo solo relleno vivo (2 Días) " + barSize + " para " + ticker + "...");
+
+        } else {
+            if (timeFrame == com.fgiaquinta.optionsquant.models.TimeFrame.MIN_15) {
+                duration = "5 D";
+                barSize = "15 mins";
+            } else if (timeFrame == com.fgiaquinta.optionsquant.models.TimeFrame.HOUR_1) {
+                duration = "10 D";
+                barSize = "1 hour";
+            } else if (timeFrame == com.fgiaquinta.optionsquant.models.TimeFrame.DAY_1) {
+                duration = "1 Y"; // Un año para la SMA 200
+                barSize = "1 day";
+            } else {
+                duration = "2 D";
+                barSize = "5 mins";
+            }
+            System.out.println("⚠️ [No Local Cache] Solicitando historial COMPLETO (" + duration + ") " + barSize + " para " + ticker + "...");
         }
 
-        System.out.println("🔄 [Poller] Solicitando " + barSize + " (" + timeFrame + ") para " + ticker + "...");
-
-        // Petición de datos estática (El 9º parámetro es 'false' para no mantener el socket abierto)
+        // Petición a IBKR
         client.reqHistoricalData(reqId, contract, "", duration, barSize, "TRADES", 1, 1, false, null);
     }
 }
