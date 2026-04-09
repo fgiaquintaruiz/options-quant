@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: options-quant-test
+
+ibkr:
+  host: 127.0.0.1
+  port: 7497
+  accountId: DUN598126
+  sync-timeout: 5
+  auto-execute: false
+  tickers:
+    - SPY
+  tws:
+    api-version: "1.0"
+
+logging:
+  level:
+    com.fgiaquinta.optionsquant: DEBUG

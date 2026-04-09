@@ -1,0 +1,452 @@
+public class com.ib.client.EReader extends java.lang.Thread {
+  private com.ib.client.EClientSocket m_clientSocket;
+
+  private com.ib.client.EReaderSignal m_signal;
+
+  private com.ib.client.EDecoder m_processMsgsDecoder;
+
+  private static final com.ib.client.EWrapper defaultWrapper;
+
+  private static final int IN_BUF_SIZE_DEFAULT;
+
+  private byte[] m_iBuf;
+
+  private int m_iBufLen;
+
+  private final java.util.Deque<com.ib.client.EMessage> m_msgQueue;
+
+  static final int MAX_MSG_LENGTH;
+
+  protected boolean isUseV100Plus();
+    Code:
+       0: aload_0
+       1: getfield      #1                  // Field m_clientSocket:Lcom/ib/client/EClientSocket;
+       4: invokevirtual #7                  // Method com/ib/client/EClientSocket.isUseV100Plus:()Z
+       7: ireturn
+
+  protected com.ib.client.EClient parent();
+    Code:
+       0: aload_0
+       1: getfield      #1                  // Field m_clientSocket:Lcom/ib/client/EClientSocket;
+       4: areturn
+
+  private com.ib.client.EWrapper eWrapper();
+    Code:
+       0: aload_0
+       1: invokevirtual #13                 // Method parent:()Lcom/ib/client/EClient;
+       4: invokevirtual #17                 // Method com/ib/client/EClient.wrapper:()Lcom/ib/client/EWrapper;
+       7: areturn
+
+  public com.ib.client.EReader(com.ib.client.EClientSocket, com.ib.client.EReaderSignal);
+    Code:
+       0: aload_0
+       1: invokespecial #23                 // Method java/lang/Thread."<init>":()V
+       4: aload_0
+       5: sipush        8192
+       8: newarray       byte
+      10: putfield      #29                 // Field m_iBuf:[B
+      13: aload_0
+      14: iconst_0
+      15: putfield      #33                 // Field m_iBufLen:I
+      18: aload_0
+      19: new           #37                 // class java/util/LinkedList
+      22: dup
+      23: invokespecial #39                 // Method java/util/LinkedList."<init>":()V
+      26: putfield      #40                 // Field m_msgQueue:Ljava/util/Deque;
+      29: aload_0
+      30: aload_1
+      31: putfield      #1                  // Field m_clientSocket:Lcom/ib/client/EClientSocket;
+      34: aload_0
+      35: aload_2
+      36: putfield      #44                 // Field m_signal:Lcom/ib/client/EReaderSignal;
+      39: aload_0
+      40: new           #48                 // class com/ib/client/EDecoder
+      43: dup
+      44: aload_1
+      45: invokevirtual #50                 // Method com/ib/client/EClientSocket.serverVersion:()I
+      48: aload_1
+      49: invokevirtual #54                 // Method com/ib/client/EClientSocket.wrapper:()Lcom/ib/client/EWrapper;
+      52: aload_1
+      53: invokespecial #55                 // Method com/ib/client/EDecoder."<init>":(ILcom/ib/client/EWrapper;Lcom/ib/client/EClientMsgSink;)V
+      56: putfield      #58                 // Field m_processMsgsDecoder:Lcom/ib/client/EDecoder;
+      59: return
+
+  public void run();
+    Code:
+       0: aload_0
+       1: invokevirtual #62                 // Method isInterrupted:()Z
+       4: ifne          17
+       7: aload_0
+       8: invokevirtual #65                 // Method putMessageToQueue:()Z
+      11: ifne          0
+      14: goto          17
+      17: goto          126
+      20: astore_1
+      21: aload_1
+      22: instanceof    #70                 // class java/io/EOFException
+      25: ifeq          66
+      28: aload_0
+      29: invokevirtual #72                 // Method eWrapper:()Lcom/ib/client/EWrapper;
+      32: iconst_m1
+      33: invokestatic  #77                 // Method com/ib/client/Util.currentTimeMillis:()J
+      36: getstatic     #83                 // Field com/ib/client/EClientErrors.BAD_LENGTH:Lcom/ib/client/EClientErrors$CodeMsgPair;
+      39: invokevirtual #87                 // Method com/ib/client/EClientErrors$CodeMsgPair.code:()I
+      42: getstatic     #83                 // Field com/ib/client/EClientErrors.BAD_LENGTH:Lcom/ib/client/EClientErrors$CodeMsgPair;
+      45: invokevirtual #92                 // Method com/ib/client/EClientErrors$CodeMsgPair.msg:()Ljava/lang/String;
+      48: aload_1
+      49: invokevirtual #96                 // Method java/lang/Exception.getMessage:()Ljava/lang/String;
+      52: invokedynamic #99,  0             // InvokeDynamic #0:makeConcatWithConstants:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+      57: aconst_null
+      58: invokeinterface #103,  7          // InterfaceMethod com/ib/client/EWrapper.error:(IJILjava/lang/String;Ljava/lang/String;)V
+      63: goto          119
+      66: aload_1
+      67: instanceof    #109                // class com/ib/client/EClientException
+      70: ifeq          109
+      73: aload_1
+      74: checkcast     #109                // class com/ib/client/EClientException
+      77: astore_2
+      78: aload_0
+      79: invokevirtual #72                 // Method eWrapper:()Lcom/ib/client/EWrapper;
+      82: iconst_m1
+      83: invokestatic  #77                 // Method com/ib/client/Util.currentTimeMillis:()J
+      86: aload_2
+      87: invokevirtual #111                // Method com/ib/client/EClientException.error:()Lcom/ib/client/EClientErrors$CodeMsgPair;
+      90: invokevirtual #87                 // Method com/ib/client/EClientErrors$CodeMsgPair.code:()I
+      93: aload_2
+      94: invokevirtual #111                // Method com/ib/client/EClientException.error:()Lcom/ib/client/EClientErrors$CodeMsgPair;
+      97: invokevirtual #92                 // Method com/ib/client/EClientErrors$CodeMsgPair.msg:()Ljava/lang/String;
+     100: aconst_null
+     101: invokeinterface #103,  7          // InterfaceMethod com/ib/client/EWrapper.error:(IJILjava/lang/String;Ljava/lang/String;)V
+     106: goto          119
+     109: aload_0
+     110: invokevirtual #72                 // Method eWrapper:()Lcom/ib/client/EWrapper;
+     113: aload_1
+     114: invokeinterface #114,  2          // InterfaceMethod com/ib/client/EWrapper.error:(Ljava/lang/Exception;)V
+     119: aload_0
+     120: invokevirtual #13                 // Method parent:()Lcom/ib/client/EClient;
+     123: invokevirtual #117                // Method com/ib/client/EClient.eDisconnect:()V
+     126: aload_0
+     127: getfield      #44                 // Field m_signal:Lcom/ib/client/EReaderSignal;
+     130: invokeinterface #120,  1          // InterfaceMethod com/ib/client/EReaderSignal.issueSignal:()V
+     135: return
+    Exception table:
+       from    to  target type
+           0    17    20   Class java/lang/Exception
+
+  public boolean putMessageToQueue() throws java.io.IOException;
+    Code:
+       0: aload_0
+       1: invokevirtual #125                // Method readSingleMessage:()Lcom/ib/client/EMessage;
+       4: astore_1
+       5: aload_1
+       6: ifnonnull     11
+       9: iconst_0
+      10: ireturn
+      11: aload_0
+      12: getfield      #40                 // Field m_msgQueue:Ljava/util/Deque;
+      15: dup
+      16: astore_2
+      17: monitorenter
+      18: aload_0
+      19: getfield      #40                 // Field m_msgQueue:Ljava/util/Deque;
+      22: aload_1
+      23: invokeinterface #129,  2          // InterfaceMethod java/util/Deque.addFirst:(Ljava/lang/Object;)V
+      28: aload_2
+      29: monitorexit
+      30: goto          38
+      33: astore_3
+      34: aload_2
+      35: monitorexit
+      36: aload_3
+      37: athrow
+      38: aload_0
+      39: getfield      #44                 // Field m_signal:Lcom/ib/client/EReaderSignal;
+      42: invokeinterface #120,  1          // InterfaceMethod com/ib/client/EReaderSignal.issueSignal:()V
+      47: iconst_1
+      48: ireturn
+    Exception table:
+       from    to  target type
+          18    30    33   any
+          33    36    33   any
+
+  protected com.ib.client.EMessage getMsg();
+    Code:
+       0: aload_0
+       1: getfield      #40                 // Field m_msgQueue:Ljava/util/Deque;
+       4: dup
+       5: astore_1
+       6: monitorenter
+       7: aload_0
+       8: getfield      #40                 // Field m_msgQueue:Ljava/util/Deque;
+      11: invokeinterface #135,  1          // InterfaceMethod java/util/Deque.isEmpty:()Z
+      16: ifeq          23
+      19: aconst_null
+      20: goto          35
+      23: aload_0
+      24: getfield      #40                 // Field m_msgQueue:Ljava/util/Deque;
+      27: invokeinterface #138,  1          // InterfaceMethod java/util/Deque.removeLast:()Ljava/lang/Object;
+      32: checkcast     #142                // class com/ib/client/EMessage
+      35: aload_1
+      36: monitorexit
+      37: areturn
+      38: astore_2
+      39: aload_1
+      40: monitorexit
+      41: aload_2
+      42: athrow
+    Exception table:
+       from    to  target type
+           7    37    38   any
+          38    41    38   any
+
+  public void processMsgs() throws java.io.IOException;
+    Code:
+       0: aload_0
+       1: invokevirtual #144                // Method getMsg:()Lcom/ib/client/EMessage;
+       4: astore_1
+       5: aload_1
+       6: ifnull        28
+       9: aload_0
+      10: getfield      #58                 // Field m_processMsgsDecoder:Lcom/ib/client/EDecoder;
+      13: aload_1
+      14: invokevirtual #147                // Method com/ib/client/EDecoder.processMsg:(Lcom/ib/client/EMessage;)I
+      17: ifle          28
+      20: aload_0
+      21: invokevirtual #144                // Method getMsg:()Lcom/ib/client/EMessage;
+      24: astore_1
+      25: goto          5
+      28: return
+
+  private com.ib.client.EMessage readSingleMessage() throws java.io.IOException;
+    Code:
+       0: aload_0
+       1: invokevirtual #151                // Method isUseV100Plus:()Z
+       4: ifeq          104
+       7: iconst_0
+       8: istore_1
+       9: aload_0
+      10: getfield      #1                  // Field m_clientSocket:Lcom/ib/client/EClientSocket;
+      13: invokevirtual #152                // Method com/ib/client/EClientSocket.readInt:()I
+      16: istore_1
+      17: goto          44
+      20: astore_2
+      21: aload_2
+      22: instanceof    #70                 // class java/io/EOFException
+      25: ifeq          42
+      28: aload_0
+      29: invokevirtual #13                 // Method parent:()Lcom/ib/client/EClient;
+      32: invokevirtual #155                // Method com/ib/client/EClient.connectionError:()V
+      35: aload_0
+      36: invokevirtual #13                 // Method parent:()Lcom/ib/client/EClient;
+      39: invokevirtual #117                // Method com/ib/client/EClient.eDisconnect:()V
+      42: aconst_null
+      43: areturn
+      44: iload_1
+      45: ldc           #158                // int 16777215
+      47: if_icmple     64
+      50: new           #159                // class com/ib/client/EReader$InvalidMessageLengthException
+      53: dup
+      54: iload_1
+      55: invokedynamic #161,  0            // InvokeDynamic #1:makeConcatWithConstants:(I)Ljava/lang/String;
+      60: invokespecial #164                // Method com/ib/client/EReader$InvalidMessageLengthException."<init>":(Ljava/lang/String;)V
+      63: athrow
+      64: iload_1
+      65: newarray       byte
+      67: astore_2
+      68: iconst_0
+      69: istore_3
+      70: iload_3
+      71: iload_1
+      72: if_icmpge     93
+      75: iload_3
+      76: aload_0
+      77: getfield      #1                  // Field m_clientSocket:Lcom/ib/client/EClientSocket;
+      80: aload_2
+      81: iload_3
+      82: iload_1
+      83: iload_3
+      84: isub
+      85: invokevirtual #167                // Method com/ib/client/EClientSocket.read:([BII)I
+      88: iadd
+      89: istore_3
+      90: goto          70
+      93: new           #142                // class com/ib/client/EMessage
+      96: dup
+      97: aload_2
+      98: aload_2
+      99: arraylength
+     100: invokespecial #171                // Method com/ib/client/EMessage."<init>":([BI)V
+     103: areturn
+     104: aload_0
+     105: getfield      #33                 // Field m_iBufLen:I
+     108: ifne          119
+     111: aload_0
+     112: aload_0
+     113: invokevirtual #174                // Method appendIBuf:()I
+     116: putfield      #33                 // Field m_iBufLen:I
+     119: iconst_0
+     120: istore_1
+     121: aload_0
+     122: getfield      #33                 // Field m_iBufLen:I
+     125: ifle          191
+     128: new           #48                 // class com/ib/client/EDecoder
+     131: dup
+     132: aload_0
+     133: getfield      #1                  // Field m_clientSocket:Lcom/ib/client/EClientSocket;
+     136: invokevirtual #50                 // Method com/ib/client/EClientSocket.serverVersion:()I
+     139: getstatic     #177                // Field defaultWrapper:Lcom/ib/client/EWrapper;
+     142: invokespecial #181                // Method com/ib/client/EDecoder."<init>":(ILcom/ib/client/EWrapper;)V
+     145: astore_2
+     146: aload_2
+     147: new           #142                // class com/ib/client/EMessage
+     150: dup
+     151: aload_0
+     152: getfield      #29                 // Field m_iBuf:[B
+     155: aload_0
+     156: getfield      #33                 // Field m_iBufLen:I
+     159: invokespecial #171                // Method com/ib/client/EMessage."<init>":([BI)V
+     162: invokevirtual #147                // Method com/ib/client/EDecoder.processMsg:(Lcom/ib/client/EMessage;)I
+     165: istore_1
+     166: aload_2
+     167: invokevirtual #184                // Method com/ib/client/EDecoder.close:()V
+     170: goto          191
+     173: astore_3
+     174: aload_2
+     175: invokevirtual #184                // Method com/ib/client/EDecoder.close:()V
+     178: goto          189
+     181: astore        4
+     183: aload_3
+     184: aload         4
+     186: invokevirtual #189                // Method java/lang/Throwable.addSuppressed:(Ljava/lang/Throwable;)V
+     189: aload_3
+     190: athrow
+     191: goto          257
+     194: astore_2
+     195: aload_0
+     196: getfield      #33                 // Field m_iBufLen:I
+     199: aload_0
+     200: getfield      #29                 // Field m_iBuf:[B
+     203: arraylength
+     204: iconst_3
+     205: imul
+     206: iconst_4
+     207: idiv
+     208: if_icmplt     241
+     211: aload_0
+     212: getfield      #29                 // Field m_iBuf:[B
+     215: arraylength
+     216: iconst_2
+     217: imul
+     218: newarray       byte
+     220: astore_3
+     221: aload_0
+     222: getfield      #29                 // Field m_iBuf:[B
+     225: iconst_0
+     226: aload_3
+     227: iconst_0
+     228: aload_0
+     229: getfield      #29                 // Field m_iBuf:[B
+     232: arraylength
+     233: invokestatic  #195                // Method java/lang/System.arraycopy:(Ljava/lang/Object;ILjava/lang/Object;II)V
+     236: aload_0
+     237: aload_3
+     238: putfield      #29                 // Field m_iBuf:[B
+     241: aload_0
+     242: dup
+     243: getfield      #33                 // Field m_iBufLen:I
+     246: aload_0
+     247: invokevirtual #174                // Method appendIBuf:()I
+     250: iadd
+     251: putfield      #33                 // Field m_iBufLen:I
+     254: goto          119
+     257: iload_1
+     258: ifne          263
+     261: aconst_null
+     262: areturn
+     263: new           #142                // class com/ib/client/EMessage
+     266: dup
+     267: aload_0
+     268: getfield      #29                 // Field m_iBuf:[B
+     271: iload_1
+     272: invokespecial #171                // Method com/ib/client/EMessage."<init>":([BI)V
+     275: astore_2
+     276: aload_0
+     277: getfield      #29                 // Field m_iBuf:[B
+     280: iload_1
+     281: aload_0
+     282: getfield      #29                 // Field m_iBuf:[B
+     285: arraylength
+     286: invokestatic  #201                // Method java/util/Arrays.copyOfRange:([BII)[B
+     289: iconst_0
+     290: aload_0
+     291: getfield      #29                 // Field m_iBuf:[B
+     294: iconst_0
+     295: aload_0
+     296: getfield      #29                 // Field m_iBuf:[B
+     299: arraylength
+     300: iload_1
+     301: isub
+     302: invokestatic  #195                // Method java/lang/System.arraycopy:(Ljava/lang/Object;ILjava/lang/Object;II)V
+     305: aload_0
+     306: dup
+     307: getfield      #33                 // Field m_iBufLen:I
+     310: iload_1
+     311: isub
+     312: putfield      #33                 // Field m_iBufLen:I
+     315: aload_0
+     316: getfield      #33                 // Field m_iBufLen:I
+     319: sipush        8192
+     322: if_icmpge     359
+     325: aload_0
+     326: getfield      #29                 // Field m_iBuf:[B
+     329: arraylength
+     330: sipush        8192
+     333: if_icmple     359
+     336: sipush        8192
+     339: newarray       byte
+     341: astore_3
+     342: aload_0
+     343: getfield      #29                 // Field m_iBuf:[B
+     346: iconst_0
+     347: aload_3
+     348: iconst_0
+     349: aload_3
+     350: arraylength
+     351: invokestatic  #195                // Method java/lang/System.arraycopy:(Ljava/lang/Object;ILjava/lang/Object;II)V
+     354: aload_0
+     355: aload_3
+     356: putfield      #29                 // Field m_iBuf:[B
+     359: aload_2
+     360: areturn
+    Exception table:
+       from    to  target type
+           9    17    20   Class java/lang/Exception
+         146   166   173   Class java/lang/Throwable
+         174   178   181   Class java/lang/Throwable
+         119   191   194   Class java/io/IOException
+
+  protected int appendIBuf() throws java.io.IOException;
+    Code:
+       0: aload_0
+       1: getfield      #1                  // Field m_clientSocket:Lcom/ib/client/EClientSocket;
+       4: aload_0
+       5: getfield      #29                 // Field m_iBuf:[B
+       8: aload_0
+       9: getfield      #33                 // Field m_iBufLen:I
+      12: aload_0
+      13: getfield      #29                 // Field m_iBuf:[B
+      16: arraylength
+      17: aload_0
+      18: getfield      #33                 // Field m_iBufLen:I
+      21: isub
+      22: invokevirtual #167                // Method com/ib/client/EClientSocket.read:([BII)I
+      25: ireturn
+
+  static {};
+    Code:
+       0: new           #207                // class com/ib/client/DefaultEWrapper
+       3: dup
+       4: invokespecial #209                // Method com/ib/client/DefaultEWrapper."<init>":()V
+       7: putstatic     #177                // Field defaultWrapper:Lcom/ib/client/EWrapper;
+      10: return
+}

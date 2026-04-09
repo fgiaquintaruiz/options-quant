@@ -1,0 +1,778 @@
+Compiled from "EClientSocket.java"
+public class com.ib.client.EClientSocket extends com.ib.client.EClient implements com.ib.client.EClientMsgSink {
+  protected int m_redirectCount;
+
+  protected int m_defaultPort;
+
+  private boolean m_allowRedirect;
+
+  protected java.io.DataInputStream m_dis;
+
+  private boolean m_asyncEConnect;
+
+  private boolean m_connected;
+
+  private java.net.Socket m_socket;
+
+  public void setAsyncEConnect(boolean);
+    Code:
+       0: aload_0
+       1: iload_1
+       2: putfield      #1                  // Field m_asyncEConnect:Z
+       5: return
+    LineNumberTable:
+      line 22: 0
+      line 23: 5
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0       6     0  this   Lcom/ib/client/EClientSocket;
+          0       6     1 asyncEConnect   Z
+
+  public boolean isAsyncEConnect();
+    Code:
+       0: aload_0
+       1: getfield      #1                  // Field m_asyncEConnect:Z
+       4: ireturn
+    LineNumberTable:
+      line 26: 0
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0       5     0  this   Lcom/ib/client/EClientSocket;
+
+  public com.ib.client.EClientSocket(com.ib.client.EWrapper, com.ib.client.EReaderSignal);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: aload_2
+       3: invokespecial #7                  // Method com/ib/client/EClient."<init>":(Lcom/ib/client/EWrapper;Lcom/ib/client/EReaderSignal;)V
+       6: aload_0
+       7: iconst_0
+       8: putfield      #13                 // Field m_redirectCount:I
+      11: aload_0
+      12: iconst_0
+      13: putfield      #1                  // Field m_asyncEConnect:Z
+      16: aload_0
+      17: iconst_0
+      18: putfield      #17                 // Field m_connected:Z
+      21: return
+    LineNumberTable:
+      line 30: 0
+      line 13: 6
+      line 17: 11
+      line 18: 16
+      line 31: 21
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0      22     0  this   Lcom/ib/client/EClientSocket;
+          0      22     1 eWrapper   Lcom/ib/client/EWrapper;
+          0      22     2 signal   Lcom/ib/client/EReaderSignal;
+
+  protected com.ib.client.Builder prepareBuffer();
+    Code:
+       0: new           #20                 // class com/ib/client/Builder
+       3: dup
+       4: sipush        1024
+       7: invokespecial #22                 // Method com/ib/client/Builder."<init>":(I)V
+      10: astore_1
+      11: aload_0
+      12: getfield      #25                 // Field m_useV100Plus:Z
+      15: ifeq          23
+      18: aload_1
+      19: invokevirtual #28                 // Method com/ib/client/Builder.allocateLengthHeader:()I
+      22: pop
+      23: aload_1
+      24: areturn
+    LineNumberTable:
+      line 35: 0
+      line 36: 11
+      line 37: 18
+      line 39: 23
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0      25     0  this   Lcom/ib/client/EClientSocket;
+         11      14     1   buf   Lcom/ib/client/Builder;
+
+  protected void closeAndSend(com.ib.client.Builder) throws java.io.IOException;
+    Code:
+       0: aload_0
+       1: getfield      #25                 // Field m_useV100Plus:Z
+       4: ifeq          12
+       7: aload_1
+       8: iconst_0
+       9: invokevirtual #32                 // Method com/ib/client/Builder.updateLength:(I)V
+      12: new           #35                 // class com/ib/client/EMessage
+      15: dup
+      16: aload_1
+      17: invokespecial #37                 // Method com/ib/client/EMessage."<init>":(Lcom/ib/client/Builder;)V
+      20: astore_2
+      21: aload_0
+      22: aload_2
+      23: invokevirtual #40                 // Method sendMsg:(Lcom/ib/client/EMessage;)V
+      26: return
+    LineNumberTable:
+      line 44: 0
+      line 45: 7
+      line 48: 12
+      line 50: 21
+      line 51: 26
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0      27     0  this   Lcom/ib/client/EClientSocket;
+          0      27     1   buf   Lcom/ib/client/Builder;
+         21       6     2   msg   Lcom/ib/client/EMessage;
+
+  protected synchronized void eConnect(java.net.Socket) throws java.io.IOException;
+    Code:
+       0: aload_0
+       1: new           #44                 // class com/ib/client/ESocket
+       4: dup
+       5: aload_1
+       6: invokespecial #46                 // Method com/ib/client/ESocket."<init>":(Ljava/net/Socket;)V
+       9: putfield      #49                 // Field m_socketTransport:Lcom/ib/client/ETransport;
+      12: aload_0
+      13: new           #53                 // class java/io/DataInputStream
+      16: dup
+      17: aload_1
+      18: invokevirtual #55                 // Method java/net/Socket.getInputStream:()Ljava/io/InputStream;
+      21: invokespecial #61                 // Method java/io/DataInputStream."<init>":(Ljava/io/InputStream;)V
+      24: putfield      #64                 // Field m_dis:Ljava/io/DataInputStream;
+      27: aload_0
+      28: aload_1
+      29: invokevirtual #68                 // Method java/net/Socket.getPort:()I
+      32: putfield      #71                 // Field m_defaultPort:I
+      35: aload_0
+      36: aload_1
+      37: putfield      #74                 // Field m_socket:Ljava/net/Socket;
+      40: aload_0
+      41: invokevirtual #78                 // Method sendConnectRequest:()V
+      44: new           #82                 // class com/ib/client/EReader
+      47: dup
+      48: aload_0
+      49: aload_0
+      50: getfield      #84                 // Field m_signal:Lcom/ib/client/EReaderSignal;
+      53: invokespecial #88                 // Method com/ib/client/EReader."<init>":(Lcom/ib/client/EClientSocket;Lcom/ib/client/EReaderSignal;)V
+      56: astore_2
+      57: aload_0
+      58: getfield      #1                  // Field m_asyncEConnect:Z
+      61: ifne          95
+      64: aload_2
+      65: invokevirtual #91                 // Method com/ib/client/EReader.putMessageToQueue:()Z
+      68: ifne          72
+      71: return
+      72: aload_0
+      73: getfield      #95                 // Field m_serverVersion:I
+      76: ifne          95
+      79: aload_0
+      80: getfield      #84                 // Field m_signal:Lcom/ib/client/EReaderSignal;
+      83: invokeinterface #98,  1           // InterfaceMethod com/ib/client/EReaderSignal.waitForSignal:()V
+      88: aload_2
+      89: invokevirtual #103                // Method com/ib/client/EReader.processMsgs:()V
+      92: goto          72
+      95: return
+    LineNumberTable:
+      line 55: 0
+      line 56: 12
+      line 57: 27
+      line 58: 35
+      line 60: 40
+      line 63: 44
+      line 65: 57
+      line 66: 64
+      line 67: 71
+      line 69: 72
+      line 70: 79
+      line 71: 88
+      line 74: 95
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0      96     0  this   Lcom/ib/client/EClientSocket;
+          0      96     1 socket   Ljava/net/Socket;
+         57      39     2 reader   Lcom/ib/client/EReader;
+
+  public synchronized void eConnect(java.net.Socket, int) throws java.io.IOException;
+    Code:
+       0: aload_0
+       1: iload_2
+       2: putfield      #106                // Field m_clientId:I
+       5: aload_0
+       6: iconst_0
+       7: putfield      #13                 // Field m_redirectCount:I
+      10: aload_0
+      11: aload_1
+      12: invokevirtual #109                // Method eConnect:(Ljava/net/Socket;)V
+      15: return
+    LineNumberTable:
+      line 77: 0
+      line 78: 5
+      line 79: 10
+      line 80: 15
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0      16     0  this   Lcom/ib/client/EClientSocket;
+          0      16     1 socket   Ljava/net/Socket;
+          0      16     2 clientId   I
+
+  public synchronized void eConnect(java.lang.String, int, int);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: iload_2
+       3: iload_3
+       4: iconst_0
+       5: invokevirtual #112                // Method eConnect:(Ljava/lang/String;IIZ)V
+       8: return
+    LineNumberTable:
+      line 83: 0
+      line 84: 8
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0       9     0  this   Lcom/ib/client/EClientSocket;
+          0       9     1  host   Ljava/lang/String;
+          0       9     2  port   I
+          0       9     3 clientId   I
+
+  public synchronized void eConnect(java.lang.String, int, int, boolean);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: invokevirtual #115                // Method validateInvalidSymbols:(Ljava/lang/String;)V
+       5: goto          26
+       8: astore        5
+      10: aload_0
+      11: iconst_m1
+      12: aload         5
+      14: invokevirtual #123                // Method com/ib/client/EClientException.error:()Lcom/ib/client/EClientErrors$CodeMsgPair;
+      17: aload         5
+      19: invokevirtual #127                // Method com/ib/client/EClientException.text:()Ljava/lang/String;
+      22: invokevirtual #131                // Method error:(ILcom/ib/client/EClientErrors$CodeMsgPair;Ljava/lang/String;)V
+      25: return
+      26: aload_0
+      27: aload_0
+      28: aload_1
+      29: invokevirtual #134                // Method checkConnected:(Ljava/lang/String;)Ljava/lang/String;
+      32: putfield      #138                // Field m_host:Ljava/lang/String;
+      35: aload_0
+      36: iload_3
+      37: putfield      #106                // Field m_clientId:I
+      40: aload_0
+      41: iload         4
+      43: putfield      #142                // Field m_extraAuth:Z
+      46: aload_0
+      47: iconst_0
+      48: putfield      #13                 // Field m_redirectCount:I
+      51: aload_0
+      52: getfield      #138                // Field m_host:Ljava/lang/String;
+      55: ifnonnull     59
+      58: return
+      59: new           #56                 // class java/net/Socket
+      62: dup
+      63: aload_0
+      64: getfield      #138                // Field m_host:Ljava/lang/String;
+      67: iload_2
+      68: invokespecial #145                // Method java/net/Socket."<init>":(Ljava/lang/String;I)V
+      71: astore        5
+      73: aload_0
+      74: aload         5
+      76: invokevirtual #109                // Method eConnect:(Ljava/net/Socket;)V
+      79: goto          92
+      82: astore        5
+      84: aload_0
+      85: invokevirtual #150                // Method eDisconnect:()V
+      88: aload_0
+      89: invokevirtual #153                // Method connectionError:()V
+      92: return
+    Exception table:
+       from    to  target type
+           0     5     8   Class com/ib/client/EClientException
+          59    79    82   Class java/lang/Exception
+    LineNumberTable:
+      line 88: 0
+      line 93: 5
+      line 90: 8
+      line 91: 10
+      line 92: 25
+      line 96: 26
+      line 98: 35
+      line 99: 40
+      line 100: 46
+      line 102: 51
+      line 103: 58
+      line 106: 59
+      line 107: 73
+      line 112: 79
+      line 109: 82
+      line 110: 84
+      line 111: 88
+      line 113: 92
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+         10      16     5     e   Lcom/ib/client/EClientException;
+         73       6     5 socket   Ljava/net/Socket;
+         84       8     5     e   Ljava/lang/Exception;
+          0      93     0  this   Lcom/ib/client/EClientSocket;
+          0      93     1  host   Ljava/lang/String;
+          0      93     2  port   I
+          0      93     3 clientId   I
+          0      93     4 extraAuth   Z
+
+  public boolean allowRedirect();
+    Code:
+       0: aload_0
+       1: getfield      #156                // Field m_allowRedirect:Z
+       4: ireturn
+    LineNumberTable:
+      line 116: 0
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0       5     0  this   Lcom/ib/client/EClientSocket;
+
+  public void allowRedirect(boolean);
+    Code:
+       0: aload_0
+       1: iload_1
+       2: putfield      #156                // Field m_allowRedirect:Z
+       5: return
+    LineNumberTable:
+      line 120: 0
+      line 121: 5
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0       6     0  this   Lcom/ib/client/EClientSocket;
+          0       6     1   val   Z
+
+  public synchronized void redirect(java.lang.String);
+    Code:
+       0: aload_0
+       1: getfield      #25                 // Field m_useV100Plus:Z
+       4: ifeq          103
+       7: aload_0
+       8: getfield      #156                // Field m_allowRedirect:Z
+      11: ifne          41
+      14: aload_0
+      15: getfield      #159                // Field m_eWrapper:Lcom/ib/client/EWrapper;
+      18: iconst_m1
+      19: invokestatic  #163                // Method com/ib/client/Util.currentTimeMillis:()J
+      22: getstatic     #169                // Field com/ib/client/EClientErrors.CONNECT_FAIL:Lcom/ib/client/EClientErrors$CodeMsgPair;
+      25: invokevirtual #173                // Method com/ib/client/EClientErrors$CodeMsgPair.code:()I
+      28: getstatic     #169                // Field com/ib/client/EClientErrors.CONNECT_FAIL:Lcom/ib/client/EClientErrors$CodeMsgPair;
+      31: invokevirtual #178                // Method com/ib/client/EClientErrors$CodeMsgPair.msg:()Ljava/lang/String;
+      34: aconst_null
+      35: invokeinterface #181,  7          // InterfaceMethod com/ib/client/EWrapper.error:(IJILjava/lang/String;Ljava/lang/String;)V
+      40: return
+      41: aload_0
+      42: dup
+      43: getfield      #13                 // Field m_redirectCount:I
+      46: iconst_1
+      47: iadd
+      48: putfield      #13                 // Field m_redirectCount:I
+      51: aload_0
+      52: getfield      #13                 // Field m_redirectCount:I
+      55: iconst_2
+      56: if_icmple     75
+      59: aload_0
+      60: invokevirtual #150                // Method eDisconnect:()V
+      63: aload_0
+      64: getfield      #159                // Field m_eWrapper:Lcom/ib/client/EWrapper;
+      67: ldc           #186                // String Redirect count exceeded
+      69: invokeinterface #188,  2          // InterfaceMethod com/ib/client/EWrapper.error:(Ljava/lang/String;)V
+      74: return
+      75: aload_0
+      76: iconst_0
+      77: invokevirtual #190                // Method eDisconnect:(Z)V
+      80: aload_0
+      81: aload_1
+      82: aload_0
+      83: getfield      #71                 // Field m_defaultPort:I
+      86: invokevirtual #193                // Method performRedirect:(Ljava/lang/String;I)V
+      89: goto          103
+      92: astore_2
+      93: aload_0
+      94: getfield      #159                // Field m_eWrapper:Lcom/ib/client/EWrapper;
+      97: aload_2
+      98: invokeinterface #198,  2          // InterfaceMethod com/ib/client/EWrapper.error:(Ljava/lang/Exception;)V
+     103: return
+    Exception table:
+       from    to  target type
+          80    89    92   Class java/io/IOException
+    LineNumberTable:
+      line 125: 0
+      line 126: 7
+      line 127: 14
+      line 128: 40
+      line 131: 41
+      line 133: 51
+      line 134: 59
+      line 135: 63
+      line 136: 74
+      line 139: 75
+      line 142: 80
+      line 145: 89
+      line 143: 92
+      line 144: 93
+      line 147: 103
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+         93      10     2     e   Ljava/io/IOException;
+          0     104     0  this   Lcom/ib/client/EClientSocket;
+          0     104     1 newAddress   Ljava/lang/String;
+
+  public synchronized void serverVersion(int, java.lang.String);
+    Code:
+       0: aload_0
+       1: iload_1
+       2: putfield      #95                 // Field m_serverVersion:I
+       5: aload_0
+       6: aload_2
+       7: putfield      #201                // Field m_TwsTime:Ljava/lang/String;
+      10: aload_0
+      11: getfield      #25                 // Field m_useV100Plus:Z
+      14: ifeq          67
+      17: aload_0
+      18: getfield      #95                 // Field m_serverVersion:I
+      21: bipush        100
+      23: if_icmplt     36
+      26: aload_0
+      27: getfield      #95                 // Field m_serverVersion:I
+      30: sipush        203
+      33: if_icmple     67
+      36: aload_0
+      37: invokevirtual #150                // Method eDisconnect:()V
+      40: aload_0
+      41: getfield      #159                // Field m_eWrapper:Lcom/ib/client/EWrapper;
+      44: iconst_m1
+      45: invokestatic  #163                // Method com/ib/client/Util.currentTimeMillis:()J
+      48: getstatic     #204                // Field com/ib/client/EClientErrors.UNSUPPORTED_VERSION:Lcom/ib/client/EClientErrors$CodeMsgPair;
+      51: invokevirtual #173                // Method com/ib/client/EClientErrors$CodeMsgPair.code:()I
+      54: getstatic     #204                // Field com/ib/client/EClientErrors.UNSUPPORTED_VERSION:Lcom/ib/client/EClientErrors$CodeMsgPair;
+      57: invokevirtual #178                // Method com/ib/client/EClientErrors$CodeMsgPair.msg:()Ljava/lang/String;
+      60: aconst_null
+      61: invokeinterface #181,  7          // InterfaceMethod com/ib/client/EWrapper.error:(IJILjava/lang/String;Ljava/lang/String;)V
+      66: return
+      67: aload_0
+      68: getfield      #95                 // Field m_serverVersion:I
+      71: bipush        38
+      73: if_icmpge     107
+      76: aload_0
+      77: invokevirtual #150                // Method eDisconnect:()V
+      80: aload_0
+      81: getfield      #159                // Field m_eWrapper:Lcom/ib/client/EWrapper;
+      84: iconst_m1
+      85: invokestatic  #163                // Method com/ib/client/Util.currentTimeMillis:()J
+      88: getstatic     #207                // Field com/ib/client/EClientErrors.UPDATE_TWS:Lcom/ib/client/EClientErrors$CodeMsgPair;
+      91: invokevirtual #173                // Method com/ib/client/EClientErrors$CodeMsgPair.code:()I
+      94: getstatic     #207                // Field com/ib/client/EClientErrors.UPDATE_TWS:Lcom/ib/client/EClientErrors$CodeMsgPair;
+      97: invokevirtual #178                // Method com/ib/client/EClientErrors$CodeMsgPair.msg:()Ljava/lang/String;
+     100: aconst_null
+     101: invokeinterface #181,  7          // InterfaceMethod com/ib/client/EWrapper.error:(IJILjava/lang/String;Ljava/lang/String;)V
+     106: return
+     107: aload_0
+     108: getfield      #95                 // Field m_serverVersion:I
+     111: bipush        70
+     113: if_icmpge     138
+     116: aload_0
+     117: aload_0
+     118: getfield      #106                // Field m_clientId:I
+     121: invokevirtual #210                // Method send:(I)V
+     124: goto          138
+     127: astore_3
+     128: aload_0
+     129: getfield      #159                // Field m_eWrapper:Lcom/ib/client/EWrapper;
+     132: aload_3
+     133: invokeinterface #198,  2          // InterfaceMethod com/ib/client/EWrapper.error:(Ljava/lang/Exception;)V
+     138: aload_0
+     139: iconst_1
+     140: putfield      #17                 // Field m_connected:Z
+     143: aload_0
+     144: getfield      #1                  // Field m_asyncEConnect:Z
+     147: ifne          154
+     150: aload_0
+     151: invokevirtual #213                // Method startAPI:()V
+     154: return
+    Exception table:
+       from    to  target type
+         116   124   127   Class java/io/IOException
+    LineNumberTable:
+      line 151: 0
+      line 152: 5
+      line 154: 10
+      line 155: 36
+      line 156: 40
+      line 157: 66
+      line 160: 67
+      line 161: 76
+      line 162: 80
+      line 163: 106
+      line 166: 107
+      line 168: 116
+      line 171: 124
+      line 169: 127
+      line 170: 128
+      line 176: 138
+      line 178: 143
+      line 179: 150
+      line 180: 154
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+        128      10     3     e   Ljava/io/IOException;
+          0     155     0  this   Lcom/ib/client/EClientSocket;
+          0     155     1 version   I
+          0     155     2  time   Ljava/lang/String;
+
+  protected synchronized void performRedirect(java.lang.String, int) throws java.io.IOException;
+    Code:
+       0: getstatic     #216                // Field java/lang/System.out:Ljava/io/PrintStream;
+       3: aload_1
+       4: invokedynamic #222,  0            // InvokeDynamic #0:makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;
+       9: invokevirtual #225                // Method java/io/PrintStream.println:(Ljava/lang/String;)V
+      12: aload_1
+      13: ldc           #230                // String :
+      15: invokevirtual #232                // Method java/lang/String.split:(Ljava/lang/String;)[Ljava/lang/String;
+      18: astore_3
+      19: aload_0
+      20: aload_3
+      21: iconst_0
+      22: aaload
+      23: putfield      #138                // Field m_host:Ljava/lang/String;
+      26: aload_3
+      27: arraylength
+      28: iconst_1
+      29: if_icmple     41
+      32: aload_3
+      33: iconst_1
+      34: aaload
+      35: invokestatic  #238                // Method java/lang/Integer.parseInt:(Ljava/lang/String;)I
+      38: goto          42
+      41: iload_2
+      42: istore        4
+      44: goto          60
+      47: astore        5
+      49: getstatic     #216                // Field java/lang/System.out:Ljava/io/PrintStream;
+      52: ldc           #246                // String Warning: redirect port is invalid, using default port
+      54: invokevirtual #225                // Method java/io/PrintStream.println:(Ljava/lang/String;)V
+      57: iload_2
+      58: istore        4
+      60: aload_0
+      61: new           #56                 // class java/net/Socket
+      64: dup
+      65: aload_0
+      66: getfield      #138                // Field m_host:Ljava/lang/String;
+      69: iload         4
+      71: invokespecial #145                // Method java/net/Socket."<init>":(Ljava/lang/String;I)V
+      74: invokevirtual #109                // Method eConnect:(Ljava/net/Socket;)V
+      77: return
+    Exception table:
+       from    to  target type
+          26    44    47   Class java/lang/NumberFormatException
+    LineNumberTable:
+      line 183: 0
+      line 186: 12
+      line 187: 19
+      line 190: 26
+      line 195: 44
+      line 192: 47
+      line 193: 49
+      line 194: 57
+      line 196: 60
+      line 197: 77
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+         44       3     4 newPort   I
+         49      11     5     e   Ljava/lang/NumberFormatException;
+          0      78     0  this   Lcom/ib/client/EClientSocket;
+          0      78     1 address   Ljava/lang/String;
+          0      78     2 defaultPort   I
+         19      59     3 array   [Ljava/lang/String;
+         60      18     4 newPort   I
+
+  public synchronized void eDisconnect();
+    Code:
+       0: aload_0
+       1: iconst_1
+       2: invokevirtual #190                // Method eDisconnect:(Z)V
+       5: return
+    LineNumberTable:
+      line 201: 0
+      line 202: 5
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0       6     0  this   Lcom/ib/client/EClientSocket;
+
+  private synchronized void eDisconnect(boolean);
+    Code:
+       0: aload_0
+       1: getfield      #64                 // Field m_dis:Ljava/io/DataInputStream;
+       4: ifnonnull     15
+       7: aload_0
+       8: getfield      #49                 // Field m_socketTransport:Lcom/ib/client/ETransport;
+      11: ifnonnull     15
+      14: return
+      15: iload_1
+      16: ifeq          50
+      19: aload_0
+      20: iconst_0
+      21: putfield      #17                 // Field m_connected:Z
+      24: aload_0
+      25: iconst_0
+      26: putfield      #142                // Field m_extraAuth:Z
+      29: aload_0
+      30: iconst_m1
+      31: putfield      #106                // Field m_clientId:I
+      34: aload_0
+      35: iconst_0
+      36: putfield      #95                 // Field m_serverVersion:I
+      39: aload_0
+      40: ldc           #248                // String
+      42: putfield      #201                // Field m_TwsTime:Ljava/lang/String;
+      45: aload_0
+      46: iconst_0
+      47: putfield      #13                 // Field m_redirectCount:I
+      50: aload_0
+      51: getfield      #64                 // Field m_dis:Ljava/io/DataInputStream;
+      54: astore_2
+      55: aload_0
+      56: aconst_null
+      57: putfield      #64                 // Field m_dis:Ljava/io/DataInputStream;
+      60: aload_0
+      61: getfield      #49                 // Field m_socketTransport:Lcom/ib/client/ETransport;
+      64: ifnull        103
+      67: aload_0
+      68: getfield      #49                 // Field m_socketTransport:Lcom/ib/client/ETransport;
+      71: invokeinterface #250,  1          // InterfaceMethod com/ib/client/ETransport.close:()V
+      76: aload_0
+      77: aconst_null
+      78: putfield      #49                 // Field m_socketTransport:Lcom/ib/client/ETransport;
+      81: goto          103
+      84: astore_3
+      85: aload_0
+      86: aconst_null
+      87: putfield      #49                 // Field m_socketTransport:Lcom/ib/client/ETransport;
+      90: goto          103
+      93: astore        4
+      95: aload_0
+      96: aconst_null
+      97: putfield      #49                 // Field m_socketTransport:Lcom/ib/client/ETransport;
+     100: aload         4
+     102: athrow
+     103: aload_2
+     104: ifnull        111
+     107: aload_2
+     108: invokevirtual #255                // Method java/io/FilterInputStream.close:()V
+     111: goto          115
+     114: astore_3
+     115: aload_0
+     116: getfield      #159                // Field m_eWrapper:Lcom/ib/client/EWrapper;
+     119: invokeinterface #258,  1          // InterfaceMethod com/ib/client/EWrapper.connectionClosed:()V
+     124: return
+    Exception table:
+       from    to  target type
+          67    76    84   Class java/io/IOException
+          67    76    93   any
+          93    95    93   any
+         103   111   114   Class java/lang/Exception
+    LineNumberTable:
+      line 206: 0
+      line 207: 14
+      line 210: 15
+      line 211: 19
+      line 212: 24
+      line 213: 29
+      line 214: 34
+      line 215: 39
+      line 216: 45
+      line 219: 50
+      line 220: 55
+      line 221: 60
+      line 223: 67
+      line 226: 76
+      line 227: 81
+      line 224: 84
+      line 226: 85
+      line 227: 90
+      line 226: 93
+      line 227: 100
+      line 231: 103
+      line 232: 107
+      line 234: 111
+      line 233: 114
+      line 236: 115
+      line 237: 124
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0     125     0  this   Lcom/ib/client/EClientSocket;
+          0     125     1 resetState   Z
+         55      70     2   dis   Ljava/io/FilterInputStream;
+
+  public int read(byte[], int, int) throws java.io.IOException;
+    Code:
+       0: aload_0
+       1: getfield      #64                 // Field m_dis:Ljava/io/DataInputStream;
+       4: ifnonnull     20
+       7: new           #119                // class com/ib/client/EClientException
+      10: dup
+      11: getstatic     #261                // Field com/ib/client/EClientErrors.FAIL_READ_MESSAGE:Lcom/ib/client/EClientErrors$CodeMsgPair;
+      14: ldc           #248                // String
+      16: invokespecial #264                // Method com/ib/client/EClientException."<init>":(Lcom/ib/client/EClientErrors$CodeMsgPair;Ljava/lang/String;)V
+      19: athrow
+      20: aload_0
+      21: getfield      #64                 // Field m_dis:Ljava/io/DataInputStream;
+      24: aload_1
+      25: iload_2
+      26: iload_3
+      27: invokevirtual #267                // Method java/io/DataInputStream.read:([BII)I
+      30: ireturn
+    LineNumberTable:
+      line 240: 0
+      line 241: 7
+      line 243: 20
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0      31     0  this   Lcom/ib/client/EClientSocket;
+          0      31     1   buf   [B
+          0      31     2   off   I
+          0      31     3   len   I
+
+  public int readInt() throws java.io.IOException;
+    Code:
+       0: aload_0
+       1: getfield      #64                 // Field m_dis:Ljava/io/DataInputStream;
+       4: ifnonnull     20
+       7: new           #119                // class com/ib/client/EClientException
+      10: dup
+      11: getstatic     #261                // Field com/ib/client/EClientErrors.FAIL_READ_MESSAGE:Lcom/ib/client/EClientErrors$CodeMsgPair;
+      14: ldc           #248                // String
+      16: invokespecial #264                // Method com/ib/client/EClientException."<init>":(Lcom/ib/client/EClientErrors$CodeMsgPair;Ljava/lang/String;)V
+      19: athrow
+      20: aload_0
+      21: getfield      #64                 // Field m_dis:Ljava/io/DataInputStream;
+      24: invokevirtual #271                // Method java/io/DataInputStream.readInt:()I
+      27: ireturn
+    LineNumberTable:
+      line 247: 0
+      line 248: 7
+      line 250: 20
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0      28     0  this   Lcom/ib/client/EClientSocket;
+
+  public synchronized boolean isConnected();
+    Code:
+       0: aload_0
+       1: getfield      #74                 // Field m_socket:Ljava/net/Socket;
+       4: ifnull        28
+       7: aload_0
+       8: getfield      #74                 // Field m_socket:Ljava/net/Socket;
+      11: invokevirtual #274                // Method java/net/Socket.isConnected:()Z
+      14: ifeq          28
+      17: aload_0
+      18: getfield      #17                 // Field m_connected:Z
+      21: ifeq          28
+      24: iconst_1
+      25: goto          29
+      28: iconst_0
+      29: ireturn
+    LineNumberTable:
+      line 255: 0
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0      30     0  this   Lcom/ib/client/EClientSocket;
+}

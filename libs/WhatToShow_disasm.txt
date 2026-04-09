@@ -1,0 +1,206 @@
+public final class com.ib.client.Types$WhatToShow extends java.lang.Enum<com.ib.client.Types$WhatToShow> {
+  public static final com.ib.client.Types$WhatToShow TRADES;
+
+  public static final com.ib.client.Types$WhatToShow MIDPOINT;
+
+  public static final com.ib.client.Types$WhatToShow BID;
+
+  public static final com.ib.client.Types$WhatToShow ASK;
+
+  public static final com.ib.client.Types$WhatToShow BID_ASK;
+
+  public static final com.ib.client.Types$WhatToShow HISTORICAL_VOLATILITY;
+
+  public static final com.ib.client.Types$WhatToShow OPTION_IMPLIED_VOLATILITY;
+
+  public static final com.ib.client.Types$WhatToShow YIELD_ASK;
+
+  public static final com.ib.client.Types$WhatToShow YIELD_BID;
+
+  public static final com.ib.client.Types$WhatToShow YIELD_BID_ASK;
+
+  public static final com.ib.client.Types$WhatToShow YIELD_LAST;
+
+  public static final com.ib.client.Types$WhatToShow ADJUSTED_LAST;
+
+  public static final com.ib.client.Types$WhatToShow SCHEDULE;
+
+  public static final com.ib.client.Types$WhatToShow AGGTRADES;
+
+  private static final com.ib.client.Types$WhatToShow[] $VALUES;
+
+  public static com.ib.client.Types$WhatToShow[] values();
+    Code:
+       0: getstatic     #46                 // Field $VALUES:[Lcom/ib/client/Types$WhatToShow;
+       3: invokevirtual #50                 // Method "[Lcom/ib/client/Types$WhatToShow;".clone:()Ljava/lang/Object;
+       6: checkcast     #51                 // class "[Lcom/ib/client/Types$WhatToShow;"
+       9: areturn
+
+  public static com.ib.client.Types$WhatToShow valueOf(java.lang.String);
+    Code:
+       0: ldc           #1                  // class com/ib/client/Types$WhatToShow
+       2: aload_0
+       3: invokestatic  #55                 // Method java/lang/Enum.valueOf:(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Enum;
+       6: checkcast     #1                  // class com/ib/client/Types$WhatToShow
+       9: areturn
+
+  private com.ib.client.Types$WhatToShow();
+    Code:
+       0: aload_0
+       1: aload_1
+       2: iload_2
+       3: invokespecial #61                 // Method java/lang/Enum."<init>":(Ljava/lang/String;I)V
+       6: return
+
+  private static com.ib.client.Types$WhatToShow[] $values();
+    Code:
+       0: bipush        14
+       2: anewarray     #1                  // class com/ib/client/Types$WhatToShow
+       5: dup
+       6: iconst_0
+       7: getstatic     #3                  // Field TRADES:Lcom/ib/client/Types$WhatToShow;
+      10: aastore
+      11: dup
+      12: iconst_1
+      13: getstatic     #7                  // Field MIDPOINT:Lcom/ib/client/Types$WhatToShow;
+      16: aastore
+      17: dup
+      18: iconst_2
+      19: getstatic     #10                 // Field BID:Lcom/ib/client/Types$WhatToShow;
+      22: aastore
+      23: dup
+      24: iconst_3
+      25: getstatic     #13                 // Field ASK:Lcom/ib/client/Types$WhatToShow;
+      28: aastore
+      29: dup
+      30: iconst_4
+      31: getstatic     #16                 // Field BID_ASK:Lcom/ib/client/Types$WhatToShow;
+      34: aastore
+      35: dup
+      36: iconst_5
+      37: getstatic     #19                 // Field HISTORICAL_VOLATILITY:Lcom/ib/client/Types$WhatToShow;
+      40: aastore
+      41: dup
+      42: bipush        6
+      44: getstatic     #22                 // Field OPTION_IMPLIED_VOLATILITY:Lcom/ib/client/Types$WhatToShow;
+      47: aastore
+      48: dup
+      49: bipush        7
+      51: getstatic     #25                 // Field YIELD_ASK:Lcom/ib/client/Types$WhatToShow;
+      54: aastore
+      55: dup
+      56: bipush        8
+      58: getstatic     #28                 // Field YIELD_BID:Lcom/ib/client/Types$WhatToShow;
+      61: aastore
+      62: dup
+      63: bipush        9
+      65: getstatic     #31                 // Field YIELD_BID_ASK:Lcom/ib/client/Types$WhatToShow;
+      68: aastore
+      69: dup
+      70: bipush        10
+      72: getstatic     #34                 // Field YIELD_LAST:Lcom/ib/client/Types$WhatToShow;
+      75: aastore
+      76: dup
+      77: bipush        11
+      79: getstatic     #37                 // Field ADJUSTED_LAST:Lcom/ib/client/Types$WhatToShow;
+      82: aastore
+      83: dup
+      84: bipush        12
+      86: getstatic     #40                 // Field SCHEDULE:Lcom/ib/client/Types$WhatToShow;
+      89: aastore
+      90: dup
+      91: bipush        13
+      93: getstatic     #43                 // Field AGGTRADES:Lcom/ib/client/Types$WhatToShow;
+      96: aastore
+      97: areturn
+
+  static {};
+    Code:
+       0: new           #1                  // class com/ib/client/Types$WhatToShow
+       3: dup
+       4: ldc           #65                 // String TRADES
+       6: iconst_0
+       7: invokespecial #66                 // Method "<init>":(Ljava/lang/String;I)V
+      10: putstatic     #3                  // Field TRADES:Lcom/ib/client/Types$WhatToShow;
+      13: new           #1                  // class com/ib/client/Types$WhatToShow
+      16: dup
+      17: ldc           #67                 // String MIDPOINT
+      19: iconst_1
+      20: invokespecial #66                 // Method "<init>":(Ljava/lang/String;I)V
+      23: putstatic     #7                  // Field MIDPOINT:Lcom/ib/client/Types$WhatToShow;
+      26: new           #1                  // class com/ib/client/Types$WhatToShow
+      29: dup
+      30: ldc           #68                 // String BID
+      32: iconst_2
+      33: invokespecial #66                 // Method "<init>":(Ljava/lang/String;I)V
+      36: putstatic     #10                 // Field BID:Lcom/ib/client/Types$WhatToShow;
+      39: new           #1                  // class com/ib/client/Types$WhatToShow
+      42: dup
+      43: ldc           #69                 // String ASK
+      45: iconst_3
+      46: invokespecial #66                 // Method "<init>":(Ljava/lang/String;I)V
+      49: putstatic     #13                 // Field ASK:Lcom/ib/client/Types$WhatToShow;
+      52: new           #1                  // class com/ib/client/Types$WhatToShow
+      55: dup
+      56: ldc           #70                 // String BID_ASK
+      58: iconst_4
+      59: invokespecial #66                 // Method "<init>":(Ljava/lang/String;I)V
+      62: putstatic     #16                 // Field BID_ASK:Lcom/ib/client/Types$WhatToShow;
+      65: new           #1                  // class com/ib/client/Types$WhatToShow
+      68: dup
+      69: ldc           #71                 // String HISTORICAL_VOLATILITY
+      71: iconst_5
+      72: invokespecial #66                 // Method "<init>":(Ljava/lang/String;I)V
+      75: putstatic     #19                 // Field HISTORICAL_VOLATILITY:Lcom/ib/client/Types$WhatToShow;
+      78: new           #1                  // class com/ib/client/Types$WhatToShow
+      81: dup
+      82: ldc           #72                 // String OPTION_IMPLIED_VOLATILITY
+      84: bipush        6
+      86: invokespecial #66                 // Method "<init>":(Ljava/lang/String;I)V
+      89: putstatic     #22                 // Field OPTION_IMPLIED_VOLATILITY:Lcom/ib/client/Types$WhatToShow;
+      92: new           #1                  // class com/ib/client/Types$WhatToShow
+      95: dup
+      96: ldc           #73                 // String YIELD_ASK
+      98: bipush        7
+     100: invokespecial #66                 // Method "<init>":(Ljava/lang/String;I)V
+     103: putstatic     #25                 // Field YIELD_ASK:Lcom/ib/client/Types$WhatToShow;
+     106: new           #1                  // class com/ib/client/Types$WhatToShow
+     109: dup
+     110: ldc           #74                 // String YIELD_BID
+     112: bipush        8
+     114: invokespecial #66                 // Method "<init>":(Ljava/lang/String;I)V
+     117: putstatic     #28                 // Field YIELD_BID:Lcom/ib/client/Types$WhatToShow;
+     120: new           #1                  // class com/ib/client/Types$WhatToShow
+     123: dup
+     124: ldc           #75                 // String YIELD_BID_ASK
+     126: bipush        9
+     128: invokespecial #66                 // Method "<init>":(Ljava/lang/String;I)V
+     131: putstatic     #31                 // Field YIELD_BID_ASK:Lcom/ib/client/Types$WhatToShow;
+     134: new           #1                  // class com/ib/client/Types$WhatToShow
+     137: dup
+     138: ldc           #76                 // String YIELD_LAST
+     140: bipush        10
+     142: invokespecial #66                 // Method "<init>":(Ljava/lang/String;I)V
+     145: putstatic     #34                 // Field YIELD_LAST:Lcom/ib/client/Types$WhatToShow;
+     148: new           #1                  // class com/ib/client/Types$WhatToShow
+     151: dup
+     152: ldc           #77                 // String ADJUSTED_LAST
+     154: bipush        11
+     156: invokespecial #66                 // Method "<init>":(Ljava/lang/String;I)V
+     159: putstatic     #37                 // Field ADJUSTED_LAST:Lcom/ib/client/Types$WhatToShow;
+     162: new           #1                  // class com/ib/client/Types$WhatToShow
+     165: dup
+     166: ldc           #78                 // String SCHEDULE
+     168: bipush        12
+     170: invokespecial #66                 // Method "<init>":(Ljava/lang/String;I)V
+     173: putstatic     #40                 // Field SCHEDULE:Lcom/ib/client/Types$WhatToShow;
+     176: new           #1                  // class com/ib/client/Types$WhatToShow
+     179: dup
+     180: ldc           #79                 // String AGGTRADES
+     182: bipush        13
+     184: invokespecial #66                 // Method "<init>":(Ljava/lang/String;I)V
+     187: putstatic     #43                 // Field AGGTRADES:Lcom/ib/client/Types$WhatToShow;
+     190: invokestatic  #80                 // Method $values:()[Lcom/ib/client/Types$WhatToShow;
+     193: putstatic     #46                 // Field $VALUES:[Lcom/ib/client/Types$WhatToShow;
+     196: return
+}

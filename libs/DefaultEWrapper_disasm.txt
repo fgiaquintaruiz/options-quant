@@ -1,0 +1,395 @@
+public class com.ib.client.DefaultEWrapper implements com.ib.client.EWrapper {
+  public com.ib.client.DefaultEWrapper();
+    Code:
+       0: aload_0
+       1: invokespecial #1                  // Method java/lang/Object."<init>":()V
+       4: return
+
+  public void tickPrice(int, int, double, com.ib.client.TickAttrib);
+    Code:
+       0: return
+
+  public void tickSize(int, int, com.ib.client.Decimal);
+    Code:
+       0: return
+
+  public void tickOptionComputation(int, int, int, double, double, double, double, double, double, double, double);
+    Code:
+       0: return
+
+  public void tickGeneric(int, int, double);
+    Code:
+       0: return
+
+  public void tickString(int, int, java.lang.String);
+    Code:
+       0: return
+
+  public void tickEFP(int, int, double, java.lang.String, double, int, java.lang.String, double, double);
+    Code:
+       0: return
+
+  public void orderStatus(int, java.lang.String, com.ib.client.Decimal, com.ib.client.Decimal, double, long, int, double, int, java.lang.String, double);
+    Code:
+       0: return
+
+  public void openOrder(int, com.ib.client.Contract, com.ib.client.Order, com.ib.client.OrderState);
+    Code:
+       0: return
+
+  public void openOrderEnd();
+    Code:
+       0: return
+
+  public void updateAccountValue(java.lang.String, java.lang.String, java.lang.String, java.lang.String);
+    Code:
+       0: return
+
+  public void updatePortfolio(com.ib.client.Contract, com.ib.client.Decimal, double, double, double, double, double, java.lang.String);
+    Code:
+       0: return
+
+  public void updateAccountTime(java.lang.String);
+    Code:
+       0: return
+
+  public void accountDownloadEnd(java.lang.String);
+    Code:
+       0: return
+
+  public void nextValidId(int);
+    Code:
+       0: return
+
+  public void contractDetails(int, com.ib.client.ContractDetails);
+    Code:
+       0: return
+
+  public void bondContractDetails(int, com.ib.client.ContractDetails);
+    Code:
+       0: return
+
+  public void contractDetailsEnd(int);
+    Code:
+       0: return
+
+  public void execDetails(int, com.ib.client.Contract, com.ib.client.Execution);
+    Code:
+       0: return
+
+  public void execDetailsEnd(int);
+    Code:
+       0: return
+
+  public void updateMktDepth(int, int, int, int, double, com.ib.client.Decimal);
+    Code:
+       0: return
+
+  public void updateMktDepthL2(int, int, java.lang.String, int, int, double, com.ib.client.Decimal, boolean);
+    Code:
+       0: return
+
+  public void updateNewsBulletin(int, int, java.lang.String, java.lang.String);
+    Code:
+       0: return
+
+  public void managedAccounts(java.lang.String);
+    Code:
+       0: return
+
+  public void receiveFA(int, java.lang.String);
+    Code:
+       0: return
+
+  public void historicalData(int, com.ib.client.Bar);
+    Code:
+       0: return
+
+  public void scannerParameters(java.lang.String);
+    Code:
+       0: return
+
+  public void scannerData(int, int, com.ib.client.ContractDetails, java.lang.String, java.lang.String, java.lang.String, java.lang.String);
+    Code:
+       0: return
+
+  public void scannerDataEnd(int);
+    Code:
+       0: return
+
+  public void realtimeBar(int, long, double, double, double, double, com.ib.client.Decimal, com.ib.client.Decimal, int);
+    Code:
+       0: return
+
+  public void currentTime(long);
+    Code:
+       0: return
+
+  public void fundamentalData(int, java.lang.String);
+    Code:
+       0: return
+
+  public void deltaNeutralValidation(int, com.ib.client.DeltaNeutralContract);
+    Code:
+       0: return
+
+  public void tickSnapshotEnd(int);
+    Code:
+       0: return
+
+  public void marketDataType(int, int);
+    Code:
+       0: return
+
+  public void commissionAndFeesReport(com.ib.client.CommissionAndFeesReport);
+    Code:
+       0: return
+
+  public void position(java.lang.String, com.ib.client.Contract, com.ib.client.Decimal, double);
+    Code:
+       0: return
+
+  public void positionEnd();
+    Code:
+       0: return
+
+  public void accountSummary(int, java.lang.String, java.lang.String, java.lang.String, java.lang.String);
+    Code:
+       0: return
+
+  public void accountSummaryEnd(int);
+    Code:
+       0: return
+
+  public void verifyMessageAPI(java.lang.String);
+    Code:
+       0: return
+
+  public void verifyCompleted(boolean, java.lang.String);
+    Code:
+       0: return
+
+  public void verifyAndAuthMessageAPI(java.lang.String, java.lang.String);
+    Code:
+       0: return
+
+  public void verifyAndAuthCompleted(boolean, java.lang.String);
+    Code:
+       0: return
+
+  public void displayGroupList(int, java.lang.String);
+    Code:
+       0: return
+
+  public void displayGroupUpdated(int, java.lang.String);
+    Code:
+       0: return
+
+  public void error(java.lang.Exception);
+    Code:
+       0: return
+
+  public void error(java.lang.String);
+    Code:
+       0: return
+
+  public void error(int, long, int, java.lang.String, java.lang.String);
+    Code:
+       0: return
+
+  public void connectionClosed();
+    Code:
+       0: return
+
+  public void connectAck();
+    Code:
+       0: return
+
+  public void positionMulti(int, java.lang.String, java.lang.String, com.ib.client.Contract, com.ib.client.Decimal, double);
+    Code:
+       0: return
+
+  public void positionMultiEnd(int);
+    Code:
+       0: return
+
+  public void accountUpdateMulti(int, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String);
+    Code:
+       0: return
+
+  public void accountUpdateMultiEnd(int);
+    Code:
+       0: return
+
+  public void securityDefinitionOptionalParameter(int, java.lang.String, int, java.lang.String, java.lang.String, java.util.Set<java.lang.String>, java.util.Set<java.lang.Double>);
+    Code:
+       0: return
+
+  public void securityDefinitionOptionalParameterEnd(int);
+    Code:
+       0: return
+
+  public void softDollarTiers(int, com.ib.client.SoftDollarTier[]);
+    Code:
+       0: return
+
+  public void familyCodes(com.ib.client.FamilyCode[]);
+    Code:
+       0: return
+
+  public void historicalDataEnd(int, java.lang.String, java.lang.String);
+    Code:
+       0: return
+
+  public void symbolSamples(int, com.ib.client.ContractDescription[]);
+    Code:
+       0: return
+
+  public void mktDepthExchanges(com.ib.client.DepthMktDataDescription[]);
+    Code:
+       0: return
+
+  public void tickNews(int, long, java.lang.String, java.lang.String, java.lang.String, java.lang.String);
+    Code:
+       0: return
+
+  public void smartComponents(int, java.util.Map<java.lang.Integer, java.util.Map$Entry<java.lang.String, java.lang.Character>>);
+    Code:
+       0: return
+
+  public void tickReqParams(int, double, java.lang.String, int);
+    Code:
+       0: return
+
+  public void newsProviders(com.ib.client.NewsProvider[]);
+    Code:
+       0: return
+
+  public void newsArticle(int, int, java.lang.String);
+    Code:
+       0: return
+
+  public void historicalNews(int, java.lang.String, java.lang.String, java.lang.String, java.lang.String);
+    Code:
+       0: return
+
+  public void historicalNewsEnd(int, boolean);
+    Code:
+       0: return
+
+  public void headTimestamp(int, java.lang.String);
+    Code:
+       0: return
+
+  public void histogramData(int, java.util.List<com.ib.client.HistogramEntry>);
+    Code:
+       0: return
+
+  public void historicalDataUpdate(int, com.ib.client.Bar);
+    Code:
+       0: return
+
+  public void pnl(int, double, double, double);
+    Code:
+       0: return
+
+  public void rerouteMktDataReq(int, int, java.lang.String);
+    Code:
+       0: return
+
+  public void rerouteMktDepthReq(int, int, java.lang.String);
+    Code:
+       0: return
+
+  public void marketRule(int, com.ib.client.PriceIncrement[]);
+    Code:
+       0: return
+
+  public void pnlSingle(int, com.ib.client.Decimal, double, double, double, double);
+    Code:
+       0: return
+
+  public void historicalTicks(int, java.util.List<com.ib.client.HistoricalTick>, boolean);
+    Code:
+       0: return
+
+  public void historicalTicksBidAsk(int, java.util.List<com.ib.client.HistoricalTickBidAsk>, boolean);
+    Code:
+       0: return
+
+  public void historicalTicksLast(int, java.util.List<com.ib.client.HistoricalTickLast>, boolean);
+    Code:
+       0: return
+
+  public void tickByTickAllLast(int, int, long, double, com.ib.client.Decimal, com.ib.client.TickAttribLast, java.lang.String, java.lang.String);
+    Code:
+       0: return
+
+  public void tickByTickBidAsk(int, long, double, double, com.ib.client.Decimal, com.ib.client.Decimal, com.ib.client.TickAttribBidAsk);
+    Code:
+       0: return
+
+  public void tickByTickMidPoint(int, long, double);
+    Code:
+       0: return
+
+  public void orderBound(long, int, int);
+    Code:
+       0: return
+
+  public void completedOrder(com.ib.client.Contract, com.ib.client.Order, com.ib.client.OrderState);
+    Code:
+       0: return
+
+  public void completedOrdersEnd();
+    Code:
+       0: return
+
+  public void replaceFAEnd(int, java.lang.String);
+    Code:
+       0: return
+
+  public void wshMetaData(int, java.lang.String);
+    Code:
+       0: return
+
+  public void wshEventData(int, java.lang.String);
+    Code:
+       0: return
+
+  public void historicalSchedule(int, java.lang.String, java.lang.String, java.lang.String, java.util.List<com.ib.client.HistoricalSession>);
+    Code:
+       0: return
+
+  public void userInfo(int, java.lang.String);
+    Code:
+       0: return
+
+  public void currentTimeInMillis(long);
+    Code:
+       0: return
+
+  public void orderStatusProtoBuf(com.ib.client.protobuf.OrderStatusProto$OrderStatus);
+    Code:
+       0: return
+
+  public void openOrderProtoBuf(com.ib.client.protobuf.OpenOrderProto$OpenOrder);
+    Code:
+       0: return
+
+  public void openOrdersEndProtoBuf(com.ib.client.protobuf.OpenOrdersEndProto$OpenOrdersEnd);
+    Code:
+       0: return
+
+  public void errorProtoBuf(com.ib.client.protobuf.ErrorMessageProto$ErrorMessage);
+    Code:
+       0: return
+
+  public void execDetailsProtoBuf(com.ib.client.protobuf.ExecutionDetailsProto$ExecutionDetails);
+    Code:
+       0: return
+
+  public void execDetailsEndProtoBuf(com.ib.client.protobuf.ExecutionDetailsEndProto$ExecutionDetailsEnd);
+    Code:
+       0: return
+}

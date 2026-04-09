@@ -1,0 +1,195 @@
+public interface com.ib.client.EWrapper {
+  public abstract void tickPrice(int, int, double, com.ib.client.TickAttrib);
+
+  public abstract void tickSize(int, int, com.ib.client.Decimal);
+
+  public abstract void tickOptionComputation(int, int, int, double, double, double, double, double, double, double, double);
+
+  public abstract void tickGeneric(int, int, double);
+
+  public abstract void tickString(int, int, java.lang.String);
+
+  public abstract void tickEFP(int, int, double, java.lang.String, double, int, java.lang.String, double, double);
+
+  public abstract void orderStatus(int, java.lang.String, com.ib.client.Decimal, com.ib.client.Decimal, double, long, int, double, int, java.lang.String, double);
+
+  public abstract void openOrder(int, com.ib.client.Contract, com.ib.client.Order, com.ib.client.OrderState);
+
+  public abstract void openOrderEnd();
+
+  public abstract void updateAccountValue(java.lang.String, java.lang.String, java.lang.String, java.lang.String);
+
+  public abstract void updatePortfolio(com.ib.client.Contract, com.ib.client.Decimal, double, double, double, double, double, java.lang.String);
+
+  public abstract void updateAccountTime(java.lang.String);
+
+  public abstract void accountDownloadEnd(java.lang.String);
+
+  public abstract void nextValidId(int);
+
+  public abstract void contractDetails(int, com.ib.client.ContractDetails);
+
+  public abstract void bondContractDetails(int, com.ib.client.ContractDetails);
+
+  public abstract void contractDetailsEnd(int);
+
+  public abstract void execDetails(int, com.ib.client.Contract, com.ib.client.Execution);
+
+  public abstract void execDetailsEnd(int);
+
+  public abstract void updateMktDepth(int, int, int, int, double, com.ib.client.Decimal);
+
+  public abstract void updateMktDepthL2(int, int, java.lang.String, int, int, double, com.ib.client.Decimal, boolean);
+
+  public abstract void updateNewsBulletin(int, int, java.lang.String, java.lang.String);
+
+  public abstract void managedAccounts(java.lang.String);
+
+  public abstract void receiveFA(int, java.lang.String);
+
+  public abstract void historicalData(int, com.ib.client.Bar);
+
+  public abstract void scannerParameters(java.lang.String);
+
+  public abstract void scannerData(int, int, com.ib.client.ContractDetails, java.lang.String, java.lang.String, java.lang.String, java.lang.String);
+
+  public abstract void scannerDataEnd(int);
+
+  public abstract void realtimeBar(int, long, double, double, double, double, com.ib.client.Decimal, com.ib.client.Decimal, int);
+
+  public abstract void currentTime(long);
+
+  public abstract void fundamentalData(int, java.lang.String);
+
+  public abstract void deltaNeutralValidation(int, com.ib.client.DeltaNeutralContract);
+
+  public abstract void tickSnapshotEnd(int);
+
+  public abstract void marketDataType(int, int);
+
+  public abstract void commissionAndFeesReport(com.ib.client.CommissionAndFeesReport);
+
+  public abstract void position(java.lang.String, com.ib.client.Contract, com.ib.client.Decimal, double);
+
+  public abstract void positionEnd();
+
+  public abstract void accountSummary(int, java.lang.String, java.lang.String, java.lang.String, java.lang.String);
+
+  public abstract void accountSummaryEnd(int);
+
+  public abstract void verifyMessageAPI(java.lang.String);
+
+  public abstract void verifyCompleted(boolean, java.lang.String);
+
+  public abstract void verifyAndAuthMessageAPI(java.lang.String, java.lang.String);
+
+  public abstract void verifyAndAuthCompleted(boolean, java.lang.String);
+
+  public abstract void displayGroupList(int, java.lang.String);
+
+  public abstract void displayGroupUpdated(int, java.lang.String);
+
+  public abstract void error(java.lang.Exception);
+
+  public abstract void error(java.lang.String);
+
+  public abstract void error(int, long, int, java.lang.String, java.lang.String);
+
+  public abstract void connectionClosed();
+
+  public abstract void connectAck();
+
+  public abstract void positionMulti(int, java.lang.String, java.lang.String, com.ib.client.Contract, com.ib.client.Decimal, double);
+
+  public abstract void positionMultiEnd(int);
+
+  public abstract void accountUpdateMulti(int, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String);
+
+  public abstract void accountUpdateMultiEnd(int);
+
+  public abstract void securityDefinitionOptionalParameter(int, java.lang.String, int, java.lang.String, java.lang.String, java.util.Set<java.lang.String>, java.util.Set<java.lang.Double>);
+
+  public abstract void securityDefinitionOptionalParameterEnd(int);
+
+  public abstract void softDollarTiers(int, com.ib.client.SoftDollarTier[]);
+
+  public abstract void familyCodes(com.ib.client.FamilyCode[]);
+
+  public abstract void symbolSamples(int, com.ib.client.ContractDescription[]);
+
+  public abstract void historicalDataEnd(int, java.lang.String, java.lang.String);
+
+  public abstract void mktDepthExchanges(com.ib.client.DepthMktDataDescription[]);
+
+  public abstract void tickNews(int, long, java.lang.String, java.lang.String, java.lang.String, java.lang.String);
+
+  public abstract void smartComponents(int, java.util.Map<java.lang.Integer, java.util.Map$Entry<java.lang.String, java.lang.Character>>);
+
+  public abstract void tickReqParams(int, double, java.lang.String, int);
+
+  public abstract void newsProviders(com.ib.client.NewsProvider[]);
+
+  public abstract void newsArticle(int, int, java.lang.String);
+
+  public abstract void historicalNews(int, java.lang.String, java.lang.String, java.lang.String, java.lang.String);
+
+  public abstract void historicalNewsEnd(int, boolean);
+
+  public abstract void headTimestamp(int, java.lang.String);
+
+  public abstract void histogramData(int, java.util.List<com.ib.client.HistogramEntry>);
+
+  public abstract void historicalDataUpdate(int, com.ib.client.Bar);
+
+  public abstract void rerouteMktDataReq(int, int, java.lang.String);
+
+  public abstract void rerouteMktDepthReq(int, int, java.lang.String);
+
+  public abstract void marketRule(int, com.ib.client.PriceIncrement[]);
+
+  public abstract void pnl(int, double, double, double);
+
+  public abstract void pnlSingle(int, com.ib.client.Decimal, double, double, double, double);
+
+  public abstract void historicalTicks(int, java.util.List<com.ib.client.HistoricalTick>, boolean);
+
+  public abstract void historicalTicksBidAsk(int, java.util.List<com.ib.client.HistoricalTickBidAsk>, boolean);
+
+  public abstract void historicalTicksLast(int, java.util.List<com.ib.client.HistoricalTickLast>, boolean);
+
+  public abstract void tickByTickAllLast(int, int, long, double, com.ib.client.Decimal, com.ib.client.TickAttribLast, java.lang.String, java.lang.String);
+
+  public abstract void tickByTickBidAsk(int, long, double, double, com.ib.client.Decimal, com.ib.client.Decimal, com.ib.client.TickAttribBidAsk);
+
+  public abstract void tickByTickMidPoint(int, long, double);
+
+  public abstract void orderBound(long, int, int);
+
+  public abstract void completedOrder(com.ib.client.Contract, com.ib.client.Order, com.ib.client.OrderState);
+
+  public abstract void completedOrdersEnd();
+
+  public abstract void replaceFAEnd(int, java.lang.String);
+
+  public abstract void wshMetaData(int, java.lang.String);
+
+  public abstract void wshEventData(int, java.lang.String);
+
+  public abstract void historicalSchedule(int, java.lang.String, java.lang.String, java.lang.String, java.util.List<com.ib.client.HistoricalSession>);
+
+  public abstract void userInfo(int, java.lang.String);
+
+  public abstract void currentTimeInMillis(long);
+
+  public abstract void orderStatusProtoBuf(com.ib.client.protobuf.OrderStatusProto$OrderStatus);
+
+  public abstract void openOrderProtoBuf(com.ib.client.protobuf.OpenOrderProto$OpenOrder);
+
+  public abstract void openOrdersEndProtoBuf(com.ib.client.protobuf.OpenOrdersEndProto$OpenOrdersEnd);
+
+  public abstract void errorProtoBuf(com.ib.client.protobuf.ErrorMessageProto$ErrorMessage);
+
+  public abstract void execDetailsProtoBuf(com.ib.client.protobuf.ExecutionDetailsProto$ExecutionDetails);
+
+  public abstract void execDetailsEndProtoBuf(com.ib.client.protobuf.ExecutionDetailsEndProto$ExecutionDetailsEnd);
+}

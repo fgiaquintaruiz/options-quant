@@ -1,0 +1,813 @@
+Compiled from "EClientErrors.java"
+public class com.ib.client.EClientErrors {
+  public static final int NO_VALID_ID;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair ALREADY_CONNECTED;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair CONNECT_FAIL;
+
+  public static final com.ib.client.EClientErrors$CodeMsgPair UPDATE_TWS;
+
+  public static final com.ib.client.EClientErrors$CodeMsgPair NOT_CONNECTED;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair UNKNOWN_ID;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair UNSUPPORTED_VERSION;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair BAD_LENGTH;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair BAD_MESSAGE;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQMKT;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_CANMKT;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_ORDER;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_ACCT;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_EXEC;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_CORDER;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_OORDER;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair UNKNOWN_CONTRACT;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQCONTRACT;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQMKTDEPTH;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_CANMKTDEPTH;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_SERVER_LOG_LEVEL;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_FA_REQUEST;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_FA_REPLACE;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQSCANNER;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_CANSCANNER;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQSCANNERPARAMETERS;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQHISTDATA;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_CANHISTDATA;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQRTBARS;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_CANRTBARS;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQCURRTIME;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQFUNDDATA;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_CANFUNDDATA;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQCALCIMPLIEDVOLAT;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQCALCOPTIONPRICE;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_CANCALCIMPLIEDVOLAT;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_CANCALCOPTIONPRICE;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQGLOBALCANCEL;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQMARKETDATATYPE;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQPOSITIONS;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_CANPOSITIONS;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQACCOUNTDATA;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_CANACCOUNTDATA;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_VERIFYREQUEST;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_VERIFYMESSAGE;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_QUERYDISPLAYGROUPS;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_SUBSCRIBETOGROUPEVENTS;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_UPDATEDISPLAYGROUP;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_UNSUBSCRIBEFROMGROUPEVENTS;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_STARTAPI;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_VERIFYANDAUTHREQUEST;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_VERIFYANDAUTHMESSAGE;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQPOSITIONSMULTI;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_CANPOSITIONSMULTI;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQACCOUNTUPDATESMULTI;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_CANACCOUNTUPDATESMULTI;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQSECDEFOPTPARAMS;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQSOFTDOLLARTIERS;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQFAMILYCODES;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQMATCHINGSYMBOLS;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQMKTDEPTHEXCHANGES;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQSMARTCOMPONENTS;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQNEWSPROVIDERS;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQNEWSARTICLE;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQHISTORICALNEWS;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQHEADTIMESTAMP;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQHISTOGRAMDATA;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_CANCELHISTOGRAMDATA;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_CANCELHEADTIMESTAMP;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQMARKETRULE;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQPNL;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_CANCELPNL;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQPNLSINGLE;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_CANCELPNLSINGLE;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQHISTORICALTICKS;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQTICKBYTICKDATA;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_CANCELTICKBYTICKDATA;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQCOMPLETEDORDERS;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair INVALID_SYMBOL;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQ_WSH_META_DATA;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_CAN_WSH_META_DATA;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQ_WSH_EVENT_DATA;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_CAN_WSH_EVENT_DATA;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQ_USER_INFO;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FA_PROFILE_NOT_SUPPORTED;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_READ_MESSAGE;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair FAIL_SEND_REQCURRTIMEINMILLIS;
+
+  static final com.ib.client.EClientErrors$CodeMsgPair ERROR_ENCODING_PROTOBUF;
+
+  public com.ib.client.EClientErrors();
+    Code:
+       0: aload_0
+       1: invokespecial #1                  // Method java/lang/Object."<init>":()V
+       4: return
+    LineNumberTable:
+      line 101: 0
+      line 102: 4
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0       5     0  this   Lcom/ib/client/EClientErrors;
+
+  static {};
+    Code:
+       0: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+       3: dup
+       4: sipush        501
+       7: ldc           #9                  // String Already connected.
+       9: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+      12: putstatic     #14                 // Field ALREADY_CONNECTED:Lcom/ib/client/EClientErrors$CodeMsgPair;
+      15: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+      18: dup
+      19: sipush        502
+      22: ldc           #20                 // String Couldn\'t connect to TWS. Confirm that \"Enable ActiveX and Socket Clients\" is enabled and connection port is the same as \"Socket Port\" on the TWS \"Edit->Global Configuration...->API->Settings\" menu. Live Trading ports: TWS: 7496; IB Gateway: 4001. Simulated Trading ports for new installations of version 954.1 or newer: TWS: 7497; IB Gateway: 4002
+      24: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+      27: putstatic     #22                 // Field CONNECT_FAIL:Lcom/ib/client/EClientErrors$CodeMsgPair;
+      30: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+      33: dup
+      34: sipush        503
+      37: ldc           #25                 // String The TWS is out of date and must be upgraded.
+      39: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+      42: putstatic     #27                 // Field UPDATE_TWS:Lcom/ib/client/EClientErrors$CodeMsgPair;
+      45: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+      48: dup
+      49: sipush        504
+      52: ldc           #30                 // String Not connected
+      54: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+      57: putstatic     #32                 // Field NOT_CONNECTED:Lcom/ib/client/EClientErrors$CodeMsgPair;
+      60: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+      63: dup
+      64: sipush        505
+      67: ldc           #35                 // String Fatal Error: Unknown message id.
+      69: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+      72: putstatic     #37                 // Field UNKNOWN_ID:Lcom/ib/client/EClientErrors$CodeMsgPair;
+      75: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+      78: dup
+      79: sipush        506
+      82: ldc           #40                 // String Unsupported Version
+      84: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+      87: putstatic     #42                 // Field UNSUPPORTED_VERSION:Lcom/ib/client/EClientErrors$CodeMsgPair;
+      90: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+      93: dup
+      94: sipush        507
+      97: ldc           #45                 // String Bad Message Length
+      99: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     102: putstatic     #47                 // Field BAD_LENGTH:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     105: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     108: dup
+     109: sipush        508
+     112: ldc           #50                 // String Bad Message
+     114: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     117: putstatic     #52                 // Field BAD_MESSAGE:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     120: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     123: dup
+     124: sipush        509
+     127: ldc           #55                 // String Failed to send message -
+     129: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     132: putstatic     #57                 // Field FAIL_SEND:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     135: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     138: dup
+     139: sipush        510
+     142: ldc           #60                 // String Request Market Data Sending Error -
+     144: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     147: putstatic     #62                 // Field FAIL_SEND_REQMKT:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     150: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     153: dup
+     154: sipush        511
+     157: ldc           #65                 // String Cancel Market Data Sending Error -
+     159: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     162: putstatic     #67                 // Field FAIL_SEND_CANMKT:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     165: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     168: dup
+     169: sipush        512
+     172: ldc           #70                 // String Order Sending Error -
+     174: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     177: putstatic     #72                 // Field FAIL_SEND_ORDER:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     180: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     183: dup
+     184: sipush        513
+     187: ldc           #75                 // String Account Update Request Sending Error -
+     189: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     192: putstatic     #77                 // Field FAIL_SEND_ACCT:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     195: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     198: dup
+     199: sipush        514
+     202: ldc           #80                 // String Request For Executions Sending Error -
+     204: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     207: putstatic     #82                 // Field FAIL_SEND_EXEC:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     210: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     213: dup
+     214: sipush        515
+     217: ldc           #85                 // String Cancel Order Sending Error -
+     219: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     222: putstatic     #87                 // Field FAIL_SEND_CORDER:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     225: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     228: dup
+     229: sipush        516
+     232: ldc           #90                 // String Request Open Order Sending Error -
+     234: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     237: putstatic     #92                 // Field FAIL_SEND_OORDER:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     240: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     243: dup
+     244: sipush        517
+     247: ldc           #95                 // String Unknown contract. Verify the contract details supplied.
+     249: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     252: putstatic     #97                 // Field UNKNOWN_CONTRACT:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     255: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     258: dup
+     259: sipush        518
+     262: ldc           #100                // String Request Contract Data Sending Error -
+     264: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     267: putstatic     #102                // Field FAIL_SEND_REQCONTRACT:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     270: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     273: dup
+     274: sipush        519
+     277: ldc           #105                // String Request Market Depth Sending Error -
+     279: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     282: putstatic     #107                // Field FAIL_SEND_REQMKTDEPTH:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     285: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     288: dup
+     289: sipush        520
+     292: ldc           #110                // String Cancel Market Depth Sending Error -
+     294: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     297: putstatic     #112                // Field FAIL_SEND_CANMKTDEPTH:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     300: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     303: dup
+     304: sipush        521
+     307: ldc           #115                // String Set Server Log Level Sending Error -
+     309: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     312: putstatic     #117                // Field FAIL_SEND_SERVER_LOG_LEVEL:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     315: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     318: dup
+     319: sipush        522
+     322: ldc           #120                // String FA Information Request Sending Error -
+     324: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     327: putstatic     #122                // Field FAIL_SEND_FA_REQUEST:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     330: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     333: dup
+     334: sipush        523
+     337: ldc           #125                // String FA Information Replace Sending Error -
+     339: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     342: putstatic     #127                // Field FAIL_SEND_FA_REPLACE:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     345: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     348: dup
+     349: sipush        524
+     352: ldc           #130                // String Request Scanner Subscription Sending Error -
+     354: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     357: putstatic     #132                // Field FAIL_SEND_REQSCANNER:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     360: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     363: dup
+     364: sipush        525
+     367: ldc           #135                // String Cancel Scanner Subscription Sending Error -
+     369: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     372: putstatic     #137                // Field FAIL_SEND_CANSCANNER:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     375: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     378: dup
+     379: sipush        526
+     382: ldc           #140                // String Request Scanner Parameter Sending Error -
+     384: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     387: putstatic     #142                // Field FAIL_SEND_REQSCANNERPARAMETERS:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     390: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     393: dup
+     394: sipush        527
+     397: ldc           #145                // String Request Historical Data Sending Error -
+     399: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     402: putstatic     #147                // Field FAIL_SEND_REQHISTDATA:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     405: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     408: dup
+     409: sipush        528
+     412: ldc           #145                // String Request Historical Data Sending Error -
+     414: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     417: putstatic     #150                // Field FAIL_SEND_CANHISTDATA:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     420: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     423: dup
+     424: sipush        529
+     427: ldc           #153                // String Request Real-time Bar Data Sending Error -
+     429: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     432: putstatic     #155                // Field FAIL_SEND_REQRTBARS:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     435: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     438: dup
+     439: sipush        530
+     442: ldc           #158                // String Cancel Real-time Bar Data Sending Error -
+     444: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     447: putstatic     #160                // Field FAIL_SEND_CANRTBARS:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     450: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     453: dup
+     454: sipush        531
+     457: ldc           #163                // String Request Current Time Sending Error -
+     459: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     462: putstatic     #165                // Field FAIL_SEND_REQCURRTIME:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     465: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     468: dup
+     469: sipush        532
+     472: ldc           #168                // String Request Fundamental Data Sending Error -
+     474: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     477: putstatic     #170                // Field FAIL_SEND_REQFUNDDATA:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     480: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     483: dup
+     484: sipush        533
+     487: ldc           #173                // String Cancel Fundamental Data Sending Error -
+     489: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     492: putstatic     #175                // Field FAIL_SEND_CANFUNDDATA:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     495: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     498: dup
+     499: sipush        534
+     502: ldc           #178                // String Request Calculate Implied Volatility Sending Error -
+     504: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     507: putstatic     #180                // Field FAIL_SEND_REQCALCIMPLIEDVOLAT:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     510: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     513: dup
+     514: sipush        535
+     517: ldc           #183                // String Request Calculate Option Price Sending Error -
+     519: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     522: putstatic     #185                // Field FAIL_SEND_REQCALCOPTIONPRICE:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     525: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     528: dup
+     529: sipush        536
+     532: ldc           #188                // String Cancel Calculate Implied Volatility Sending Error -
+     534: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     537: putstatic     #190                // Field FAIL_SEND_CANCALCIMPLIEDVOLAT:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     540: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     543: dup
+     544: sipush        537
+     547: ldc           #193                // String Cancel Calculate Option Price Sending Error -
+     549: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     552: putstatic     #195                // Field FAIL_SEND_CANCALCOPTIONPRICE:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     555: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     558: dup
+     559: sipush        538
+     562: ldc           #198                // String Request Global Cancel Sending Error -
+     564: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     567: putstatic     #200                // Field FAIL_SEND_REQGLOBALCANCEL:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     570: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     573: dup
+     574: sipush        539
+     577: ldc           #203                // String Request Market Data Type Sending Error -
+     579: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     582: putstatic     #205                // Field FAIL_SEND_REQMARKETDATATYPE:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     585: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     588: dup
+     589: sipush        540
+     592: ldc           #208                // String Request Positions Sending Error -
+     594: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     597: putstatic     #210                // Field FAIL_SEND_REQPOSITIONS:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     600: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     603: dup
+     604: sipush        541
+     607: ldc           #213                // String Cancel Positions Sending Error -
+     609: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     612: putstatic     #215                // Field FAIL_SEND_CANPOSITIONS:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     615: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     618: dup
+     619: sipush        542
+     622: ldc           #218                // String Request Account Data Sending Error -
+     624: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     627: putstatic     #220                // Field FAIL_SEND_REQACCOUNTDATA:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     630: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     633: dup
+     634: sipush        543
+     637: ldc           #223                // String Cancel Account Data Sending Error -
+     639: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     642: putstatic     #225                // Field FAIL_SEND_CANACCOUNTDATA:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     645: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     648: dup
+     649: sipush        544
+     652: ldc           #228                // String Verify Request Sending Error -
+     654: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     657: putstatic     #230                // Field FAIL_SEND_VERIFYREQUEST:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     660: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     663: dup
+     664: sipush        545
+     667: ldc           #233                // String Verify Message Sending Error -
+     669: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     672: putstatic     #235                // Field FAIL_SEND_VERIFYMESSAGE:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     675: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     678: dup
+     679: sipush        546
+     682: ldc           #238                // String Query Display Groups Sending Error -
+     684: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     687: putstatic     #240                // Field FAIL_SEND_QUERYDISPLAYGROUPS:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     690: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     693: dup
+     694: sipush        547
+     697: ldc           #243                // String Subscribe To Group Events Sending Error -
+     699: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     702: putstatic     #245                // Field FAIL_SEND_SUBSCRIBETOGROUPEVENTS:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     705: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     708: dup
+     709: sipush        548
+     712: ldc           #248                // String Update Display Group Sending Error -
+     714: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     717: putstatic     #250                // Field FAIL_SEND_UPDATEDISPLAYGROUP:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     720: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     723: dup
+     724: sipush        549
+     727: ldc           #253                // String Unsubscribe From Group Events Sending Error -
+     729: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     732: putstatic     #255                // Field FAIL_SEND_UNSUBSCRIBEFROMGROUPEVENTS:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     735: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     738: dup
+     739: sipush        550
+     742: ldc_w         #258                // String Start API Sending Error -
+     745: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     748: putstatic     #260                // Field FAIL_SEND_STARTAPI:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     751: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     754: dup
+     755: sipush        551
+     758: ldc_w         #263                // String Verify And Auth Request Sending Error -
+     761: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     764: putstatic     #265                // Field FAIL_SEND_VERIFYANDAUTHREQUEST:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     767: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     770: dup
+     771: sipush        552
+     774: ldc_w         #268                // String Verify And Auth Message Sending Error -
+     777: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     780: putstatic     #270                // Field FAIL_SEND_VERIFYANDAUTHMESSAGE:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     783: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     786: dup
+     787: sipush        553
+     790: ldc_w         #273                // String Request Positions Multi Sending Error -
+     793: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     796: putstatic     #275                // Field FAIL_SEND_REQPOSITIONSMULTI:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     799: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     802: dup
+     803: sipush        554
+     806: ldc_w         #278                // String Cancel Positions Multi Sending Error -
+     809: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     812: putstatic     #280                // Field FAIL_SEND_CANPOSITIONSMULTI:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     815: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     818: dup
+     819: sipush        555
+     822: ldc_w         #283                // String Request Account Updates Multi Sending Error -
+     825: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     828: putstatic     #285                // Field FAIL_SEND_REQACCOUNTUPDATESMULTI:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     831: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     834: dup
+     835: sipush        556
+     838: ldc_w         #288                // String Cancel Account Updates Multi Sending Error -
+     841: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     844: putstatic     #290                // Field FAIL_SEND_CANACCOUNTUPDATESMULTI:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     847: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     850: dup
+     851: sipush        557
+     854: ldc_w         #293                // String Request Security Definition Option Params Sending Error -
+     857: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     860: putstatic     #295                // Field FAIL_SEND_REQSECDEFOPTPARAMS:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     863: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     866: dup
+     867: sipush        558
+     870: ldc_w         #298                // String Request Soft Dollar Tiers Sending Error -
+     873: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     876: putstatic     #300                // Field FAIL_SEND_REQSOFTDOLLARTIERS:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     879: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     882: dup
+     883: sipush        559
+     886: ldc_w         #303                // String Request Family Codes Sending Error -
+     889: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     892: putstatic     #305                // Field FAIL_SEND_REQFAMILYCODES:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     895: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     898: dup
+     899: sipush        560
+     902: ldc_w         #308                // String Request Matching Symbols Sending Error -
+     905: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     908: putstatic     #310                // Field FAIL_SEND_REQMATCHINGSYMBOLS:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     911: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     914: dup
+     915: sipush        561
+     918: ldc_w         #313                // String Request Market Depth Exchanges Sending Error -
+     921: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     924: putstatic     #315                // Field FAIL_SEND_REQMKTDEPTHEXCHANGES:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     927: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     930: dup
+     931: sipush        562
+     934: ldc_w         #318                // String Request Smart Components Sending Error -
+     937: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     940: putstatic     #320                // Field FAIL_SEND_REQSMARTCOMPONENTS:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     943: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     946: dup
+     947: sipush        563
+     950: ldc_w         #323                // String Request News Providers Sending Error -
+     953: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     956: putstatic     #325                // Field FAIL_SEND_REQNEWSPROVIDERS:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     959: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     962: dup
+     963: sipush        564
+     966: ldc_w         #328                // String Request News Article Sending Error -
+     969: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     972: putstatic     #330                // Field FAIL_SEND_REQNEWSARTICLE:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     975: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     978: dup
+     979: sipush        565
+     982: ldc_w         #333                // String Request Historical News Sending Error -
+     985: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+     988: putstatic     #335                // Field FAIL_SEND_REQHISTORICALNEWS:Lcom/ib/client/EClientErrors$CodeMsgPair;
+     991: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+     994: dup
+     995: sipush        566
+     998: ldc_w         #338                // String Request Head Time Stamp Sending Error -
+    1001: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1004: putstatic     #340                // Field FAIL_SEND_REQHEADTIMESTAMP:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1007: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1010: dup
+    1011: sipush        567
+    1014: ldc_w         #343                // String Request Histogram Data Sending Error -
+    1017: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1020: putstatic     #345                // Field FAIL_SEND_REQHISTOGRAMDATA:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1023: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1026: dup
+    1027: sipush        568
+    1030: ldc_w         #348                // String Cancel Request Histogram Data Sending Error -
+    1033: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1036: putstatic     #350                // Field FAIL_SEND_CANCELHISTOGRAMDATA:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1039: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1042: dup
+    1043: sipush        569
+    1046: ldc_w         #353                // String Cancel Head Time Stamp Sending Error -
+    1049: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1052: putstatic     #355                // Field FAIL_SEND_CANCELHEADTIMESTAMP:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1055: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1058: dup
+    1059: sipush        570
+    1062: ldc_w         #358                // String Request Market Rule Sending Error -
+    1065: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1068: putstatic     #360                // Field FAIL_SEND_REQMARKETRULE:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1071: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1074: dup
+    1075: sipush        571
+    1078: ldc_w         #363                // String Request PnL Sending Error -
+    1081: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1084: putstatic     #365                // Field FAIL_SEND_REQPNL:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1087: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1090: dup
+    1091: sipush        572
+    1094: ldc_w         #368                // String Cancel PnL Sending Error -
+    1097: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1100: putstatic     #370                // Field FAIL_SEND_CANCELPNL:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1103: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1106: dup
+    1107: sipush        573
+    1110: ldc_w         #373                // String Request PnL Single Error -
+    1113: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1116: putstatic     #375                // Field FAIL_SEND_REQPNLSINGLE:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1119: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1122: dup
+    1123: sipush        574
+    1126: ldc_w         #378                // String Cancel PnL Single Sending Error -
+    1129: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1132: putstatic     #380                // Field FAIL_SEND_CANCELPNLSINGLE:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1135: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1138: dup
+    1139: sipush        575
+    1142: ldc_w         #383                // String Request Historical Ticks Error -
+    1145: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1148: putstatic     #385                // Field FAIL_SEND_REQHISTORICALTICKS:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1151: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1154: dup
+    1155: sipush        576
+    1158: ldc_w         #388                // String Request Tick-By-Tick Data Sending Error -
+    1161: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1164: putstatic     #390                // Field FAIL_SEND_REQTICKBYTICKDATA:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1167: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1170: dup
+    1171: sipush        577
+    1174: ldc_w         #393                // String Cancel Tick-By-Tick Data Sending Error -
+    1177: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1180: putstatic     #395                // Field FAIL_SEND_CANCELTICKBYTICKDATA:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1183: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1186: dup
+    1187: sipush        578
+    1190: ldc_w         #398                // String Request Completed Orders Sending Error -
+    1193: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1196: putstatic     #400                // Field FAIL_SEND_REQCOMPLETEDORDERS:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1199: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1202: dup
+    1203: sipush        579
+    1206: ldc_w         #403                // String Invalid symbol in string -
+    1209: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1212: putstatic     #405                // Field INVALID_SYMBOL:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1215: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1218: dup
+    1219: sipush        580
+    1222: ldc_w         #408                // String Request WSH Meta Data Sending Error -
+    1225: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1228: putstatic     #410                // Field FAIL_SEND_REQ_WSH_META_DATA:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1231: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1234: dup
+    1235: sipush        581
+    1238: ldc_w         #413                // String Cancel WSH Meta Data Sending Error -
+    1241: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1244: putstatic     #415                // Field FAIL_SEND_CAN_WSH_META_DATA:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1247: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1250: dup
+    1251: sipush        582
+    1254: ldc_w         #418                // String Request WSH Event Data Sending Error -
+    1257: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1260: putstatic     #420                // Field FAIL_SEND_REQ_WSH_EVENT_DATA:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1263: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1266: dup
+    1267: sipush        583
+    1270: ldc_w         #423                // String Cancel WSH Event Data Sending Error -
+    1273: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1276: putstatic     #425                // Field FAIL_SEND_CAN_WSH_EVENT_DATA:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1279: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1282: dup
+    1283: sipush        584
+    1286: ldc_w         #428                // String Request User Info Sending Error -
+    1289: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1292: putstatic     #430                // Field FAIL_SEND_REQ_USER_INFO:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1295: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1298: dup
+    1299: sipush        585
+    1302: ldc_w         #433                // String FA Profile is not supported anymore, use FA Group instead -
+    1305: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1308: putstatic     #435                // Field FA_PROFILE_NOT_SUPPORTED:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1311: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1314: dup
+    1315: sipush        586
+    1318: ldc_w         #438                // String Failed to read message because not connected
+    1321: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1324: putstatic     #440                // Field FAIL_READ_MESSAGE:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1327: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1330: dup
+    1331: sipush        587
+    1334: ldc_w         #443                // String Request Current Time In Millis Sending Error -
+    1337: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1340: putstatic     #445                // Field FAIL_SEND_REQCURRTIMEINMILLIS:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1343: new           #7                  // class com/ib/client/EClientErrors$CodeMsgPair
+    1346: dup
+    1347: sipush        588
+    1350: ldc_w         #448                // String Error encoding protobuf -
+    1353: invokespecial #11                 // Method com/ib/client/EClientErrors$CodeMsgPair."<init>":(ILjava/lang/String;)V
+    1356: putstatic     #450                // Field ERROR_ENCODING_PROTOBUF:Lcom/ib/client/EClientErrors$CodeMsgPair;
+    1359: return
+    LineNumberTable:
+      line 9: 0
+      line 10: 15
+      line 14: 30
+      line 15: 45
+      line 16: 60
+      line 17: 75
+      line 18: 90
+      line 19: 105
+      line 20: 120
+      line 21: 135
+      line 22: 150
+      line 23: 165
+      line 24: 180
+      line 25: 195
+      line 26: 210
+      line 27: 225
+      line 28: 240
+      line 29: 255
+      line 30: 270
+      line 31: 285
+      line 32: 300
+      line 33: 315
+      line 34: 330
+      line 35: 345
+      line 36: 360
+      line 37: 375
+      line 38: 390
+      line 39: 405
+      line 40: 420
+      line 41: 435
+      line 42: 450
+      line 43: 465
+      line 44: 480
+      line 45: 495
+      line 46: 510
+      line 47: 525
+      line 48: 540
+      line 49: 555
+      line 50: 570
+      line 51: 585
+      line 52: 600
+      line 53: 615
+      line 54: 630
+      line 55: 645
+      line 56: 660
+      line 57: 675
+      line 58: 690
+      line 59: 705
+      line 60: 720
+      line 61: 735
+      line 62: 751
+      line 63: 767
+      line 64: 783
+      line 65: 799
+      line 66: 815
+      line 67: 831
+      line 68: 847
+      line 69: 863
+      line 70: 879
+      line 71: 895
+      line 72: 911
+      line 73: 927
+      line 74: 943
+      line 75: 959
+      line 76: 975
+      line 77: 991
+      line 78: 1007
+      line 79: 1023
+      line 80: 1039
+      line 81: 1055
+      line 82: 1071
+      line 83: 1087
+      line 84: 1103
+      line 85: 1119
+      line 86: 1135
+      line 87: 1151
+      line 88: 1167
+      line 89: 1183
+      line 90: 1199
+      line 91: 1215
+      line 92: 1231
+      line 93: 1247
+      line 94: 1263
+      line 95: 1279
+      line 96: 1295
+      line 97: 1311
+      line 98: 1327
+      line 99: 1343
+}

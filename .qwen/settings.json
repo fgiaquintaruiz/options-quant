@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(C:\\Users\\FGIAQUINTA\\Downloads/**)",
+      "Bash(findstr *)",
+      "Bash(tasklist)",
+      "Bash(type *)",
+      "Bash(.\\gradlew *)",
+      "Bash(ping *)",
+      "mcp__idea__search_symbol",
+      "Bash(copy *)",
+      "Bash(gradlew.bat *)",
+      "mcp__idea__get_run_configurations",
+      "mcp__idea__execute_run_configuration",
+      "Bash(dir *)",
+      "mcp__idea__get_file_text_by_path"
+    ]
+  },
+  "$version": 3
+}

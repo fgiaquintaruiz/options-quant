@@ -1,0 +1,21 @@
+[versions]
+spring-boot = "4.0.4"
+java = "25"
+lombok = "1.18.42"
+slf4j = "2.0.16"
+ta4j = "0.15"
+fastutil = "8.5.18"
+jackson = "2.19.0"
+
+[libraries]
+spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web", version.ref = "spring-boot" }
+spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator", version.ref = "spring-boot" }
+lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+ta4j-core = { module = "org.ta4j:ta4j-core", version.ref = "ta4j" }
+fastutil = { module = "it.unimi.dsi:fastutil", version.ref = "fastutil" }
+jackson-yaml = { module = "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml", version.ref = "jackson" }
+jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
