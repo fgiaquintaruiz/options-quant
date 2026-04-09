@@ -5,14 +5,12 @@ import com.fgiaquinta.optionsquant.domain.Candle;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.*;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
-import com.fgiaquinta.optionsquant.strategy.indicator.WordenStochasticIndicator;
 import com.fgiaquinta.optionsquant.strategy.model.TradePlan;
 import com.fgiaquinta.optionsquant.strategy.utils.RiskCalculator;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.time.ZoneId;
 import java.util.*;
@@ -20,29 +18,38 @@ import java.util.*;
 /**
  * Scans all configured tickers against all 12 strategies.
  * Returns triggered signals with trade plans.
+ * Auto-downloads fresh data if CSV is missing or stale.
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class StrategyScannerService {
 
     private final CandleCsvService csvService;
+    private final IbkrService ibkrService;
     private final IbkrProperties ibkrProperties;
 
     private final List<TradingStrategy> callStrategies;
     private final List<TradingStrategy> putStrategies;
 
-    public StrategyScannerService(CandleCsvService csvService, IbkrProperties ibkrProperties) {
+    // Maximum age for data to be considered "fresh"
+    private static final Map<TimeFrame, Duration> FRESHNESS_THRESHOLDS = Map.of(
+            TimeFrame.MIN_5, Duration.ofMinutes(15),
+            TimeFrame.MIN_15, Duration.ofMinutes(30),
+            TimeFrame.HOUR_1, Duration.ofHours(2),
+            TimeFrame.DAY_1, Duration.ofHours(26)
+    );
+
+    public StrategyScannerService(CandleCsvService csvService, IbkrService ibkrService, IbkrProperties ibkrProperties) {
         this.csvService = csvService;
+        this.ibkrService = ibkrService;
         this.ibkrProperties = ibkrProperties;
 
-        // Initialize strategies with WordenStochastic for C5/P5
         this.callStrategies = List.of(
                 new C1SqueezeCallStrategy(),
                 new C2TrendCallStrategy(),
                 new C3BounceCallStrategy(),
                 new C4OpeningCallStrategy(),
-                new C5ContinuationCallStrategy(), // uses volume surge fallback
+                new C5ContinuationCallStrategy(),
                 new C6ReversalCallStrategy()
         );
         this.putStrategies = List.of(
@@ -50,23 +57,28 @@ public class StrategyScannerService {
                 new P2TrendPutStrategy(),
                 new P3BouncePutStrategy(),
                 new P4OpeningPutStrategy(),
-                new P5ContinuationPutStrategy(), // uses volume surge fallback
+                new P5ContinuationPutStrategy(),
                 new P6ReversalPutStrategy()
         );
     }
 
     /**
      * Scans all configured tickers against all strategies.
+     * Auto-downloads fresh data if CSV is missing or stale.
      */
-    public ScanResult scanAll(boolean includeTradePlans) {
-        log.info(">>> Scanning {} tickers against 12 strategies", ibkrProperties.tickers().size());
+    public ScanResult scanAll(boolean includeTradePlans, boolean autoRefreshData) {
+        log.info(">>> Scanning {} tickers against 12 strategies (autoRefresh={})", ibkrProperties.tickers().size(), autoRefreshData);
         long startTime = System.currentTimeMillis();
 
         List<Signal> allSignals = new ArrayList<>();
 
         for (String ticker : ibkrProperties.tickers()) {
-            List<Signal> tickerSignals = scanTicker(ticker, includeTradePlans);
-            allSignals.addAll(tickerSignals);
+            try {
+                List<Signal> tickerSignals = scanTicker(ticker, includeTradePlans, autoRefreshData);
+                allSignals.addAll(tickerSignals);
+            } catch (Exception e) {
+                log.error("Error scanning ticker {}: {}", ticker, e.getMessage());
+            }
         }
 
         long elapsed = System.currentTimeMillis() - startTime;
@@ -77,28 +89,62 @@ public class StrategyScannerService {
     }
 
     /**
+     * Scans all tickers with auto-refresh enabled by default.
+     */
+    public ScanResult scanAll(boolean includeTradePlans) {
+        return scanAll(includeTradePlans, true);
+    }
+
+    /**
      * Scans a single ticker against all strategies.
      */
-    public List<Signal> scanTicker(String ticker, boolean includeTradePlans) {
-        log.debug("Scanning ticker: {}", ticker);
+    public List<Signal> scanTicker(String ticker, boolean includeTradePlans, boolean autoRefreshData) {
+        log.debug("Scanning ticker: {} (autoRefresh={})", ticker, autoRefreshData);
 
-        // Load all timeframes from CSV
+        // Load all timeframes from CSV, auto-download if stale/missing
         Map<TimeFrame, List<Candle>> candlesByTimeframe = new EnumMap<>(TimeFrame.class);
+        boolean needsDownload = false;
+
         for (TimeFrame tf : TimeFrame.values()) {
             List<Candle> candles = csvService.loadFromCsv(ticker, tf);
-            if (!candles.isEmpty()) {
+            if (candles.isEmpty()) {
+                log.debug("No CSV data for {} [{}]", ticker, tf);
+                needsDownload = true;
+            } else if (autoRefreshData && isStale(candles, tf)) {
+                Duration threshold = FRESHNESS_THRESHOLDS.get(tf);
+                log.info("Data stale for {} [{}]: last candle {} vs threshold {}", ticker, tf, getLastTimestamp(candles), threshold);
+                needsDownload = true;
+            } else {
                 candlesByTimeframe.put(tf, candles);
             }
         }
 
+        // Auto-download missing or stale data
+        if (needsDownload && autoRefreshData) {
+            log.info("Auto-refreshing data for ticker: {}", ticker);
+            try {
+                Map<TimeFrame, List<Candle>> freshData = ibkrService.downloadAllTimeframes(ticker);
+                freshData.forEach((tf, candles) -> {
+                    if (!candles.isEmpty()) {
+                        csvService.saveToCsv(ticker, tf, candles);
+                        candlesByTimeframe.put(tf, candles);
+                    }
+                });
+                log.info("Refreshed {} timeframes for {}", freshData.size(), ticker);
+            } catch (Exception e) {
+                log.error("Failed to download data for {}: {}", ticker, e.getMessage());
+                // Fall back to whatever cached data we have
+            }
+        }
+
         if (candlesByTimeframe.isEmpty()) {
-            log.debug("No data found for ticker {}", ticker);
+            log.debug("No usable data for ticker {}", ticker);
             return Collections.emptyList();
         }
 
         StrategyData data = new StrategyData(candlesByTimeframe);
         if (!data.hasAllTimeframes()) {
-            log.debug("Incomplete data for ticker {} (missing timeframes)", ticker);
+            log.debug("Incomplete data for ticker {} (have {}, need 4 timeframes)", ticker, candlesByTimeframe.keySet());
             return Collections.emptyList();
         }
 
@@ -145,6 +191,29 @@ public class StrategyScannerService {
 
         return signals;
     }
+
+    /**
+     * Scans a single ticker with auto-refresh enabled by default.
+     */
+    public List<Signal> scanTicker(String ticker, boolean includeTradePlans) {
+        return scanTicker(ticker, includeTradePlans, true);
+    }
+
+    // ===== Data Freshness Checks =====
+
+    private boolean isStale(List<Candle> candles, TimeFrame tf) {
+        if (candles.isEmpty()) return true;
+        ZonedDateTime lastTimestamp = candles.get(candles.size() - 1).timestamp();
+        Duration threshold = FRESHNESS_THRESHOLDS.getOrDefault(tf, Duration.ofHours(2));
+        Duration age = Duration.between(lastTimestamp, ZonedDateTime.now(ZoneId.of("America/New_York")));
+        return age.compareTo(threshold) > 0;
+    }
+
+    private ZonedDateTime getLastTimestamp(List<Candle> candles) {
+        return candles.get(candles.size() - 1).timestamp();
+    }
+
+    // ===== Helpers =====
 
     private ZonedDateTime getLatestTimestamp(StrategyData data) {
         ZonedDateTime latest = null;
