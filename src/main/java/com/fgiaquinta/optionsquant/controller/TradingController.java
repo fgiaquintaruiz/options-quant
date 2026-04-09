@@ -85,11 +85,13 @@ public class TradingController {
     public ResponseEntity<AccountStatusResponse> accountStatus() {
         log.debug(">>> GET /api/trading/account-status");
         double balance = tradingService.getAccountBalance();
-        double riskLimit = balance * 0.02;
+        double riskPct = tradingService.getRiskPerTradePct();
+        double riskLimit = balance * riskPct;
 
         AccountStatusResponse response = new AccountStatusResponse(
                 balance,
                 riskLimit,
+                riskPct * 100,
                 tradingService.getActiveTradeCount(),
                 tradingService.canOpenNewTrade(3)
         );
@@ -111,6 +113,7 @@ public class TradingController {
         AccountStatusResponse response = new AccountStatusResponse(
                 balance,
                 balance * 0.02,
+                tradingService.getRiskPerTradePct() * 100,
                 tradingService.getActiveTradeCount(),
                 true
         );
@@ -122,6 +125,7 @@ public class TradingController {
     public record AccountStatusResponse(
             double balance,
             double riskPerTrade,
+            double riskPerTradePct,
             int activeTrades,
             boolean canTrade
     ) {}

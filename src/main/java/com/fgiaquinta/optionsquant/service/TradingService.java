@@ -217,4 +217,8 @@ public class TradingService {
     public void connectAccountManager() {
         accountManager.connect();
     }
+
+    public double getRiskPerTradePct() {
+        return ibkrProperties.riskPerTradePct();
+    }
 }

@@ -43,6 +43,7 @@ ibkr:
   auto-execute: true
   account-id: "DUN598126"
   default-qty: 10
+  risk-per-trade-pct: 0.02
   tickers:
     - SPY
     - QQQ

@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Tracks IBKR account balance and calculates position sizing based on risk.
+ * Tracks IBKR account balance and calculates position sizing based on configurable risk %.
  * Uses IBKR's account updates stream to get real NetLiquidation value.
  */
 @Slf4j
@@ -48,7 +48,6 @@ public class AccountManager {
             @Override
             public void nextValidId(int orderId) {
                 log.info("AccountManager connected, subscribing to account updates");
-                // Subscribe to account updates (empty string = default account)
                 client.reqAccountUpdates(true, "");
             }
 
@@ -66,7 +65,6 @@ public class AccountManager {
 
             @Override
             public void error(int id, long timestamp, int errorCode, String errorMsg, String advancedOrderRejectJson) {
-                // Skip informational messages
                 if (errorCode == 2104 || errorCode == 2106 || errorCode == 2158) return;
                 log.debug("AccountManager IBKR error: code={}, msg={}", errorCode, errorMsg);
             }
@@ -80,7 +78,6 @@ public class AccountManager {
             return;
         }
 
-        // Start EReader
         final EReader reader = new EReader(client, signal);
         reader.start();
         new Thread(() -> {
@@ -96,15 +93,15 @@ public class AccountManager {
      */
     public void updateBalance(double balance) {
         this.currentBalance = balance;
-        double riskPerTrade = balance * 0.02; // 2% risk
-        log.info("💰 Account balance updated: ${,.2f} | 2% risk limit: ${,.2f}", balance, riskPerTrade);
+        double riskPerTrade = balance * ibkrProperties.riskPerTradePct();
+        log.info("💰 Account balance: $%.2f | risk limit (%.0f%%): $%.2f",
+                balance, ibkrProperties.riskPerTradePct() * 100, riskPerTrade);
     }
 
     /**
-     * Calculates the number of option contracts to buy based on 2% risk rule.
+     * Calculates the number of option contracts to buy based on configurable risk %.
      *
      * Formula: qty = (balance * riskPct) / (|entry - SL| * 100)
-     * Where 100 is the options multiplier.
      *
      * @param entryPrice Entry price per contract
      * @param slPrice Stop loss price per contract
@@ -112,55 +109,40 @@ public class AccountManager {
      */
     public int calculateQuantity(double entryPrice, double slPrice) {
         if (currentBalance <= 0) {
-            log.warn("⚠️ Account balance is 0 or not synced yet. Cannot calculate position size.");
+            log.warn("⚠️ Account balance is 0 or not synced yet.");
             return 0;
         }
 
-        double riskPct = 0.02; // 2% of account
+        double riskPct = ibkrProperties.riskPerTradePct();
         double maxRiskDollars = currentBalance * riskPct;
         double riskPerContract = Math.abs(entryPrice - slPrice) * 100.0;
 
         if (riskPerContract == 0) {
-            log.warn("Risk per contract is 0 (entry == SL), cannot calculate quantity");
+            log.warn("Risk per contract is 0 (entry == SL)");
             return 0;
         }
 
         int qty = (int) Math.floor(maxRiskDollars / riskPerContract);
 
-        // Ensure minimum of 1 contract if risk is reasonable
         if (qty < 1 && maxRiskDollars >= riskPerContract) {
             qty = 1;
         }
 
-        log.info("📐 Position sizing: balance=${,.2f} | 2% risk=${,.2f} | risk/contract=${,.2f} | qty={}",
-                currentBalance, maxRiskDollars, riskPerContract, qty);
+        log.info("📐 Position sizing: balance=$%.2f | risk=%.0f%%= $%.2f | risk/contract=$%.2f | qty=%d",
+                currentBalance, riskPct * 100, maxRiskDollars, riskPerContract, qty);
 
         return qty;
     }
 
-    /**
-     * Checks if we can open a new trade based on concurrent trade limits.
-     */
     public boolean canOpenNewTrade(int maxConcurrent) {
         if (maxConcurrent <= 0) return true;
         return activeTrades.get() < maxConcurrent;
     }
 
-    public void addActiveTrade() {
-        activeTrades.incrementAndGet();
-    }
-
-    public void removeActiveTrade() {
-        activeTrades.decrementAndGet();
-    }
-
-    public int getActiveTradeCount() {
-        return activeTrades.get();
-    }
-
-    public double getCurrentBalance() {
-        return currentBalance;
-    }
+    public void addActiveTrade() { activeTrades.incrementAndGet(); }
+    public void removeActiveTrade() { activeTrades.decrementAndGet(); }
+    public int getActiveTradeCount() { return activeTrades.get(); }
+    public double getCurrentBalance() { return currentBalance; }
 
     public void disconnect() {
         if (client != null && client.isConnected()) {

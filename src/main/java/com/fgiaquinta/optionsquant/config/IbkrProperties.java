@@ -15,11 +15,6 @@ public record IbkrProperties(
         List<String> tickers,
         boolean autoExecute,
         String accountId,
-        int defaultQty
-) {
-    public IbkrProperties {
-        if (autoExecute == false) {
-            // Default is false for safety - paper trading first
-        }
-    }
-}
+        int defaultQty,
+        double riskPerTradePct
+) {}
