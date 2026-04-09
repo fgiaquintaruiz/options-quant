@@ -40,6 +40,9 @@ dependencies {
     // SLF4J (provided by spring-boot-starter)
     implementation(libs.slf4j.api)
 
+    // TA4J (Technical Analysis for Java - used by strategies)
+    implementation("org.ta4j:ta4j-core:0.16")
+
     // Testing
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
