@@ -20,17 +20,18 @@ public class TradingController {
 
     /**
      * Scans all tickers and optionally auto-executes signals.
-     * POST /api/trading/scan-and-execute?autoExecute=true&qty=1
+     * POST /api/trading/scan-and-execute?autoExecute=true&qty=1&maxConcurrent=3
      */
     @Timed(value = "trading.scanAndExecute", description = "Scan and optionally execute trades")
     @PostMapping("/scan-and-execute")
     public ResponseEntity<TradingService.TradingResult> scanAndExecute(
             @RequestParam(defaultValue = "false") boolean autoExecute,
-            @RequestParam(defaultValue = "0") int qty
+            @RequestParam(defaultValue = "0") int qty,
+            @RequestParam(defaultValue = "3") int maxConcurrent
     ) {
-        log.info(">>> POST /api/trading/scan-and-execute autoExecute={} qty={}", autoExecute, qty);
+        log.info(">>> POST /api/trading/scan-and-execute autoExecute={} qty={} maxConcurrent={}", autoExecute, qty, maxConcurrent);
 
-        TradingService.TradingResult result = tradingService.scanAndExecute(autoExecute, qty);
+        TradingService.TradingResult result = tradingService.scanAndExecute(autoExecute, qty, maxConcurrent);
 
         log.info("<<< POST /api/trading/scan-and-execute - {} signals, {} executions",
                 result.scanResult().totalSignals(), result.executions().size());
@@ -75,4 +76,53 @@ public class TradingController {
         log.info("<<< GET /api/trading/check-options - ticker={} success={}", ticker, result.success());
         return ResponseEntity.ok(result);
     }
+
+    /**
+     * Get account status: balance, active trades, 2% risk limit.
+     * GET /api/trading/account-status
+     */
+    @GetMapping("/account-status")
+    public ResponseEntity<AccountStatusResponse> accountStatus() {
+        log.debug(">>> GET /api/trading/account-status");
+        double balance = tradingService.getAccountBalance();
+        double riskLimit = balance * 0.02;
+
+        AccountStatusResponse response = new AccountStatusResponse(
+                balance,
+                riskLimit,
+                tradingService.getActiveTradeCount(),
+                tradingService.canOpenNewTrade(3)
+        );
+
+        log.debug("<<< GET /api/trading/account-status - balance=${,.2f}, active={}", balance, response.activeTrades());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Connect to IBKR to sync account balance.
+     * POST /api/trading/connect-account
+     */
+    @PostMapping("/connect-account")
+    public ResponseEntity<AccountStatusResponse> connectAccount() {
+        log.info(">>> POST /api/trading/connect-account");
+        tradingService.connectAccountManager();
+
+        double balance = tradingService.getAccountBalance();
+        AccountStatusResponse response = new AccountStatusResponse(
+                balance,
+                balance * 0.02,
+                tradingService.getActiveTradeCount(),
+                true
+        );
+
+        log.info("<<< POST /api/trading/connect-account - balance=${,.2f}", balance);
+        return ResponseEntity.ok(response);
+    }
+
+    public record AccountStatusResponse(
+            double balance,
+            double riskPerTrade,
+            int activeTrades,
+            boolean canTrade
+    ) {}
 }

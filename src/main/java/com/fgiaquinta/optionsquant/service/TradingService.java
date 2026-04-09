@@ -18,11 +18,14 @@ public class TradingService {
 
     private final StrategyScannerService scannerService;
     private final OrderExecutionService orderExecutionService;
+    private final AccountManager accountManager;
     private final IbkrProperties ibkrProperties;
 
-    public TradingService(StrategyScannerService scannerService, OrderExecutionService orderExecutionService, IbkrProperties ibkrProperties) {
+    public TradingService(StrategyScannerService scannerService, OrderExecutionService orderExecutionService,
+                          AccountManager accountManager, IbkrProperties ibkrProperties) {
         this.scannerService = scannerService;
         this.orderExecutionService = orderExecutionService;
+        this.accountManager = accountManager;
         this.ibkrProperties = ibkrProperties;
     }
 
@@ -30,11 +33,12 @@ public class TradingService {
      * Scans all tickers and optionally auto-executes signals.
      *
      * @param autoExecute If true, places bracket orders for all signals (paper or live based on config)
-     * @param qty Number of contracts per trade (overrides default if > 0)
+     * @param qty Number of contracts per trade (overrides account-based calc if > 0)
+     * @param maxConcurrentTrades Max concurrent open positions (0 = unlimited)
      * @return Scan result with execution status
      */
-    public TradingResult scanAndExecute(boolean autoExecute, int qty) {
-        log.info(">>> scanAndExecute(autoExecute={}, qty={})", autoExecute, qty);
+    public TradingResult scanAndExecute(boolean autoExecute, int qty, int maxConcurrentTrades) {
+        log.info(">>> scanAndExecute(autoExecute={}, qty={}, maxConcurrent={})", autoExecute, qty, maxConcurrentTrades);
         long startTime = System.currentTimeMillis();
 
         // Step 1: Scan for signals
@@ -44,8 +48,6 @@ public class TradingService {
 
         // Step 2: Execute if enabled and auto-execute is on in config
         if (autoExecute && ibkrProperties.autoExecute()) {
-            int effectiveQty = qty > 0 ? qty : ibkrProperties.defaultQty();
-
             for (StrategyScannerService.Signal signal : scanResult.signals()) {
                 try {
                     boolean isCall = "CALL".equals(signal.direction());
@@ -57,8 +59,31 @@ public class TradingService {
                         continue;
                     }
 
-                    log.info("🎯 Executing: {} {} @ {} | TP={} SL={}",
-                            signal.ticker(), signal.direction(), plan.entryPrice, plan.takeProfit, plan.stopLoss);
+                    // Check concurrent trades limit
+                    if (!accountManager.canOpenNewTrade(maxConcurrentTrades)) {
+                        log.warn("Max concurrent trades reached ({}) - skipping {}", maxConcurrentTrades, signal.ticker());
+                        executions.add(new ExecutionResult(signal, false, "Max concurrent trades reached", null));
+                        continue;
+                    }
+
+                    // Calculate position size based on 2% risk (or use override)
+                    int effectiveQty;
+                    if (qty > 0) {
+                        effectiveQty = qty;
+                    } else {
+                        effectiveQty = accountManager.calculateQuantity(plan.entryPrice, plan.stopLoss);
+                    }
+
+                    if (effectiveQty < 1) {
+                        log.warn("Calculated quantity is 0 for {} (balance=${,.2f}, SL distance too small?) - skipping",
+                                signal.ticker(), accountManager.getCurrentBalance());
+                        executions.add(new ExecutionResult(signal, false, "Quantity calculated as 0", null));
+                        continue;
+                    }
+
+                    log.info("🎯 Executing: {} {} @ {} | TP={} SL={} | Qty={} (balance=${,.2f})",
+                            signal.ticker(), signal.direction(), plan.entryPrice,
+                            plan.takeProfit, plan.stopLoss, effectiveQty, accountManager.getCurrentBalance());
 
                     OrderExecutionService.OrderResult orderResult = orderExecutionService.placeOptionBracket(
                             signal.ticker(),
@@ -69,6 +94,7 @@ public class TradingService {
                     );
 
                     if (orderResult != null) {
+                        accountManager.addActiveTrade();
                         executions.add(new ExecutionResult(signal, true, "Order placed", orderResult));
                         log.info("✅ Order placed for {}: strike={}, expiry={}, orders=[{},{},{}]",
                                 signal.ticker(), orderResult.strike(), orderResult.expiration(),
@@ -87,29 +113,42 @@ public class TradingService {
         long elapsed = System.currentTimeMillis() - startTime;
         long executed = executions.stream().filter(ExecutionResult::success).count();
 
-        log.info("<<< scanAndExecute: {} signals, {} executed in {}ms",
-                scanResult.totalSignals(), executed, elapsed);
+        log.info("<<< scanAndExecute: {} signals, {} executed in {}ms | Account: ${,.2f} | Active trades: {}",
+                scanResult.totalSignals(), executed, elapsed,
+                accountManager.getCurrentBalance(), accountManager.getActiveTradeCount());
 
         return new TradingResult(scanResult, executions, elapsed);
     }
 
     /**
      * Executes a single signal manually (e.g., from API call).
+     * Uses account-based position sizing if qty <= 0.
      */
     public ExecutionResult executeSignal(String ticker, String direction, int qty, double entryPrice, double tp, double sl) {
         log.info(">>> executeSignal: ticker={}, direction={}, qty={}, entry={}, tp={}, sl={}",
                 ticker, direction, qty, entryPrice, tp, sl);
 
         boolean isCall = "CALL".equalsIgnoreCase(direction) || direction.toUpperCase().contains("CALL");
-
         TradePlan plan = new TradePlan(entryPrice, tp, sl, isCall, java.time.LocalTime.of(15, 55));
+
+        int effectiveQty;
+        if (qty > 0) {
+            effectiveQty = qty;
+        } else {
+            effectiveQty = accountManager.calculateQuantity(entryPrice, sl);
+        }
+
+        if (effectiveQty < 1) {
+            return new ExecutionResult(null, false, "Quantity calculated as 0", null);
+        }
 
         try {
             OrderExecutionService.OrderResult orderResult = orderExecutionService.placeOptionBracket(
-                    ticker, isCall, qty, plan, "manual"
+                    ticker, isCall, effectiveQty, plan, "manual"
             );
 
             if (orderResult != null) {
+                accountManager.addActiveTrade();
                 StrategyScannerService.Signal signal = new StrategyScannerService.Signal(
                         ticker, "manual", direction, entryPrice, java.time.ZonedDateTime.now(), plan
                 );
@@ -160,4 +199,22 @@ public class TradingService {
             int availableStrikes,
             String error
     ) {}
+
+    // ===== Account Manager Delegation =====
+
+    public double getAccountBalance() {
+        return accountManager.getCurrentBalance();
+    }
+
+    public int getActiveTradeCount() {
+        return accountManager.getActiveTradeCount();
+    }
+
+    public boolean canOpenNewTrade(int maxConcurrent) {
+        return accountManager.canOpenNewTrade(maxConcurrent);
+    }
+
+    public void connectAccountManager() {
+        accountManager.connect();
+    }
 }

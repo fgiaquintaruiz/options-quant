@@ -40,9 +40,9 @@ ibkr:
   host: 127.0.0.1
   port: 7497
   sync-timeout: 30
-  auto-execute: false
-  account-id: ""
-  default-qty: 1
+  auto-execute: true
+  account-id: "DUN598126"
+  default-qty: 10
   tickers:
     - SPY
     - QQQ
