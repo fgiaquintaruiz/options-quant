@@ -175,7 +175,9 @@ public class BacktestEngine {
             if (tpHit || slHit) {
                 double exitPrice = tpHit ? pos.tp : pos.sl;
                 String exitReason = tpHit ? "TP" : "SL";
-                closePosition(ticker, pos, exitPrice, time, exitReason, fillEngine, reporter, it);
+                closePosition(ticker, pos, exitPrice, time, exitReason, fillEngine, reporter);
+                it.remove();
+                continue; // skip runup/drawdown tracking for closed positions
             }
 
             // Track max runup/drawdown
@@ -236,7 +238,7 @@ public class BacktestEngine {
 
     private void closePosition(String ticker, OpenPosition pos, double exitPrice,
             ZonedDateTime exitTime, String reason, FillEngine fillEngine,
-            CsvBacktestReporter reporter, Iterator<OpenPosition> it) {
+            CsvBacktestReporter reporter) {
         FillResult exitFill = fillEngine.fillExit(ticker, pos.direction, pos.quantity, exitPrice, exitTime);
         double grossPnl = pos.isCall
                 ? (exitPrice - pos.entryPrice) * pos.quantity * 100
@@ -248,7 +250,6 @@ public class BacktestEngine {
                 pos.entryPrice, pos.entryTime, exitPrice, exitTime, reason,
                 grossPnl, exitFill.commission(), exitFill.slippage(),
                 netPnl, pos.maxDrawdown, pos.maxRunup));
-        it.remove();
     }
 
     private void closeRemainingPositions(Map<String, List<OpenPosition>> openPositions,
@@ -261,7 +262,7 @@ public class BacktestEngine {
             Candle last = lastCandles.get(lastCandles.size() - 1);
 
             for (OpenPosition pos : new ArrayList<>(entry.getValue())) {
-                closePosition(ticker, pos, last.close(), last.timestamp(), "EOS", fillEngine, reporter, null);
+                closePosition(ticker, pos, last.close(), last.timestamp(), "EOS", fillEngine, reporter);
             }
             entry.getValue().clear();
         }
