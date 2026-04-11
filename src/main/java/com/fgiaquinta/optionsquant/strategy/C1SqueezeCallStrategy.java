@@ -3,6 +3,7 @@ package com.fgiaquinta.optionsquant.strategy;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.utils.BollingerBandsUtil;
+import com.fgiaquinta.optionsquant.strategy.utils.ChannelAnalyzer;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
@@ -47,6 +48,9 @@ public class C1SqueezeCallStrategy implements TradingStrategy {
 
         // If averages are separated by more than 4%, they are NOT laterally interlaced
         if ((maxSma - minSma) / minSma > 0.04) return false;
+
+        // RULE 1b: MULTI-BAR COMPRESSION CONFIRMATION (ChannelAnalyzer)
+        if (!ChannelAnalyzer.isSmaLateralChannel(series1h, prevIdx, 70, 4.0)) return false;
 
         // Find the ceiling of the channel over last 10 days (70 bars)
         double maxPriceLast10Days = 0;

@@ -13,7 +13,8 @@
       "mcp__idea__get_run_configurations",
       "mcp__idea__execute_run_configuration",
       "Bash(dir *)",
-      "mcp__idea__get_file_text_by_path"
+      "mcp__idea__get_file_text_by_path",
+      "Bash(curl *)"
     ]
   },
   "$version": 3

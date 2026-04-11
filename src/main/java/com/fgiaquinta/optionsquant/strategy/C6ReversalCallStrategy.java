@@ -2,6 +2,7 @@ package com.fgiaquinta.optionsquant.strategy;
 
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
+import com.fgiaquinta.optionsquant.strategy.utils.TrendAnalyzer;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.*;
@@ -56,6 +57,13 @@ public class C6ReversalCallStrategy implements TradingStrategy {
             }
         }
         if (!wasClearDowntrend) return false;
+
+        // RULE 1b: STRUCTURED DOWNTREND CONFIRMATION (TrendAnalyzer)
+        double bearishTrendLine = TrendAnalyzer.getBearishTrendLineValue(series1h, idx1h - 1, 30);
+        if (bearishTrendLine > 0) {
+            double prevClose = close1h.getValue(idx1h - 1).doubleValue();
+            if (prevClose >= bearishTrendLine) return false;
+        }
 
         // =========================================================================
         // RULES 2 and 3: SMA20 BREAKOUT AND STRONG CANDLE

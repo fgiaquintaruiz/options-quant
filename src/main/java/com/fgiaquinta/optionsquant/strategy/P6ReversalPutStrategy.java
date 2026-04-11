@@ -2,6 +2,7 @@ package com.fgiaquinta.optionsquant.strategy;
 
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
+import com.fgiaquinta.optionsquant.strategy.utils.TrendAnalyzer;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.*;
@@ -56,6 +57,13 @@ public class P6ReversalPutStrategy implements TradingStrategy {
             }
         }
         if (!wasClearUptrend) return false;
+
+        // RULE 1b: STRUCTURED UPTREND CONFIRMATION (TrendAnalyzer)
+        double bullishTrendLine = TrendAnalyzer.getBullishTrendLineValue(series1h, idx1h - 1, 30);
+        if (bullishTrendLine > 0) {
+            double prevClose = close1h.getValue(idx1h - 1).doubleValue();
+            if (prevClose <= bullishTrendLine) return false;
+        }
 
         // =========================================================================
         // RULES 2 and 3: SMA20 BREAKDOWN (PUT)

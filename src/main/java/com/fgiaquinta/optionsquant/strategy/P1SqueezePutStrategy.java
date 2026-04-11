@@ -3,6 +3,7 @@ package com.fgiaquinta.optionsquant.strategy;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.utils.BollingerBandsUtil;
+import com.fgiaquinta.optionsquant.strategy.utils.ChannelAnalyzer;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
@@ -43,6 +44,9 @@ public class P1SqueezePutStrategy implements TradingStrategy {
         double minSma = Math.min(Math.min(s20, s40), Math.min(s100, s200));
 
         if ((maxSma - minSma) / minSma > 0.04) return false;
+
+        // RULE 1b: MULTI-BAR COMPRESSION CONFIRMATION (ChannelAnalyzer)
+        if (!ChannelAnalyzer.isSmaLateralChannel(series1h, prevIdx, 70, 4.0)) return false;
 
         // Find the floor of the channel over last 10 days (70 bars)
         double minPriceLast10Days = Double.MAX_VALUE;
