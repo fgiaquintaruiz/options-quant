@@ -9,6 +9,9 @@ import com.fgiaquinta.optionsquant.infrastructure.MetricsService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -20,6 +23,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 @Service
 public class IbkrService {
+
+    // Separate logger for IBKR network/download operations
+    private static final org.slf4j.Logger ibkrLog =
+            org.slf4j.LoggerFactory.getLogger("IbkrDownload");
 
     private final IbkrProperties properties;
     private final IbkrCallbackHandler callbackHandler;
@@ -34,6 +41,7 @@ public class IbkrService {
     private final Map<Integer, TimeFrame> requestTimeframeMap = new ConcurrentHashMap<>();
     private final Map<String, List<Candle>> receivedData = new ConcurrentHashMap<>();
     private final Set<Integer> pendingRequests = ConcurrentHashMap.newKeySet();
+    private final Set<Integer> cancelledRequests = ConcurrentHashMap.newKeySet();  // Track intentionally cancelled requests
 
     public IbkrService(IbkrProperties properties, MetricsService metrics) {
         this.properties = properties;
@@ -112,16 +120,26 @@ public class IbkrService {
 
     /**
      * Download historical data for a single ticker and timeframe.
+     * Downloads the full duration specified in the TimeFrame config.
      */
     public List<Candle> downloadHistoricalData(String ticker, TimeFrame timeframe) {
-        log.info(">>> downloadHistoricalData(ticker={}, timeframe={})", ticker, timeframe);
+        return downloadHistoricalData(ticker, timeframe, null);
+    }
+
+    /**
+     * Download historical data for a single ticker and timeframe.
+     * If endDateTime is provided, downloads only data from that point forward (delta download).
+     * If endDateTime is null, downloads the full duration (full download).
+     */
+    public List<Candle> downloadHistoricalData(String ticker, TimeFrame timeframe, ZonedDateTime endDateTime) {
+        ibkrLog.info(">>> [IBKR] downloadHistoricalData(ticker={}, timeframe={}, endDateTime={})", ticker, timeframe, endDateTime);
         long startTime = System.currentTimeMillis();
 
         try {
             return metrics.timeIbkrCall("downloadHistoricalData", () -> {
                 // Auto-connect if not already connected
                 if (!isConnected()) {
-                    log.info("Not connected to IBKR, auto-connecting...");
+                    ibkrLog.info("📥 [IBKR] Not connected to IBKR, auto-connecting...");
                     connect();
                 }
 
@@ -134,19 +152,27 @@ public class IbkrService {
 
                 Contract contract = IbkrCallbackHandler.createStockContract(ticker);
 
-                log.info("    Sending reqHistoricalData: reqId={}, duration={}, barSize={}, whatToShow=TRADES",
-                        reqId, timeframe.getIbkrDuration(), timeframe.getIbkrBarSize());
+                // Format endDateTime for IBKR: "yyyyMMdd HH:mm:ss" or empty for full history
+                String endDateTimeStr = "";
+                if (endDateTime != null) {
+                    // Convert to NY timezone and format for IBKR
+                    ZonedDateTime nyTime = endDateTime.withZoneSameInstant(ZoneId.of("America/New_York"));
+                    endDateTimeStr = nyTime.format(DateTimeFormatter.ofPattern("yyyyMMdd HH:mm:ss"));
+                }
+
+                ibkrLog.info("    [IBKR] Sending reqHistoricalData: reqId={}, duration={}, barSize={}, whatToShow=TRADES, endDateTime={}",
+                        reqId, timeframe.getIbkrDuration(), timeframe.getIbkrBarSize(), endDateTimeStr.isEmpty() ? "now" : endDateTimeStr);
 
                 client.reqHistoricalData(
                         reqId,
                         contract,
-                        "",
+                        endDateTimeStr,  // "" = now, otherwise specific datetime
                         timeframe.getIbkrDuration(),
                         timeframe.getIbkrBarSize(),
                         "TRADES",
-                        1,
-                        1,
-                        false,
+                        2,  // 1=RTH only, 2=All sessions (includes pre/post market)
+                        1,  // Format: 1=seconds epoch, 2=yyyy-MM-dd HH:mm:ss
+                        false,  // Don't keep up to date for delta downloads (we'll request fresh data each time)
                         null
                 );
 
@@ -154,7 +180,7 @@ public class IbkrService {
                 cleanupRequest(reqId);
 
                 long elapsed = System.currentTimeMillis() - startTime;
-                log.info("<<< downloadHistoricalData(ticker={}, timeframe={}) - {} candles in {}ms",
+                ibkrLog.info("<<< [IBKR] downloadHistoricalData(ticker={}, timeframe={}) - {} candles in {}ms",
                         ticker, timeframe, candles.size(), elapsed);
 
                 if (candles.isEmpty()) {
@@ -164,7 +190,7 @@ public class IbkrService {
                 return new ArrayList<>(candles);
             });
         } catch (Exception e) {
-            log.error("Error during downloadHistoricalData(ticker={}, timeframe={}): {}", ticker, timeframe, e.getMessage());
+            ibkrLog.error("❌ [IBKR] Error during downloadHistoricalData(ticker={}, timeframe={}): {}", ticker, timeframe, e.getMessage());
             metrics.incrementIbkrError("download_exception");
             throw new RuntimeException("Failed to download historical data for " + ticker + " [" + timeframe + "]", e);
         }
@@ -174,12 +200,12 @@ public class IbkrService {
      * Download all timeframes for a single ticker.
      */
     public Map<TimeFrame, List<Candle>> downloadAllTimeframes(String ticker) {
-        log.info(">>> downloadAllTimeframes(ticker={})", ticker);
+        ibkrLog.info(">>> [IBKR] downloadAllTimeframes(ticker={})", ticker);
         long startTime = System.currentTimeMillis();
 
         // Auto-connect if not already connected
         if (!isConnected()) {
-            log.info("Not connected to IBKR, auto-connecting...");
+            ibkrLog.info("📥 [IBKR] Not connected to IBKR, auto-connecting...");
             connect();
         }
 
@@ -187,13 +213,13 @@ public class IbkrService {
 
         for (TimeFrame tf : TimeFrame.values()) {
             try {
-                log.info("    Downloading timeframe: {}", tf.name());
+                ibkrLog.info("    [IBKR] Downloading timeframe: {}", tf.name());
                 List<Candle> candles = downloadHistoricalData(ticker, tf);
                 results.put(tf, candles);
-                log.info("    Timeframe {} complete: {} candles", tf.name(), candles.size());
+                ibkrLog.info("    [IBKR] Timeframe {} complete: {} candles", tf.name(), candles.size());
                 Thread.sleep(2000);
             } catch (Exception e) {
-                log.error("    Failed to download {} data for {}: {}", tf, ticker, e.getMessage());
+                ibkrLog.error("❌ [IBKR] Failed to download {} data for {}: {}", tf, ticker, e.getMessage());
                 metrics.incrementIbkrError("timeframe_download_failed");
                 results.put(tf, Collections.emptyList());
             }
@@ -201,10 +227,50 @@ public class IbkrService {
 
         long elapsed = System.currentTimeMillis() - startTime;
         int totalCandles = results.values().stream().mapToInt(List::size).sum();
-        log.info("<<< downloadAllTimeframes(ticker={}) - {} total candles across {} timeframes in {}ms",
+        ibkrLog.info("<<< [IBKR] downloadAllTimeframes(ticker={}) - {} total candles across {} timeframes in {}ms",
                 ticker, totalCandles, results.size(), elapsed);
 
         return results;
+    }
+
+    /**
+     * Download only new candles (delta) for a single ticker and timeframe since the last known timestamp.
+     * IBKR always returns full duration backwards from "now", so we filter client-side
+     * to keep only candles NEWER than lastCandleTimestamp.
+     */
+    public List<Candle> downloadDelta(String ticker, TimeFrame timeframe, ZonedDateTime lastCandleTimestamp) {
+        if (lastCandleTimestamp == null) {
+            ibkrLog.info("📥 [IBKR] No CSV data for {} [{}] — downloading full history", ticker, timeframe);
+            return downloadHistoricalData(ticker, timeframe);
+        }
+
+        ibkrLog.info("📥 [IBKR] Delta download: {} [{}] since {}", ticker, timeframe, lastCandleTimestamp);
+        long startTime = System.currentTimeMillis();
+
+        // Auto-connect if not already connected
+        if (!isConnected()) {
+            ibkrLog.info("📥 [IBKR] Not connected to IBKR, auto-connecting...");
+            connect();
+        }
+
+        try {
+            // Request from "now" backwards (IBKR default behavior)
+            List<Candle> allCandles = downloadHistoricalData(ticker, timeframe);
+
+            // Filter: keep only candles NEWER than the last CSV candle
+            List<Candle> deltaCandles = allCandles.stream()
+                    .filter(c -> c.timestamp().isAfter(lastCandleTimestamp))
+                    .toList();
+
+            long elapsed = System.currentTimeMillis() - startTime;
+            ibkrLog.info("📥 [IBKR] Delta result: {} [{}] — {} new candles (filtered from {} received) in {}ms",
+                    ticker, timeframe, deltaCandles.size(), allCandles.size(), elapsed);
+            return deltaCandles;
+        } catch (Exception e) {
+            ibkrLog.error("❌ [IBKR] Failed to download delta for {} [{}]: {}", ticker, timeframe, e.getMessage());
+            metrics.incrementIbkrError("delta_download_failed");
+            return Collections.emptyList();
+        }
     }
 
     // ===== Callback handlers (private) =====
@@ -227,12 +293,46 @@ public class IbkrService {
     }
 
     private void onErrorReceived(IbkrCallbackHandler.ErrorEvent event) {
+        // Check if this is a cancellation error for a request we intentionally cancelled
+        if (event.message() != null && event.message().contains("API historical data query cancelled")) {
+            if (cancelledRequests.contains(event.id())) {
+                log.debug("    Ignoring expected cancellation error for intentionally cancelled request {}", event.id());
+                return;  // This is expected, not an error
+            }
+        }
+
+        // Error 502: Can't connect to TWS — fatal, shut down gracefully
+        if (event.code() == 502) {
+            log.error("    🔌 FATAL: IBKR error 502 - Can't connect to TWS/Gateway.");
+            log.error("    → Check that TWS/Gateway is running and 'Enable ActiveX and Socket Clients' is ON.");
+            log.error("    → Simulated port: 7497 (TWS) / 4002 (Gateway) | Live port: 7496 (TWS) / 4001 (Gateway)");
+            log.error("    → Shutting down application to prevent orphaned processes.");
+            shutdownApplication(1);
+            return;
+        }
+
         log.warn("    Error received: id={}, code={}, message={}", event.id(), event.code(), event.message());
         if (pendingRequests.contains(event.id())) {
             log.warn("    Removing failed request {} from pending list (error {})", event.id(), event.code());
             pendingRequests.remove(event.id());
             metrics.incrementIbkrError("error_" + event.code());
         }
+    }
+
+    /**
+     * Gracefully shuts down the application with the given exit code.
+     */
+    private void shutdownApplication(int exitCode) {
+        log.info("    Initiating graceful shutdown (exit code {})...", exitCode);
+        disconnect();
+        new Thread(() -> {
+            try {
+                Thread.sleep(1000);  // Give logging threads time to flush
+                System.exit(exitCode);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }, "shutdown-thread").start();
     }
 
     private void onConnectionReady() {
@@ -270,6 +370,8 @@ public class IbkrService {
             }
         }
 
+        // Mark as cancelled before calling cancelHistoricalData
+        cancelledRequests.add(reqId);
         log.debug("    Cancelling historical data for reqId={}", reqId);
         client.cancelHistoricalData(reqId);
     }
@@ -278,5 +380,6 @@ public class IbkrService {
         requestTickerMap.remove(reqId);
         requestTimeframeMap.remove(reqId);
         pendingRequests.remove(reqId);
+        cancelledRequests.remove(reqId);  // Clean up cancelled tracking
     }
 }

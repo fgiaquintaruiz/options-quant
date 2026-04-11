@@ -2,10 +2,8 @@ package com.fgiaquinta.optionsquant.strategy;
 
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
+import com.fgiaquinta.optionsquant.strategy.utils.BollingerBandsUtil;
 import org.ta4j.core.BarSeries;
-import org.ta4j.core.indicators.SMAIndicator;
-import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
-import org.ta4j.core.indicators.statistics.StandardDeviationIndicator;
 
 import java.time.ZonedDateTime;
 import java.time.ZoneId;
@@ -35,18 +33,12 @@ public class P4OpeningPutStrategy implements TradingStrategy {
         // =========================================================================
         // RULE 1: LATERAL TREND (Previous day)
         // =========================================================================
-        ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
-        SMAIndicator sma20_15m = new SMAIndicator(close15m, 20);
-        StandardDeviationIndicator sd15m = new StandardDeviationIndicator(close15m, 20);
+        BollingerBandsUtil bb = new BollingerBandsUtil(series15m, 20);
 
-        double prevSma = sma20_15m.getValue(idx15m - 1).doubleValue();
-        double prevSd = sd15m.getValue(idx15m - 1).doubleValue();
-        double prevLowerBand = prevSma - (prevSd * 2);
-        double prevUpperBand = prevSma + (prevSd * 2);
+        int prevIdx15m = idx15m - 1;
 
         // Relax the lateral channel a bit (max band width of 2%)
-        double bandWidthPct = (prevUpperBand - prevLowerBand) / prevSma;
-        if (bandWidthPct > 0.02) return false;
+        if (!bb.isLateral(prevIdx15m, 2.0)) return false;
 
         // =========================================================================
         // RULE 2: THE GOLDEN GAP ZONE (GAP UP)
@@ -55,7 +47,7 @@ public class P4OpeningPutStrategy implements TradingStrategy {
         double closeYesterday = series5m.getBar(idx5m - 1).getClosePrice().doubleValue();
 
         // Did it open above yesterday's Upper Bollinger Band?
-        boolean isExtremeGapUp = openToday > prevUpperBand;
+        boolean isExtremeGapUp = openToday > bb.getUpper(prevIdx15m);
         if (!isExtremeGapUp) return false;
 
         // GAP RANGE FILTER: Between +1.5% and +6.0% (Avoid OPA/acquisition spikes)

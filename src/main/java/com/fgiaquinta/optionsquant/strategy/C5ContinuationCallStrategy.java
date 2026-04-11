@@ -3,10 +3,10 @@ package com.fgiaquinta.optionsquant.strategy;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.indicator.WordenStochasticIndicator;
+import com.fgiaquinta.optionsquant.strategy.utils.BollingerBandsUtil;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.*;
-import org.ta4j.core.indicators.statistics.StandardDeviationIndicator;
 
 import java.time.ZonedDateTime;
 import java.time.ZoneId;
@@ -99,14 +99,9 @@ public class C5ContinuationCallStrategy implements TradingStrategy {
         // =========================================================================
         // RULE 3: FIRST 15M CANDLE COMPLETELY OUTSIDE BOLLINGER (BELOW)
         // =========================================================================
-        ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
-        SMAIndicator sma20_15m = new SMAIndicator(close15m, 20);
-        StandardDeviationIndicator sd15m = new StandardDeviationIndicator(close15m, 20);
+        BollingerBandsUtil bb = new BollingerBandsUtil(series15m, 20);
 
-        double prevSma15m = sma20_15m.getValue(firstCandle15mIdx - 1).doubleValue();
-        double prevSd15m = sd15m.getValue(firstCandle15mIdx - 1).doubleValue();
-        double lowerBand15m = prevSma15m - (prevSd15m * 2);
-
+        double lowerBand15m = bb.getLower(firstCandle15mIdx - 1);
         double first15mHigh = series15m.getBar(firstCandle15mIdx).getHighPrice().doubleValue();
 
         // "Completely outside": Even the highest point of that first candle must be below the band

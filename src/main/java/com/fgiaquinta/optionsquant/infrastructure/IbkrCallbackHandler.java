@@ -126,11 +126,17 @@ public final class IbkrCallbackHandler extends DefaultEWrapper {
     public void error(int id, long timestamp, int errorCode, String errorMsg, String advancedOrderRejectJson) {
         // Skip informational messages
         if (errorCode == 2104 || errorCode == 2106 || errorCode == 2158) return;
-        
+
         // Skip error 366 - it's a spurious cleanup message that arrives AFTER historicalDataEnd
         // The data has already been received successfully
         if (errorCode == 366) {
             log.debug("Ignoring spurious error 366 for reqId={} (data already received)", id);
+            return;
+        }
+
+        // Skip error 162 when it's a cancellation message (we intentionally cancelled after receiving data)
+        if (errorCode == 162 && errorMsg != null && errorMsg.contains("API historical data query cancelled")) {
+            log.debug("Ignoring expected cancellation error 162 for reqId={} (intentionally cancelled)", id);
             return;
         }
 

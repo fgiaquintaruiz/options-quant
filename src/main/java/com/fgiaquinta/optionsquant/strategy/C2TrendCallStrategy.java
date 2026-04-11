@@ -2,6 +2,7 @@ package com.fgiaquinta.optionsquant.strategy;
 
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
+import com.fgiaquinta.optionsquant.strategy.utils.BollingerBandsUtil;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.*;
@@ -96,7 +97,8 @@ public class C2TrendCallStrategy implements TradingStrategy {
         if (currentVol < (avgVol * 0.90)) return false;
 
         // =========================================================================
-        // RULE 4: 15-MINUTE CONFIRMATION
+        // RULE 4: 15-MINUTE CONFIRMATION (Bollinger Bands context per book)
+        // Book: "Cambiar a la temporalidad 15 minutos y la tendencia debe mostrarse totalmente alcista"
         // =========================================================================
         ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
         SMAIndicator sma20_15m = new SMAIndicator(close15m, 20);
@@ -108,7 +110,13 @@ public class C2TrendCallStrategy implements TradingStrategy {
         // 15m must be accompanying the uptrend
         boolean isUptrend15m = (currentPrice15m > currentSma15m) && (currentSma15m > prevSma15m);
 
-        if (isUptrend15m) {
+        // Book requirement: Verify bullish trend in Bollinger Bands context
+        BollingerBandsUtil bb15m = new BollingerBandsUtil(series15m, 20);
+        boolean isBullishBBTrend = bb15m.isBullishTrend(idx15m, 10); // 70% of last 10 candles above middle band
+        boolean priceAboveMiddleBB = currentPrice15m > bb15m.getMiddle(idx15m);
+
+        // Signal confirmed if BOTH: SMA uptrend AND BB bullish context
+        if (isUptrend15m && isBullishBBTrend && priceAboveMiddleBB) {
             lastTriggerMap.put(ticker, currentTime);
             return true;
         }

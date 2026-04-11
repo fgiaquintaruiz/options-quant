@@ -1,0 +1,51 @@
+2026-04-11 05:36:19.749 INFO  [main] DataDownload : ✅ C [DAY_1] delta: +1 new candles (cached: 250 → merged: 251)
+2026-04-11 05:36:19.850 INFO  [main] DataDownload : 📊 C refresh complete: +25 new candles across timeframes
+2026-04-11 05:36:20.909 INFO  [scheduling-1] DataDownload : ✅ AOS [HOUR_1] delta: +4 new candles (cached: 858 → merged: 862)
+2026-04-11 05:36:21.232 INFO  [main] DataDownload : ✅ CAG [MIN_5] delta: +78 new candles (cached: 780 → merged: 858)
+2026-04-11 05:36:21.470 INFO  [scheduling-1] DataDownload : ✅ AOS [DAY_1] delta: +1 new candles (cached: 249 → merged: 250)
+2026-04-11 05:36:21.471 INFO  [scheduling-1] DataDownload : 📊 AOS refresh complete: +5 new candles across timeframes
+2026-04-11 05:36:21.928 INFO  [main] DataDownload : ✅ CAG [MIN_15] delta: +26 new candles (cached: 546 → merged: 572)
+2026-04-11 05:36:23.255 INFO  [scheduling-1] DataDownload : ✅ APA [MIN_5] delta: +57 new candles (cached: 801 → merged: 858)
+2026-04-11 05:36:23.352 INFO  [main] DataDownload : ✅ CAG [HOUR_1] delta: +7 new candles (cached: 855 → merged: 862)
+2026-04-11 05:36:23.897 INFO  [scheduling-1] DataDownload : ✅ APA [MIN_15] delta: +19 new candles (cached: 553 → merged: 572)
+2026-04-11 05:36:23.916 INFO  [main] DataDownload : ✅ CAG [DAY_1] delta: +1 new candles (cached: 250 → merged: 251)
+2026-04-11 05:36:23.916 INFO  [main] DataDownload : 📊 CAG refresh complete: +112 new candles across timeframes
+2026-04-11 05:36:25.140 INFO  [scheduling-1] DataDownload : ✅ APA [HOUR_1] delta: +4 new candles (cached: 858 → merged: 862)
+2026-04-11 05:36:25.274 INFO  [main] DataDownload : ✅ CAH [MIN_5] delta: +78 new candles (cached: 780 → merged: 858)
+2026-04-11 05:36:25.727 INFO  [scheduling-1] DataDownload : ✅ APA [DAY_1] delta: +1 new candles (cached: 250 → merged: 251)
+2026-04-11 05:36:25.727 INFO  [scheduling-1] DataDownload : 📊 APA refresh complete: +81 new candles across timeframes
+2026-04-11 05:36:25.952 INFO  [main] DataDownload : ✅ CAH [MIN_15] delta: +26 new candles (cached: 546 → merged: 572)
+2026-04-11 05:36:27.224 INFO  [scheduling-1] DataDownload : ✅ APD [MIN_5] delta: +57 new candles (cached: 801 → merged: 858)
+2026-04-11 05:36:27.324 INFO  [main] DataDownload : ✅ CAH [HOUR_1] delta: +7 new candles (cached: 855 → merged: 862)
+2026-04-11 05:36:27.857 INFO  [scheduling-1] DataDownload : ✅ APD [MIN_15] delta: +19 new candles (cached: 553 → merged: 572)
+2026-04-11 05:36:27.925 INFO  [main] DataDownload : ✅ CAH [DAY_1] delta: +1 new candles (cached: 250 → merged: 251)
+2026-04-11 05:36:27.925 INFO  [main] DataDownload : 📊 CAH refresh complete: +112 new candles across timeframes
+2026-04-11 05:36:28.805 INFO  [scheduling-1] DataDownload : ✅ APD [HOUR_1] delta: +4 new candles (cached: 858 → merged: 862)
+2026-04-11 05:36:28.911 INFO  [main] DataDownload : ✅ CARR [MIN_5] delta: +78 new candles (cached: 780 → merged: 858)
+2026-04-11 05:36:29.252 INFO  [scheduling-1] DataDownload : ✅ APD [DAY_1] delta: +1 new candles (cached: 250 → merged: 251)
+2026-04-11 05:36:29.252 INFO  [scheduling-1] DataDownload : 📊 APD refresh complete: +81 new candles across timeframes
+2026-04-11 05:36:29.407 INFO  [main] DataDownload : ✅ CARR [MIN_15] delta: +26 new candles (cached: 546 → merged: 572)
+2026-04-11 05:36:30.026 INFO  [scheduling-1] DataDownload : ✅ APH [MIN_5] delta: +57 new candles (cached: 801 → merged: 858)
+2026-04-11 05:36:30.030 INFO  [main] DataDownload : ✅ CARR [HOUR_1] delta: +7 new candles (cached: 855 → merged: 862)
+2026-04-11 05:36:30.546 INFO  [scheduling-1] DataDownload : ✅ APH [MIN_15] delta: +19 new candles (cached: 553 → merged: 572)
+2026-04-11 05:36:30.548 INFO  [main] DataDownload : ✅ CARR [DAY_1] delta: +1 new candles (cached: 250 → merged: 251)
+2026-04-11 05:36:30.548 INFO  [main] DataDownload : 📊 CARR refresh complete: +112 new candles across timeframes
+2026-04-11 05:36:31.175 INFO  [scheduling-1] DataDownload : ✅ APH [HOUR_1] delta: +4 new candles (cached: 858 → merged: 862)
+2026-04-11 05:36:31.584 INFO  [scheduling-1] DataDownload : ✅ APH [DAY_1] delta: +1 new candles (cached: 250 → merged: 251)
+2026-04-11 05:36:31.584 INFO  [scheduling-1] DataDownload : 📊 APH refresh complete: +81 new candles across timeframes
+2026-04-11 05:36:35.794 INFO  [main] DataDownload : ✅ CAT [MIN_5] delta: +78 new candles (cached: 780 → merged: 858)
+2026-04-11 05:36:35.821 INFO  [scheduling-1] DataDownload : ✅ APTV [MIN_5] delta: +57 new candles (cached: 801 → merged: 858)
+2026-04-11 05:36:36.204 INFO  [main] DataDownload : ✅ CAT [MIN_15] delta: +26 new candles (cached: 546 → merged: 572)
+2026-04-11 05:36:42.031 INFO  [scheduling-1] DataDownload : ✅ APTV [MIN_15] delta: +19 new candles (cached: 553 → merged: 572)
+2026-04-11 05:36:42.044 INFO  [main] DataDownload : ✅ CAT [HOUR_1] delta: +7 new candles (cached: 855 → merged: 862)
+2026-04-11 05:36:42.652 INFO  [main] DataDownload : ✅ CAT [DAY_1] delta: +1 new candles (cached: 250 → merged: 251)
+2026-04-11 05:36:42.652 INFO  [main] DataDownload : 📊 CAT refresh complete: +112 new candles across timeframes
+2026-04-11 05:36:47.891 INFO  [main] DataDownload : ✅ CB [MIN_5] delta: +78 new candles (cached: 780 → merged: 858)
+2026-04-11 05:36:48.078 INFO  [scheduling-1] DataDownload : ✅ APTV [HOUR_1] delta: +4 new candles (cached: 858 → merged: 862)
+2026-04-11 05:36:48.489 INFO  [scheduling-1] DataDownload : ✅ APTV [DAY_1] delta: +1 new candles (cached: 250 → merged: 251)
+2026-04-11 05:36:48.489 INFO  [scheduling-1] DataDownload : 📊 APTV refresh complete: +81 new candles across timeframes
+2026-04-11 05:36:53.836 INFO  [main] DataDownload : ✅ CB [MIN_15] delta: +26 new candles (cached: 546 → merged: 572)
+2026-04-11 05:37:05.927 INFO  [main] DataDownload : ✅ CB [HOUR_1] delta: +7 new candles (cached: 855 → merged: 862)
+2026-04-11 05:37:06.333 INFO  [main] DataDownload : ✅ CB [DAY_1] delta: +1 new candles (cached: 250 → merged: 251)
+2026-04-11 05:37:06.333 INFO  [main] DataDownload : 📊 CB refresh complete: +112 new candles across timeframes
+2026-04-11 05:37:18.030 INFO  [main] DataDownload : ✅ CBOE [MIN_5] delta: +78 new candles (cached: 780 → merged: 858)

@@ -38,7 +38,7 @@ public class Main {
 
         try {
             // 1. Inicializar Módulos Core
-            AccountManager accountManager = new AccountManager();
+            com.fgiaquinta.optionsquant.engine.AccountManager accountManager = new com.fgiaquinta.optionsquant.engine.AccountManager();
             IbkrService ibkrService = new IbkrService(accountManager);
 
             DataManager dataManager = new DataManager();

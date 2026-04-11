@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <!-- Console: Strategy analysis and general logs -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) %magenta([%thread]) %cyan(%logger{36}) : %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- File: Strategy Analysis (per-ticker results) -->
+    <appender name="STRATEGY_LOG" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/strategy-analysis.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>logs/strategy-analysis-%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} : %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- File: Data Downloads (IBKR API calls) -->
+    <appender name="DOWNLOAD_LOG" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/downloads.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>logs/downloads-%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} : %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- File: MarketScanner summary -->
+    <appender name="SCANNER_LOG" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/scanner.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>logs/scanner-%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} : %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Loggers -->
+    
+    <!-- Strategy Analysis: Per-ticker results (DEBUG level to show "no signals" messages) -->
+    <logger name="StrategyAnalysis" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="STRATEGY_LOG"/>
+    </logger>
+
+    <!-- Data Downloads: IBKR API calls and CSV operations -->
+    <logger name="DataDownload" level="INFO" additivity="false">
+        <appender-ref ref="DOWNLOAD_LOG"/>
+    </logger>
+
+    <!-- MarketScanner: Scheduled scan summaries -->
+    <logger name="com.fgiaquinta.optionsquant.service.MarketScanner" level="INFO" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="SCANNER_LOG"/>
+    </logger>
+
+    <!-- General application logs -->
+    <logger name="com.fgiaquinta.optionsquant" level="INFO" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!-- Spring logs at WARN level to reduce noise -->
+    <logger name="org.springframework" level="WARN"/>
+    <logger name="org.apache.catalina" level="WARN"/>
+    <logger name="com.ib" level="WARN"/>
+
+    <!-- Root logger -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

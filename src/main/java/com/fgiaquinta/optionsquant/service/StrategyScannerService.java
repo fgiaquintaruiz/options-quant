@@ -27,9 +27,18 @@ public class StrategyScannerService {
     private final CandleCsvService csvService;
     private final IbkrService ibkrService;
     private final IbkrProperties ibkrProperties;
+    private final TickerService tickerService;
 
     private final List<TradingStrategy> callStrategies;
     private final List<TradingStrategy> putStrategies;
+
+    // Separate logger for strategy analysis output
+    private static final org.slf4j.Logger strategyLog = 
+            org.slf4j.LoggerFactory.getLogger("StrategyAnalysis");
+    
+    // Separate logger for data download operations
+    private static final org.slf4j.Logger downloadLog = 
+            org.slf4j.LoggerFactory.getLogger("DataDownload");
 
     // Maximum age for data to be considered "fresh"
     private static final Map<TimeFrame, Duration> FRESHNESS_THRESHOLDS = Map.of(
@@ -39,10 +48,12 @@ public class StrategyScannerService {
             TimeFrame.DAY_1, Duration.ofHours(26)
     );
 
-    public StrategyScannerService(CandleCsvService csvService, IbkrService ibkrService, IbkrProperties ibkrProperties) {
+    public StrategyScannerService(CandleCsvService csvService, IbkrService ibkrService, 
+                                   IbkrProperties ibkrProperties, TickerService tickerService) {
         this.csvService = csvService;
         this.ibkrService = ibkrService;
         this.ibkrProperties = ibkrProperties;
+        this.tickerService = tickerService;
 
         this.callStrategies = List.of(
                 new C1SqueezeCallStrategy(),
@@ -63,29 +74,69 @@ public class StrategyScannerService {
     }
 
     /**
-     * Scans all configured tickers against all strategies.
-     * Auto-downloads fresh data if CSV is missing or stale.
+     * Scans all tickers against all strategies with hot tickers first.
+     * Hot tickers (SPY, QQQ, AAPL, NVDA, TSLA, etc.) are scanned immediately,
+     * then the remaining tickers are scanned.
      */
     public ScanResult scanAll(boolean includeTradePlans, boolean autoRefreshData) {
-        log.info(">>> Scanning {} tickers against 12 strategies (autoRefresh={})", ibkrProperties.tickers().size(), autoRefreshData);
+        // Get all tickers from CSV or YAML
+        List<String> allTickers = ibkrProperties.useCsvTickers() 
+                ? tickerService.getTickerSymbols()
+                : ibkrProperties.tickers();
+        
+        // Get hot tickers (priority list)
+        List<String> hotTickers = ibkrProperties.hotTickers() != null 
+                ? ibkrProperties.hotTickers() 
+                : List.of("SPY", "QQQ", "AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "META", "GOOGL", "AMD");
+        
+        // Separate hot tickers from the rest
+        List<String> hotTickersToScan = allTickers.stream()
+                .filter(hotTickers::contains)
+                .toList();
+        
+        List<String> remainingTickers = allTickers.stream()
+                .filter(t -> !hotTickers.contains(t))
+                .toList();
+        
+        log.info(">>> Scanning {} tickers ({} hot first, {} remaining) against 12 strategies (autoRefresh={})", 
+                allTickers.size(), hotTickersToScan.size(), remainingTickers.size(), autoRefreshData);
+        
         long startTime = System.currentTimeMillis();
-
         List<Signal> allSignals = new ArrayList<>();
 
-        for (String ticker : ibkrProperties.tickers()) {
-            try {
-                List<Signal> tickerSignals = scanTicker(ticker, includeTradePlans, autoRefreshData);
-                allSignals.addAll(tickerSignals);
-            } catch (Exception e) {
-                log.error("Error scanning ticker {}: {}", ticker, e.getMessage());
+        // SCAN HOT TICKERS FIRST
+        if (!hotTickersToScan.isEmpty()) {
+            log.info("🔥 Scanning {} HOT tickers first: {}", hotTickersToScan.size(), hotTickersToScan);
+            for (String ticker : hotTickersToScan) {
+                try {
+                    List<Signal> tickerSignals = scanTicker(ticker, includeTradePlans, autoRefreshData);
+                    allSignals.addAll(tickerSignals);
+                } catch (Exception e) {
+                    log.error("Error scanning hot ticker {}: {}", ticker, e.getMessage());
+                }
+            }
+            log.info("✅ Hot tickers scan complete - {} signals found", 
+                    allSignals.size());
+        }
+
+        // SCAN REMAINING TICKERS
+        if (!remainingTickers.isEmpty()) {
+            log.info("📊 Scanning {} remaining tickers...", remainingTickers.size());
+            for (String ticker : remainingTickers) {
+                try {
+                    List<Signal> tickerSignals = scanTicker(ticker, includeTradePlans, autoRefreshData);
+                    allSignals.addAll(tickerSignals);
+                } catch (Exception e) {
+                    log.error("Error scanning ticker {}: {}", ticker, e.getMessage());
+                }
             }
         }
 
         long elapsed = System.currentTimeMillis() - startTime;
         log.info("<<< Scan complete: {} signals found across {} tickers in {}ms",
-                allSignals.size(), ibkrProperties.tickers().size(), elapsed);
+                allSignals.size(), allTickers.size(), elapsed);
 
-        return new ScanResult(allSignals.size(), ibkrProperties.tickers().size(), allSignals, elapsed);
+        return new ScanResult(allSignals.size(), allTickers.size(), allSignals, elapsed);
     }
 
     /**
@@ -99,42 +150,47 @@ public class StrategyScannerService {
      * Scans a single ticker against all strategies.
      */
     public List<Signal> scanTicker(String ticker, boolean includeTradePlans, boolean autoRefreshData) {
+        long tickerStartTime = System.currentTimeMillis();
         log.debug("Scanning ticker: {} (autoRefresh={})", ticker, autoRefreshData);
 
-        // Load all timeframes from CSV, auto-download if stale/missing
+        // Load all timeframes from CSV, auto-download delta if stale/missing
         Map<TimeFrame, List<Candle>> candlesByTimeframe = new EnumMap<>(TimeFrame.class);
-        boolean needsDownload = false;
+        int totalNewCandles = 0;
 
         for (TimeFrame tf : TimeFrame.values()) {
             List<Candle> candles = csvService.loadFromCsv(ticker, tf);
             if (candles.isEmpty()) {
-                log.debug("No CSV data for {} [{}]", ticker, tf);
-                needsDownload = true;
+                log.debug("No CSV data for {} [{}], downloading full history", ticker, tf);
+                // Full download for missing data
+                List<Candle> freshData = downloadTimeframeDelta(ticker, tf, null);
+                if (!freshData.isEmpty()) {
+                    csvService.saveToCsv(ticker, tf, freshData);
+                    candlesByTimeframe.put(tf, freshData);
+                    totalNewCandles += freshData.size();
+                }
             } else if (autoRefreshData && isStale(candles, tf)) {
                 Duration threshold = FRESHNESS_THRESHOLDS.get(tf);
-                log.info("Data stale for {} [{}]: last candle {} vs threshold {}", ticker, tf, getLastTimestamp(candles), threshold);
-                needsDownload = true;
+                ZonedDateTime lastTimestamp = getLastTimestamp(candles);
+                // Delta download: only get new candles since last timestamp
+                List<Candle> deltaData = downloadTimeframeDelta(ticker, tf, lastTimestamp);
+                if (!deltaData.isEmpty()) {
+                    List<Candle> mergedCandles = mergeCandles(candles, deltaData);
+                    csvService.saveToCsv(ticker, tf, mergedCandles);
+                    candlesByTimeframe.put(tf, mergedCandles);
+                    totalNewCandles += deltaData.size();
+                    downloadLog.info("✅ {} [{}] delta: +{} new candles (cached: {} → merged: {})",
+                            ticker, tf, deltaData.size(), candles.size(), mergedCandles.size());
+                } else {
+                    // Delta download returned no new candles, use cached data
+                    candlesByTimeframe.put(tf, candles);
+                }
             } else {
                 candlesByTimeframe.put(tf, candles);
             }
         }
 
-        // Auto-download missing or stale data
-        if (needsDownload && autoRefreshData) {
-            log.info("Auto-refreshing data for ticker: {}", ticker);
-            try {
-                Map<TimeFrame, List<Candle>> freshData = ibkrService.downloadAllTimeframes(ticker);
-                freshData.forEach((tf, candles) -> {
-                    if (!candles.isEmpty()) {
-                        csvService.saveToCsv(ticker, tf, candles);
-                        candlesByTimeframe.put(tf, candles);
-                    }
-                });
-                log.info("Refreshed {} timeframes for {}", freshData.size(), ticker);
-            } catch (Exception e) {
-                log.error("Failed to download data for {}: {}", ticker, e.getMessage());
-                // Fall back to whatever cached data we have
-            }
+        if (totalNewCandles > 0) {
+            downloadLog.info("📊 {} refresh complete: +{} new candles across timeframes", ticker, totalNewCandles);
         }
 
         if (candlesByTimeframe.isEmpty()) {
@@ -182,14 +238,81 @@ public class StrategyScannerService {
                     );
 
                     signals.add(signal);
-                    log.info("🎯 SIGNAL: {} triggered {} at ${}", ticker, strategy.getName(), currentPrice);
+                    strategyLog.info("🎯 SIGNAL: {} triggered {} at ${}", ticker, strategy.getName(), currentPrice);
                 }
             } catch (Exception e) {
                 log.warn("Error evaluating strategy {} for ticker {}: {}", strategy.getName(), ticker, e.getMessage());
             }
         }
 
+        long elapsed = System.currentTimeMillis() - tickerStartTime;
+        logTickerResult(ticker, signals, elapsed);
         return signals;
+    }
+
+    /**
+     * Downloads data for a single timeframe. If lastTimestamp is null, does a full download.
+     * Otherwise, downloads only delta (new candles since lastTimestamp).
+     */
+    private List<Candle> downloadTimeframeDelta(String ticker, TimeFrame tf, ZonedDateTime lastTimestamp) {
+        try {
+            if (lastTimestamp == null) {
+                // Full download
+                return ibkrService.downloadHistoricalData(ticker, tf);
+            } else {
+                // Delta download
+                return ibkrService.downloadDelta(ticker, tf, lastTimestamp);
+            }
+        } catch (Exception e) {
+            downloadLog.error("❌ Failed to download {} [{}]: {}", ticker, tf, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * Merges cached candles with freshly downloaded delta candles.
+     * Deduplicates by timestamp and returns a sorted list.
+     */
+    private List<Candle> mergeCandles(List<Candle> cachedCandles, List<Candle> deltaCandles) {
+        if (cachedCandles == null || cachedCandles.isEmpty()) {
+            return deltaCandles != null ? new ArrayList<>(deltaCandles) : Collections.emptyList();
+        }
+        if (deltaCandles == null || deltaCandles.isEmpty()) {
+            return new ArrayList<>(cachedCandles);
+        }
+
+        // Use a LinkedHashMap to deduplicate by timestamp (delta candles overwrite cached ones)
+        Map<ZonedDateTime, Candle> merged = new LinkedHashMap<>();
+        for (Candle candle : cachedCandles) {
+            merged.put(candle.timestamp(), candle);
+        }
+        for (Candle candle : deltaCandles) {
+            merged.put(candle.timestamp(), candle);
+        }
+
+        // Sort by timestamp and return
+        List<Candle> result = new ArrayList<>(merged.values());
+        result.sort(Comparator.comparing(Candle::timestamp));
+        return result;
+    }
+
+    /**
+     * Logs per-ticker analysis completion.
+     */
+    private void logTickerResult(String ticker, List<Signal> signals, long elapsedMs) {
+        if (signals.isEmpty()) {
+            strategyLog.debug("✅ {} analyzed - no signals ({})", ticker, elapsedMs + "ms");
+        } else {
+            strategyLog.info("📊 {} analyzed - {} signal(s) found ({})", 
+                    ticker, signals.size(), elapsedMs + "ms");
+            for (Signal signal : signals) {
+                strategyLog.info("   {} {} @ ${} - {} (TP: ${}, SL: ${})", 
+                        signal.ticker(), signal.direction(), signal.currentPrice(),
+                        signal.strategy(),
+                        signal.tradePlan() != null ? signal.tradePlan().takeProfit : "N/A",
+                        signal.tradePlan() != null ? signal.tradePlan().stopLoss : "N/A");
+            }
+        }
     }
 
     /**

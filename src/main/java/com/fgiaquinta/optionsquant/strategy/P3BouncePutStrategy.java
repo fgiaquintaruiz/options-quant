@@ -2,6 +2,7 @@ package com.fgiaquinta.optionsquant.strategy;
 
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
+import com.fgiaquinta.optionsquant.strategy.utils.BollingerBandsUtil;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
@@ -52,11 +53,16 @@ public class P3BouncePutStrategy implements TradingStrategy {
         if (idx1D < 20 || idx1h < 20 || idx15m < 20) return false;
 
         // =========================================================================
-        // RULE 1: Main Bearish Trend (1 Day)
+        // RULE 1: Main Bearish Trend (1 Day) + Bullish BB context on 1H (per book)
+        // Book: "Debemos encontrarnos en una tendencia claramente alcista en Bollinger en la temporalidad hora"
         // =========================================================================
         ClosePriceIndicator close1D = new ClosePriceIndicator(series1D);
         boolean isDowntrend = close1D.getValue(idx1D - 1).isLessThan(close1D.getValue(idx1D - 2));
         if (!isDowntrend) return false;
+
+        // Book requirement: Verify price was in bullish BB context before rejection
+        BollingerBandsUtil bb1h = new BollingerBandsUtil(series1h, 20);
+        boolean wasInBullishBBContext = bb1h.brokeAboveUpperBand(idx1h - 1, 5); // Price touched/broke upper band recently
 
         // =========================================================================
         // RULE 2: Pullback (Bounce) to SMA20 on 1 Hour
@@ -87,7 +93,8 @@ public class P3BouncePutStrategy implements TradingStrategy {
 
         boolean confirmedDowntrend15m = currentPrice15m < sma20Val15m;
 
-        if (confirmedDowntrend15m) {
+        // Signal requires: 15m confirmation AND prior bullish BB context (book requirement)
+        if (confirmedDowntrend15m && wasInBullishBBContext) {
             lastTriggerMap.put(ticker, currentTime);
             return true;
         }

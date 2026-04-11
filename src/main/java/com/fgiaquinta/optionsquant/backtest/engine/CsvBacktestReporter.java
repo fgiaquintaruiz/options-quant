@@ -36,7 +36,9 @@ public class CsvBacktestReporter implements BacktestReporter {
     public void onStart(ZonedDateTime startTime, double initialCapital) {
         this.startTime = startTime;
         this.initialCapital = initialCapital;
-        try { Files.createDirectories(outputDir); } catch (Exception e) { log.warn("Could not create output dir: {}", outputDir); }
+        try {
+            Files.deleteIfExists(outputDir.resolve("trades.csv"));
+            Files.createDirectories(outputDir); } catch (Exception e) { log.warn("Could not create output dir: {}", outputDir); }
     }
 
     @Override
@@ -106,12 +108,21 @@ public class CsvBacktestReporter implements BacktestReporter {
 
     private void writeEquityCsv() {
         Path filePath = outputDir.resolve("equity.csv");
-        try (PrintWriter pw = new PrintWriter(Files.newBufferedWriter(filePath))) {
-            pw.println("Timestamp,Equity");
-            for (BacktestReport.EquityPoint p : equityCurve) {
-                pw.printf(Locale.US, "%s,%.2f%n", p.timestamp().format(TS_FMT), p.equity());
+        try {
+            // Ensure directory exists
+            Files.createDirectories(outputDir);
+            
+            log.info("Writing equity curve: {} points to {}", equityCurve.size(), filePath.toAbsolutePath());
+            
+            try (PrintWriter pw = new PrintWriter(Files.newBufferedWriter(filePath))) {
+                pw.println("Timestamp,Equity");
+                for (BacktestReport.EquityPoint p : equityCurve) {
+                    pw.printf(Locale.US, "%s,%.2f%n", p.timestamp().format(TS_FMT), p.equity());
+                }
             }
-        } catch (Exception e) { log.warn("Failed to write equity CSV: {}", e.getMessage()); }
+        } catch (Exception e) { 
+            log.error("Failed to write equity CSV to {}: {}", filePath.toAbsolutePath(), e.getMessage(), e); 
+        }
     }
 
     private void writeSummary(BacktestReport r) {

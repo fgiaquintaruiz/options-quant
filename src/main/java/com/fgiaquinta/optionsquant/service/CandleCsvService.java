@@ -22,6 +22,10 @@ import java.util.Locale;
 @Service
 public class CandleCsvService {
 
+    // Separate logger for CSV file operations
+    private static final org.slf4j.Logger csvLog =
+            org.slf4j.LoggerFactory.getLogger("CsvOperations");
+
     private static final DateTimeFormatter CSV_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final Path DEFAULT_DATA_DIR = Path.of("data");
 
@@ -43,14 +47,14 @@ public class CandleCsvService {
         long startTime = System.currentTimeMillis();
 
         if (candles == null || candles.isEmpty()) {
-            log.warn("<<< saveToCsv(ticker={}, timeframe={}) - No candles to save", ticker, timeframe);
+            csvLog.warn("⚠️ [CSV] saveToCsv(ticker={}, timeframe={}) - No candles to save", ticker, timeframe);
             return;
         }
 
         try {
             if (!Files.exists(dataDir)) {
                 Files.createDirectories(dataDir);
-                log.info("Created data directory: {}", dataDir.toAbsolutePath());
+                csvLog.info("📁 [CSV] Created data directory: {}", dataDir.toAbsolutePath());
             }
 
             String filename = timeframe.toCacheKey(ticker) + ".csv";
@@ -75,8 +79,8 @@ public class CandleCsvService {
             }
 
             long elapsed = System.currentTimeMillis() - startTime;
-            log.info("<<< saveToCsv(ticker={}, timeframe={}) - Saved {} candles to {} in {}ms",
-                    ticker, timeframe, candles.size(), filepath.toAbsolutePath(), elapsed);
+            csvLog.info("💾 [CSV] Saved {} candles for {} [{}] → {} in {}ms",
+                    candles.size(), ticker, timeframe, filepath.toAbsolutePath(), elapsed);
 
         } catch (IOException e) {
             log.error("Failed to save CSV for {} [{}]: {}", ticker, timeframe, e.getMessage());
@@ -126,8 +130,8 @@ public class CandleCsvService {
             }
 
             long elapsed = System.currentTimeMillis() - startTime;
-            log.debug("<<< loadFromCsv(ticker={}, timeframe={}) - {} candles in {}ms",
-                    ticker, timeframe, candles.size(), elapsed);
+            csvLog.debug("📂 [CSV] Loaded {} candles for {} [{}] from {} in {}ms",
+                    candles.size(), ticker, timeframe, filepath, elapsed);
 
         } catch (IOException e) {
             log.error("Failed to load CSV for {} [{}]: {}", ticker, timeframe, e.getMessage());

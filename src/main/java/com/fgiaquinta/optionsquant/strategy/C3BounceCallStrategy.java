@@ -2,6 +2,7 @@ package com.fgiaquinta.optionsquant.strategy;
 
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
+import com.fgiaquinta.optionsquant.strategy.utils.BollingerBandsUtil;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
@@ -52,12 +53,17 @@ public class C3BounceCallStrategy implements TradingStrategy {
         if (idx1D < 20 || idx1h < 20 || idx15m < 20) return false;
 
         // =========================================================================
-        // RULE 1: Main Uptrend (1 Day)
+        // RULE 1: Main Uptrend (1 Day) + Bearish BB context on 1H (per book)
+        // Book: "Debemos encontrarnos en una tendencia claramente bajista en Bollinger en la temporalidad hora"
         // =========================================================================
         ClosePriceIndicator close1D = new ClosePriceIndicator(series1D);
         // Require yesterday's close > day before yesterday's close
         boolean isUptrend = close1D.getValue(idx1D - 1).isGreaterThan(close1D.getValue(idx1D - 2));
         if (!isUptrend) return false;
+
+        // Book requirement: Verify price was in bearish BB context before bounce
+        BollingerBandsUtil bb1h = new BollingerBandsUtil(series1h, 20);
+        boolean wasInBearishBBContext = bb1h.brokeBelowLowerBand(idx1h - 1, 5); // Price touched/broke lower band recently
 
         // =========================================================================
         // RULE 2: Pullback (Bounce) to SMA20 support on 1 Hour
@@ -91,7 +97,8 @@ public class C3BounceCallStrategy implements TradingStrategy {
         // On 15m, price has crossed and stays above SMA20
         boolean confirmedUptrend15m = currentPrice15m > sma20Val15m;
 
-        if (confirmedUptrend15m) {
+        // Signal requires: 15m confirmation AND prior bearish BB context (book requirement)
+        if (confirmedUptrend15m && wasInBearishBBContext) {
             lastTriggerMap.put(ticker, currentTime);
             return true;
         }

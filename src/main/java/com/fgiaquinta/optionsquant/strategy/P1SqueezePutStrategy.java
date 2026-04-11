@@ -2,10 +2,10 @@ package com.fgiaquinta.optionsquant.strategy;
 
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
+import com.fgiaquinta.optionsquant.strategy.utils.BollingerBandsUtil;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
-import org.ta4j.core.indicators.helpers.*;
-import org.ta4j.core.indicators.statistics.StandardDeviationIndicator;
+import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
 
 import java.time.ZonedDateTime;
 
@@ -63,19 +63,13 @@ public class P1SqueezePutStrategy implements TradingStrategy {
 
         // =========================================================================
         // RULE 4: HIGH VOLATILITY CONFIRMATION ON 15-MIN BOLLINGER BAND
+        // Book: "confirmacion con vela final bajista en Bollinger Bands en periodo de 15 minutos con alta volatilidad"
         // =========================================================================
-        ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
-        SMAIndicator sma20_15m = new SMAIndicator(close15m, 20);
-        StandardDeviationIndicator sd15m = new StandardDeviationIndicator(close15m, 20);
-
-        double currentSma15m = sma20_15m.getValue(idx15m).doubleValue();
-        double currentSd15m = sd15m.getValue(idx15m).doubleValue();
-        double lowerBand15m = currentSma15m - (currentSd15m * 2);
-
-        double currentClose15m = close15m.getValue(idx15m).doubleValue();
+        BollingerBandsUtil bb15m = new BollingerBandsUtil(series15m, 20);
+        double currentClose15m = series15m.getBar(idx15m).getClosePrice().doubleValue();
 
         // Pushing the lower band downward
-        boolean isRidingLowerBand = currentClose15m <= (lowerBand15m * 1.005);
+        boolean isRidingLowerBand = bb15m.isRidingLowerBand(idx15m, 0.005); // Within 0.5% of lower band
 
         return isRidingLowerBand;
     }

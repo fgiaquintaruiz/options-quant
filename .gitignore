@@ -45,4 +45,4 @@ logs/*.txt
 # Sensitive Config
 config.yaml
 /.idea/
-backtest_resultados.log
+/backtest/

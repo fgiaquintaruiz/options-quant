@@ -16,6 +16,7 @@ ta4j-core = { module = "org.ta4j:ta4j-core", version.ref = "ta4j" }
 fastutil = { module = "it.unimi.dsi:fastutil", version.ref = "fastutil" }
 jackson-yaml = { module = "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml", version.ref = "jackson" }
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
+jackson-jsr310 = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jsr310", version.ref = "jackson" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }

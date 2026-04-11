@@ -215,11 +215,14 @@ public class BacktestEngine {
                 boolean isCall = strategy.getName().contains("call");
                 double entryPrice = candle.close();
 
-                TradePlan plan = RiskCalculator.generatePlan(data, ticker, time, isCall, entryPrice);
+                // Use strategy name for per-strategy ATR tuning
+                TradePlan plan = RiskCalculator.generatePlan(data, ticker, time, isCall, entryPrice, strategy.getName());
                 double riskPerContract = Math.abs(entryPrice - plan.stopLoss) * 100;
                 double maxRisk = equity * config.riskPerTradePct();
+                
+                // CRITICAL FIX: Cap at 10 contracts max to prevent position sizing bugs
                 int qty = riskPerContract > 0 ? (int) Math.floor(maxRisk / riskPerContract) : 0;
-                qty = Math.max(1, Math.min(qty, 100));
+                qty = Math.max(1, Math.min(qty, 10)); // FIXED: Was 100, now 10
 
                 FillResult entryFill = fillEngine.fillEntry(ticker, isCall ? "CALL" : "PUT", qty, plan, time);
 
@@ -228,8 +231,8 @@ public class BacktestEngine {
                         entryFill.fillPrice(), plan.takeProfit, plan.stopLoss, time);
                 openPositions.get(ticker).add(pos);
 
-                log.debug("Signal: {} {} at {} entry={}", ticker, pos.direction,
-                        time.format(TS_FMT), entryFill.fillPrice());
+                log.debug("Signal: {} {} at {} entry={} qty={}", ticker, pos.direction,
+                        time.format(TS_FMT), entryFill.fillPrice(), qty);
             } catch (Exception e) {
                 log.debug("Strategy {} error for {}: {}", strategy.getName(), ticker, e.getMessage());
             }

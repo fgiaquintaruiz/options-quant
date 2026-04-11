@@ -177,6 +177,47 @@ public class TradingService {
         }
     }
 
+    /**
+     * Executes a manual trade from Telegram webhook callback.
+     * Format: ticker, strategy, direction, price
+     */
+    public boolean executeManualTrade(String ticker, String strategy, String direction, double price) {
+        log.info(">>> executeManualTrade: ticker={}, strategy={}, direction={}, price={}", 
+                ticker, strategy, direction, price);
+
+        try {
+            boolean isCall = "CALL".equalsIgnoreCase(direction);
+            
+            // Create a simple trade plan with default TP/SL (20% TP, 10% SL)
+            double tp = price * 1.20;  // 20% profit target
+            double sl = price * 0.90;  // 10% stop loss
+            TradePlan plan = new TradePlan(price, tp, sl, isCall, java.time.LocalTime.of(15, 55));
+
+            // Calculate position size
+            int qty = accountManager.calculateQuantity(price, sl);
+            if (qty < 1) {
+                qty = 1;  // Default to 1 contract if calculation fails
+            }
+
+            // Place the bracket order
+            OrderExecutionService.OrderResult orderResult = orderExecutionService.placeOptionBracket(
+                    ticker, isCall, qty, plan, strategy
+            );
+
+            if (orderResult != null) {
+                accountManager.addActiveTrade();
+                log.info("✅ Manual trade executed: {} {} @ ${}, qty={}", ticker, direction, price, qty);
+                return true;
+            } else {
+                log.error("❌ Manual trade failed: order result was null");
+                return false;
+            }
+        } catch (Exception e) {
+            log.error("❌ Manual trade execution failed: {}", e.getMessage(), e);
+            return false;
+        }
+    }
+
     // ===== Response Records =====
 
     public record TradingResult(

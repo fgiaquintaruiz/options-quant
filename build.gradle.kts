@@ -31,6 +31,11 @@ dependencies {
     // TwsApi depends on protobuf
     implementation("com.google.protobuf:protobuf-java:4.34.1")
 
+    // Jackson for JSON serialization (used by BacktestCli)
+    implementation(libs.jackson.databind)
+    implementation(libs.jackson.yaml)
+    implementation(libs.jackson.jsr310)
+
     // Lombok
     compileOnly(libs.lombok)
     annotationProcessor(libs.lombok)
