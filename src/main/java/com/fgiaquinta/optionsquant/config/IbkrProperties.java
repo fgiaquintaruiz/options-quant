@@ -20,12 +20,14 @@ public record IbkrProperties(
         int defaultQty,
         double riskPerTradePct,
         boolean useCsvTickers,
-        List<String> hotTickers  // Priority tickers to scan first
+        List<String> hotTickers,  // Priority tickers to scan first
+        int hotTickerCount        // How many CSV tickers to promote as hot (if hotTickers is empty)
 ) {
     public IbkrProperties {
         // Default values
         if (tickers == null) tickers = new ArrayList<>();
         if (hotTickers == null) hotTickers = List.of("SPY", "QQQ", "AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "META", "GOOGL", "AMD");
+        if (hotTickerCount <= 0) hotTickerCount = 20;  // Default: top 20 tickers by market cap
     }
     
     /**

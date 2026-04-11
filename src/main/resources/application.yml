@@ -46,7 +46,8 @@ ibkr:
   risk-per-trade-pct: 0.02
   use-csv-tickers: true  # Use tickers.csv instead of YAML list
   tickers: []  # Legacy list - kept for backwards compatibility. See data/tickers.csv
-  
+  hot-ticker-count: 20  # Number of top CSV tickers to scan first (by market cap)
+
   # Hot Tickers: Scanned FIRST on every cycle (high-priority, high-volume)
   # These are analyzed before the remaining 500+ tickers for faster signal detection
   hot-tickers:

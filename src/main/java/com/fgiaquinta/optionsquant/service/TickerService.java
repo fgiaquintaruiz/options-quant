@@ -19,6 +19,10 @@ import java.util.stream.Collectors;
 /**
  * Loads and manages ticker information from CSV file.
  * Provides fundamental analysis data for each ticker.
+ *
+ * CSV format: ticker,[active],company,sector,market_cap_b,pe_ratio,dividend_yield,beta,avg_volume_m,description
+ * The 'active' column is optional. If present, filters out inactive tickers.
+ * If absent, all tickers are considered active.
  */
 @Slf4j
 @Service
@@ -27,6 +31,7 @@ public class TickerService {
     private static final String TICKERS_CSV_PATH = "data/tickers.csv";
     private final Map<String, TickerInfo> tickerMap = new ConcurrentHashMap<>();
     private volatile boolean loaded = false;
+    private boolean hasActiveColumn = false;
 
     /**
      * Loads tickers from CSV file on startup.
@@ -154,25 +159,41 @@ public class TickerService {
 
     /**
      * Parses a CSV line into TickerInfo.
+     * Supports both formats:
+     * - Old: ticker,company,sector,...
+     * - New: ticker,active,company,sector,...
      */
     private TickerInfo parseLine(String line) {
         String[] parts = line.split(",");
-        if (parts.length < 11) return null;
+        if (parts.length < 10) return null;
+
+        int offset = 0;
+        boolean active = true;  // Default to active
+
+        // Check if second column is active flag (true/false)
+        if (parts.length >= 11 && ("true".equalsIgnoreCase(parts[1]) || "false".equalsIgnoreCase(parts[1]))) {
+            active = Boolean.parseBoolean(parts[1]);
+            offset = 1;
+        }
+
+        if (!active) {
+            return null;  // Skip inactive tickers
+        }
 
         try {
             return new TickerInfo(
-                    parts[0].trim(),                          // ticker
-                    parts[1].trim(),                          // company_name
-                    parseString(parts[2]),                    // sector
-                    parseLong(parts[3]),                      // market_cap_billion
-                    parseDouble(parts[4]),                    // pe_ratio
-                    parseDouble(parts[5]),                    // dividend_yield
-                    parseDouble(parts[6]),                    // beta
-                    parseDouble(parts[7]),                    // eps_growth
-                    parseDouble(parts[8]),                    // revenue_growth
-                    parseDouble(parts[9]),                    // debt_to_equity
-                    parseDouble(parts[10]),                   // roic
-                    parts.length > 11 ? parts[11].trim() : null // notes
+                    parts[0].trim(),                                    // ticker
+                    parts[1 + offset].trim(),                           // company_name
+                    parseString(parts[2 + offset]),                     // sector
+                    parseLong(parts[3 + offset]),                       // market_cap_billion
+                    parseDouble(parts[4 + offset]),                     // pe_ratio
+                    parseDouble(parts[5 + offset]),                     // dividend_yield
+                    parseDouble(parts[6 + offset]),                     // beta
+                    parseDouble(parts[7 + offset]),                     // eps_growth
+                    parseDouble(parts[8 + offset]),                     // revenue_growth
+                    parseDouble(parts[9 + offset]),                     // debt_to_equity
+                    parseDouble(parts[10 + offset]),                    // roic
+                    parts.length > 11 + offset ? parts[11 + offset].trim() : null // notes
             );
         } catch (Exception e) {
             log.debug("Failed to parse line: {}", e.getMessage());

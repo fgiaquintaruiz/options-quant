@@ -1,4 +1,4 @@
-ticker,company,sector,market_cap_b,pe_ratio,dividend_yield,beta,avg_volume_m,description
+ticker,active,company,sector,market_cap_b,pe_ratio,dividend_yield,beta,avg_volume_m,description
 SPY,SPDR S&P 500 ETF,ETF,0,0,1.2,1.0,85.0,Largest US equity ETF tracking S&P 500
 QQQ,Invesco QQQ Trust,ETF,0,0,0.5,1.2,45.0,NASDAQ-100 index ETF tech-heavy
 A,Agilent Technologies,Healthcare,42.5,28.3,0.6,1.1,2.1,Life sciences and diagnostics
