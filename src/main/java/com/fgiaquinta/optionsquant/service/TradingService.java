@@ -21,15 +21,17 @@ public class TradingService {
     private final AccountManager accountManager;
     private final IbkrProperties ibkrProperties;
     private final StaircaseReEntryFilter staircaseFilter;
+    private final TickerMemory tickerMemory;
 
     public TradingService(StrategyScannerService scannerService, OrderExecutionService orderExecutionService,
                           AccountManager accountManager, IbkrProperties ibkrProperties,
-                          StaircaseReEntryFilter staircaseFilter) {
+                          StaircaseReEntryFilter staircaseFilter, TickerMemory tickerMemory) {
         this.scannerService = scannerService;
         this.orderExecutionService = orderExecutionService;
         this.accountManager = accountManager;
         this.ibkrProperties = ibkrProperties;
         this.staircaseFilter = staircaseFilter;
+        this.tickerMemory = tickerMemory;
     }
 
     /**
@@ -70,6 +72,14 @@ public class TradingService {
                         continue;
                     }
 
+                    // Ticker Memory: adjust position size based on historical performance
+                    double tickerMultiplier = tickerMemory.getPositionSizeMultiplier(signal.ticker());
+                    TickerMemory.TickerStats stats = tickerMemory.getStats(signal.ticker());
+                    if (stats != null && stats.totalTrades >= 3) {
+                        log.info("🧠 [Memory] {} size multiplier: {:.2f}x ({:.1f}% WR, {} trades)",
+                                signal.ticker(), tickerMultiplier, stats.getWinRate() * 100, stats.totalTrades);
+                    }
+
                     // Check concurrent trades limit
                     if (!accountManager.canOpenNewTrade(maxConcurrentTrades)) {
                         log.warn("Max concurrent trades reached ({}) - skipping {}", maxConcurrentTrades, signal.ticker());
@@ -80,9 +90,10 @@ public class TradingService {
                     // Calculate position size based on 2% risk (or use override)
                     int effectiveQty;
                     if (qty > 0) {
-                        effectiveQty = qty;
+                        effectiveQty = (int) Math.max(1, Math.round(qty * tickerMultiplier));
                     } else {
                         effectiveQty = accountManager.calculateQuantity(plan.entryPrice, plan.stopLoss);
+                        effectiveQty = (int) Math.max(1, Math.round(effectiveQty * tickerMultiplier));
                     }
 
                     if (effectiveQty < 1) {

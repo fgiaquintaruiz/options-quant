@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.ta4j.core.BarSeries;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.time.ZoneId;
 import java.util.*;
@@ -30,6 +31,8 @@ public class StrategyScannerService {
     private final IbkrService ibkrService;
     private final IbkrProperties ibkrProperties;
     private final TickerService tickerService;
+    private final TickerMemory tickerMemory;
+    private final EarningsDateService earningsService;
 
     private final List<TradingStrategy> callStrategies;
     private final List<TradingStrategy> putStrategies;
@@ -50,12 +53,15 @@ public class StrategyScannerService {
             TimeFrame.DAY_1, Duration.ofHours(26)
     );
 
-    public StrategyScannerService(CandleCsvService csvService, IbkrService ibkrService, 
-                                   IbkrProperties ibkrProperties, TickerService tickerService) {
+    public StrategyScannerService(CandleCsvService csvService, IbkrService ibkrService,
+                                   IbkrProperties ibkrProperties, TickerService tickerService,
+                                   TickerMemory tickerMemory, EarningsDateService earningsService) {
         this.csvService = csvService;
         this.ibkrService = ibkrService;
         this.ibkrProperties = ibkrProperties;
         this.tickerService = tickerService;
+        this.tickerMemory = tickerMemory;
+        this.earningsService = earningsService;
 
         this.callStrategies = List.of(
                 new C1SqueezeCallStrategy(),
@@ -154,6 +160,21 @@ public class StrategyScannerService {
     public List<Signal> scanTicker(String ticker, boolean includeTradePlans, boolean autoRefreshData) {
         long tickerStartTime = System.currentTimeMillis();
         log.debug("Scanning ticker: {} (autoRefresh={})", ticker, autoRefreshData);
+
+        // ===== TICKER MEMORY CHECK =====
+        // Block tickers with consistently poor performance
+        if (tickerMemory.isBlocked(ticker)) {
+            strategyLog.debug("🚫 [Memory] Skipping {} — blocked due to poor historical performance", ticker);
+            return Collections.emptyList();
+        }
+
+        // ===== EARNINGS CHECK =====
+        // Skip tickers with earnings in the next 3 days (IV crush risk)
+        if (earningsService.hasEarningsSoon(ticker, 3)) {
+            LocalDate earningsDate = earningsService.getEarningsDate(ticker);
+            strategyLog.debug("📅 [Earnings] Skipping {} — earnings on {}", ticker, earningsDate);
+            return Collections.emptyList();
+        }
 
         // Load all timeframes from CSV, auto-download delta if stale/missing
         Map<TimeFrame, List<Candle>> candlesByTimeframe = new EnumMap<>(TimeFrame.class);
