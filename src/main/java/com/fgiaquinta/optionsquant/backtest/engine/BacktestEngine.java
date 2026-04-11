@@ -219,7 +219,7 @@ public class BacktestEngine {
                 TradePlan plan = RiskCalculator.generatePlan(data, ticker, time, isCall, entryPrice, strategy.getName());
                 double riskPerContract = Math.abs(entryPrice - plan.stopLoss) * 100;
                 double maxRisk = equity * config.riskPerTradePct();
-                
+
                 // CRITICAL FIX: Cap at 10 contracts max to prevent position sizing bugs
                 int qty = riskPerContract > 0 ? (int) Math.floor(maxRisk / riskPerContract) : 0;
                 qty = Math.max(1, Math.min(qty, 10)); // FIXED: Was 100, now 10
@@ -230,6 +230,19 @@ public class BacktestEngine {
                         strategy.getName(), isCall ? "CALL" : "PUT", qty,
                         entryFill.fillPrice(), plan.takeProfit, plan.stopLoss, time);
                 openPositions.get(ticker).add(pos);
+
+                // Generate chart for this signal
+                List<Candle> chartCandles = data.getCandles(config.executionTimeframe());
+                if (chartCandles != null && !chartCandles.isEmpty()) {
+                    Path chartsDir = Path.of("backtest/charts");
+                    Path chartPath = SignalChartGenerator.generateChart(
+                            ticker, strategy.getName(), time,
+                            entryFill.fillPrice(), plan.takeProfit, plan.stopLoss,
+                            isCall, chartCandles, chartsDir);
+                    if (chartPath != null) {
+                        log.debug("📊 Chart generated: {}", chartPath);
+                    }
+                }
 
                 log.debug("Signal: {} {} at {} entry={} qty={}", ticker, pos.direction,
                         time.format(TS_FMT), entryFill.fillPrice(), qty);

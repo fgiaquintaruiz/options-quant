@@ -7,8 +7,10 @@ import com.fgiaquinta.optionsquant.strategy.*;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.model.TradePlan;
 import com.fgiaquinta.optionsquant.strategy.utils.RiskCalculator;
+import com.fgiaquinta.optionsquant.strategy.utils.SignalQualityFilter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.ta4j.core.BarSeries;
 
 import java.time.Duration;
 import java.time.ZonedDateTime;
@@ -220,8 +222,22 @@ public class StrategyScannerService {
             try {
                 boolean triggered = strategy.isTriggered(ticker, data, nyTime);
                 if (triggered) {
-                    double currentPrice = getCurrentPrice(data);
+                    // ===== POST-TRIGGER: Signal Quality Filter =====
+                    // Run generic false signal detection on the 1-hour series
+                    BarSeries series1h = data.getSeries(TimeFrame.HOUR_1);
                     boolean isCall = strategy.getName().contains("call");
+
+                    if (series1h != null && !series1h.isEmpty()) {
+                        int idx1h = data.getIndexForTime(series1h, currentTime);
+                        if (idx1h > 0 && !SignalQualityFilter.passesCoreChecks(series1h, idx1h, isCall)) {
+                            String qualityReport = SignalQualityFilter.getQualityReport(series1h, idx1h, isCall);
+                            strategyLog.debug("🚫 [Quality Filter] {} {} failed quality check: {}",
+                                    ticker, strategy.getName(), qualityReport);
+                            continue;  // Skip this signal — likely false
+                        }
+                    }
+
+                    double currentPrice = getCurrentPrice(data);
 
                     TradePlan tradePlan = null;
                     if (includeTradePlans) {
