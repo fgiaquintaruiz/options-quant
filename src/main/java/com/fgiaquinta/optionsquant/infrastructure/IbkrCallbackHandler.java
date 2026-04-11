@@ -39,13 +39,21 @@ public final class IbkrCallbackHandler extends DefaultEWrapper {
     private final Consumer<RequestCompleteEvent> onComplete;
     private final Consumer<ErrorEvent> onError;
     private final Runnable onReady;
+    private final Consumer<ExecutionEvent> onExecution;  // NEW: callback for trade fills
 
     public IbkrCallbackHandler(Consumer<BarEvent> onBar, Consumer<RequestCompleteEvent> onComplete,
                                Consumer<ErrorEvent> onError, Runnable onReady) {
+        this(onBar, onComplete, onError, onReady, null);
+    }
+
+    public IbkrCallbackHandler(Consumer<BarEvent> onBar, Consumer<RequestCompleteEvent> onComplete,
+                               Consumer<ErrorEvent> onError, Runnable onReady,
+                               Consumer<ExecutionEvent> onExecution) {
         this.onBar = onBar;
         this.onComplete = onComplete;
         this.onError = onError;
         this.onReady = onReady;
+        this.onExecution = onExecution;
     }
 
     // ===== Factory methods =====
@@ -173,4 +181,5 @@ public final class IbkrCallbackHandler extends DefaultEWrapper {
             return code == 366 || code == 162 || code == 200;
         }
     }
+    public record ExecutionEvent(String ticker, String side, double price, int quantity, ZonedDateTime timestamp) {}
 }

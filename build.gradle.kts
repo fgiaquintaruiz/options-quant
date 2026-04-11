@@ -63,8 +63,8 @@ tasks.withType<Test> {
 tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
     options.compilerArgs.addAll(listOf("-Xlint:all", "-g"))
-    // Exclude legacy code from compilation (missing TA4J etc. dependencies)
-    exclude("com/fgiaquinta/optionsquant/legacy/**")
+    // Exclude legacy-reference code from compilation (preserved for migration reference only)
+    exclude("com/fgiaquinta/optionsquant/legacy-reference/**")
 }
 
 tasks.bootJar {

@@ -20,13 +20,16 @@ public class TradingService {
     private final OrderExecutionService orderExecutionService;
     private final AccountManager accountManager;
     private final IbkrProperties ibkrProperties;
+    private final StaircaseReEntryFilter staircaseFilter;
 
     public TradingService(StrategyScannerService scannerService, OrderExecutionService orderExecutionService,
-                          AccountManager accountManager, IbkrProperties ibkrProperties) {
+                          AccountManager accountManager, IbkrProperties ibkrProperties,
+                          StaircaseReEntryFilter staircaseFilter) {
         this.scannerService = scannerService;
         this.orderExecutionService = orderExecutionService;
         this.accountManager = accountManager;
         this.ibkrProperties = ibkrProperties;
+        this.staircaseFilter = staircaseFilter;
     }
 
     /**
@@ -56,6 +59,14 @@ public class TradingService {
                     if (plan == null) {
                         log.warn("No trade plan for signal {} - skipping execution", signal);
                         executions.add(new ExecutionResult(signal, false, "No trade plan", null));
+                        continue;
+                    }
+
+                    // Staircase Re-Entry Filter: block if price hasn't improved since last exit
+                    if (!staircaseFilter.isReEntryAllowed(signal.ticker(), isCall, signal.currentPrice())) {
+                        log.warn("⏳ [Staircase] BLOCKED: {} {} at ${:.2f} - price not improved since last exit",
+                                signal.ticker(), signal.direction(), signal.currentPrice());
+                        executions.add(new ExecutionResult(signal, false, "Staircase re-entry blocked", null));
                         continue;
                     }
 

@@ -40,20 +40,24 @@ public class MarketScanner {
     private final com.fgiaquinta.optionsquant.service.OrderExecutionService orderExecutionService;
     private final MacroEnvironmentFilter macroFilter;
     private final TelegramService telegramService;
+    private final TrailingStopMonitor trailingStopMonitor;
 
     public MarketScanner(StrategyScannerService scannerService,
                          IbkrProperties ibkrProperties,
                          com.fgiaquinta.optionsquant.service.OrderExecutionService orderExecutionService,
                          MacroEnvironmentFilter macroFilter,
-                         TelegramService telegramService) {
+                         TelegramService telegramService,
+                         TrailingStopMonitor trailingStopMonitor) {
         this.scannerService = scannerService;
         this.ibkrProperties = ibkrProperties;
         this.orderExecutionService = orderExecutionService;
         this.macroFilter = macroFilter;
         this.telegramService = telegramService;
+        this.trailingStopMonitor = trailingStopMonitor;
         log.info("🤖 MarketScanner initialized - Spain timezone, 15-min synchronized");
         log.info("   Auto-execute: {}", ibkrProperties.autoExecute());
         log.info("   Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)");
+        log.info("   Trailing stop monitor: ENABLED ({} min max hold, SMA20 trailing)", 90);
     }
 
     /**
@@ -198,8 +202,16 @@ public class MarketScanner {
                                 
                                 if (orderResult != null) {
                                     log.info("    ✅ ORDER PLACED: Parent ID={}, Strike={}, Expiration={}, Right={}",
-                                            orderResult.parentId(), orderResult.strike(), 
+                                            orderResult.parentId(), orderResult.strike(),
                                             orderResult.expiration(), orderResult.right());
+
+                                    // Register for trailing stop monitoring
+                                    trailingStopMonitor.registerPosition(
+                                            signal.ticker(),
+                                            isCall,
+                                            signal.currentPrice(),
+                                            orderResult.slOrderId()
+                                    );
                                 } else {
                                     log.error("    ❌ ORDER FAILED: Check logs for IBKR errors");
                                 }
