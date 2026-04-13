@@ -148,30 +148,15 @@ public class BacktestDashboardController {
                                 elapsedSec, currentTradeCount);
                         lastLogTime = now;
 
-                        // Send progress update to UI with current date range
+                        // Send progress update to UI
                         final long finalElapsedSec = elapsedSec;
                         final int finalTradeCount = currentTradeCount;
                         eventExecutor.submit(() -> {
                             try {
-                                // Read last trade to get current date being analyzed
-                                String currentDate = "";
-                                List<String> lines = Files.readAllLines(tradesCsv);
-                                if (lines.size() > 1) {
-                                    String lastLine = lines.get(lines.size() - 1);
-                                    String[] parts = lastLine.split(",");
-                                    if (parts.length >= 6) {
-                                        String entryTime = parts[5].trim();
-                                        if (entryTime.length() >= 10) {
-                                            currentDate = entryTime.substring(0, 10);
-                                        }
-                                    }
-                                }
-                                
                                 Map<String, Object> progressUpdate = new LinkedHashMap<>();
                                 progressUpdate.put("type", "progress_update");
                                 progressUpdate.put("elapsedSec", finalElapsedSec);
                                 progressUpdate.put("totalTrades", finalTradeCount);
-                                progressUpdate.put("currentDate", currentDate);
                                 emitter.send(SseEmitter.event().data(progressUpdate));
                             } catch (IOException e) {
                                 log.warn("Error sending progress update: {}", e.getMessage());
@@ -193,15 +178,6 @@ public class BacktestDashboardController {
                                 if (!newTrades.isEmpty()) {
                                     long wins = newTrades.stream().filter(t -> (double) t.getOrDefault("netPnl", 0.0) > 0).count();
                                     double totalPnl = newTrades.stream().mapToDouble(t -> (double) t.getOrDefault("netPnl", 0.0)).sum();
-                                    
-                                    // Get current date from last trade
-                                    String currentDate = "";
-                                    if (!newTrades.isEmpty()) {
-                                        String lastEntryTime = (String) newTrades.get(newTrades.size() - 1).get("entryTime");
-                                        if (lastEntryTime != null && lastEntryTime.length() >= 10) {
-                                            currentDate = lastEntryTime.substring(0, 10);
-                                        }
-                                    }
 
                                     Map<String, Object> progressEvent = new LinkedHashMap<>();
                                     progressEvent.put("type", "trades");
@@ -210,7 +186,6 @@ public class BacktestDashboardController {
                                     progressEvent.put("elapsedMs", currentElapsed);
                                     progressEvent.put("recentWins", wins);
                                     progressEvent.put("recentPnl", totalPnl);
-                                    progressEvent.put("currentDate", currentDate);
 
                                     emitter.send(SseEmitter.event().data(progressEvent));
                                     log.debug("SSE progress event sent: {} new trades, totalPnl={}", newTrades.size(), totalPnl);
@@ -394,14 +369,14 @@ public class BacktestDashboardController {
                     trade.put("pattern", parts[15].trim());
                     trade.put("entryTime", parts[5].trim());
                     
-                    // Build chart file path
+                    // Build chart file path (using /charts/ endpoint)
                     String entryTime = parts[5].trim();
                     String chartFilename = String.format("%s_%s_%s_%s.html",
                             parts[0].trim(),
                             parts[1].trim(),
                             parts[2].trim(),
                             entryTime.replace(" ", "_").replace(":", "-"));
-                    trade.put("chartPath", "backtest/charts/" + chartFilename);
+                    trade.put("chartPath", chartFilename); // Just the filename, JS will prefix /charts/
                     
                     trades.add(trade);
                 }
@@ -1066,7 +1041,7 @@ public class BacktestDashboardController {
                                                     const pnlClass = trade.netPnl >= 0 ? 'positive' : 'negative';
                                                     const exitBadge = trade.exitReason === 'TP' ? 'badge-success' : 
                                                                      trade.exitReason === 'SL' ? 'badge-danger' : 'badge-warning';
-                                                    const chartLink = trade.chartPath ? `<a href="/${trade.chartPath}" target="_blank" style="color: #58a6ff; text-decoration: none;" title="Ver gráfico">📊</a>` : '';
+                                                    const chartLink = trade.chartPath ? `<a href="/charts/${trade.chartPath}" target="_blank" style="color: #58a6ff; text-decoration: none;" title="Ver gráfico">📊</a>` : '';
                                                     
                                                     tr.innerHTML = `
                                                         <td>${trade.entryTime.substring(5)}</td>
@@ -1104,30 +1079,27 @@ public class BacktestDashboardController {
                                             // Update progress
                                             const totalTrades = data.totalTrades || 0;
                                             const elapsed = data.elapsedMs || 0;
-                                            const currentDate = data.currentDate || '';
                                             startTimeSec = Math.round(elapsed / 1000);
-                                            progressText.textContent = `Escaneando... ${totalTrades} trades encontrados (${startTimeSec}s) ${currentDate ? '- Analizando: ' + currentDate : ''}`;
+                                            progressText.textContent = `Escaneando... ${totalTrades} trades encontrados (${startTimeSec}s)`;
                                             progressBar.style.width = Math.min(90, 10 + (totalTrades / 5)) + '%';
                                             footerTime.textContent = startTimeSec + 's';
-                                            footerStatus.textContent = currentDate ? `Analizando: ${currentDate}` : 'Escaneando...';
+                                            footerStatus.textContent = 'Escaneando...';
                                             break;
                                             
                                         case 'progress_update':
                                             // Update every 10 seconds even without new trades
                                             const elapsedSec = data.elapsedSec || 0;
                                             const tradesFound = data.totalTrades || 0;
-                                            const progressDate = data.currentDate || '';
-                                            progressText.textContent = `Escaneando... ${tradesFound} trades encontrados (${elapsedSec}s) ${progressDate ? '- ' + progressDate : ''}`;
+                                            progressText.textContent = `Escaneando... ${tradesFound} trades encontrados (${elapsedSec}s)`;
                                             footerTime.textContent = elapsedSec + 's';
-                                            footerStatus.textContent = progressDate ? `Analizando: ${progressDate}` : 'Escaneando...';
+                                            footerStatus.textContent = `Escaneando...`;
                                             
-                                            // ALWAYS show progress in console (but limit to avoid flooding)
-                                            if (elapsedSec > 0) {
+                                            // Show progress in console (every 30s to avoid flooding)
+                                            if (elapsedSec > 0 && elapsedSec % 30 === 0) {
                                                 const min = Math.floor(elapsedSec / 60);
                                                 const sec = elapsedSec % 60;
                                                 const timeStr = min > 0 ? `${min}m ${sec}s` : `${sec}s`;
-                                                const dateStr = progressDate ? ` | 📅 ${progressDate}` : '';
-                                                addConsoleLog(`⏳ ${timeStr} transcurridos, ${tradesFound} trades${dateStr}`, 'info');
+                                                addConsoleLog(`⏳ Progreso: ${timeStr}, ${tradesFound} trades encontrados`, 'info');
                                             }
                                             break;
                                             
