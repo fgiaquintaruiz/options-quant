@@ -137,26 +137,41 @@ public class BacktestDashboardController {
 
                 // Monitor progress while backtest runs
                 while (backtestThread.isAlive()) {
-                    Thread.sleep(500); // Check every 500ms
+                    Thread.sleep(1000); // Check every 1 second
 
                     // Log progress every 10 seconds AND send to UI
                     long now = System.currentTimeMillis();
                     if (now - lastLogTime > 10000) {
                         int currentTradeCount = countTradesInCsv(tradesCsv);
                         long elapsedSec = (now - startTime) / 1000;
-                        log.info("Backtest progress: {}s elapsed, {} trades so far", 
+                        log.info("Backtest progress: {}s elapsed, {} trades so far",
                                 elapsedSec, currentTradeCount);
                         lastLogTime = now;
-                        
-                        // Send progress update to UI even if no new trades
+
+                        // Send progress update to UI with current date range
                         final long finalElapsedSec = elapsedSec;
                         final int finalTradeCount = currentTradeCount;
                         eventExecutor.submit(() -> {
                             try {
+                                // Read last trade to get current date being analyzed
+                                String currentDate = "";
+                                List<String> lines = Files.readAllLines(tradesCsv);
+                                if (lines.size() > 1) {
+                                    String lastLine = lines.get(lines.size() - 1);
+                                    String[] parts = lastLine.split(",");
+                                    if (parts.length >= 6) {
+                                        String entryTime = parts[5].trim();
+                                        if (entryTime.length() >= 10) {
+                                            currentDate = entryTime.substring(0, 10);
+                                        }
+                                    }
+                                }
+                                
                                 Map<String, Object> progressUpdate = new LinkedHashMap<>();
                                 progressUpdate.put("type", "progress_update");
                                 progressUpdate.put("elapsedSec", finalElapsedSec);
                                 progressUpdate.put("totalTrades", finalTradeCount);
+                                progressUpdate.put("currentDate", currentDate);
                                 emitter.send(SseEmitter.event().data(progressUpdate));
                             } catch (IOException e) {
                                 log.warn("Error sending progress update: {}", e.getMessage());
@@ -164,13 +179,13 @@ public class BacktestDashboardController {
                         });
                     }
 
-                    // Read current trades from CSV
+                    // Read current trades from CSV (batch updates to avoid flooding UI)
                     int currentTradeCount = countTradesInCsv(tradesCsv);
                     if (currentTradeCount > lastTradeCount) {
                         final int tradesToSendFrom = lastTradeCount;
                         final int newTradeCount = currentTradeCount;
                         final long currentElapsed = System.currentTimeMillis() - startTime;
-                        
+
                         eventExecutor.submit(() -> {
                             try {
                                 List<Map<String, Object>> newTrades = readNewTradesFromCsv(tradesCsv, tradesToSendFrom);
@@ -178,6 +193,15 @@ public class BacktestDashboardController {
                                 if (!newTrades.isEmpty()) {
                                     long wins = newTrades.stream().filter(t -> (double) t.getOrDefault("netPnl", 0.0) > 0).count();
                                     double totalPnl = newTrades.stream().mapToDouble(t -> (double) t.getOrDefault("netPnl", 0.0)).sum();
+                                    
+                                    // Get current date from last trade
+                                    String currentDate = "";
+                                    if (!newTrades.isEmpty()) {
+                                        String lastEntryTime = (String) newTrades.get(newTrades.size() - 1).get("entryTime");
+                                        if (lastEntryTime != null && lastEntryTime.length() >= 10) {
+                                            currentDate = lastEntryTime.substring(0, 10);
+                                        }
+                                    }
 
                                     Map<String, Object> progressEvent = new LinkedHashMap<>();
                                     progressEvent.put("type", "trades");
@@ -186,6 +210,7 @@ public class BacktestDashboardController {
                                     progressEvent.put("elapsedMs", currentElapsed);
                                     progressEvent.put("recentWins", wins);
                                     progressEvent.put("recentPnl", totalPnl);
+                                    progressEvent.put("currentDate", currentDate);
 
                                     emitter.send(SseEmitter.event().data(progressEvent));
                                     log.debug("SSE progress event sent: {} new trades, totalPnl={}", newTrades.size(), totalPnl);
@@ -196,7 +221,7 @@ public class BacktestDashboardController {
                                 log.error("Unexpected error in SSE progress: {}", e.getMessage(), e);
                             }
                         });
-                        
+
                         lastTradeCount = currentTradeCount;
                     }
 
@@ -368,6 +393,16 @@ public class BacktestDashboardController {
                     trade.put("exitReason", parts[8].trim());
                     trade.put("pattern", parts[15].trim());
                     trade.put("entryTime", parts[5].trim());
+                    
+                    // Build chart file path
+                    String entryTime = parts[5].trim();
+                    String chartFilename = String.format("%s_%s_%s_%s.html",
+                            parts[0].trim(),
+                            parts[1].trim(),
+                            parts[2].trim(),
+                            entryTime.replace(" ", "_").replace(":", "-"));
+                    trade.put("chartPath", "backtest/charts/" + chartFilename);
+                    
                     trades.add(trade);
                 }
             }
@@ -780,6 +815,7 @@ public class BacktestDashboardController {
                                             <th>Patrón</th>
                                             <th>PnL</th>
                                             <th>Salida</th>
+                                            <th>Chart</th>
                                         </tr>
                                     </thead>
                                     <tbody id="live-trades-body"></tbody>
@@ -945,7 +981,7 @@ public class BacktestDashboardController {
                             const footerTime = document.getElementById('footer-time');
                             const footerStatus = document.getElementById('footer-status');
 
-                            // Helper: add log to console
+                            // Helper: add log to console (limit to 100 entries to prevent UI hanging)
                             function addConsoleLog(message, type = 'info') {
                                 const now = new Date();
                                 const timestamp = now.toLocaleTimeString('es-AR', { hour12: false });
@@ -956,6 +992,12 @@ public class BacktestDashboardController {
                                 line.style.marginBottom = '3px';
                                 line.innerHTML = `<span style="color: #8b949e;">[${timestamp}]</span> ${message}`;
                                 consoleOutput.appendChild(line);
+                                
+                                // Limit to 100 entries to prevent UI hanging
+                                while (consoleOutput.children.length > 100) {
+                                    consoleOutput.removeChild(consoleOutput.firstChild);
+                                }
+                                
                                 consoleOutput.scrollTop = consoleOutput.scrollHeight;
                             }
 
@@ -1024,6 +1066,7 @@ public class BacktestDashboardController {
                                                     const pnlClass = trade.netPnl >= 0 ? 'positive' : 'negative';
                                                     const exitBadge = trade.exitReason === 'TP' ? 'badge-success' : 
                                                                      trade.exitReason === 'SL' ? 'badge-danger' : 'badge-warning';
+                                                    const chartLink = trade.chartPath ? `<a href="/${trade.chartPath}" target="_blank" style="color: #58a6ff; text-decoration: none;" title="Ver gráfico">📊</a>` : '';
                                                     
                                                     tr.innerHTML = `
                                                         <td>${trade.entryTime.substring(5)}</td>
@@ -1033,6 +1076,7 @@ public class BacktestDashboardController {
                                                         <td style="font-size: 11px;">${trade.pattern}</td>
                                                         <td class="${pnlClass}">$${trade.netPnl.toFixed(2)}</td>
                                                         <td><span class="badge ${exitBadge}">${trade.exitReason}</span></td>
+                                                        <td>${chartLink}</td>
                                                     `;
                                                     liveTradesBody.insertBefore(tr, liveTradesBody.firstChild);
                                                 });
@@ -1060,27 +1104,30 @@ public class BacktestDashboardController {
                                             // Update progress
                                             const totalTrades = data.totalTrades || 0;
                                             const elapsed = data.elapsedMs || 0;
+                                            const currentDate = data.currentDate || '';
                                             startTimeSec = Math.round(elapsed / 1000);
-                                            progressText.textContent = `Escaneando... ${totalTrades} trades encontrados (${startTimeSec}s transcurridos)`;
+                                            progressText.textContent = `Escaneando... ${totalTrades} trades encontrados (${startTimeSec}s) ${currentDate ? '- Analizando: ' + currentDate : ''}`;
                                             progressBar.style.width = Math.min(90, 10 + (totalTrades / 5)) + '%';
                                             footerTime.textContent = startTimeSec + 's';
-                                            footerStatus.textContent = 'Escaneando...';
+                                            footerStatus.textContent = currentDate ? `Analizando: ${currentDate}` : 'Escaneando...';
                                             break;
                                             
                                         case 'progress_update':
                                             // Update every 10 seconds even without new trades
                                             const elapsedSec = data.elapsedSec || 0;
                                             const tradesFound = data.totalTrades || 0;
-                                            progressText.textContent = `Escaneando... ${tradesFound} trades encontrados (${elapsedSec}s transcurridos)`;
+                                            const progressDate = data.currentDate || '';
+                                            progressText.textContent = `Escaneando... ${tradesFound} trades encontrados (${elapsedSec}s) ${progressDate ? '- ' + progressDate : ''}`;
                                             footerTime.textContent = elapsedSec + 's';
-                                            footerStatus.textContent = `Escaneando...`;
+                                            footerStatus.textContent = progressDate ? `Analizando: ${progressDate}` : 'Escaneando...';
                                             
-                                            // ALWAYS show progress in console
+                                            // ALWAYS show progress in console (but limit to avoid flooding)
                                             if (elapsedSec > 0) {
                                                 const min = Math.floor(elapsedSec / 60);
                                                 const sec = elapsedSec % 60;
                                                 const timeStr = min > 0 ? `${min}m ${sec}s` : `${sec}s`;
-                                                addConsoleLog(`⏳ Escaneando... ${timeStr} transcurridos, ${tradesFound} trades encontrados`, 'info');
+                                                const dateStr = progressDate ? ` | 📅 ${progressDate}` : '';
+                                                addConsoleLog(`⏳ ${timeStr} transcurridos, ${tradesFound} trades${dateStr}`, 'info');
                                             }
                                             break;
                                             
