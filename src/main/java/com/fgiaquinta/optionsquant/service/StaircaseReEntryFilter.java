@@ -39,21 +39,21 @@ public class StaircaseReEntryFilter {
         if (isCall) {
             // CALL: current price must be LOWER than last exit (cheaper entry)
             if (currentPrice >= lastExitPrice) {
-                log.warn("⏳ [Staircase] BLOCKED re-entry for {} CALL: current ${:.2f} >= last exit ${:.2f}",
-                        ticker, currentPrice, lastExitPrice);
+                log.warn("⏳ [Staircase] BLOCKED re-entry for {} CALL: current ${} >= last exit ${}",
+                        ticker, String.format("%.2f", currentPrice), String.format("%.2f", lastExitPrice));
                 return false;
             }
         } else {
             // PUT: current price must be HIGHER than last exit (better premium)
             if (currentPrice <= lastExitPrice) {
-                log.warn("⏳ [Staircase] BLOCKED re-entry for {} PUT: current ${:.2f} <= last exit ${:.2f}",
-                        ticker, currentPrice, lastExitPrice);
+                log.warn("⏳ [Staircase] BLOCKED re-entry for {} PUT: current ${} <= last exit ${}",
+                        ticker, String.format("%.2f", currentPrice), String.format("%.2f", lastExitPrice));
                 return false;
             }
         }
 
-        log.info("✅ [Staircase] Price improved for {} {} (current ${:.2f} vs last exit ${:.2f}) — allowing re-entry",
-                ticker, isCall ? "CALL" : "PUT", currentPrice, lastExitPrice);
+        log.info("✅ [Staircase] Price improved for {} {} (current ${} vs last exit ${}) — allowing re-entry",
+                ticker, isCall ? "CALL" : "PUT", String.format("%.2f", currentPrice), String.format("%.2f", lastExitPrice));
         return true;
     }
 
@@ -65,7 +65,7 @@ public class StaircaseReEntryFilter {
      */
     public void recordExit(String ticker, double exitPrice) {
         lastExitPrices.put(ticker, exitPrice);
-        log.info("💾 [Staircase] Recorded exit for {} at ${:.2f}", ticker, exitPrice);
+        log.info("💾 [Staircase] Recorded exit for {} at ${}", ticker, String.format("%.2f", exitPrice));
     }
 
     /**

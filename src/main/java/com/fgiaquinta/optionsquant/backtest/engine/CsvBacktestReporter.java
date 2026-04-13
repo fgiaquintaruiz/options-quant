@@ -27,6 +27,7 @@ public class CsvBacktestReporter implements BacktestReporter {
     private final List<BacktestReport.EquityPoint> equityCurve = Collections.synchronizedList(new ArrayList<>());
     private double initialCapital;
     private ZonedDateTime startTime;
+    private ZonedDateTime lastEquityTimestamp = null;
 
     public CsvBacktestReporter(Path outputDir) {
         this.outputDir = outputDir;
@@ -49,6 +50,12 @@ public class CsvBacktestReporter implements BacktestReporter {
 
     @Override
     public void onEquityUpdate(ZonedDateTime timestamp, double equity) {
+        // Only record one equity value per unique timestamp
+        // (Multiple tickers may report equity at the same candle time)
+        if (lastEquityTimestamp != null && lastEquityTimestamp.isEqual(timestamp)) {
+            return;
+        }
+        lastEquityTimestamp = timestamp;
         equityCurve.add(new BacktestReport.EquityPoint(timestamp, equity));
     }
 
@@ -95,14 +102,16 @@ public class CsvBacktestReporter implements BacktestReporter {
         boolean exists = Files.exists(filePath);
         try (PrintWriter pw = new PrintWriter(Files.newBufferedWriter(filePath, StandardOpenOption.CREATE, StandardOpenOption.APPEND))) {
             if (!exists) {
-                pw.println("Ticker,Strategy,Direction,Qty,EntryPrice,EntryTime,ExitPrice,ExitTime,ExitReason,GrossPnl,Commission,Slippage,NetPnl,MaxDD,MaxRunup");
+                pw.println("Ticker,Strategy,Direction,Qty,EntryPrice,EntryTime,ExitPrice,ExitTime,ExitReason,GrossPnl,Commission,Slippage,NetPnl,MaxDD,MaxRunup,Pattern,ATR,VIX,EntryHour,MarketTrend");
             }
-            pw.printf(Locale.US, "%s,%s,%s,%d,%.2f,%s,%.2f,%s,%s,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f%n",
+            pw.printf(Locale.US, "%s,%s,%s,%d,%.2f,%s,%.2f,%s,%s,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%s,%.2f,%.2f,%d,%s%n",
                     trade.ticker(), trade.strategy(), trade.direction(), trade.quantity(),
                     trade.entryPrice(), trade.entryTime().format(TS_FMT),
                     trade.exitPrice(), trade.exitTime().format(TS_FMT),
                     trade.exitReason(), trade.grossPnl(), trade.commission(),
-                    trade.slippage(), trade.netPnl(), trade.maxDrawdown(), trade.maxRunup());
+                    trade.slippage(), trade.netPnl(), trade.maxDrawdown(), trade.maxRunup(),
+                    trade.candlestickPattern(), trade.atrAtEntry(), trade.vixAtEntry(),
+                    trade.entryHour(), trade.marketTrend());
         } catch (Exception e) { log.warn("Failed to append trade CSV: {}", e.getMessage()); }
     }
 

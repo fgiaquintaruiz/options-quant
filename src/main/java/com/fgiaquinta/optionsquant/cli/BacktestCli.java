@@ -4,26 +4,26 @@ import com.fgiaquinta.optionsquant.backtest.domain.BacktestConfig;
 import com.fgiaquinta.optionsquant.backtest.domain.BacktestReport;
 import com.fgiaquinta.optionsquant.backtest.engine.BacktestEngine;
 import com.fgiaquinta.optionsquant.service.BacktestAnalyzer;
+import com.fgiaquinta.optionsquant.service.ContinuousLearningLoop;
+import com.fgiaquinta.optionsquant.service.Emoji;
+import com.fgiaquinta.optionsquant.service.TickerMemory;
 import com.fgiaquinta.optionsquant.service.TickerService;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
- * Advanced CLI for running backtests with comprehensive analysis.
- * Outputs results to JSON files for later strategy tuning.
- * 
+ * Simplified CLI for Options Quant backtest analysis.
+ * Focus: Learning loop, signal review, and learning memory management.
+ *
  * Activate with: java -jar app.jar --backtest-cli.enabled=true
  */
 @Slf4j
@@ -34,41 +34,34 @@ public class BacktestCli implements CommandLineRunner {
     private final BacktestEngine backtestEngine;
     private final BacktestAnalyzer backtestAnalyzer;
     private final TickerService tickerService;
-    private final ObjectMapper objectMapper;
+    private final ContinuousLearningLoop learningLoop;
+    private final TickerMemory tickerMemory;
 
-    public BacktestCli(BacktestEngine backtestEngine, BacktestAnalyzer backtestAnalyzer, TickerService tickerService) {
+    public BacktestCli(BacktestEngine backtestEngine,
+                       BacktestAnalyzer backtestAnalyzer,
+                       TickerService tickerService,
+                       ContinuousLearningLoop learningLoop,
+                       TickerMemory tickerMemory) {
         this.backtestEngine = backtestEngine;
         this.backtestAnalyzer = backtestAnalyzer;
         this.tickerService = tickerService;
-        
-        // Configure Jackson for JSON output
-        this.objectMapper = new ObjectMapper();
-        this.objectMapper.registerModule(new JavaTimeModule());
-        this.objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        this.objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
+        this.learningLoop = learningLoop;
+        this.tickerMemory = tickerMemory;
     }
 
     @Override
     public void run(String... args) {
-        log.info("🚀 Options Quant Backtest CLI started");
+        try {
+            System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
+            System.setErr(new PrintStream(System.err, true, StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            // Ignore if already set
+        }
+
+        log.info("Options Quant Backtest CLI started");
         Scanner scanner = new Scanner(System.in);
 
-        System.out.println("""
-                
-                ╔═══════════════════════════════════════════════╗
-                ║     📊 Options Quant Backtest Analyzer CLI v1.3.30     ║
-                ║     "Measure Twice, Cut Once"                  ║
-                ╚═══════════════════════════════════════════════╝
-                
-                Available commands:
-                  1. Run backtest + analysis (save to JSON)
-                  2. Compare two backtest results
-                  3. Analyze existing backtest results
-                  4. View strategy performance history
-                  5. Generate strategy tuning recommendations
-                  6. Exit
-                
-                """);
+        printMainMenu();
 
         while (true) {
             System.out.print("\nEnter command (1-6): ");
@@ -76,36 +69,157 @@ public class BacktestCli implements CommandLineRunner {
 
             try {
                 switch (input) {
-                    case "1" -> runBacktestAndSave(scanner);
-                    case "2" -> compareResults(scanner);
-                    case "3" -> analyzeExistingResults(scanner);
-                    case "4" -> viewStrategyHistory();
-                    case "5" -> generateTuningRecommendations();
+                    case "1" -> runQuickLearningLoop();
+                    case "2" -> runContinuousLearningLoop(scanner);
+                    case "3" -> runSignalReview();
+                    case "4" -> viewLearningReport();
+                    case "5" -> resetLearningMemory();
                     case "6" -> {
-                        System.out.println("👋 Exiting Backtest CLI...");
+                        System.out.println(Emoji.WAVE() + " Exiting Backtest CLI...");
                         return;
                     }
-                    default -> System.out.println("❌ Invalid command. Enter 1-6.");
+                    default -> System.out.println(Emoji.CROSS() + " Invalid command. Enter 1-6.");
                 }
             } catch (Exception e) {
-                System.out.println("❌ Error: " + e.getMessage());
+                System.out.println(Emoji.CROSS() + " Error: " + e.getMessage());
                 log.error("CLI error", e);
             }
         }
     }
 
-    private void runBacktestAndSave(Scanner scanner) {
-        System.out.println("\n📝 Backtest Configuration:");
-        System.out.println("  ℹ️ Press Enter to use default values shown in [brackets]");
+    private void printMainMenu() {
+        System.out.println("""
 
-        // Default: 1 year back from today
+                ╔═══════════════════════════════════════════════╗
+                ║     %s Options Quant Backtest Analyzer CLI v2.0.0     ║
+                ║     "Learn, Adapt, Conquer"                   ║
+                ╚═══════════════════════════════════════════════╝
+
+                Available commands:
+                  1. %s QUICK LEARNING LOOP (Defaults: All tickers, focus on HOT)
+                  2. %s CUSTOM LEARNING LOOP (Configure tickers, dates, risk)
+                  3. %s AUTOMATED SIGNAL REVIEW (Analyze all trades from CSV)
+                  4. %s VIEW LEARNING REPORT (Per-ticker/strategy memory)
+                  5. %s RESET LEARNING MEMORY (Start fresh)
+                  6. %s EXIT
+
+                """.formatted(
+                Emoji.CHART(),
+                Emoji.BRAIN(),
+                Emoji.BRAIN(),
+                Emoji.SEARCH(),
+                Emoji.CHART(),
+                Emoji.WRENCH(),
+                Emoji.WAVE()
+        ));
+    }
+
+    /**
+     * Command 1: Quick Learning Loop with defaults
+     * Uses all tickers, with hot tickers first in the list.
+     */
+    private void runQuickLearningLoop() {
+        List<String> hotTickers = tickerService.getHotTickers();
+        List<String> allTickers = tickerService.getTickerSymbols();
+        List<String> tickers = new ArrayList<>(hotTickers);
+        allTickers.stream()
+                .filter(t -> !hotTickers.contains(t))
+                .forEach(tickers::add);
+
+        LocalDate defaultTo = LocalDate.now();
+        LocalDate defaultFrom = defaultTo.minusYears(1);
+        double initialCapital = 50000;
+        double riskPct = 0.02;
+        int maxIterations = 20;
+        double convergenceThreshold = 0.02;
+
+        System.out.println("""
+
+                ╔═══════════════════════════════════════════════╗
+                ║     %s QUICK LEARNING LOOP (DEFAULTS)        ║
+                ║     "Practice Makes Progress"                 ║
+                ╚═══════════════════════════════════════════════╝
+
+                Using default configuration:
+                  Tickers: %d total (%d hot first)
+                  Date Range: %s to %s
+                  Capital: $%.0f
+                  Risk: %.0f%%
+                  Max Iterations: %d
+                  Convergence: %.0f%%
+
+                Starting training...
+                """.formatted(Emoji.BRAIN(), tickers.size(), hotTickers.size(),
+                        defaultFrom, defaultTo, initialCapital,
+                        riskPct * 100, maxIterations, convergenceThreshold * 100));
+
+        var result = learningLoop.startLoop(tickers, defaultFrom, defaultTo,
+                initialCapital, riskPct, maxIterations, convergenceThreshold);
+
+        System.out.println("\n" + "=".repeat(80));
+        System.out.println(Emoji.BRAIN() + " TRAINING COMPLETE");
+        System.out.println("=".repeat(80));
+
+        if (result.error != null) {
+            System.out.println(Emoji.CROSS() + " Error: " + result.error);
+            printMainMenu();
+            return;
+        }
+
+        System.out.println(Emoji.CHART() + " RESULTS:");
+        System.out.println("   Iterations: " + result.completedIterations);
+        System.out.println("   Reason: " + result.convergenceReason);
+        System.out.println("   Elapsed: " + (result.elapsedMs / 1000) + " seconds");
+
+        if (!result.iterations.isEmpty()) {
+            var first = result.iterations.get(0);
+            var last = result.iterations.get(result.iterations.size() - 1);
+
+            System.out.println("\n" + Emoji.TREND_UP() + " IMPROVEMENT:");
+            System.out.println("   First: " + first.totalTrades + " trades, " +
+                    String.format("%.1f%%", first.winRate * 100) + " WR, $" +
+                    String.format("%.2f", first.totalPnl) + " PnL");
+            System.out.println("   Last:  " + last.totalTrades + " trades, " +
+                    String.format("%.1f%%", last.winRate * 100) + " WR, $" +
+                    String.format("%.2f", last.totalPnl) + " PnL");
+            System.out.println("   Delta Win Rate: " + String.format("%+.1f%%",
+                    (last.winRate - first.winRate) * 100));
+            System.out.println("   Delta PnL: $" + String.format("%+.2f",
+                    last.totalPnl - first.totalPnl));
+        }
+
+        System.out.println("\n" + "=".repeat(80));
+        System.out.println(Emoji.TARGET() + " NEXT STEPS:");
+        System.out.println("=".repeat(80));
+        System.out.println("  3. Run signal review to analyze trades");
+        System.out.println("  4. View learning report");
+        System.out.println("  2. Custom learning loop with different parameters");
+        System.out.println("=".repeat(80));
+        printMainMenu();
+    }
+
+    /**
+     * Command 2: Continuous Learning Loop (ADVANCED CONFIG)
+     */
+    private void runContinuousLearningLoop(Scanner scanner) {
+        System.out.println("""
+
+                ╔═══════════════════════════════════════════════╗
+                ║     %s CUSTOM LEARNING LOOP (ADVANCED)       ║
+                ║     "Practice Makes Progress"                 ║
+                ╚═══════════════════════════════════════════════╝
+
+                The system will run multiple backtests automatically,
+                learning from each one until it reaches optimal performance.
+
+                """.formatted(Emoji.BRAIN()));
+
+        // Get configuration
+        System.out.println(Emoji.WRITING() + " Learning Loop Configuration:\n");
+
         LocalDate defaultTo = LocalDate.now();
         LocalDate defaultFrom = defaultTo.minusYears(1);
 
-        System.out.println("\n  ┌─ Date Range ──────────────────────────────────┐");
-        System.out.println("  │ From: Start date for historical data         │");
-        System.out.println("  │ To:   End date (usually today)               │");
-        System.out.println("  └──────────────────────────────────────────────┘");
         System.out.printf("  From date (YYYY-MM-DD) [%s]: ", defaultFrom);
         String from = scanner.nextLine().trim();
         if (from.isEmpty()) from = defaultFrom.toString();
@@ -114,11 +228,11 @@ public class BacktestCli implements CommandLineRunner {
         String to = scanner.nextLine().trim();
         if (to.isEmpty()) to = defaultTo.toString();
 
-        System.out.println("\n  ┌─ Risk Management ─────────────────────────────┐");
-        System.out.println("  │ Capital: Starting account balance            │");
-        System.out.println("  │ Risk %: Max % of capital per trade           │");
-        System.out.println("  │         0.01 = 1%, 0.02 = 2% (recommended)  │");
-        System.out.println("  └──────────────────────────────────────────────┘");
+        System.out.print("  Tickers (comma-separated, e.g., AMZN,NVDA,GOOGL) [AMZN,NVDA,GOOGL]: ");
+        String tickersInput = scanner.nextLine().trim();
+        if (tickersInput.isEmpty()) tickersInput = "AMZN,NVDA,GOOGL";
+        List<String> tickers = List.of(tickersInput.split(","));
+
         System.out.print("  Initial capital [50000]: ");
         String capital = scanner.nextLine().trim();
         double initialCapital = capital.isEmpty() ? 50000 : Double.parseDouble(capital);
@@ -127,356 +241,340 @@ public class BacktestCli implements CommandLineRunner {
         String risk = scanner.nextLine().trim();
         double riskPct = risk.isEmpty() ? 0.02 : Double.parseDouble(risk);
 
-        System.out.println("\n  ┌─ Ticker Selection ────────────────────────────┐");
-        System.out.println("  │ Options:                                       │");
-        System.out.println("  │   [Enter]     = Scan all 512 tickers           │");
-        System.out.println("  │   SPY,AAPL    = Scan specific tickers          │");
-        System.out.println("  │   @hot        = Scan 15 hot tickers only       │");
-        System.out.println("  │   @quality    = Scan high-quality tickers      │");
-        System.out.println("  └──────────────────────────────────────────────┘");
-        System.out.print("  Tickers (comma-separated, empty=all, @hot, @quality): ");
-        String tickersInput = scanner.nextLine().trim();
-        List<String> tickers;
-        if (tickersInput.isEmpty()) {
-            tickers = tickerService.getTickerSymbols();
-        } else if (tickersInput.equalsIgnoreCase("@hot")) {
-            tickers = tickerService.getHotTickers();
-        } else if (tickersInput.equalsIgnoreCase("@quality")) {
-            tickers = tickerService.getHighQualityTickers().stream()
-                    .map(t -> t.ticker())
-                    .toList();
-        } else {
-            tickers = List.of(tickersInput.split(","));
-        }
+        System.out.print("  Max iterations [20]: ");
+        String maxIter = scanner.nextLine().trim();
+        int maxIterations = maxIter.isEmpty() ? 20 : Integer.parseInt(maxIter);
 
-        // Auto-generate test name with date, time, and ticker count
-        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("MMdd_HHmm"));
-        String testName = String.format("bt_%s_%dtickers", timestamp, tickers.size());
-        
-        System.out.println("\n  ┌─ Test Identification ─────────────────────────┐");
-        System.out.println("  │ Auto-generated: bt_MMdd_HHMM_Ntickers        │");
-        System.out.println("  │ Custom: Enter your own name for comparison   │");
-        System.out.println("  └──────────────────────────────────────────────┘");
-        System.out.printf("  Test name (auto-generated) [%s]: ", testName);
-        String customName = scanner.nextLine().trim();
-        if (!customName.isEmpty()) {
-            testName = customName;
-        }
+        System.out.print("  Convergence threshold [0.02] (2%%): ");
+        String conv = scanner.nextLine().trim();
+        double convergenceThreshold = conv.isEmpty() ? 0.02 : Double.parseDouble(conv);
 
-        System.out.println("\n🔄 Running backtest...");
-        BacktestConfig config = new BacktestConfig(
+        System.out.println("\n" + "=".repeat(80));
+        System.out.println("Starting Continuous Learning Loop...");
+        System.out.println("=".repeat(80));
+        System.out.println("  Tickers: " + tickers);
+        System.out.println("  Date Range: " + from + " to " + to);
+        System.out.println("  Capital: $" + initialCapital);
+        System.out.println("  Risk: " + (riskPct * 100) + "%");
+        System.out.println("  Max Iterations: " + maxIterations);
+        System.out.println("  Convergence: " + (convergenceThreshold * 100) + "%");
+        System.out.println("=".repeat(80));
+        System.out.println("\nThis will take several minutes. Watch the logs for progress!\n");
+
+        // Run the learning loop
+        var result = learningLoop.startLoop(
                 tickers,
                 LocalDate.parse(from),
                 LocalDate.parse(to),
                 initialCapital,
                 riskPct,
-                0.005,  // slippage
-                0.65,   // commission
-                3,      // max concurrent
-                com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15,
-                true
+                maxIterations,
+                convergenceThreshold
         );
 
-        BacktestReport report = backtestEngine.run(config);
+        // Display results
+        System.out.println("\n" + "=".repeat(80));
+        System.out.println("LEARNING LOOP COMPLETE!");
+        System.out.println("=".repeat(80));
 
-        // Analyze results
-        System.out.println("\n🔍 Analyzing results...");
-        BacktestAnalyzer.AnalysisReport analysis = backtestAnalyzer.analyzeTrades(
-                java.nio.file.Path.of("backtest/trades.csv"));
-
-        // Create comprehensive result object
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("testName", testName);
-        result.put("timestamp", LocalDateTime.now().toString());
-        result.put("config", Map.of(
-                "from", from,
-                "to", to,
-                "initialCapital", initialCapital,
-                "riskPerTradePct", riskPct,
-                "tickers", tickers.size(),
-                "tickerList", tickers
-        ));
-        // Build performance map
-        Map<String, Object> perfMap = new LinkedHashMap<>();
-        perfMap.put("finalCapital", report.finalCapital());
-        perfMap.put("totalReturn", report.totalReturn());
-        perfMap.put("totalReturnPct", report.totalReturnPct() * 100);
-        perfMap.put("totalTrades", report.totalTrades());
-        perfMap.put("winningTrades", report.winningTrades());
-        perfMap.put("losingTrades", report.losingTrades());
-        perfMap.put("winRate", report.winRate() * 100);
-        perfMap.put("profitFactor", report.profitFactor());
-        perfMap.put("sharpeRatio", report.sharpeRatio());
-        perfMap.put("maxDrawdown", report.maxDrawdown());
-        perfMap.put("maxDrawdownPct", report.maxDrawdownPct() * 100);
-        perfMap.put("avgWin", report.avgWin());
-        perfMap.put("avgLoss", report.avgLoss());
-        perfMap.put("avgTradeDurationHours", report.avgTradeDurationHours());
-        result.put("performance", perfMap);
-        result.put("byStrategy", report.byStrategy());
-        result.put("byTicker", report.byTicker());
-        result.put("analysis", Map.of(
-                "summary", analysis.summary(),
-                "totalSuggestions", analysis.getSuggestionCount(),
-                "criticalIssues", analysis.getCriticalSuggestions(),
-                "optimizationTips", analysis.getOptimizationSuggestions(),
-                "allSuggestions", analysis.suggestions()
-        ));
-
-        // Save to results directory
-        Path resultsDir = Path.of("backtest/results");
-        try {
-            Files.createDirectories(resultsDir);
-            Path resultFile = resultsDir.resolve(testName + ".json");
-            objectMapper.writeValue(resultFile.toFile(), result);
-
-            System.out.println("\n" + "=".repeat(60));
-            System.out.println("✅ BACKTEST COMPLETE");
-            System.out.println("=".repeat(60));
-            System.out.printf("Results saved to: %s%n", resultFile.toAbsolutePath());
-            System.out.printf("Trades CSV: backtest/trades.csv%n");
-            System.out.printf("Equity CSV: backtest/equity.csv%n");
-            System.out.printf("Summary: backtest/summary.txt%n");
-            System.out.println("\n📊 Performance Summary:");
-            System.out.printf("  Return: $%.2f (%.2f%%)%n", report.totalReturn(), report.totalReturnPct() * 100);
-            System.out.printf("  Trades: %d (Win Rate: %.1f%%)%n", report.totalTrades(), report.winRate() * 100);
-            System.out.printf("  Profit Factor: %.2f%n", report.profitFactor());
-            System.out.printf("  Max Drawdown: %.2f%%%n", report.maxDrawdownPct() * 100);
-            System.out.printf("  Sharpe Ratio: %.2f%n", report.sharpeRatio());
-            System.out.println("\n💡 Suggestions:");
-            System.out.printf("  Critical Issues: %d%n", analysis.getCriticalSuggestions().size());
-            System.out.printf("  Optimization Tips: %d%n", analysis.getOptimizationSuggestions().size());
-            
-        } catch (Exception e) {
-            System.out.println("❌ Failed to save results: " + e.getMessage());
-            log.error("Failed to save results", e);
+        if (result.error != null) {
+            System.out.println(Emoji.CROSS() + " Error: " + result.error);
+            return;
         }
+
+        System.out.println(Emoji.CHART() + " RESULTS:");
+        System.out.println("   Iterations: " + result.completedIterations);
+        System.out.println("   Reason: " + result.convergenceReason);
+        System.out.println("   Elapsed: " + (result.elapsedMs / 1000) + " seconds");
+
+        if (!result.iterations.isEmpty()) {
+            var first = result.iterations.get(0);
+            var last = result.iterations.get(result.iterations.size() - 1);
+
+            System.out.println("\n" + Emoji.TREND_UP() + " IMPROVEMENT:");
+            System.out.println("   First: " + first.totalTrades + " trades, " +
+                    String.format("%.1f%%", first.winRate * 100) + " WR, $" +
+                    String.format("%.2f", first.totalPnl) + " PnL");
+            System.out.println("   Last:  " + last.totalTrades + " trades, " +
+                    String.format("%.1f%%", last.winRate * 100) + " WR, $" +
+                    String.format("%.2f", last.totalPnl) + " PnL");
+            System.out.println("   Delta Win Rate: " + String.format("%+.1f%%",
+                    (last.winRate - first.winRate) * 100));
+            System.out.println("   Delta PnL: $" + String.format("%+.2f",
+                    last.totalPnl - first.totalPnl));
+        }
+
+        System.out.println("\n" + "=".repeat(80));
+        System.out.println(Emoji.TARGET() + " NEXT STEPS:");
+        System.out.println("=".repeat(80));
+        System.out.println("  3. Run signal review to analyze trades");
+        System.out.println("  4. View learning report");
+        System.out.println("  5. Reset and try with different parameters");
+        System.out.println("=".repeat(80));
+        printMainMenu();
     }
 
-    private void compareResults(Scanner scanner) {
-        System.out.println("\n📊 Compare Two Backtest Results:");
-        
-        System.out.print("  First test filename (without .json): ");
-        String test1 = scanner.nextLine().trim();
-        
-        System.out.print("  Second test filename (without .json): ");
-        String test2 = scanner.nextLine().trim();
+    /**
+     * Command 4: View Learning Report
+     */
+    private void viewLearningReport() {
+        System.out.println("""
 
-        try {
-            Path resultsDir = Path.of("backtest/results");
-            Map<?, ?> result1 = objectMapper.readValue(
-                    resultsDir.resolve(test1 + ".json").toFile(), Map.class);
-            Map<?, ?> result2 = objectMapper.readValue(
-                    resultsDir.resolve(test2 + ".json").toFile(), Map.class);
+                ╔═══════════════════════════════════════════════╗
+                ║     %s TICKER MEMORY LEARNING REPORT         ║
+                ╚═══════════════════════════════════════════════╝
+                """.formatted(Emoji.BRAIN()));
 
-            Map<String, Object> perf1 = (Map<String, Object>) result1.get("performance");
-            Map<String, Object> perf2 = (Map<String, Object>) result2.get("performance");
-
-            System.out.println("\n" + "=".repeat(80));
-            System.out.println("📈 BACKTEST COMPARISON");
-            System.out.println("=".repeat(80));
-            System.out.printf("%-25s | %-20s | %-20s%n", "Metric", test1, test2);
-            System.out.println("-".repeat(80));
-            System.out.printf("%-25s | $%-19.2f | $%-19.2f%n", "Final Capital", 
-                    perf1.get("finalCapital"), perf2.get("finalCapital"));
-            System.out.printf("%-25s | %19.2f%% | %19.2f%%n", "Return %", 
-                    perf1.get("totalReturnPct"), perf2.get("totalReturnPct"));
-            System.out.printf("%-25s | %20d | %20dn", "Total Trades", 
-                    perf1.get("totalTrades"), perf2.get("totalTrades"));
-            System.out.printf("%-25s | %19.1f%% | %19.1f%%n", "Win Rate", 
-                    perf1.get("winRate"), perf2.get("winRate"));
-            System.out.printf("%-25s | %20.2f | %20.2f%n", "Profit Factor", 
-                    perf1.get("profitFactor"), perf2.get("profitFactor"));
-            System.out.printf("%-25s | %19.2f%% | %19.2f%%n", "Max Drawdown %", 
-                    perf1.get("maxDrawdownPct"), perf2.get("maxDrawdownPct"));
-            System.out.printf("%-25s | %20.2f | %20.2f%n", "Sharpe Ratio", 
-                    perf1.get("sharpeRatio"), perf2.get("sharpeRatio"));
-            System.out.println("=".repeat(80));
-
-            // Calculate winner
-            double return1 = (double) perf1.get("totalReturnPct");
-            double return2 = (double) perf2.get("totalReturnPct");
-            String winner = return1 > return2 ? test1 : test2;
-            System.out.printf("\n🏆 Better Return: %s (%.2f%% vs %.2f%%)%n", 
-                    winner, return1, return2);
-
-        } catch (Exception e) {
-            System.out.println("❌ Failed to compare: " + e.getMessage());
-        }
+        String report = tickerMemory.getLearningReport();
+        System.out.println(report);
+        printMainMenu();
     }
 
-    private void analyzeExistingResults(Scanner scanner) {
-        System.out.println("\n📂 Available Backtest Results:");
-        
-        Path resultsDir = Path.of("backtest/results");
-        if (!Files.exists(resultsDir)) {
-            System.out.println("  No results found. Run a backtest first.");
+    /**
+     * Command 5: Reset Learning Memory
+     */
+    private void resetLearningMemory() {
+        System.out.println("""
+
+                ╔═══════════════════════════════════════════════╗
+                ║     %s RESET LEARNING MEMORY                 ║
+                ╚═══════════════════════════════════════════════╝
+
+                This will delete all learned patterns and statistics.
+                Are you sure? (yes/no):
+                """.formatted(Emoji.WRENCH()));
+
+        Scanner scanner = new Scanner(System.in);
+        String confirm = scanner.nextLine().trim().toLowerCase();
+
+        if (confirm.equals("yes") || confirm.equals("y")) {
+            tickerMemory.resetAll();
+            System.out.println(Emoji.CHECK() + " Learning memory has been reset!");
+        } else {
+            System.out.println(Emoji.CROSS() + " Reset cancelled.");
+        }
+        printMainMenu();
+    }
+
+    /**
+     * Command 3: Automated Signal Review
+     */
+    private void runSignalReview() {
+        System.out.println("\n" + Emoji.SEARCH() + " Automated Signal Review:");
+
+        Path tradesCsv = Path.of("backtest/trades.csv");
+        if (!Files.exists(tradesCsv)) {
+            System.out.println("  No trades.csv found. Run a backtest first.");
+            printMainMenu();
             return;
         }
 
         try {
-            Files.list(resultsDir)
-                    .filter(p -> p.toString().endsWith(".json"))
-                    .sorted()
-                    .forEach(p -> {
-                        try {
-                            Map<?, ?> result = objectMapper.readValue(p.toFile(), Map.class);
-                            Map<?, ?> perf = (Map<?, ?>) result.get("performance");
-                            System.out.printf("  %-40s | Return: %7.2f%% | Trades: %3d | Win: %5.1f%%%n",
-                                    p.getFileName(),
-                                    perf.get("totalReturnPct"),
-                                    perf.get("totalTrades"),
-                                    perf.get("winRate"));
-                        } catch (Exception e) {
-                            System.out.println("  " + p.getFileName() + " (error reading)");
-                        }
-                    });
-
-            System.out.print("\n  Select test to analyze (filename without .json): ");
-            String testName = scanner.nextLine().trim();
-            
-            Path testFile = resultsDir.resolve(testName + ".json");
-            if (Files.exists(testFile)) {
-                Map<?, ?> result = objectMapper.readValue(testFile.toFile(), Map.class);
-                Map<?, ?> analysis = (Map<?, ?>) result.get("analysis");
-                
-                System.out.println("\n" + "=".repeat(60));
-                System.out.println("📈 ANALYSIS: " + testName);
-                System.out.println("=".repeat(60));
-                System.out.println(analysis.get("summary"));
-                System.out.println("\n⚠️ Critical Issues:");
-                @SuppressWarnings("unchecked")
-                List<String> critical = (List<String>) analysis.get("criticalIssues");
-                critical.forEach(s -> System.out.println("  " + s));
-                
-                System.out.println("\n💡 Optimization Tips:");
-                @SuppressWarnings("unchecked")
-                List<String> optimization = (List<String>) analysis.get("optimizationTips");
-                optimization.forEach(s -> System.out.println("  " + s));
-            } else {
-                System.out.println("❌ File not found: " + testFile);
-            }
-        } catch (Exception e) {
-            System.out.println("❌ Error: " + e.getMessage());
-        }
-    }
-
-    private void viewStrategyHistory() {
-        System.out.println("\n📊 Strategy Performance History:");
-        
-        Path resultsDir = Path.of("backtest/results");
-        if (!Files.exists(resultsDir)) {
-            System.out.println("  No results found.");
-            return;
-        }
-
-        try {
-            // Aggregate performance by strategy across all tests
-            Map<String, List<Double>> strategyReturns = new TreeMap<>();
-            
-            Files.list(resultsDir)
-                    .filter(p -> p.toString().endsWith(".json"))
-                    .forEach(p -> {
-                        try {
-                            Map<?, ?> result = objectMapper.readValue(p.toFile(), Map.class);
-                            @SuppressWarnings("unchecked")
-                            Map<String, Map<String, Object>> byStrategy = 
-                                    (Map<String, Map<String, Object>>) result.get("byStrategy");
-                            
-                            if (byStrategy != null) {
-                                byStrategy.forEach((strategy, stats) -> {
-                                    strategyReturns.computeIfAbsent(strategy, k -> new ArrayList<>())
-                                            .add((double) stats.getOrDefault("totalPnl", 0.0));
-                                });
-                            }
-                        } catch (Exception e) {
-                            // Skip invalid files
-                        }
-                    });
-
-            System.out.printf("%-25s | %-10s | %-12s | %-12s%n", 
-                    "Strategy", "Tests", "Avg PnL", "Total PnL");
-            System.out.println("-".repeat(65));
-            
-            strategyReturns.forEach((strategy, returns) -> {
-                double avg = returns.stream().mapToDouble(Double::doubleValue).average().orElse(0);
-                double total = returns.stream().mapToDouble(Double::doubleValue).sum();
-                System.out.printf("%-25s | %10d | $%11.2f | $%11.2f%n", 
-                        strategy, returns.size(), avg, total);
-            });
-            
-        } catch (Exception e) {
-            System.out.println("❌ Error: " + e.getMessage());
-        }
-    }
-
-    private void generateTuningRecommendations() {
-        System.out.println("\n🔧 Strategy Tuning Recommendations:");
-        
-        Path resultsDir = Path.of("backtest/results");
-        if (!Files.exists(resultsDir)) {
-            System.out.println("  No results found. Run a backtest first.");
-            return;
-        }
-
-        try {
-            // Find the latest test
-            Path latestTest = Files.list(resultsDir)
-                    .filter(p -> p.toString().endsWith(".json"))
-                    .sorted()
-                    .reduce((first, second) -> second)
-                    .orElse(null);
-
-            if (latestTest == null) {
-                System.out.println("  No test results found.");
+            List<String> lines = Files.readAllLines(tradesCsv);
+            if (lines.size() < 2) {
+                System.out.println("  No trades found in trades.csv.");
+                printMainMenu();
                 return;
             }
 
-            Map<?, ?> result = objectMapper.readValue(latestTest.toFile(), Map.class);
-            @SuppressWarnings("unchecked")
-            Map<String, Map<String, Object>> byStrategy = 
-                    (Map<String, Map<String, Object>>) result.get("byStrategy");
+            // Parse header to find column indices
+            String[] headers = lines.get(0).toLowerCase().split(",");
+            Map<String, Integer> colIdx = new HashMap<>();
+            for (int i = 0; i < headers.length; i++) {
+                colIdx.put(headers[i].trim(), i);
+            }
 
+            int strategyIdx = colIdx.getOrDefault("strategy", 1);
+            int netPnlIdx = colIdx.getOrDefault("netpnl", 12);
+            int exitReasonIdx = colIdx.getOrDefault("exitreason", 8);
+            int entryTimeIdx = colIdx.getOrDefault("entrytime", 5);
+            int patternIdx = colIdx.getOrDefault("pattern", 15);
+
+            // Data collectors
+            int totalTrades = 0;
+            int wins = 0;
+            double totalPnl = 0;
+
+            Map<String, int[]> strategyStats = new TreeMap<>();
+            Map<String, Double> strategyPnl = new TreeMap<>();
+            Map<String, int[]> patternStats = new TreeMap<>();
+            Map<String, Double> patternPnl = new TreeMap<>();
+            Map<Integer, Double> hourlyPnl = new TreeMap<>();
+            Map<Integer, Integer> hourlyCount = new TreeMap<>();
+            Map<String, int[]> exitReasonStats = new TreeMap<>();
+
+            for (int i = 1; i < lines.size(); i++) {
+                String line = lines.get(i).trim();
+                if (line.isEmpty()) continue;
+
+                String[] cols = line.split(",", -1);
+                totalTrades++;
+
+                double pnl = 0;
+                if (netPnlIdx >= 0 && netPnlIdx < cols.length) {
+                    try { pnl = Double.parseDouble(cols[netPnlIdx].trim()); } catch (Exception ignored) {}
+                }
+                totalPnl += pnl;
+
+                boolean isWin = pnl > 0;
+                if (isWin) wins++;
+
+                // Strategy stats
+                if (strategyIdx >= 0 && strategyIdx < cols.length) {
+                    String strategy = cols[strategyIdx].trim();
+                    if (!strategy.isEmpty()) {
+                        strategyStats.computeIfAbsent(strategy, k -> new int[3])[0]++;
+                        if (isWin) strategyStats.get(strategy)[1]++;
+                        else strategyStats.get(strategy)[2]++;
+                        strategyPnl.merge(strategy, pnl, Double::sum);
+                    }
+                }
+
+                // Pattern stats
+                if (patternIdx >= 0 && patternIdx < cols.length) {
+                    String pattern = cols[patternIdx].trim();
+                    if (!pattern.isEmpty()) {
+                        patternStats.computeIfAbsent(pattern, k -> new int[2])[0]++;
+                        if (isWin) patternStats.get(pattern)[1]++;
+                        patternPnl.merge(pattern, pnl, Double::sum);
+                    }
+                }
+
+                // Hourly stats
+                if (entryTimeIdx >= 0 && entryTimeIdx < cols.length) {
+                    String timeStr = cols[entryTimeIdx].trim();
+                    try {
+                        String hourStr = timeStr.length() >= 13 ? timeStr.substring(11, 13) : null;
+                        if (hourStr != null) {
+                            int hour = Integer.parseInt(hourStr);
+                            hourlyPnl.merge(hour, pnl, Double::sum);
+                            hourlyCount.merge(hour, 1, Integer::sum);
+                        }
+                    } catch (Exception ignored) {}
+                }
+
+                // Exit reason stats
+                if (exitReasonIdx >= 0 && exitReasonIdx < cols.length) {
+                    String reason = cols[exitReasonIdx].trim();
+                    if (!reason.isEmpty()) {
+                        exitReasonStats.computeIfAbsent(reason, k -> new int[2])[0]++;
+                        if (isWin) exitReasonStats.get(reason)[1]++;
+                    }
+                }
+            }
+
+            if (totalTrades == 0) {
+                System.out.println("  No trades found in trades.csv.");
+                printMainMenu();
+                return;
+            }
+
+            double winRate = (double) wins / totalTrades * 100;
+
+            // Print summary
             System.out.println("\n" + "=".repeat(80));
-            System.out.println("📋 AUTOMATIC STRATEGY TUNING RECOMMENDATIONS");
+            System.out.println(Emoji.CHART() + " TRADE SIGNAL SUMMARY");
             System.out.println("=".repeat(80));
+            System.out.printf("  Total Trades:  %d%n", totalTrades);
+            System.out.printf("  Win Rate:      %.1f%% (%dW / %dL)%n", winRate, wins, totalTrades - wins);
+            System.out.printf("  Total PnL:     $%.2f%n", totalPnl);
+            System.out.printf("  Avg PnL/Trade: $%.2f%n", totalPnl / totalTrades);
 
-            byStrategy.forEach((strategy, stats) -> {
-                double winRate = (double) stats.getOrDefault("winRate", 0.0);
-                double profitFactor = (double) stats.getOrDefault("profitFactor", 0.0);
-                double totalPnl = (double) stats.getOrDefault("totalPnl", 0.0);
-                int trades = (int) stats.getOrDefault("trades", 0);
+            // Per-strategy breakdown
+            System.out.println("\n" + "-".repeat(80));
+            System.out.println("PER-STRATEGY BREAKDOWN:");
+            System.out.printf("  %-30s | %-8s | %-8s | %12s%n", "Strategy", "Trades", "Win%", "PnL");
+            System.out.println("  " + "-".repeat(76));
+            for (var entry : strategyStats.entrySet()) {
+                String s = entry.getKey();
+                int[] stats = entry.getValue();
+                double sWinRate = stats[0] > 0 ? (double) stats[1] / stats[0] * 100 : 0;
+                double sPnl = strategyPnl.getOrDefault(s, 0.0);
+                System.out.printf("  %-30s | %8d | %7.1f%% | $%11.2f%n", s, stats[0], sWinRate, sPnl);
+            }
 
-                System.out.printf("\n%s (%d trades):%n", strategy, trades);
-                
-                if (winRate < 0.40 && trades >= 5) {
-                    System.out.println("  ❌ LOW WIN RATE: " + String.format("%.1f%%", winRate * 100));
-                    System.out.println("  → Recommendation: Widen SL ATR multiplier by 0.3-0.5");
-                    System.out.println("  → Consider: Better entry timing or disable strategy");
-                } else if (winRate >= 0.60 && profitFactor > 1.5) {
-                    System.out.println("  ✅ HIGH PERFORMER: " + String.format("%.1f%% win rate", winRate * 100));
-                    System.out.println("  → Recommendation: Increase risk allocation for this strategy");
+            // Pattern performance
+            System.out.println("\n" + "-".repeat(80));
+            System.out.println("PATTERN PERFORMANCE:");
+            System.out.printf("  %-30s | %-8s | %-8s | %12s%n", "Pattern", "Trades", "Win%", "PnL");
+            System.out.println("  " + "-".repeat(76));
+            for (var entry : patternStats.entrySet()) {
+                String p = entry.getKey();
+                int[] stats = entry.getValue();
+                double pWinRate = stats[0] > 0 ? (double) stats[1] / stats[0] * 100 : 0;
+                double pPnl = patternPnl.getOrDefault(p, 0.0);
+                System.out.printf("  %-30s | %8d | %7.1f%% | $%11.2f%n", p, stats[0], pWinRate, pPnl);
+            }
+
+            // Best/worst patterns
+            if (!patternPnl.isEmpty()) {
+                String bestPattern = patternPnl.entrySet().stream()
+                        .max(Map.Entry.comparingByValue()).map(Map.Entry::getKey).orElse("N/A");
+                String worstPattern = patternPnl.entrySet().stream()
+                        .min(Map.Entry.comparingByValue()).map(Map.Entry::getKey).orElse("N/A");
+                System.out.printf("%n  Best Pattern:  %s ($%.2f)%n", bestPattern, patternPnl.get(bestPattern));
+                System.out.printf("  Worst Pattern: %s ($%.2f)%n", worstPattern, patternPnl.get(worstPattern));
+            }
+
+            // Time-of-day analysis
+            if (!hourlyPnl.isEmpty()) {
+                System.out.println("\n" + "-".repeat(80));
+                System.out.println("TIME-OF-DAY ANALYSIS:");
+                System.out.printf("  %-10s | %-8s | %12s | %12s%n", "Hour", "Trades", "Total PnL", "Avg PnL");
+                System.out.println("  " + "-".repeat(58));
+                for (var entry : hourlyPnl.entrySet()) {
+                    int hour = entry.getKey();
+                    double hPnl = entry.getValue();
+                    int hCount = hourlyCount.getOrDefault(hour, 1);
+                    System.out.printf("  %02d:00      | %8d | $%11.2f | $%11.2f%n", hour, hCount, hPnl, hPnl / hCount);
                 }
-
-                if (profitFactor < 1.0 && trades >= 5) {
-                    System.out.println("  ⚠️ NEGATIVE EXPECTANCY: PF=" + String.format("%.2f", profitFactor));
-                    System.out.println("  → Recommendation: Review TP/SL ratio, aim for >1.5");
+                int bestHour = hourlyPnl.entrySet().stream()
+                        .max(Map.Entry.comparingByValue()).map(Map.Entry::getKey).orElse(-1);
+                if (bestHour >= 0) {
+                    System.out.printf("%n  Most Profitable Hour: %02d:00 ($%.2f)%n", bestHour, hourlyPnl.get(bestHour));
                 }
+            }
 
-                if (totalPnl < -1000 && trades >= 3) {
-                    System.out.println("  🚨 SIGNIFICANT LOSSES: $" + String.format("%.2f", totalPnl));
-                    System.out.println("  → Recommendation: Reduce position size or disable temporarily");
+            // Exit reason breakdown
+            if (!exitReasonStats.isEmpty()) {
+                System.out.println("\n" + "-".repeat(80));
+                System.out.println("EXIT REASON BREAKDOWN:");
+                System.out.printf("  %-20s | %-8s | %-8s%n", "Exit Reason", "Count", "Win%");
+                System.out.println("  " + "-".repeat(42));
+                for (var entry : exitReasonStats.entrySet()) {
+                    String reason = entry.getKey();
+                    int[] stats = entry.getValue();
+                    double rWinRate = stats[0] > 0 ? (double) stats[1] / stats[0] * 100 : 0;
+                    System.out.printf("  %-20s | %8d | %7.1f%%%n", reason, stats[0], rWinRate);
                 }
-            });
+            }
 
-            System.out.println("\n" + "=".repeat(80));
-            System.out.println("💡 To apply recommendations, edit:");
-            System.out.println("   src/main/java/com/fgiaquinta/optionsquant/strategy/utils/RiskCalculator.java");
-            System.out.println("   → Modify STRATEGY_SL_MULTIPLIERS and STRATEGY_TP_MULTIPLIERS");
-            System.out.println("=".repeat(80));
+            // Recommendations
+            System.out.println("\n" + "-".repeat(80));
+            System.out.println(Emoji.LIGHTBULB() + " AUTOMATIC RECOMMENDATIONS:");
+            System.out.println("-".repeat(80));
+
+            strategyPnl.entrySet().stream()
+                    .filter(e -> e.getValue() < 0)
+                    .min(Map.Entry.comparingByValue())
+                    .ifPresent(e -> System.out.printf("  - Review or disable: %s (PnL: $%.2f)%n", e.getKey(), e.getValue()));
+
+            patternPnl.entrySet().stream()
+                    .filter(e -> e.getValue() < 0)
+                    .min(Map.Entry.comparingByValue())
+                    .ifPresent(e -> System.out.printf("  - Low-signal pattern: %s (PnL: $%.2f)%n", e.getKey(), e.getValue()));
+
+            if (winRate < 40) {
+                System.out.println("  - Overall win rate is low (<40%). Consider widening stop losses.");
+            } else if (winRate > 60) {
+                System.out.println("  - Strong win rate. Consider increasing position sizes.");
+            }
 
         } catch (Exception e) {
-            System.out.println("❌ Error: " + e.getMessage());
+            System.out.println(Emoji.CROSS() + " Error analyzing trades: " + e.getMessage());
+            log.error("Signal review error", e);
         }
+
+        printMainMenu();
     }
 }

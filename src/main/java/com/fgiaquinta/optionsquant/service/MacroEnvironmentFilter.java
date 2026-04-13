@@ -68,11 +68,11 @@ public class MacroEnvironmentFilter {
         log.info("🌐 [Macro Filter] Initializing - multi-factor analysis (50-SMA + short-term momentum)...");
         updateMarketAnalysis();
 
-        // Send macro status to Telegram on startup
-        if (telegramService != null && telegramService.isEnabled()) {
-            String trend = getAnalysisString();
-            telegramService.sendMacroStatus(trend);
-        }
+        // Telegram notification removed - only send during live trading, not backtesting
+        // if (telegramService != null && telegramService.isEnabled()) {
+        //     String trend = getAnalysisString();
+        //     telegramService.sendMacroStatus(trend);
+        // }
     }
 
     /**
@@ -104,15 +104,15 @@ public class MacroEnvironmentFilter {
     private boolean isMacroFavorableForCall() {
         // STRONGLY_BEARISH + falling momentum = block CALLs (market crashing)
         if (regime == MarketRegime.STRONGLY_BEARISH && momentum == ShortTermMomentum.FALLING) {
-            log.warn("🛑 [Macro Filter] BLOCKED CALL: STRONGLY bearish regime ({:+.2f}% from 50-SMA) + falling momentum",
-                    distanceFromSma50Pct);
+            log.warn("🛑 [Macro Filter] BLOCKED CALL: STRONGLY bearish regime ({}% from 50-SMA) + falling momentum",
+                    String.format("%+.2f", distanceFromSma50Pct));
             return false;
         }
 
         // BEARISH + falling momentum = warn but allow (counter-trend bounce plays exist)
         if (regime == MarketRegime.BEARISH && momentum == ShortTermMomentum.FALLING) {
-            log.warn("⚠️ [Macro Filter] CAUTION on CALL: Bearish regime ({:+.2f}%) + falling momentum — counter-trend trade",
-                    distanceFromSma50Pct);
+            log.warn("⚠️ [Macro Filter] CAUTION on CALL: Bearish regime ({}%) + falling momentum — counter-trend trade",
+                    String.format("%+.2f", distanceFromSma50Pct));
             return true;  // Allow but warn
         }
 
@@ -138,16 +138,16 @@ public class MacroEnvironmentFilter {
     private boolean isMacroFavorableForPut() {
         // STRONGLY_BULLISH + rising momentum = block PUTs (market rocketing up)
         if ((regime == MarketRegime.STRONGLY_BULLISH) && momentum == ShortTermMomentum.RISING) {
-            log.warn("🛑 [Macro Filter] BLOCKED PUT: STRONGLY bullish regime ({:+.2f}% from 50-SMA) + rising momentum",
-                    distanceFromSma50Pct);
+            log.warn("🛑 [Macro Filter] BLOCKED PUT: STRONGLY bullish regime ({}% from 50-SMA) + rising momentum",
+                    String.format("%+.2f", distanceFromSma50Pct));
             return false;
         }
 
         // BULLISH + rising momentum = warn but allow (pullback plays exist)
         if ((regime == MarketRegime.BULLISH || regime == MarketRegime.STRONGLY_BULLISH)
                 && momentum == ShortTermMomentum.FALLING) {
-            log.warn("⚠️ [Macro Filter] CAUTION on PUT: Bullish regime ({:+.2f}%) but falling momentum — pullback trade",
-                    distanceFromSma50Pct);
+            log.warn("⚠️ [Macro Filter] CAUTION on PUT: Bullish regime ({}%) but falling momentum — pullback trade",
+                    String.format("%+.2f", distanceFromSma50Pct));
             return true;  // Allow — SPY is pulling back, good for PUTs
         }
 
@@ -231,10 +231,12 @@ public class MacroEnvironmentFilter {
             lastCheckTime = System.currentTimeMillis();
 
             // Log the analysis
-            log.info("🌐 [Macro Filter] SPY ${:.2f} | 50-SMA ${:.2f} ({:+.2f}%) | Regime: {}",
-                    spyPrice, sma50, distanceFromSma50Pct, regime);
-            log.info("   → 5-day SMA: ${:.2f} | 10-day SMA: ${:.2f} | Momentum: {} ({:+.3f}%)",
-                    sma5, sma10, momentum, momentumDiff);
+            log.info("🌐 [Macro Filter] SPY ${} | 50-SMA ${} ({}%) | Regime: {}",
+                    String.format("%.2f", spyPrice), String.format("%.2f", sma50), 
+                    String.format("%+.2f", distanceFromSma50Pct), regime);
+            log.info("   → 5-day SMA: ${} | 10-day SMA: ${} | Momentum: {} ({}%)",
+                    String.format("%.2f", sma5), String.format("%.2f", sma10), 
+                    momentum, String.format("%+.3f", momentumDiff));
             log.info("   → CALL trades: {} | PUT trades: {}",
                     regime == MarketRegime.STRONGLY_BEARISH && momentum == ShortTermMomentum.FALLING ? "BLOCKED" : "allowed",
                     regime == MarketRegime.STRONGLY_BULLISH && momentum == ShortTermMomentum.RISING ? "BLOCKED" : "allowed");

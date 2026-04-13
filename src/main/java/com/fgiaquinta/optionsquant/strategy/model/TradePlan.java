@@ -11,7 +11,12 @@ public class TradePlan {
     public final double stopLoss;
     public final boolean isCall;
     public final LocalTime intradayExitTime;
-    public final double atr;
+    public final double atr;  // ATR at entry time (for position sizing and analysis)
+    
+    // Alias for clarity in learning system
+    public double getAtrAtEntry() {
+        return atr;
+    }
 
     public TradePlan(double entryPrice, double takeProfit, double stopLoss, boolean isCall, LocalTime intradayExitTime) {
         this(entryPrice, takeProfit, stopLoss, isCall, intradayExitTime, 0);

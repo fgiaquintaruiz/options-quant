@@ -39,10 +39,10 @@ bin/
 .DS_Store
 
 # Trading Data & Logs
-data/*.csv
-logs/*.txt
+data/*
+logs/*
+backtest/*
 
 # Sensitive Config
 config.yaml
 /.idea/
-/backtest/

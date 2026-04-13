@@ -83,7 +83,7 @@ public class MarketScanner {
                 log.info("✅ Startup delta download complete!");
                 log.info("   Tickers refreshed: {}", result.tickersScanned());
                 log.info("   Signals found: {}", result.totalSignals());
-                log.info("   Duration: {}ms ({:.1f} min)", elapsed, elapsed / 60000.0);
+                log.info("   Duration: {}ms ({} min)", elapsed, String.format("%.1f", elapsed / 60000.0));
                 log.info("   Next scan: at next 15-min boundary");
             } catch (Exception e) {
                 log.warn("⚠️ Startup delta download failed: {} (will retry at next scan)", e.getMessage());

@@ -4,9 +4,11 @@ import com.fgiaquinta.optionsquant.backtest.domain.*;
 import com.fgiaquinta.optionsquant.domain.Candle;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.service.CandleCsvService;
+import com.fgiaquinta.optionsquant.service.TickerMemory;
 import com.fgiaquinta.optionsquant.strategy.TradingStrategy;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.model.TradePlan;
+import com.fgiaquinta.optionsquant.strategy.utils.CandlestickPatternDetector;
 import com.fgiaquinta.optionsquant.strategy.utils.RiskCalculator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,9 +37,11 @@ public class BacktestEngine {
 
     private final List<TradingStrategy> strategies;
     private final CandleCsvService csvService;
+    private final TickerMemory tickerMemory;
 
-    public BacktestEngine(CandleCsvService csvService) {
+    public BacktestEngine(CandleCsvService csvService, TickerMemory tickerMemory) {
         this.csvService = csvService;
+        this.tickerMemory = tickerMemory;
         this.strategies = List.of(
                 new com.fgiaquinta.optionsquant.strategy.C1SqueezeCallStrategy(),
                 new com.fgiaquinta.optionsquant.strategy.C2TrendCallStrategy(),
@@ -226,29 +230,67 @@ public class BacktestEngine {
 
                 FillResult entryFill = fillEngine.fillEntry(ticker, isCall ? "CALL" : "PUT", qty, plan, time);
 
+                // === CANDLESTICK PATTERN DETECTION ===
+                // Detect the actual candlestick pattern at entry
+                String candlestickPattern = detectEntryCandlestickPattern(data, config.executionTimeframe());
+                // Also get the strategy-derived pattern for compatibility
+                String strategyPattern = extractPatternFromStrategy(strategy.getName());
+                // Combine both: "squeeze_breakout + hammer"
+                String combinedPattern = strategyPattern + " + " + candlestickPattern;
+
+                // Get chart candles for later use in chart generation (entry + exit)
+                List<Candle> chartCandles = data.getCandles(config.executionTimeframe());
+
                 OpenPosition pos = new OpenPosition(
-                        strategy.getName(), isCall ? "CALL" : "PUT", qty,
-                        entryFill.fillPrice(), plan.takeProfit, plan.stopLoss, time);
+                        strategy.getName(), isCall ? "CALL" : "PUT", combinedPattern, qty,
+                        entryFill.fillPrice(), plan.takeProfit, plan.stopLoss, time,
+                        plan.atr, chartCandles);
                 openPositions.get(ticker).add(pos);
 
-                // Generate chart for this signal
-                List<Candle> chartCandles = data.getCandles(config.executionTimeframe());
+                // Generate chart for this signal (entry only, no trade outcome yet)
                 if (chartCandles != null && !chartCandles.isEmpty()) {
                     Path chartsDir = Path.of("backtest/charts");
                     Path chartPath = SignalChartGenerator.generateChart(
-                            ticker, strategy.getName(), time,
+                            ticker, strategy.getName(), candle.timestamp(),
                             entryFill.fillPrice(), plan.takeProfit, plan.stopLoss,
-                            isCall, chartCandles, chartsDir);
+                            isCall, chartCandles, chartsDir,
+                            null, null, null);
                     if (chartPath != null) {
-                        log.debug("📊 Chart generated: {}", chartPath);
+                        log.debug("Chart generated: {}", chartPath);
                     }
                 }
 
-                log.debug("Signal: {} {} at {} entry={} qty={}", ticker, pos.direction,
-                        time.format(TS_FMT), entryFill.fillPrice(), qty);
+                log.debug("Signal: {} {} at {} entry={} qty={} pattern={}", ticker, pos.direction,
+                        time.format(TS_FMT), entryFill.fillPrice(), qty, candlestickPattern);
             } catch (Exception e) {
-                log.debug("Strategy {} error for {}: {}", strategy.getName(), ticker, e.getMessage());
+                log.debug("Strategy {} error for {}: {} (type: {})", 
+                        strategy.getName(), ticker, e.getMessage(), 
+                        e.getClass().getSimpleName());
+                if (log.isTraceEnabled()) {
+                    log.trace("Full stack trace for strategy error:", e);
+                }
             }
+        }
+    }
+
+    /**
+     * Detects the actual candlestick pattern at the entry candle.
+     * Uses the 1H timeframe for pattern detection (most reliable).
+     */
+    private String detectEntryCandlestickPattern(StrategyData data, TimeFrame executionTimeframe) {
+        try {
+            // Use 1H series for pattern detection (more reliable than lower timeframes)
+            org.ta4j.core.BarSeries series1h = data.getSeries(TimeFrame.HOUR_1);
+            if (series1h == null || series1h.isEmpty()) {
+                return "unknown";
+            }
+
+            int lastIndex = series1h.getEndIndex();
+            String pattern = CandlestickPatternDetector.detectPattern(series1h, lastIndex);
+            return pattern;
+        } catch (Exception e) {
+            log.debug("Failed to detect candlestick pattern: {}", e.getMessage());
+            return "unknown";
         }
     }
 
@@ -261,11 +303,67 @@ public class BacktestEngine {
                 : (pos.entryPrice - exitPrice) * pos.quantity * 100;
         double netPnl = grossPnl - exitFill.commission() - exitFill.slippage() * pos.quantity * 100;
 
+        // Record to TradeRecord for CSV reporting
         reporter.onTrade(new TradeRecord(
                 ticker, pos.strategy, pos.direction, pos.quantity,
                 pos.entryPrice, pos.entryTime, exitPrice, exitTime, reason,
                 grossPnl, exitFill.commission(), exitFill.slippage(),
-                netPnl, pos.maxDrawdown, pos.maxRunup));
+                netPnl, pos.maxDrawdown, pos.maxRunup,
+                pos.pattern, pos.atrAtEntry, pos.vixAtEntry, pos.entryHour,
+                pos.marketTrend, Map.of()));
+
+        // === LEARNING SYSTEM: Record to TickerMemory ===
+        boolean isWin = netPnl > 0;
+        tickerMemory.recordTrade(
+                ticker,
+                pos.strategy,
+                pos.pattern,
+                isWin,
+                netPnl,
+                pos.maxDrawdown,
+                pos.maxRunup,
+                pos.atrAtEntry,
+                pos.vixAtEntry,
+                pos.entryHour,
+                pos.marketTrend,
+                Map.of("exitReason", reason, "grossPnl", grossPnl)
+        );
+
+        // === GENERATE CHART WITH TRADE OUTCOME ===
+        if (pos.chartCandles != null && !pos.chartCandles.isEmpty()) {
+            // Estimate candles held: time difference / 15 minutes (execution timeframe)
+            long minutesHeld = java.time.Duration.between(pos.entryTime, exitTime).toMinutes();
+            int candlesHeld = Math.max(1, (int) Math.round(minutesHeld / 15.0));
+
+            Path chartsDir = Path.of("backtest/charts");
+            SignalChartGenerator.generateChart(
+                    ticker, pos.strategy, pos.entryTime,
+                    pos.entryPrice, pos.tp, pos.sl,
+                    pos.isCall, pos.chartCandles, chartsDir,
+                    netPnl, reason, candlesHeld);
+        }
+    }
+
+    /**
+     * Extracts a human-readable pattern name from the strategy name.
+     * e.g., "c1squeezecall" -> "squeeze_breakout"
+     *       "c2trendcall" -> "trend_continuation"
+     */
+    private String extractPatternFromStrategy(String strategyName) {
+        String base = strategyName.toLowerCase()
+                .replace("call", "")
+                .replace("put", "")
+                .replaceAll("c\\d+|p\\d+", "");  // Remove C1, P2, etc.
+        
+        return switch (base) {
+            case "squeeze" -> "squeeze_breakout";
+            case "trend" -> "trend_continuation";
+            case "bounce" -> "support_resistance_bounce";
+            case "opening" -> "opening_range";
+            case "continuation" -> "gap_continuation";
+            case "reversal" -> "reversal";
+            default -> base.isEmpty() ? "unknown" : base;
+        };
     }
 
     private void closeRemainingPositions(Map<String, List<OpenPosition>> openPositions,
@@ -289,25 +387,38 @@ public class BacktestEngine {
     private static class OpenPosition {
         final String strategy;
         final String direction;
+        final String pattern;              // NEW: candlestick pattern name
         final int quantity;
         final double entryPrice;
         final double tp;
         final double sl;
         final ZonedDateTime entryTime;
+        final int entryHour;               // NEW: hour of entry (NY time)
+        final double atrAtEntry;           // NEW: ATR at entry
+        final double vixAtEntry;           // NEW: VIX at entry (placeholder for now)
+        final String marketTrend;          // NEW: market trend at entry
+        final List<Candle> chartCandles;   // Candle data for chart generation
         double maxDrawdown = 0;
         double maxRunup = 0;
         final boolean isCall;
 
-        OpenPosition(String strategy, String direction, int quantity, double entryPrice,
-                     double tp, double sl, ZonedDateTime entryTime) {
+        OpenPosition(String strategy, String direction, String pattern, int quantity, double entryPrice,
+                     double tp, double sl, ZonedDateTime entryTime, double atrAtEntry,
+                     List<Candle> chartCandles) {
             this.strategy = strategy;
             this.direction = direction;
+            this.pattern = pattern;
             this.quantity = quantity;
             this.entryPrice = entryPrice;
             this.tp = tp;
             this.sl = sl;
             this.entryTime = entryTime;
+            this.entryHour = entryTime.withZoneSameInstant(NY).getHour();
+            this.atrAtEntry = atrAtEntry;
+            this.vixAtEntry = 0.0;  // TODO: Fetch from VIX data source
+            this.marketTrend = "neutral";  // TODO: Determine from SPY trend
             this.isCall = direction.equalsIgnoreCase("CALL");
+            this.chartCandles = chartCandles;
         }
     }
 }

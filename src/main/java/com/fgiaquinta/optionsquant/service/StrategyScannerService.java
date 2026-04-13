@@ -6,6 +6,7 @@ import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.*;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.model.TradePlan;
+import com.fgiaquinta.optionsquant.strategy.utils.CandlestickPatternDetector;
 import com.fgiaquinta.optionsquant.strategy.utils.RiskCalculator;
 import com.fgiaquinta.optionsquant.strategy.utils.SignalQualityFilter;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +18,8 @@ import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.time.ZoneId;
 import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Scans all configured tickers against all 12 strategies.
@@ -44,6 +47,22 @@ public class StrategyScannerService {
     // Separate logger for data download operations
     private static final org.slf4j.Logger downloadLog = 
             org.slf4j.LoggerFactory.getLogger("DataDownload");
+
+    // ===== IBKR RATE LIMITING =====
+    // IBKR TWS API limit: 50 messages/second (Error 100)
+    // We use a conservative approach: 10 concurrent requests max, 100ms between each
+    private static final int MAX_CONCURRENT_DOWNLOADS = 10;
+    private static final long DOWNLOAD_DELAY_MS = 100;  // 100ms = 10 req/sec max
+    private final Semaphore downloadSemaphore = new Semaphore(MAX_CONCURRENT_DOWNLOADS);
+    private final ExecutorService downloadExecutor = Executors.newFixedThreadPool(
+            MAX_CONCURRENT_DOWNLOADS, 
+            r -> {
+                Thread t = new Thread(r, "IBKR-Downloader");
+                t.setDaemon(true);
+                return t;
+            }
+    );
+    private final AtomicInteger activeDownloads = new AtomicInteger(0);
 
     // Maximum age for data to be considered "fresh"
     private static final Map<TimeFrame, Duration> FRESHNESS_THRESHOLDS = Map.of(
@@ -176,44 +195,92 @@ public class StrategyScannerService {
             return Collections.emptyList();
         }
 
-        // Load all timeframes from CSV, auto-download delta if stale/missing
-        Map<TimeFrame, List<Candle>> candlesByTimeframe = new EnumMap<>(TimeFrame.class);
-        int totalNewCandles = 0;
+        // ===== PARALLEL DATA LOADING =====
+        // Load all timeframes concurrently with rate limiting
+        Map<TimeFrame, List<Candle>> candlesByTimeframe = new ConcurrentHashMap<>();
+        AtomicInteger totalNewCandles = new AtomicInteger(0);
+        
+        List<TimeFrame> timeframesToLoad = Arrays.asList(TimeFrame.values());
+        List<CompletableFuture<Void>> downloadFutures = new ArrayList<>();
 
-        for (TimeFrame tf : TimeFrame.values()) {
-            List<Candle> candles = csvService.loadFromCsv(ticker, tf);
-            if (candles.isEmpty()) {
-                log.debug("No CSV data for {} [{}], downloading full history", ticker, tf);
-                // Full download for missing data
-                List<Candle> freshData = downloadTimeframeDelta(ticker, tf, null);
-                if (!freshData.isEmpty()) {
-                    csvService.saveToCsv(ticker, tf, freshData);
-                    candlesByTimeframe.put(tf, freshData);
-                    totalNewCandles += freshData.size();
-                }
-            } else if (autoRefreshData && isStale(candles, tf)) {
-                Duration threshold = FRESHNESS_THRESHOLDS.get(tf);
-                ZonedDateTime lastTimestamp = getLastTimestamp(candles);
-                // Delta download: only get new candles since last timestamp
-                List<Candle> deltaData = downloadTimeframeDelta(ticker, tf, lastTimestamp);
-                if (!deltaData.isEmpty()) {
-                    List<Candle> mergedCandles = mergeCandles(candles, deltaData);
-                    csvService.saveToCsv(ticker, tf, mergedCandles);
-                    candlesByTimeframe.put(tf, mergedCandles);
-                    totalNewCandles += deltaData.size();
-                    downloadLog.info("✅ {} [{}] delta: +{} new candles (cached: {} → merged: {})",
-                            ticker, tf, deltaData.size(), candles.size(), mergedCandles.size());
-                } else {
-                    // Delta download returned no new candles, use cached data
-                    candlesByTimeframe.put(tf, candles);
-                }
+        for (TimeFrame tf : timeframesToLoad) {
+            List<Candle> cachedCandles = csvService.loadFromCsv(ticker, tf);
+            
+            if (cachedCandles.isEmpty()) {
+                // Need full download - submit to parallel executor
+                downloadFutures.add(CompletableFuture.runAsync(() -> {
+                    try {
+                        downloadSemaphore.acquire();
+                        activeDownloads.incrementAndGet();
+                        
+                        List<Candle> freshData = downloadTimeframeDelta(ticker, tf, null);
+                        if (!freshData.isEmpty()) {
+                            csvService.saveToCsv(ticker, tf, freshData);
+                            candlesByTimeframe.put(tf, freshData);
+                            totalNewCandles.addAndGet(freshData.size());
+                        }
+                        
+                        Thread.sleep(DOWNLOAD_DELAY_MS);  // Rate limit
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        downloadLog.error("❌ Download interrupted for {} [{}]", ticker, tf);
+                    } catch (Exception e) {
+                        downloadLog.error("❌ Failed to download {} [{}]: {}", ticker, tf, e.getMessage());
+                    } finally {
+                        activeDownloads.decrementAndGet();
+                        downloadSemaphore.release();
+                    }
+                }, downloadExecutor));
+                
+            } else if (autoRefreshData && isStale(cachedCandles, tf)) {
+                // Need delta download - submit to parallel executor
+                final List<Candle> cached = cachedCandles;  // For lambda
+                downloadFutures.add(CompletableFuture.runAsync(() -> {
+                    try {
+                        downloadSemaphore.acquire();
+                        activeDownloads.incrementAndGet();
+                        
+                        ZonedDateTime lastTimestamp = getLastTimestamp(cached);
+                        List<Candle> deltaData = downloadTimeframeDelta(ticker, tf, lastTimestamp);
+                        
+                        if (!deltaData.isEmpty()) {
+                            List<Candle> mergedCandles = mergeCandles(cached, deltaData);
+                            csvService.saveToCsv(ticker, tf, mergedCandles);
+                            candlesByTimeframe.put(tf, mergedCandles);
+                            totalNewCandles.addAndGet(deltaData.size());
+                            downloadLog.info("✅ {} [{}] delta: +{} new candles (cached: {} → merged: {})",
+                                    ticker, tf, deltaData.size(), cached.size(), mergedCandles.size());
+                        } else {
+                            candlesByTimeframe.put(tf, cached);
+                        }
+                        
+                        Thread.sleep(DOWNLOAD_DELAY_MS);  // Rate limit
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        downloadLog.error("❌ Download interrupted for {} [{}]", ticker, tf);
+                    } catch (Exception e) {
+                        downloadLog.error("❌ Failed to download {} [{}]: {}", ticker, tf, e.getMessage());
+                    } finally {
+                        activeDownloads.decrementAndGet();
+                        downloadSemaphore.release();
+                    }
+                }, downloadExecutor));
+                
             } else {
-                candlesByTimeframe.put(tf, candles);
+                // Use cached data (no download needed)
+                candlesByTimeframe.put(tf, cachedCandles);
             }
         }
 
-        if (totalNewCandles > 0) {
-            downloadLog.info("📊 {} refresh complete: +{} new candles across timeframes", ticker, totalNewCandles);
+        // Wait for all downloads to complete
+        if (!downloadFutures.isEmpty()) {
+            downloadLog.info("📥 {} downloading {} timeframes in parallel...", ticker, downloadFutures.size());
+            CompletableFuture.allOf(downloadFutures.toArray(new CompletableFuture<?>[0])).join();
+            downloadLog.info("✅ {} downloads complete (+{} new candles)", ticker, totalNewCandles.get());
+        }
+
+        if (totalNewCandles.get() > 0) {
+            downloadLog.info("📊 {} refresh complete: +{} new candles across timeframes", ticker, totalNewCandles.get());
         }
 
         if (candlesByTimeframe.isEmpty()) {
@@ -242,41 +309,57 @@ public class StrategyScannerService {
         for (TradingStrategy strategy : allStrategies) {
             try {
                 boolean triggered = strategy.isTriggered(ticker, data, nyTime);
-                if (triggered) {
-                    // ===== POST-TRIGGER: Signal Quality Filter =====
-                    // Run generic false signal detection on the 1-hour series
-                    BarSeries series1h = data.getSeries(TimeFrame.HOUR_1);
-                    boolean isCall = strategy.getName().contains("call");
+                if (!triggered) continue;
+                
+                // ===== POST-TRIGGER: Signal Quality Filter =====
+                // Run generic false signal detection on the 1-hour series
+                BarSeries series1h = data.getSeries(TimeFrame.HOUR_1);
+                boolean isCall = strategy.getName().contains("call");
 
-                    if (series1h != null && !series1h.isEmpty()) {
-                        int idx1h = data.getIndexForTime(series1h, currentTime);
-                        if (idx1h > 0 && !SignalQualityFilter.passesCoreChecks(series1h, idx1h, isCall)) {
-                            String qualityReport = SignalQualityFilter.getQualityReport(series1h, idx1h, isCall);
-                            strategyLog.debug("🚫 [Quality Filter] {} {} failed quality check: {}",
-                                    ticker, strategy.getName(), qualityReport);
-                            continue;  // Skip this signal — likely false
-                        }
-                    }
-
-                    double currentPrice = getCurrentPrice(data);
-
-                    TradePlan tradePlan = null;
-                    if (includeTradePlans) {
-                        tradePlan = RiskCalculator.generatePlan(data, ticker, currentTime, !isCall, currentPrice);
-                    }
-
-                    Signal signal = new Signal(
-                            ticker,
-                            strategy.getName(),
-                            isCall ? "CALL" : "PUT",
-                            currentPrice,
-                            nyTime,
-                            tradePlan
-                    );
-
-                    signals.add(signal);
-                    strategyLog.info("🎯 SIGNAL: {} triggered {} at ${}", ticker, strategy.getName(), currentPrice);
+                if (series1h == null || series1h.isEmpty()) continue;
+                
+                int idx1h = data.getIndexForTime(series1h, currentTime);
+                if (idx1h > 0 && !SignalQualityFilter.passesCoreChecks(series1h, idx1h, isCall)) {
+                    String qualityReport = SignalQualityFilter.getQualityReport(series1h, idx1h, isCall);
+                    strategyLog.debug("🚫 [Quality Filter] {} {} failed quality check: {}",
+                            ticker, strategy.getName(), qualityReport);
+                    continue;  // Skip this signal — likely false
                 }
+
+                // ===== CANDLESTICK PATTERN DETECTION =====
+                String candlestickPattern = CandlestickPatternDetector.detectPattern(series1h, idx1h);
+                String strategyPattern = extractPatternFromStrategy(strategy.getName());
+                String combinedPattern = strategyPattern + " + " + candlestickPattern;
+
+                // ===== LEARNED PATTERN FILTERING =====
+                // Check if this pattern has been disabled for this ticker+strategy
+                if (!tickerMemory.isPatternAllowed(ticker, strategy.getName(), combinedPattern)) {
+                    strategyLog.debug("🚫 [Pattern Filter] {} {} disabled pattern '{}' — skipping",
+                            ticker, strategy.getName(), combinedPattern);
+                    continue;  // Skip signals with historically poor patterns
+                }
+
+                double currentPrice = getCurrentPrice(data);
+
+                TradePlan tradePlan = null;
+                if (includeTradePlans) {
+                    tradePlan = RiskCalculator.generatePlan(data, ticker, currentTime, !isCall, currentPrice);
+                }
+
+                Signal signal = new Signal(
+                        ticker,
+                        strategy.getName(),
+                        isCall ? "CALL" : "PUT",
+                        currentPrice,
+                        nyTime,
+                        tradePlan,
+                        combinedPattern  // Include pattern in signal
+                );
+
+                signals.add(signal);
+                strategyLog.info("🎯 SIGNAL: {} triggered {} at ${} [pattern: {}]", 
+                        ticker, strategy.getName(), currentPrice, combinedPattern);
+                        
             } catch (Exception e) {
                 log.warn("Error evaluating strategy {} for ticker {}: {}", strategy.getName(), ticker, e.getMessage());
             }
@@ -375,6 +458,26 @@ public class StrategyScannerService {
 
     // ===== Helpers =====
 
+    /**
+     * Extracts a human-readable pattern name from the strategy name.
+     */
+    private String extractPatternFromStrategy(String strategyName) {
+        String base = strategyName.toLowerCase()
+                .replace("call", "")
+                .replace("put", "")
+                .replaceAll("c\\d+|p\\d+", "");
+        
+        return switch (base) {
+            case "squeeze" -> "squeeze_breakout";
+            case "trend" -> "trend_continuation";
+            case "bounce" -> "support_resistance_bounce";
+            case "opening" -> "opening_range";
+            case "continuation" -> "gap_continuation";
+            case "reversal" -> "reversal";
+            default -> base.isEmpty() ? "unknown" : base;
+        };
+    }
+
     private ZonedDateTime getLatestTimestamp(StrategyData data) {
         ZonedDateTime latest = null;
         for (TimeFrame tf : TimeFrame.values()) {
@@ -416,6 +519,13 @@ public class StrategyScannerService {
             String direction,
             double currentPrice,
             ZonedDateTime timestamp,
-            TradePlan tradePlan
-    ) {}
+            TradePlan tradePlan,
+            String candlestickPattern  // NEW: detected pattern (e.g., "squeeze_breakout + hammer")
+    ) {
+        // Backward-compatible compact constructor
+        public Signal(String ticker, String strategy, String direction, double currentPrice,
+                     ZonedDateTime timestamp, TradePlan tradePlan) {
+            this(ticker, strategy, direction, currentPrice, timestamp, tradePlan, "unknown");
+        }
+    }
 }

@@ -126,6 +126,52 @@ public class OllamaService {
     }
 
     /**
+     * Analyzes the learning report and provides AI-powered strategy recommendations.
+     * This is the BRAAIN of the learning system - combines ML insights with AI reasoning.
+     */
+    public String analyzeLearningReport(String learningReport) {
+        try {
+            String prompt = """
+                    You are a professional quantitative trading analyst. Review this automated learning report and provide specific, actionable recommendations.
+                    
+                    The system has been paper trading and learning from its mistakes. Your job is to:
+                    1. Identify the most critical issues to fix
+                    2. Suggest specific parameter adjustments for underperforming ticker+strategy combos
+                    3. Recommend which patterns to disable/enhance
+                    4. Suggest risk management improvements
+                    
+                    Learning Report:
+                    %s
+                    
+                    Provide your analysis in this format:
+                    
+                    🔍 CRITICAL ISSUES:
+                    [List top 3 issues that are causing the most losses]
+                    
+                    🎯 PATTERN OPTIMIZATION:
+                    [Which patterns to enable/disable per ticker, with reasoning]
+                    
+                    ⚙️ PARAMETER TUNING:
+                    [Specific ATR multiplier, RSI threshold, time filter adjustments]
+                    
+                    🛡️ RISK MANAGEMENT:
+                    [Position sizing, stop loss, take profit improvements]
+                    
+                    📈 NEXT STEPS:
+                    [What to test in the next backtest iteration]
+                    
+                    Be specific with numbers and prioritize changes that will have the biggest impact.
+                    """.formatted(learningReport);
+
+            return callOllama(prompt, 800);
+
+        } catch (Exception e) {
+            log.warn("⚠️ Ollama learning analysis failed: {}", e.getMessage());
+            return "Unable to analyze learning report - Ollama may not be running";
+        }
+    }
+
+    /**
      * Makes a call to Ollama API.
      */
     private String callOllama(String prompt, int maxTokens) throws IOException, InterruptedException {

@@ -66,8 +66,8 @@ public class TradingService {
 
                     // Staircase Re-Entry Filter: block if price hasn't improved since last exit
                     if (!staircaseFilter.isReEntryAllowed(signal.ticker(), isCall, signal.currentPrice())) {
-                        log.warn("⏳ [Staircase] BLOCKED: {} {} at ${:.2f} - price not improved since last exit",
-                                signal.ticker(), signal.direction(), signal.currentPrice());
+                        log.warn("⏳ [Staircase] BLOCKED: {} {} at ${} - price not improved since last exit",
+                                signal.ticker(), signal.direction(), String.format("%.2f", signal.currentPrice()));
                         executions.add(new ExecutionResult(signal, false, "Staircase re-entry blocked", null));
                         continue;
                     }
@@ -76,8 +76,8 @@ public class TradingService {
                     double tickerMultiplier = tickerMemory.getPositionSizeMultiplier(signal.ticker());
                     TickerMemory.TickerStats stats = tickerMemory.getStats(signal.ticker());
                     if (stats != null && stats.totalTrades >= 3) {
-                        log.info("🧠 [Memory] {} size multiplier: {:.2f}x ({:.1f}% WR, {} trades)",
-                                signal.ticker(), tickerMultiplier, stats.getWinRate() * 100, stats.totalTrades);
+                        log.info("🧠 [Memory] {} size multiplier: {}x ({}% WR, {} trades)",
+                                signal.ticker(), String.format("%.2f", tickerMultiplier), String.format("%.1f", stats.getWinRate() * 100), stats.totalTrades);
                     }
 
                     // Check concurrent trades limit
@@ -97,15 +97,15 @@ public class TradingService {
                     }
 
                     if (effectiveQty < 1) {
-                        log.warn("Calculated quantity is 0 for {} (balance=${,.2f}, SL distance too small?) - skipping",
-                                signal.ticker(), accountManager.getCurrentBalance());
+                        log.warn("Calculated quantity is 0 for {} (balance={}, SL distance too small?) - skipping",
+                                signal.ticker(), String.format("%,.2f", accountManager.getCurrentBalance()));
                         executions.add(new ExecutionResult(signal, false, "Quantity calculated as 0", null));
                         continue;
                     }
 
-                    log.info("🎯 Executing: {} {} @ {} | TP={} SL={} | Qty={} (balance=${,.2f})",
+                    log.info("🎯 Executing: {} {} @ {} | TP={} SL={} | Qty={} (balance=${})",
                             signal.ticker(), signal.direction(), plan.entryPrice,
-                            plan.takeProfit, plan.stopLoss, effectiveQty, accountManager.getCurrentBalance());
+                            plan.takeProfit, plan.stopLoss, effectiveQty, String.format("%,.2f", accountManager.getCurrentBalance()));
 
                     OrderExecutionService.OrderResult orderResult = orderExecutionService.placeOptionBracket(
                             signal.ticker(),
@@ -135,9 +135,9 @@ public class TradingService {
         long elapsed = System.currentTimeMillis() - startTime;
         long executed = executions.stream().filter(ExecutionResult::success).count();
 
-        log.info("<<< scanAndExecute: {} signals, {} executed in {}ms | Account: ${,.2f} | Active trades: {}",
+        log.info("<<< scanAndExecute: {} signals, {} executed in {}ms | Account: ${} | Active trades: {}",
                 scanResult.totalSignals(), executed, elapsed,
-                accountManager.getCurrentBalance(), accountManager.getActiveTradeCount());
+                String.format("%,.2f", accountManager.getCurrentBalance()), accountManager.getActiveTradeCount());
 
         return new TradingResult(scanResult, executions, elapsed);
     }

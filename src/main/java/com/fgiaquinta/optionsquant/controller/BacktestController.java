@@ -31,6 +31,10 @@ public class BacktestController {
     private final com.fgiaquinta.optionsquant.service.BacktestAnalyzer backtestAnalyzer;
     private final com.fgiaquinta.optionsquant.service.NewsFilterService newsFilterService;
     private final com.fgiaquinta.optionsquant.service.StrategyScreenerService screenerService;
+    private final com.fgiaquinta.optionsquant.service.TradingLearningAnalyzer learningAnalyzer;
+    private final com.fgiaquinta.optionsquant.service.TickerMemory tickerMemory;
+    private final com.fgiaquinta.optionsquant.service.OllamaService ollamaService;
+    private final com.fgiaquinta.optionsquant.service.ContinuousLearningLoop continuousLearningLoop;
 
     /**
      * Run a backtest with default parameters.
@@ -69,8 +73,17 @@ public class BacktestController {
 
         BacktestReport report = backtestEngine.run(config);
 
-        log.info("<<< POST /api/backtest/run - {} trades, return={:.2f}%",
-                report.totalTrades(), report.totalReturnPct() * 100);
+        // === LEARNING SYSTEM: Analyze and learn from the backtest ===
+        if (report.totalTrades() > 0) {
+            log.info("🧠 [Learning] Analyzing backtest results for automated learning...");
+            var learningReport = learningAnalyzer.analyze(report);
+            
+            // Log ticker memory status
+            log.info("\n{}", tickerMemory.getLearningReport());
+        }
+
+        log.info("<<< POST /api/backtest/run - {} trades, return={}%",
+                report.totalTrades(), String.format("%.2f", report.totalReturnPct() * 100));
         return ResponseEntity.ok(report);
     }
 
@@ -100,9 +113,89 @@ public class BacktestController {
 
         BacktestReport report = backtestEngine.run(config);
 
-        log.info("<<< POST /api/backtest/run-all - {} trades, return={:.2f}%",
-                report.totalTrades(), report.totalReturnPct() * 100);
+        log.info("<<< POST /api/backtest/run-all - {} trades, return={}%",
+                report.totalTrades(), String.format("%.2f", report.totalReturnPct() * 100));
         return ResponseEntity.ok(report);
+    }
+
+    /**
+     * Get the current ticker memory learning report.
+     * GET /api/backtest/learning-report
+     */
+    @GetMapping("/learning-report")
+    public ResponseEntity<String> getLearningReport() {
+        log.info(">>> GET /api/backtest/learning-report");
+        return ResponseEntity.ok(tickerMemory.getLearningReport());
+    }
+
+    /**
+     * Get AI-powered analysis of the current learning report.
+     * POST /api/backtest/ai-analysis
+     */
+    @PostMapping("/ai-analysis")
+    public ResponseEntity<String> getAiAnalysis() {
+        log.info(">>> POST /api/backtest/ai-analysis");
+        
+        String learningReport = tickerMemory.getLearningReport();
+        String aiAnalysis = ollamaService.analyzeLearningReport(learningReport);
+        
+        return ResponseEntity.ok(aiAnalysis);
+    }
+
+    /**
+     * Start continuous learning loop (TRAINING MODE).
+     * POST /api/backtest/learn?from=2025-01-01&to=2026-04-01&tickers=AMZN,NVDA,GOOGL&maxIterations=20
+     */
+    @PostMapping("/learn")
+    public ResponseEntity<com.fgiaquinta.optionsquant.service.ContinuousLearningLoop.LearningLoopResult> startLearningLoop(
+            @RequestParam String from,
+            @RequestParam String to,
+            @RequestParam String tickers,
+            @RequestParam(defaultValue = "50000") double initialCapital,
+            @RequestParam(defaultValue = "0.02") double riskPct,
+            @RequestParam(defaultValue = "20") int maxIterations,
+            @RequestParam(defaultValue = "0.02") double convergenceThreshold
+    ) {
+        log.info(">>> POST /api/backtest/learn from={} to={} tickers={} maxIter={}", 
+                from, to, tickers, maxIterations);
+
+        LocalDate fromDate = LocalDate.parse(from);
+        LocalDate toDate = LocalDate.parse(to);
+        List<String> tickerList = List.of(tickers.split(","));
+
+        // Run in a separate thread to avoid blocking
+        new Thread(() -> {
+            var result = continuousLearningLoop.startLoop(
+                    tickerList, fromDate, toDate, initialCapital, riskPct, 
+                    maxIterations, convergenceThreshold);
+            log.info("<<< Learning loop completed: {} iterations", result.completedIterations);
+        }).start();
+
+        return ResponseEntity.accepted().build();
+    }
+
+    /**
+     * Stop the continuous learning loop.
+     * POST /api/backtest/learn/stop
+     */
+    @PostMapping("/learn/stop")
+    public ResponseEntity<String> stopLearningLoop() {
+        log.info(">>> POST /api/backtest/learn/stop");
+        continuousLearningLoop.stop();
+        return ResponseEntity.ok("Learning loop stop requested");
+    }
+
+    /**
+     * Check if learning loop is running.
+     * GET /api/backtest/learn/status
+     */
+    @GetMapping("/learn/status")
+    public ResponseEntity<Map<String, Object>> getLearningLoopStatus() {
+        boolean isRunning = continuousLearningLoop.isRunning();
+        return ResponseEntity.ok(Map.of(
+                "running", isRunning,
+                "message", isRunning ? "Learning loop is running" : "Learning loop is idle"
+        ));
     }
 
     /**

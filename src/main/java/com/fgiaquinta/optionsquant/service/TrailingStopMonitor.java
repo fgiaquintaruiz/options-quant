@@ -63,8 +63,8 @@ public class TrailingStopMonitor {
                 ticker, isCall, entryPrice, slOrderId, ZonedDateTime.now(ZoneId.of("America/New_York"))
         );
         activePositions.put(ticker, position);
-        log.info("📍 [TrailingStop] Registered position: {} {} @ ${:.2f}, SL orderId={}",
-                ticker, isCall ? "CALL" : "PUT", entryPrice, slOrderId);
+        log.info("📍 [TrailingStop] Registered position: {} {} @ ${}, SL orderId={}",
+                ticker, isCall ? "CALL" : "PUT", String.format("%.2f", entryPrice), slOrderId);
     }
 
     /**
@@ -121,13 +121,13 @@ public class TrailingStopMonitor {
         // === 1. TIME STOP (90-minute max hold) ===
         long heldMinutes = position.getHeldMinutes();
         if (heldMinutes >= MAX_HOLD_MINUTES) {
-            log.warn("⏳ [Time Stop] {} held {} min (max {}). Forcing exit at ${:.2f}",
-                    position.ticker, heldMinutes, MAX_HOLD_MINUTES, currentPrice);
+            log.warn("⏳ [Time Stop] {} held {} min (max {}). Forcing exit at ${}",
+                    position.ticker, heldMinutes, MAX_HOLD_MINUTES, String.format("%.2f", currentPrice));
             // Adjust SL to current price to force exit on next touch
             // TODO: Call ibkrService.modifyStopLossCondition(position.slOrderId, position.ticker, currentPrice);
             // For now, log and mark for manual review
-            log.warn("⚠️ [Time Stop] Manual intervention required: modify SL order {} to ${:.2f}",
-                    position.slOrderId, currentPrice);
+            log.warn("⚠️ [Time Stop] Manual intervention required: modify SL order {} to ${}",
+                    position.slOrderId, String.format("%.2f", currentPrice));
             return;
         }
 
@@ -155,9 +155,9 @@ public class TrailingStopMonitor {
             }
 
             if (shouldTrail) {
-                log.info("🎯 [TrailingStop] {} {} - profit {:.2f}%, trailing SL to SMA20 ${:.2f} (was ${:.2f})",
+                log.info("🎯 [TrailingStop] {} {} - profit {}%, trailing SL to SMA20 ${} (was ${})",
                         position.ticker, position.isCall ? "CALL" : "PUT",
-                        profitPct, sma20, position.currentStopLoss);
+                        String.format("%.2f", profitPct), String.format("%.2f", sma20), String.format("%.2f", position.currentStopLoss));
 
                 // TODO: Call ibkrService.modifyStopLossCondition(position.slOrderId, position.ticker, sma20);
                 position.currentStopLoss = sma20;  // Track locally for now
