@@ -217,7 +217,7 @@ public class BacktestDashboardController {
                                             equityEvent.put("type", "equity");
                                             equityEvent.put("time", parts[0].trim());
                                             equityEvent.put("equity", Double.parseDouble(parts[1].trim()));
-                                            emitter.send(SseEmitter.event().name("equity").data(equityEvent));
+                                            emitter.send(SseEmitter.event().data(equityEvent));
                                         }
                                     }
                                 } catch (Exception e) {
@@ -1075,8 +1075,12 @@ public class BacktestDashboardController {
                                             footerTime.textContent = elapsedSec + 's';
                                             footerStatus.textContent = `Escaneando...`;
                                             
-                                            if (elapsedSec > 0 && elapsedSec % 30 === 0) {
-                                                addConsoleLog(`⏱️ Progreso: ${elapsedSec}s, ${tradesFound} trades encontrados`, 'info');
+                                            // ALWAYS show progress in console
+                                            if (elapsedSec > 0) {
+                                                const min = Math.floor(elapsedSec / 60);
+                                                const sec = elapsedSec % 60;
+                                                const timeStr = min > 0 ? `${min}m ${sec}s` : `${sec}s`;
+                                                addConsoleLog(`⏳ Escaneando... ${timeStr} transcurridos, ${tradesFound} trades encontrados`, 'info');
                                             }
                                             break;
                                             

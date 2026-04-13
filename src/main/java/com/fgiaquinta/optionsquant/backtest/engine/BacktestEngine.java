@@ -74,8 +74,9 @@ public class BacktestEngine {
         double equity = config.initialCapital();
         reporter.onStart(ZonedDateTime.now(NY), equity);
 
-        // Load all data for all tickers
+        // Load all data for all tickers (this takes time - log progress)
         Map<String, Map<TimeFrame, List<Candle>>> allData = new LinkedHashMap<>();
+        int loadedCount = 0;
         for (String ticker : config.tickers()) {
             Map<TimeFrame, List<Candle>> tickerData = new EnumMap<>(TimeFrame.class);
             for (TimeFrame tf : TimeFrame.values()) {
@@ -87,6 +88,12 @@ public class BacktestEngine {
                 tickerData.put(tf, filtered);
             }
             allData.put(ticker, tickerData);
+            loadedCount++;
+            
+            // Log progress every 50 tickers
+            if (loadedCount % 50 == 0 || loadedCount == config.tickers().size()) {
+                log.info("Loaded candle data for {}/{} tickers...", loadedCount, config.tickers().size());
+            }
         }
 
         TimeFrame execTf = config.executionTimeframe();
