@@ -869,14 +869,19 @@ public class BacktestDashboardController {
                     <!-- Fixed Footer with Running PnL -->
                     <div id="running-pnl-footer" style="display: none; position: fixed; bottom: 0; left: 0; right: 0; background: #161b22; border-top: 2px solid #21262d; padding: 12px 20px; z-index: 999; box-shadow: 0 -4px 12px rgba(0,0,0,0.5);">
                         <div style="max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center;">
-                            <div style="font-size: 13px; color: #8b949e;">
-                                <span id="footer-trades">0 trades</span> · 
-                                <span id="footer-time">0s</span> ·
-                                <span id="footer-status">Escaneando...</span>
+                            <div style="display: flex; gap: 20px; align-items: center;">
+                                <span style="font-size: 13px; color: #8b949e;" id="footer-trades">0 trades</span>
+                                <span style="font-size: 13px; color: #8b949e;" id="footer-status">⏳ Esperando...</span>
                             </div>
-                            <div style="text-align: right;">
-                                <div style="font-size: 11px; color: #8b949e;">💰 PnL Total</div>
-                                <div id="footer-pnl" style="font-size: 24px; font-weight: bold;">$0.00</div>
+                            <div style="display: flex; gap: 30px; align-items: center;">
+                                <div style="text-align: center;">
+                                    <div style="font-size: 11px; color: #8b949e;">Tiempo</div>
+                                    <div id="footer-time" style="font-size: 16px; font-weight: bold;">0s</div>
+                                </div>
+                                <div style="text-align: center;">
+                                    <div style="font-size: 11px; color: #8b949e;">💰 PnL Total</div>
+                                    <div id="footer-pnl" style="font-size: 20px; font-weight: bold;">$0.00</div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -977,12 +982,15 @@ public class BacktestDashboardController {
                             footerPnl.className = '';
                             footerTrades.textContent = '0 trades';
                             footerTime.textContent = '0s';
-                            footerStatus.textContent = 'Iniciando...';
-                            
-                            addConsoleLog('🚀 Iniciando backtest...', 'info');
+                            footerStatus.textContent = '⏳ Esperando...';
 
-                            // Connect to SSE stream
+                            // Connect to SSE stream FIRST, then show console
                             const eventSource = new EventSource('/backtest-ui/stream');
+                            
+                            // Show console immediately
+                            consoleLog.style.display = 'block';
+                            addConsoleLog('🚀 Iniciando backtest...', 'info');
+                            addConsoleLog('⏳ Conectando al servidor...', 'info');
                             
                             // Track cumulative equity
                             const equityPoints = [];
@@ -999,6 +1007,7 @@ public class BacktestDashboardController {
                                             progressBar.style.width = '10%';
                                             addConsoleLog(`📂 Cargando ${data.tickerCount} tickers (${data.dateRange})`, 'info');
                                             addConsoleLog(`💵 Capital: $${data.capital.toLocaleString()} | Riesgo: 2%`, 'info');
+                                            footerStatus.textContent = `📂 Cargando ${data.tickerCount} tickers...`;
                                             break;
                                             
                                         case 'trades':
@@ -1064,10 +1073,10 @@ public class BacktestDashboardController {
                                             const tradesFound = data.totalTrades || 0;
                                             progressText.textContent = `Escaneando... ${tradesFound} trades encontrados (${elapsedSec}s transcurridos)`;
                                             footerTime.textContent = elapsedSec + 's';
-                                            footerStatus.textContent = `Escaneando... ${tradesFound} trades`;
+                                            footerStatus.textContent = `Escaneando...`;
                                             
                                             if (elapsedSec > 0 && elapsedSec % 30 === 0) {
-                                                addConsoleLog(`⏱️ Progreso: ${elapsedSec}s transcurridos, ${tradesFound} trades encontrados`, 'info');
+                                                addConsoleLog(`⏱️ Progreso: ${elapsedSec}s, ${tradesFound} trades encontrados`, 'info');
                                             }
                                             break;
                                             
