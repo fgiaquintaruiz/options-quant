@@ -139,13 +139,29 @@ public class BacktestDashboardController {
                 while (backtestThread.isAlive()) {
                     Thread.sleep(500); // Check every 500ms
 
-                    // Log progress every 10 seconds
+                    // Log progress every 10 seconds AND send to UI
                     long now = System.currentTimeMillis();
                     if (now - lastLogTime > 10000) {
                         int currentTradeCount = countTradesInCsv(tradesCsv);
+                        long elapsedSec = (now - startTime) / 1000;
                         log.info("Backtest progress: {}s elapsed, {} trades so far", 
-                                (now - startTime) / 1000, currentTradeCount);
+                                elapsedSec, currentTradeCount);
                         lastLogTime = now;
+                        
+                        // Send progress update to UI even if no new trades
+                        final long finalElapsedSec = elapsedSec;
+                        final int finalTradeCount = currentTradeCount;
+                        eventExecutor.submit(() -> {
+                            try {
+                                Map<String, Object> progressUpdate = new LinkedHashMap<>();
+                                progressUpdate.put("type", "progress_update");
+                                progressUpdate.put("elapsedSec", finalElapsedSec);
+                                progressUpdate.put("totalTrades", finalTradeCount);
+                                emitter.send(SseEmitter.event().data(progressUpdate));
+                            } catch (IOException e) {
+                                log.warn("Error sending progress update: {}", e.getMessage());
+                            }
+                        });
                     }
 
                     // Read current trades from CSV
@@ -752,18 +768,18 @@ public class BacktestDashboardController {
 
                         <!-- Live Trade Log -->
                         <div class="card" id="live-trade-log" style="display: none;">
-                            <h2>📡 Live Trades</h2>
+                            <h2>📡 Trades en Vivo</h2>
                             <div style="max-height: 300px; overflow-y: auto; background: #0d1117; border-radius: 6px; padding: 10px;">
                                 <table style="width: 100%;">
                                     <thead>
                                         <tr>
-                                            <th>Time</th>
+                                            <th>Hora</th>
                                             <th>Ticker</th>
-                                            <th>Strategy</th>
+                                            <th>Estrategia</th>
                                             <th>Dir</th>
-                                            <th>Pattern</th>
+                                            <th>Patrón</th>
                                             <th>PnL</th>
-                                            <th>Exit</th>
+                                            <th>Salida</th>
                                         </tr>
                                     </thead>
                                     <tbody id="live-trades-body"></tbody>
@@ -771,9 +787,16 @@ public class BacktestDashboardController {
                             </div>
                         </div>
 
+                        <!-- Console Log -->
+                        <div class="card" id="console-log" style="display: none;">
+                            <h2>💻 Consola de Progreso</h2>
+                            <div id="console-output" style="max-height: 200px; overflow-y: auto; background: #0d1117; border-radius: 6px; padding: 10px; font-family: 'Courier New', monospace; font-size: 12px; color: #c9d1d9;">
+                            </div>
+                        </div>
+
                         <!-- Results -->
                         <div class="card" id="results" style="display: none;">
-                            <h2>📊 Results</h2>
+                            <h2>📊 Resultados</h2>
                             <div class="stats">
                                 <div class="stat">
                                     <div class="stat-value" id="total-trades">-</div>
@@ -798,16 +821,9 @@ public class BacktestDashboardController {
                             </div>
                         </div>
 
-                        <!-- Running PnL Counter (Fixed Bottom-Right) -->
-                        <div id="running-pnl-counter" style="display: none; position: fixed; bottom: 20px; right: 20px; background: #161b22; border: 2px solid #21262d; border-radius: 12px; padding: 15px 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 999; min-width: 180px;">
-                            <div style="font-size: 11px; color: #8b949e; margin-bottom: 5px;">💰 PnL Total (en vivo)</div>
-                            <div id="running-pnl-value" style="font-size: 28px; font-weight: bold; text-align: right;">$0.00</div>
-                            <div id="running-pnl-trades" style="font-size: 11px; color: #8b949e; text-align: right; margin-top: 3px;">0 trades</div>
-                        </div>
-
                         <!-- Equity Chart -->
                         <div class="card" id="chart-card" style="display: none;">
-                            <h2>📈 Equity Curve</h2>
+                            <h2>📈 Curva de Equity</h2>
                             <div id="chart-container">
                                 <canvas id="equity-chart"></canvas>
                             </div>
@@ -815,17 +831,17 @@ public class BacktestDashboardController {
 
                         <!-- Strategy Table -->
                         <div class="card" id="strategy-card" style="display: none;">
-                            <h2>🎯 Strategy Performance</h2>
+                            <h2>🎯 Performance por Estrategia</h2>
                             <table>
                                 <thead>
                                     <tr>
-                                        <th>Strategy</th>
+                                        <th>Estrategia</th>
                                         <th>Trades</th>
                                         <th>Win Rate</th>
                                         <th>Total PnL</th>
                                         <th>Profit Factor</th>
                                         <th>Max DD</th>
-                                        <th>Actions</th>
+                                        <th>Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody id="strategy-table"></tbody>
@@ -834,7 +850,7 @@ public class BacktestDashboardController {
 
                         <!-- Ticker Table -->
                         <div class="card" id="ticker-card" style="display: none;">
-                            <h2>📋 Ticker Performance</h2>
+                            <h2>📋 Performance por Ticker</h2>
                             <table>
                                 <thead>
                                     <tr>
@@ -847,6 +863,21 @@ public class BacktestDashboardController {
                                 </thead>
                                 <tbody id="ticker-table"></tbody>
                             </table>
+                        </div>
+                    </div>
+
+                    <!-- Fixed Footer with Running PnL -->
+                    <div id="running-pnl-footer" style="display: none; position: fixed; bottom: 0; left: 0; right: 0; background: #161b22; border-top: 2px solid #21262d; padding: 12px 20px; z-index: 999; box-shadow: 0 -4px 12px rgba(0,0,0,0.5);">
+                        <div style="max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center;">
+                            <div style="font-size: 13px; color: #8b949e;">
+                                <span id="footer-trades">0 trades</span> · 
+                                <span id="footer-time">0s</span> ·
+                                <span id="footer-status">Escaneando...</span>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 11px; color: #8b949e;">💰 PnL Total</div>
+                                <div id="footer-pnl" style="font-size: 24px; font-weight: bold;">$0.00</div>
+                            </div>
                         </div>
                     </div>
 
@@ -901,9 +932,27 @@ public class BacktestDashboardController {
                             const progressText = document.getElementById('progress-text');
                             const liveTradeLog = document.getElementById('live-trade-log');
                             const liveTradesBody = document.getElementById('live-trades-body');
-                            const runningPnlCounter = document.getElementById('running-pnl-counter');
-                            const runningPnlValue = document.getElementById('running-pnl-value');
-                            const runningPnlTrades = document.getElementById('running-pnl-trades');
+                            const consoleLog = document.getElementById('console-log');
+                            const consoleOutput = document.getElementById('console-output');
+                            const runningPnlFooter = document.getElementById('running-pnl-footer');
+                            const footerPnl = document.getElementById('footer-pnl');
+                            const footerTrades = document.getElementById('footer-trades');
+                            const footerTime = document.getElementById('footer-time');
+                            const footerStatus = document.getElementById('footer-status');
+
+                            // Helper: add log to console
+                            function addConsoleLog(message, type = 'info') {
+                                const now = new Date();
+                                const timestamp = now.toLocaleTimeString('es-AR', { hour12: false });
+                                const colors = { info: '#58a6ff', success: '#3fb950', warning: '#d29922', error: '#f85149' };
+                                const color = colors[type] || colors.info;
+                                const line = document.createElement('div');
+                                line.style.color = color;
+                                line.style.marginBottom = '3px';
+                                line.innerHTML = `<span style="color: #8b949e;">[${timestamp}]</span> ${message}`;
+                                consoleOutput.appendChild(line);
+                                consoleOutput.scrollTop = consoleOutput.scrollHeight;
+                            }
 
                             // Reset UI
                             btn.disabled = true;
@@ -911,24 +960,31 @@ public class BacktestDashboardController {
                             progressBar.style.width = '5%';
                             progressText.textContent = 'Iniciando backtest...';
                             liveTradesBody.innerHTML = '';
+                            consoleOutput.innerHTML = '';
                             liveTradeLog.style.display = 'none';
+                            consoleLog.style.display = 'none';
                             document.getElementById('results').style.display = 'none';
                             document.getElementById('chart-card').style.display = 'none';
                             document.getElementById('strategy-card').style.display = 'none';
                             document.getElementById('ticker-card').style.display = 'none';
                             
-                            // Reset running PnL counter
+                            // Reset running PnL footer
                             let cumulativePnl = 0;
                             let cumulativeTrades = 0;
-                            runningPnlCounter.style.display = 'block';
-                            runningPnlValue.textContent = '$0.00';
-                            runningPnlValue.className = '';
-                            runningPnlTrades.textContent = '0 trades';
+                            let startTimeSec = 0;
+                            runningPnlFooter.style.display = 'block';
+                            footerPnl.textContent = '$0.00';
+                            footerPnl.className = '';
+                            footerTrades.textContent = '0 trades';
+                            footerTime.textContent = '0s';
+                            footerStatus.textContent = 'Iniciando...';
+                            
+                            addConsoleLog('🚀 Iniciando backtest...', 'info');
 
                             // Connect to SSE stream
                             const eventSource = new EventSource('/backtest-ui/stream');
                             
-                            // Track cumulative equity and PnL
+                            // Track cumulative equity
                             const equityPoints = [];
                             let allTrades = [];
 
@@ -941,12 +997,17 @@ public class BacktestDashboardController {
                                         case 'start':
                                             progressText.textContent = `Cargando ${data.tickerCount} tickers (${data.hotTickers} hot + ${data.totalTickers - data.hotTickers} rest)...`;
                                             progressBar.style.width = '10%';
+                                            addConsoleLog(`📂 Cargando ${data.tickerCount} tickers (${data.dateRange})`, 'info');
+                                            addConsoleLog(`💵 Capital: $${data.capital.toLocaleString()} | Riesgo: 2%`, 'info');
                                             break;
                                             
                                         case 'trades':
                                             // Show live trade log if we have trades
                                             if (data.trades && data.trades.length > 0) {
-                                                liveTradeLog.style.display = 'block';
+                                                if (liveTradeLog.style.display === 'none') {
+                                                    liveTradeLog.style.display = 'block';
+                                                    addConsoleLog('📊 Primeras señales detectadas', 'success');
+                                                }
                                                 
                                                 // Add new trades to the live table
                                                 data.trades.forEach(trade => {
@@ -969,21 +1030,45 @@ public class BacktestDashboardController {
                                                 
                                                 allTrades.push(...data.trades);
                                                 
+                                                // Log new trades to console
+                                                data.trades.forEach(trade => {
+                                                    const pnlEmoji = trade.netPnl >= 0 ? '✅' : '❌';
+                                                    const pnlSign = trade.netPnl >= 0 ? '+' : '';
+                                                    addConsoleLog(`${pnlEmoji} ${trade.ticker} ${trade.strategy} ${trade.direction}: ${pnlSign}$${trade.netPnl.toFixed(2)} (${trade.exitReason})`, 
+                                                        trade.netPnl >= 0 ? 'success' : 'error');
+                                                });
+                                                
                                                 // Update cumulative PnL
                                                 cumulativePnl += data.recentPnl || 0;
                                                 cumulativeTrades += data.trades.length;
                                                 
-                                                // Update running PnL counter
-                                                runningPnlValue.textContent = '$' + cumulativePnl.toFixed(2);
-                                                runningPnlValue.className = cumulativePnl >= 0 ? 'positive' : 'negative';
-                                                runningPnlTrades.textContent = cumulativeTrades + ' trades';
+                                                // Update footer
+                                                footerPnl.textContent = '$' + cumulativePnl.toFixed(2);
+                                                footerPnl.className = cumulativePnl >= 0 ? 'positive' : 'negative';
+                                                footerTrades.textContent = cumulativeTrades + ' trades';
                                             }
                                             
                                             // Update progress
                                             const totalTrades = data.totalTrades || 0;
                                             const elapsed = data.elapsedMs || 0;
-                                            progressText.textContent = `Escaneando... ${totalTrades} trades encontrados (${(elapsed / 1000).toFixed(1)}s transcurridos)`;
+                                            startTimeSec = Math.round(elapsed / 1000);
+                                            progressText.textContent = `Escaneando... ${totalTrades} trades encontrados (${startTimeSec}s transcurridos)`;
                                             progressBar.style.width = Math.min(90, 10 + (totalTrades / 5)) + '%';
+                                            footerTime.textContent = startTimeSec + 's';
+                                            footerStatus.textContent = 'Escaneando...';
+                                            break;
+                                            
+                                        case 'progress_update':
+                                            // Update every 10 seconds even without new trades
+                                            const elapsedSec = data.elapsedSec || 0;
+                                            const tradesFound = data.totalTrades || 0;
+                                            progressText.textContent = `Escaneando... ${tradesFound} trades encontrados (${elapsedSec}s transcurridos)`;
+                                            footerTime.textContent = elapsedSec + 's';
+                                            footerStatus.textContent = `Escaneando... ${tradesFound} trades`;
+                                            
+                                            if (elapsedSec > 0 && elapsedSec % 30 === 0) {
+                                                addConsoleLog(`⏱️ Progreso: ${elapsedSec}s transcurridos, ${tradesFound} trades encontrados`, 'info');
+                                            }
                                             break;
                                             
                                         case 'equity':
@@ -991,15 +1076,21 @@ public class BacktestDashboardController {
                                             break;
                                             
                                         case 'complete':
+                                            const totalTime = Math.round(data.elapsedMs / 1000);
                                             progressBar.style.width = '100%';
-                                            progressText.textContent = `¡Completo! ${data.totalTrades} trades en ${(data.elapsedMs / 1000).toFixed(1)}s`;
+                                            progressText.textContent = `¡Completo! ${data.totalTrades} trades en ${totalTime}s`;
+                                            addConsoleLog(`🏁 Backtest completo: ${data.totalTrades} trades en ${totalTime}s`, 'success');
+                                            addConsoleLog(`📊 PnL Final: $${data.totalPnl.toFixed(2)}`, data.totalPnl >= 0 ? 'success' : 'error');
+                                            addConsoleLog(`📈 Win Rate: ${data.winRate.toFixed(1)}% | Profit Factor: ${data.profitFactor.toFixed(2)}`, 'info');
                                             
-                                            // Update final PnL counter
+                                            // Update final footer
                                             cumulativePnl = data.totalPnl;
                                             cumulativeTrades = data.totalTrades;
-                                            runningPnlValue.textContent = '$' + cumulativePnl.toFixed(2);
-                                            runningPnlValue.className = cumulativePnl >= 0 ? 'positive' : 'negative';
-                                            runningPnlTrades.textContent = cumulativeTrades + ' trades';
+                                            footerPnl.textContent = '$' + cumulativePnl.toFixed(2);
+                                            footerPnl.className = cumulativePnl >= 0 ? 'positive' : 'negative';
+                                            footerTrades.textContent = cumulativeTrades + ' trades';
+                                            footerTime.textContent = totalTime + 's';
+                                            footerStatus.textContent = '✅ Completo';
                                             
                                             // Display final results
                                             displayResults(data);
@@ -1015,21 +1106,24 @@ public class BacktestDashboardController {
                                             break;
                                             
                                         case 'error':
+                                            addConsoleLog(`❌ Error: ${data.error}`, 'error');
                                             alert('Error: ' + (data.error || 'Error desconocido'));
                                             eventSource.close();
                                             btn.disabled = false;
                                             progressSection.style.display = 'none';
-                                            runningPnlCounter.style.display = 'none';
+                                            runningPnlFooter.style.display = 'none';
                                             break;
                                     }
                                 } catch (err) {
                                     console.error('Error parsing SSE event:', err, e.data);
+                                    addConsoleLog(`⚠️ Error parsing evento: ${err.message}`, 'warning');
                                 }
                             };
 
                             // Handle connection errors
                             eventSource.onerror = (err) => {
                                 console.error('SSE connection error:', err);
+                                addConsoleLog('⚠️ Error de conexión SSE', 'warning');
                                 eventSource.close();
                                 btn.disabled = false;
                             };
