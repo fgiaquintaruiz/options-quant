@@ -15,17 +15,23 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Web UI Dashboard for backtest analysis and strategy improvement.
  * Access at: http://localhost:9090/backtest-ui
- * 
+ *
  * Features:
  * 1. Interactive equity curve chart (Chart.js)
  * 2. Strategy performance table with "Improve" buttons
@@ -41,6 +47,29 @@ public class BacktestDashboardController {
     private final BacktestEngine backtestEngine;
     private final TickerService tickerService;
     private final TickerMemory tickerMemory;
+
+    // Shared backtest running flag (for stop functionality)
+    private static final AtomicBoolean backtestRunning = new AtomicBoolean(false);
+    private static Thread currentBacktestThread = null;
+
+    // Checkpoint file path for resume capability
+    private static final Path CHECKPOINT_FILE = Path.of("backtest/checkpoint.txt");
+
+    // Cached DateTimeFormatter for chart time display
+    private static final DateTimeFormatter CHART_TIME_FMT = DateTimeFormatter.ofPattern("MM-dd HH:mm");
+
+    // Event-driven progress tracker: replaces CSV polling for SSE progress updates.
+    // The backtest thread updates this map directly; the SSE monitoring loop reads from it.
+    private final ConcurrentHashMap<String, BacktestProgress> activeBacktests = new ConcurrentHashMap<>();
+
+    /**
+     * Mutable progress state shared between the backtest thread and SSE monitor.
+     */
+    private static class BacktestProgress {
+        volatile int totalTrades = 0;
+        volatile long elapsedMs = 0;
+        volatile boolean done = false;
+    }
 
     /**
      * Serves the main dashboard HTML page.
@@ -104,8 +133,9 @@ public class BacktestDashboardController {
                     Files.createDirectories(tradesCsv.getParent());
                 }
 
-                long lastFileLength = 0;
-                int lastTradeCount = 0;
+                long equityByteOffset = 0;
+                long tradesByteOffset = 0;
+                int totalTradesSent = 0;
                 long startTime = System.currentTimeMillis();
                 long lastLogTime = startTime;
 
@@ -116,7 +146,7 @@ public class BacktestDashboardController {
                 BacktestConfig config = new BacktestConfig(
                         tickers, fromDate, toDate,
                         initialCapital, riskPct, 0.005, 0.65,
-                        3, com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15, true
+                        3, com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15, true, false
                 );
 
                 final BacktestReport[] finalReport = new BacktestReport[1];
@@ -125,7 +155,7 @@ public class BacktestDashboardController {
                 Thread backtestThread = new Thread(() -> {
                     try {
                         log.info("Starting backtest engine...");
-                        finalReport[0] = backtestEngine.run(config);
+                        finalReport[0] = backtestEngine.run(config, false, backtestRunning);
                         log.info("Backtest engine completed");
                     } catch (Exception e) {
                         log.error("Backtest engine failed: {}", e.getMessage(), e);
@@ -142,15 +172,14 @@ public class BacktestDashboardController {
                     // Log progress every 10 seconds AND send to UI
                     long now = System.currentTimeMillis();
                     if (now - lastLogTime > 10000) {
-                        int currentTradeCount = countTradesInCsv(tradesCsv);
                         long elapsedSec = (now - startTime) / 1000;
                         log.info("Backtest progress: {}s elapsed, {} trades so far",
-                                elapsedSec, currentTradeCount);
+                                elapsedSec, totalTradesSent);
                         lastLogTime = now;
 
                         // Send progress update to UI
                         final long finalElapsedSec = elapsedSec;
-                        final int finalTradeCount = currentTradeCount;
+                        final int finalTradeCount = totalTradesSent;
                         eventExecutor.submit(() -> {
                             try {
                                 Map<String, Object> progressUpdate = new LinkedHashMap<>();
@@ -165,30 +194,31 @@ public class BacktestDashboardController {
                     }
 
                     // Read current trades from CSV (batch updates to avoid flooding UI)
-                    int currentTradeCount = countTradesInCsv(tradesCsv);
-                    if (currentTradeCount > lastTradeCount) {
-                        final int tradesToSendFrom = lastTradeCount;
-                        final int newTradeCount = currentTradeCount;
+                    long currentTradesFileSize = Files.exists(tradesCsv) ? Files.size(tradesCsv) : 0;
+                    if (currentTradesFileSize > tradesByteOffset) {
+                        final int tradesToSendFrom = totalTradesSent;
                         final long currentElapsed = System.currentTimeMillis() - startTime;
+                        final long currentTradesByteOffset = tradesByteOffset;
 
                         eventExecutor.submit(() -> {
                             try {
-                                List<Map<String, Object>> newTrades = readNewTradesFromCsv(tradesCsv, tradesToSendFrom);
+                                List<Map<String, Object>> newTrades = readNewTradesFromCsv(tradesCsv, tradesToSendFrom, currentTradesByteOffset);
 
                                 if (!newTrades.isEmpty()) {
                                     long wins = newTrades.stream().filter(t -> (double) t.getOrDefault("netPnl", 0.0) > 0).count();
                                     double totalPnl = newTrades.stream().mapToDouble(t -> (double) t.getOrDefault("netPnl", 0.0)).sum();
+                                    int newTradeCount = newTrades.size();
 
                                     Map<String, Object> progressEvent = new LinkedHashMap<>();
                                     progressEvent.put("type", "trades");
                                     progressEvent.put("trades", newTrades);
-                                    progressEvent.put("totalTrades", newTradeCount);
+                                    progressEvent.put("totalTrades", tradesToSendFrom + newTradeCount);
                                     progressEvent.put("elapsedMs", currentElapsed);
                                     progressEvent.put("recentWins", wins);
                                     progressEvent.put("recentPnl", totalPnl);
 
                                     emitter.send(SseEmitter.event().data(progressEvent));
-                                    log.debug("SSE progress event sent: {} new trades, totalPnl={}", newTrades.size(), totalPnl);
+                                    log.debug("SSE progress event sent: {} new trades, totalPnl={}", newTradeCount, totalPnl);
                                 }
                             } catch (IOException e) {
                                 log.warn("Error sending SSE progress event: {}", e.getMessage());
@@ -197,34 +227,44 @@ public class BacktestDashboardController {
                             }
                         });
 
-                        lastTradeCount = currentTradeCount;
+                        totalTradesSent += estimateNewTradesInSegment(currentTradesFileSize - tradesByteOffset);
+                        tradesByteOffset = currentTradesFileSize;
                     }
 
-                    // Also check equity curve
+                    // Also check equity curve (byte-offset tracking)
                     Path equityCsv = Path.of("backtest/equity.csv");
                     if (Files.exists(equityCsv)) {
                         long currentLength = Files.size(equityCsv);
-                        if (currentLength > lastFileLength) {
-                            final long finalLength = currentLength;
+                        if (currentLength > equityByteOffset) {
+                            final long currentEquityByteOffset = equityByteOffset;
                             eventExecutor.submit(() -> {
-                                try {
-                                    List<String> lines = Files.readAllLines(equityCsv);
-                                    if (!lines.isEmpty()) {
-                                        String lastLine = lines.get(lines.size() - 1);
-                                        String[] parts = lastLine.split(",");
-                                        if (parts.length >= 2) {
-                                            Map<String, Object> equityEvent = new LinkedHashMap<>();
-                                            equityEvent.put("type", "equity");
-                                            equityEvent.put("time", parts[0].trim());
-                                            equityEvent.put("equity", Double.parseDouble(parts[1].trim()));
-                                            emitter.send(SseEmitter.event().data(equityEvent));
+                                try (FileChannel channel = FileChannel.open(equityCsv, StandardOpenOption.READ)) {
+                                    channel.position(currentEquityByteOffset);
+                                    long bytesToRead = currentLength - currentEquityByteOffset;
+                                    ByteBuffer buffer = ByteBuffer.allocate((int) Math.min(bytesToRead, 1024 * 1024));
+                                    int bytesRead = channel.read(buffer);
+                                    if (bytesRead > 0) {
+                                        buffer.flip();
+                                        String newContent = StandardCharsets.UTF_8.decode(buffer).toString();
+                                        String[] lines = newContent.split("\n");
+                                        // Get the last complete line
+                                        if (lines.length > 0) {
+                                            String lastLine = lines[lines.length - 1].trim();
+                                            String[] parts = lastLine.split(",");
+                                            if (parts.length >= 2) {
+                                                Map<String, Object> equityEvent = new LinkedHashMap<>();
+                                                equityEvent.put("type", "equity");
+                                                equityEvent.put("time", parts[0].trim());
+                                                equityEvent.put("equity", Double.parseDouble(parts[1].trim()));
+                                                emitter.send(SseEmitter.event().data(equityEvent));
+                                            }
                                         }
                                     }
                                 } catch (Exception e) {
                                     // Ignore equity read errors
                                 }
                             });
-                            lastFileLength = currentLength;
+                            equityByteOffset = currentLength;
                         }
                     }
                 }
@@ -244,12 +284,11 @@ public class BacktestDashboardController {
                 // Send final results
                 if (finalReport[0] != null) {
                     BacktestReport report = finalReport[0];
-                    java.time.format.DateTimeFormatter timeFmt = java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm");
 
                     List<Map<String, Object>> equityData = new ArrayList<>();
                     for (EquityPoint point : report.equityCurve()) {
                         Map<String, Object> entry = new LinkedHashMap<>();
-                        entry.put("time", point.timestamp().format(timeFmt));
+                        entry.put("time", point.timestamp().format(CHART_TIME_FMT));
                         entry.put("equity", point.equity());
                         equityData.add(entry);
                     }
@@ -331,54 +370,63 @@ public class BacktestDashboardController {
     }
 
     /**
-     * Counts the number of trades in the CSV file (excluding header).
+     * Estimates the number of trade lines in a byte segment of the CSV file.
+     * Uses ~100 bytes per trade line as a heuristic to avoid parsing the content.
      */
-    private int countTradesInCsv(Path csvPath) {
-        try {
-            if (!Files.exists(csvPath)) return 0;
-            List<String> lines = Files.readAllLines(csvPath);
-            return Math.max(0, lines.size() - 1); // Exclude header
-        } catch (Exception e) {
-            return 0;
-        }
+    private int estimateNewTradesInSegment(long byteCount) {
+        return (int) Math.max(0, byteCount / 100);
     }
 
     /**
-     * Reads new trades from CSV starting from a given index.
+     * Reads new trades from CSV using byte-offset tracking.
+     * Only reads bytes appended since the last poll, avoiding loading the entire file.
      */
-    private List<Map<String, Object>> readNewTradesFromCsv(Path csvPath, int startIndex) {
+    private List<Map<String, Object>> readNewTradesFromCsv(Path csvPath, int startIndex, long lastByteOffset) {
         List<Map<String, Object>> trades = new ArrayList<>();
         try {
             if (!Files.exists(csvPath)) return trades;
-            List<String> lines = Files.readAllLines(csvPath);
+            long currentSize = Files.size(csvPath);
+            if (currentSize <= lastByteOffset) return trades;
 
-            // Start from startIndex + 1 (skip header)
-            int startIdx = startIndex + 1;
-            for (int i = startIdx; i < lines.size(); i++) {
-                String line = lines.get(i).trim();
-                if (line.isEmpty()) continue;
+            try (FileChannel channel = FileChannel.open(csvPath, StandardOpenOption.READ)) {
+                channel.position(lastByteOffset);
+                long bytesToRead = currentSize - lastByteOffset;
+                ByteBuffer buffer = ByteBuffer.allocate((int) Math.min(bytesToRead, 1024 * 1024));
+                int bytesRead = channel.read(buffer);
+                if (bytesRead > 0) {
+                    buffer.flip();
+                    String newContent = StandardCharsets.UTF_8.decode(buffer).toString();
+                    String[] newLines = newContent.split("\n");
 
-                String[] parts = line.split(",");
-                if (parts.length >= 20) {
-                    Map<String, Object> trade = new LinkedHashMap<>();
-                    trade.put("ticker", parts[0].trim());
-                    trade.put("strategy", parts[1].trim());
-                    trade.put("direction", parts[2].trim());
-                    trade.put("netPnl", Double.parseDouble(parts[12].trim()));
-                    trade.put("exitReason", parts[8].trim());
-                    trade.put("pattern", parts[15].trim());
-                    trade.put("entryTime", parts[5].trim());
-                    
-                    // Build chart file path (using /charts/ endpoint)
-                    String entryTime = parts[5].trim();
-                    String chartFilename = String.format("%s_%s_%s_%s.html",
-                            parts[0].trim(),
-                            parts[1].trim(),
-                            parts[2].trim(),
-                            entryTime.replace(" ", "_").replace(":", "-"));
-                    trade.put("chartPath", chartFilename); // Just the filename, JS will prefix /charts/
-                    
-                    trades.add(trade);
+                    // Skip partial last line (may be incomplete write)
+                    int linesToProcess = newLines.length;
+                    if (!newContent.endsWith("\n") && linesToProcess > 0) {
+                        linesToProcess--;
+                    }
+
+                    for (int i = 0; i < linesToProcess; i++) {
+                        String line = newLines[i].trim();
+                        if (line.isEmpty()) continue;
+                        String[] parts = line.split(",");
+                        if (parts.length >= 20) {
+                            Map<String, Object> trade = new LinkedHashMap<>();
+                            trade.put("ticker", parts[0].trim());
+                            trade.put("strategy", parts[1].trim());
+                            trade.put("direction", parts[2].trim());
+                            trade.put("netPnl", Double.parseDouble(parts[12].trim()));
+                            trade.put("exitReason", parts[8].trim());
+                            trade.put("pattern", parts[15].trim());
+                            String entryTime = parts[5].trim();
+                            if (entryTime.matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}")) {
+                                entryTime = entryTime.substring(0, 16);
+                            }
+                            String chartFilename = String.format("%s_%s_%s_%s.html",
+                                    parts[0].trim(), parts[1].trim(), parts[2].trim(),
+                                    entryTime.replace(" ", "_").replace(":", "-"));
+                            trade.put("chartPath", chartFilename);
+                            trades.add(trade);
+                        }
+                    }
                 }
             }
         } catch (Exception e) {
@@ -396,6 +444,13 @@ public class BacktestDashboardController {
             @RequestParam(defaultValue = "50000") double initialCapital,
             @RequestParam(defaultValue = "0.02") double riskPct
     ) {
+        if (!backtestRunning.compareAndSet(false, true)) {
+            Map<String, Object> error = new LinkedHashMap<>();
+            error.put("success", false);
+            error.put("error", "A backtest is already running. Stop it first.");
+            return ResponseEntity.ok(error);
+        }
+
         try {
             // Get tickers: hot first, then rest
             List<String> hotTickers = tickerService.getHotTickers();
@@ -414,17 +469,42 @@ public class BacktestDashboardController {
             BacktestConfig config = new BacktestConfig(
                     tickers, fromDate, toDate,
                     initialCapital, riskPct, 0.005, 0.65,
-                    3, com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15, true
+                    3, com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15, true, false
             );
 
-            BacktestReport report = backtestEngine.run(config);
+            // Run in a separate thread so stop can interrupt
+            final BacktestReport[] reportHolder = new BacktestReport[1];
+            final Exception[] errorHolder = new Exception[1];
+            currentBacktestThread = new Thread(() -> {
+                try {
+                    reportHolder[0] = backtestEngine.run(config, false, backtestRunning);
+                } catch (Exception e) {
+                    errorHolder[0] = e;
+                }
+            });
+            currentBacktestThread.start();
+            currentBacktestThread.join(); // wait for completion or interruption
+            currentBacktestThread = null;
+
+            if (errorHolder[0] != null) {
+                throw errorHolder[0];
+            }
+
+            BacktestReport report = reportHolder[0];
+            if (report == null) {
+                // Backtest was stopped
+                Map<String, Object> result = new LinkedHashMap<>();
+                result.put("success", false);
+                result.put("stopped", true);
+                result.put("error", "Backtest was stopped by user");
+                return ResponseEntity.ok(result);
+            }
 
             // Build equity curve data
             List<Map<String, Object>> equityData = new ArrayList<>();
-            java.time.format.DateTimeFormatter timeFmt = java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm");
             for (EquityPoint point : report.equityCurve()) {
                 Map<String, Object> entry = new LinkedHashMap<>();
-                entry.put("time", point.timestamp().format(timeFmt));
+                entry.put("time", point.timestamp().format(CHART_TIME_FMT));
                 entry.put("equity", point.equity());
                 equityData.add(entry);
             }
@@ -476,7 +556,237 @@ public class BacktestDashboardController {
             error.put("success", false);
             error.put("error", e.getMessage());
             return ResponseEntity.ok(error);
+        } finally {
+            backtestRunning.set(false);
+            currentBacktestThread = null;
         }
+    }
+
+    /**
+     * GET /backtest-ui/running - Check if a backtest is currently running
+     */
+    @GetMapping("/running")
+    public ResponseEntity<Map<String, Object>> isRunning() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("running", backtestRunning.get());
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * POST /backtest-ui/stop - Stop the currently running backtest
+     */
+    @PostMapping("/stop")
+    public ResponseEntity<Map<String, Object>> stopBacktest() {
+        if (!backtestRunning.get()) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("success", false);
+            result.put("error", "No backtest is currently running");
+            return ResponseEntity.ok(result);
+        }
+
+        log.info("Stop requested for running backtest");
+        backtestRunning.set(false);
+
+        Thread bt = currentBacktestThread;
+        if (bt != null && bt.isAlive()) {
+            bt.interrupt();
+            log.info("Backtest thread interrupted");
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", "Backtest stop requested");
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * GET /backtest-ui/checkpoint - Check if a checkpoint exists and get processed tickers
+     */
+    @GetMapping("/checkpoint")
+    public ResponseEntity<Map<String, Object>> getCheckpoint() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (Files.exists(CHECKPOINT_FILE)) {
+            try {
+                List<String> lines = Files.readAllLines(CHECKPOINT_FILE);
+                List<String> tickers = new ArrayList<>();
+                for (String line : lines) {
+                    String trimmed = line.trim();
+                    if (!trimmed.isEmpty() && !trimmed.startsWith("#")) {
+                        tickers.add(trimmed);
+                    }
+                }
+                result.put("exists", true);
+                result.put("processedCount", tickers.size());
+                result.put("tickers", tickers);
+            } catch (Exception e) {
+                result.put("exists", false);
+                result.put("error", "Failed to read checkpoint: " + e.getMessage());
+            }
+        } else {
+            result.put("exists", false);
+        }
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * POST /backtest-ui/checkpoint/clear - Clear the checkpoint file
+     */
+    @PostMapping("/checkpoint/clear")
+    public ResponseEntity<Map<String, Object>> clearCheckpoint() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        try {
+            if (Files.exists(CHECKPOINT_FILE)) {
+                Files.delete(CHECKPOINT_FILE);
+                result.put("success", true);
+                result.put("message", "Checkpoint cleared");
+            } else {
+                result.put("success", true);
+                result.put("message", "No checkpoint to clear");
+            }
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("error", "Failed to clear checkpoint: " + e.getMessage());
+        }
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * GET /backtest-ui/resume - SSE endpoint to resume backtest from checkpoint
+     */
+    @GetMapping(value = "/resume", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter resumeBacktest(
+            @RequestParam(defaultValue = "50000") double initialCapital,
+            @RequestParam(defaultValue = "0.02") double riskPct
+    ) {
+        SseEmitter emitter = new SseEmitter(300_000L);
+
+        if (!backtestRunning.compareAndSet(false, true)) {
+            try {
+                Map<String, Object> error = new LinkedHashMap<>();
+                error.put("type", "error");
+                error.put("error", "A backtest is already running");
+                emitter.send(SseEmitter.event().name("error").data(error));
+                emitter.complete();
+            } catch (IOException e) {
+                emitter.completeWithError(e);
+            }
+            return emitter;
+        }
+
+        if (!Files.exists(CHECKPOINT_FILE)) {
+            try {
+                Map<String, Object> error = new LinkedHashMap<>();
+                error.put("type", "error");
+                error.put("error", "No checkpoint found. Run a full backtest first.");
+                emitter.send(SseEmitter.event().name("error").data(error));
+                emitter.complete();
+            } catch (IOException e) {
+                emitter.completeWithError(e);
+            }
+            backtestRunning.set(false);
+            return emitter;
+        }
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                // Load processed tickers from checkpoint
+                List<String> processedTickers = new ArrayList<>();
+                for (String line : Files.readAllLines(CHECKPOINT_FILE)) {
+                    String trimmed = line.trim();
+                    if (!trimmed.isEmpty() && !trimmed.startsWith("#")) {
+                        processedTickers.add(trimmed);
+                    }
+                }
+
+                log.info("Resuming backtest from checkpoint: {} tickers already processed", processedTickers.size());
+
+                // Send start event
+                Map<String, Object> startEvent = new LinkedHashMap<>();
+                startEvent.put("type", "start");
+                startEvent.put("checkpointed", processedTickers.size());
+                emitter.send(SseEmitter.event().name("start").data(startEvent));
+
+                // Get all tickers, skip processed ones
+                List<String> allTickers = tickerService.getTickerSymbols();
+                List<String> remainingTickers = new ArrayList<>();
+                for (String t : allTickers) {
+                    if (!processedTickers.contains(t)) {
+                        remainingTickers.add(t);
+                    }
+                }
+
+                log.info("Resuming backtest: {} remaining tickers ({} already done)",
+                        remainingTickers.size(), processedTickers.size());
+
+                LocalDate toDate = LocalDate.now();
+                LocalDate fromDate = toDate.minusYears(1);
+
+                BacktestConfig config = new BacktestConfig(
+                        remainingTickers, fromDate, toDate,
+                        initialCapital, riskPct, 0.005, 0.65,
+                        3, com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15, true, false
+                );
+
+                final BacktestReport[] reportHolder = new BacktestReport[1];
+                final Exception[] errorHolder = new Exception[1];
+                currentBacktestThread = new Thread(() -> {
+                    try {
+                        reportHolder[0] = backtestEngine.run(config, true, backtestRunning);
+                    } catch (Exception e) {
+                        errorHolder[0] = e;
+                    }
+                });
+                currentBacktestThread.start();
+                currentBacktestThread.join();
+                currentBacktestThread = null;
+
+                if (errorHolder[0] != null) {
+                    throw errorHolder[0];
+                }
+
+                BacktestReport report = reportHolder[0];
+                if (report == null) {
+                    Map<String, Object> stoppedEvent = new LinkedHashMap<>();
+                    stoppedEvent.put("type", "stopped");
+                    stoppedEvent.put("message", "Resume was stopped by user");
+                    emitter.send(SseEmitter.event().name("stopped").data(stoppedEvent));
+                    emitter.complete();
+                    return;
+                }
+
+                // Build and send results
+                Map<String, Object> result = new LinkedHashMap<>();
+                result.put("type", "complete");
+                result.put("totalTrades", report.totalTrades());
+                result.put("winRate", report.winRate() * 100);
+                result.put("totalPnl", report.finalCapital() - report.initialCapital());
+                result.put("profitFactor", report.profitFactor());
+                result.put("maxDrawdown", report.maxDrawdown());
+                emitter.send(SseEmitter.event().name("complete").data(result));
+
+                // Clear checkpoint on successful completion
+                if (Files.exists(CHECKPOINT_FILE)) {
+                    Files.delete(CHECKPOINT_FILE);
+                }
+
+                emitter.complete();
+            } catch (Exception e) {
+                log.error("Resume backtest failed: {}", e.getMessage(), e);
+                try {
+                    Map<String, Object> errorEvent = new LinkedHashMap<>();
+                    errorEvent.put("type", "error");
+                    errorEvent.put("error", e.getMessage());
+                    emitter.send(SseEmitter.event().name("error").data(errorEvent));
+                } catch (IOException ioEx) {
+                    // ignore
+                }
+                emitter.completeWithError(e);
+            } finally {
+                backtestRunning.set(false);
+            }
+        });
+
+        return emitter;
     }
 
     /**
@@ -602,7 +912,7 @@ public class BacktestDashboardController {
             BacktestConfig config = new BacktestConfig(
                     tickers, fromDate, toDate,
                     initialCapital, riskPct, 0.005, 0.65,
-                    3, com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15, true
+                    3, com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15, true, false
             );
 
             BacktestReport report = backtestEngine.run(config);

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import java.time.ZonedDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Automatically scans market and executes trades during market hours.
@@ -41,19 +42,25 @@ public class MarketScanner {
     private final MacroEnvironmentFilter macroFilter;
     private final TelegramService telegramService;
     private final TrailingStopMonitor trailingStopMonitor;
+    private final com.fgiaquinta.optionsquant.controller.LiveModeController liveModeController;
+    private final TickerService tickerService;
 
     public MarketScanner(StrategyScannerService scannerService,
                          IbkrProperties ibkrProperties,
                          com.fgiaquinta.optionsquant.service.OrderExecutionService orderExecutionService,
                          MacroEnvironmentFilter macroFilter,
                          TelegramService telegramService,
-                         TrailingStopMonitor trailingStopMonitor) {
+                         TrailingStopMonitor trailingStopMonitor,
+                         com.fgiaquinta.optionsquant.controller.LiveModeController liveModeController,
+                         TickerService tickerService) {
         this.scannerService = scannerService;
         this.ibkrProperties = ibkrProperties;
         this.orderExecutionService = orderExecutionService;
         this.macroFilter = macroFilter;
         this.telegramService = telegramService;
         this.trailingStopMonitor = trailingStopMonitor;
+        this.liveModeController = liveModeController;
+        this.tickerService = tickerService;
         log.info("🤖 MarketScanner initialized - Spain timezone, 15-min synchronized");
         log.info("   Auto-execute: {}", ibkrProperties.autoExecute());
         log.info("   Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)");
@@ -62,7 +69,7 @@ public class MarketScanner {
 
     /**
      * Downloads fresh candle delta as soon as the app starts.
-     * This ensures data is ready before the first scheduled scan.
+     * Runs on a background thread so it doesn't block application ready state.
      */
     @EventListener(ApplicationReadyEvent.class)
     public void onStartup() {
@@ -71,23 +78,27 @@ public class MarketScanner {
         // Only download during market hours or pre-market
         int currentHour = nowSpain.getHour();
         if (currentHour >= 10 && currentHour < 22 && nowSpain.getDayOfWeek().getValue() <= 5) {
-            log.info("🔄 Market hours detected - downloading fresh candle delta...");
+            log.info("🔄 Market hours detected - downloading fresh candle delta in background...");
             log.info("   This may take a few minutes for 512 tickers...");
+            log.info("   App is ready; scan will complete in background.");
             
-            try {
-                long startTime = System.currentTimeMillis();
-                // Include trade plans so we see TP/SL in logs
-                ScanResult result = scannerService.scanAll(true, true);
-                long elapsed = System.currentTimeMillis() - startTime;
-                
-                log.info("✅ Startup delta download complete!");
-                log.info("   Tickers refreshed: {}", result.tickersScanned());
-                log.info("   Signals found: {}", result.totalSignals());
-                log.info("   Duration: {}ms ({} min)", elapsed, String.format("%.1f", elapsed / 60000.0));
-                log.info("   Next scan: at next 15-min boundary");
-            } catch (Exception e) {
-                log.warn("⚠️ Startup delta download failed: {} (will retry at next scan)", e.getMessage());
-            }
+            // Run on background thread so the app reaches "ready" state immediately
+            CompletableFuture.runAsync(() -> {
+                try {
+                    long startTime = System.currentTimeMillis();
+                    // Include trade plans so we see TP/SL in logs
+                    ScanResult result = scannerService.scanAll(true, true);
+                    long elapsed = System.currentTimeMillis() - startTime;
+                    
+                    log.info("✅ Startup delta download complete!");
+                    log.info("   Tickers refreshed: {}", result.tickersScanned());
+                    log.info("   Signals found: {}", result.totalSignals());
+                    log.info("   Duration: {}ms ({} min)", elapsed, String.format("%.1f", elapsed / 60000.0));
+                    log.info("   Next scan: at next 15-min boundary");
+                } catch (Exception e) {
+                    log.warn("⚠️ Startup delta download failed: {} (will retry at next scan)", e.getMessage());
+                }
+            });
         } else {
             log.info("⏸️ Outside market hours - skipping startup delta download");
             log.info("   MarketScanner will activate at 10:00 Spain time on next weekday");
@@ -100,11 +111,18 @@ public class MarketScanner {
     @Scheduled(cron = "2 0/15 10-21 * * MON-FRI", zone = "Europe/Madrid")
     public void scanAndExecute() {
         ZonedDateTime nowSpain = ZonedDateTime.now(ZoneId.of("Europe/Madrid"));
-        
-        // Skip if outside market hours
+
+        // Skip if outside market hours (unless extended hours is enabled)
         int currentHour = nowSpain.getHour();
-        if (currentHour < 10 || currentHour >= 22) {
-            log.debug("⏸️ Outside market hours ({}:{} Spain) - skipping", currentHour, nowSpain.getMinute());
+        boolean isExtendedHours = (currentHour >= 8 && currentHour < 10) || (currentHour >= 22 && currentHour < 24);
+        
+        if (!liveModeController.isExtendedHoursEnabled()) {
+            if (currentHour < 10 || currentHour >= 22) {
+                log.debug("⏸️ Outside market hours ({}:{} Spain) - skipping", currentHour, nowSpain.getMinute());
+                return;
+            }
+        } else if (currentHour < 8 || currentHour >= 24) {
+            log.debug("⏸️ Outside extended hours ({}:{} Spain) - skipping", currentHour, nowSpain.getMinute());
             return;
         }
 
@@ -113,12 +131,30 @@ public class MarketScanner {
             return;
         }
 
-        log.info("\n🔍 === MARKET SCAN === {} (Spain) ===", 
+        log.info("\n🔍 === MARKET SCAN === {} (Spain) ===",
                 nowSpain.toLocalTime());
-        
+
+        long scanStartTime = System.currentTimeMillis();
+
         try {
+            // Get all tickers for progress tracking
+            List<String> allTickers = ibkrProperties.useCsvTickers()
+                    ? tickerService.getTickerSymbols()
+                    : ibkrProperties.tickers();
+            
+            // Update UI: scanning started
+            liveModeController.updateScanningState(true, "Starting...", 0, allTickers.size());
+
             // Scan all tickers with trade plans, auto-refresh data
             ScanResult result = scannerService.scanAll(true, true);
+
+            // Update UI: scan complete
+            liveModeController.updateScanComplete(System.currentTimeMillis() - scanStartTime);
+
+            // Update UI: add all signals
+            for (Signal signal : result.signals()) {
+                liveModeController.addLiveSignal(signal);
+            }
             
             log.info("\n📈 === SCAN SUMMARY ===");
             log.info("  Time: {} (Spain)", nowSpain.toLocalTime());
