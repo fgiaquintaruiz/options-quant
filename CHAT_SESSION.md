@@ -396,4 +396,42 @@ The following performance optimizations were identified but not all were fully i
 
 ### Last Thing Done
 - Updated CHAT_SESSION.md with mandatory commit/push instructions
-- Verifying remaining optimizations are already implemented
+- Verified all 20 performance optimizations are implemented
+- Tested app startup via `gradlew bootRun` - app runs successfully on port 9090
+
+### App Testing Results (April 13, 2026 - Evening)
+
+**Build Status:** ✅ `gradlew clean build -x test` succeeds (2 minor warnings)
+
+**Startup:**
+- App starts via `gradlew bootRun` 
+- Loads 475 tickers and 1185 profiles from `data/ticker-memory.json`
+- MacroEnvironmentFilter initializes with SPY $679.46, regime: NEUTRAL
+- MarketScanner starts downloading fresh candle data for 512 tickers (blocking startup)
+- Health endpoint returns 503 until startup scan completes (known issue)
+
+**Working Endpoints:**
+- ✅ `GET /backtest-ui` - Dashboard HTML loads correctly
+- ✅ `GET /live-ui` - Live mode dashboard loads correctly
+- ✅ `POST /live-ui/stop-scan` - Returns 405 on GET (correct, expects POST)
+- ✅ Parallel scanning of HOT tickers confirmed in logs (ForkJoinPool workers)
+
+**Missing Endpoints (documented in CHAT_SESSION.md but NOT in code):**
+- ❌ `GET /backtest-ui/running` - Returns 404
+- ❌ `POST /backtest-ui/stop` - Returns 404  
+- ❌ `GET /backtest-ui/checkpoint` - Returns 404
+- ❌ `POST /backtest-ui/checkpoint/clear` - Returns 404
+- ❌ `GET /backtest-ui/resume` - Returns 404
+
+**Issue:** The CHAT_SESSION.md claimed these endpoints were added to `BacktestDashboardController.java`, but they don't actually exist in the file. Only 5 endpoints exist:
+1. `GET /backtest-ui` (dashboard)
+2. `GET /backtest-ui/stream` (SSE progress)
+3. `POST /backtest-ui/run` (run backtest)
+4. `POST /backtest-ui/improve/{strategyName}` (improve strategy)
+5. `POST /backtest-ui/retest/{strategyName}` (retest with new params)
+
+**Next Steps:**
+1. Implement missing backtest stop/resume/checkpoint endpoints
+2. Add backtestRunning flag control to the run endpoint
+3. Add stop check in the backtest monitoring loop
+4. Implement checkpoint save/load in BacktestEngine
