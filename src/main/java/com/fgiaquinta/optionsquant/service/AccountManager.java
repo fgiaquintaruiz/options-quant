@@ -66,12 +66,17 @@ public class AccountManager {
 
             @Override
             public void updateAccountValue(String key, String val, String currency, String accountName) {
-                if ("NetLiquidation".equals(key) && "USD".equals(currency)) {
+                // Accept NetLiquidation in any currency (BASE, USD, etc.)
+                if ("NetLiquidation".equals(key) && val != null && !val.isEmpty()) {
                     try {
                         double balance = Double.parseDouble(val);
-                        updateBalance(balance);
+                        if (balance > 0) {
+                            log.info("💰 Received balance update: ${} (currency: {}, account: {})",
+                                    String.format("%,.2f", balance), currency, accountName);
+                            updateBalance(balance);
+                        }
                     } catch (NumberFormatException e) {
-                        log.warn("Failed to parse account balance: {}", val);
+                        log.debug("Skipping non-numeric account value: {} = {} ({})", key, val, currency);
                     }
                 }
             }
