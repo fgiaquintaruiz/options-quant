@@ -403,22 +403,33 @@ The following performance optimizations were identified but not all were fully i
 6. **Frontend Migration**: Consider migrating from raw HTML string building to React + Vite
 
 ### Last Thing Done
-- **Fixed balance display**: Auto-connect AccountManager at startup via `StartupInitializer`
-  - Balance now shows actual TWS balance instead of "N/A (no TWS)"
-- **Fixed scanner progress visibility**: 
-  - Progress shows "Hot tickers: X/14" then "Total: X/512" for clear visibility
-  - Reduced status polling from 2s to 500ms for smoother updates
-  - Shows "Scan complete" when done instead of empty string
-- **Added Playwright E2E Test Suite** - ~79 tests covering all UI pages, APIs, and interactions:
-  1. **BasePlaywrightTest** - Base class with random port, Spring Boot lifecycle, Playwright browser management
-  2. **HealthEndpointTest** (5 tests) - Health, liveness, readiness endpoints
-  3. **LiveUiDashboardTest** (25 tests) - Page rendering, status API, scan API, signals, tickers, TWS status, JS functions
-  4. **BacktestUiDashboardTest** (19 tests) - Page rendering, run/stop/checkpoint APIs, JS functions
-  5. **LiveModeInteractionTest** (5 tests) - Scan start/stop, toggle interactions
-  6. **BacktestInteractionTest** (7 tests) - Backtest run/improve/retest/stop/checkpoint
-  7. **NavigationTest** (8 tests) - Cross-page navigation, mobile viewport, HTML structure
-  8. **UiStylingTest** (14 tests) - CSS styles, dark theme, responsive design, badges, toggles, progress bars
-- Committed and pushed (commit 45d2931)
+- **Migrated frontend to React + Vite** - Complete SPA replacement for old HTML string building:
+  - React 19 + Vite 6 with React Router for client-side navigation
+  - Recharts for equity curve charts
+  - Lucide React for icons
+  - Dark theme matching original GitHub-style design
+  - Live Dashboard: scanning status with 500ms polling, signals feed, TWS status, tickers queue, console log
+  - Backtest Dashboard: run/stop backtest with proper button swap, equity curve chart, strategy/ticker tables, console
+  - Health page with liveness/readiness status checks
+  - WebConfig serves React SPA with fallback routing
+  - Old HTML controllers now redirect to React SPA
+- **Fixed all pending issues**:
+  - Stop Run button now properly swaps during backtest execution
+  - Console log shows real-time activity for both live and backtest modes
+  - Balance auto-connects to TWS at startup
+  - Scanner progress shows detailed batch labels ("Hot tickers: X/14", "Total: X/512")
+- Build and commit completed (commit 529c918)
+
+### How to develop frontend
+```bash
+cd frontend && npm run dev    # Dev server with HMR (proxies API to :9090)
+npm run build                 # Build for production (outputs to build/resources/main/static)
+```
+
+### How to run the app
+```bash
+gradlew bootRun               # Serves React SPA + all API endpoints on port 9090
+```
   1. **BasePlaywrightTest** - Base class with random port, Spring Boot lifecycle, Playwright browser management
   2. **HealthEndpointTest** (5 tests) - Health, liveness, readiness endpoints
   3. **LiveUiDashboardTest** (25 tests) - Page rendering, status API, scan API, signals, tickers, TWS status, JS functions
