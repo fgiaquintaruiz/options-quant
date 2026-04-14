@@ -403,7 +403,10 @@ The following performance optimizations were identified but not all were fully i
 6. **Frontend Migration**: Consider migrating from raw HTML string building to React + Vite
 
 ### Last Thing Done
-- **Migrated frontend to React + Vite** - Complete SPA replacement for old HTML string building:
+- **Fixed balance display**: IBKR sends `NetLiquidation` with currency `EUR`, but code only accepted `USD`
+  - Now accepts balance from any currency (BASE, EUR, USD, etc.)
+  - Balance shows correctly: **$980,663.48**
+- Committed and pushed (commit 3ce6f10)
   - React 19 + Vite 6 with React Router for client-side navigation
   - Recharts for equity curve charts
   - Lucide React for icons
