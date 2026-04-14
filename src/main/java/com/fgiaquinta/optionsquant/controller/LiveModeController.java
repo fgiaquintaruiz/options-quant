@@ -40,7 +40,7 @@ public class LiveModeController {
     private final AtomicLong lastScanTime = new AtomicLong(0);
     private final AtomicLong lastScanDuration = new AtomicLong(0);
     private final AtomicInteger signalsToday = new AtomicInteger(0);
-    private final AtomicBoolean extendedHoursEnabled = new AtomicBoolean(false);
+    private final AtomicBoolean extendedHoursEnabled = new AtomicBoolean(true);
     private Thread scanThread = null;
 
     public LiveModeController(StrategyScannerService scannerService,
