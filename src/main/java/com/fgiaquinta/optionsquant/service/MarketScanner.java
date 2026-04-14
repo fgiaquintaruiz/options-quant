@@ -44,6 +44,7 @@ public class MarketScanner {
     private final TrailingStopMonitor trailingStopMonitor;
     private final com.fgiaquinta.optionsquant.controller.LiveModeController liveModeController;
     private final TickerService tickerService;
+    private final MarketCalendarService marketCalendar;
 
     public MarketScanner(StrategyScannerService scannerService,
                          IbkrProperties ibkrProperties,
@@ -52,7 +53,8 @@ public class MarketScanner {
                          TelegramService telegramService,
                          TrailingStopMonitor trailingStopMonitor,
                          com.fgiaquinta.optionsquant.controller.LiveModeController liveModeController,
-                         TickerService tickerService) {
+                         TickerService tickerService,
+                         MarketCalendarService marketCalendar) {
         this.scannerService = scannerService;
         this.ibkrProperties = ibkrProperties;
         this.orderExecutionService = orderExecutionService;
@@ -61,10 +63,12 @@ public class MarketScanner {
         this.trailingStopMonitor = trailingStopMonitor;
         this.liveModeController = liveModeController;
         this.tickerService = tickerService;
+        this.marketCalendar = marketCalendar;
         log.info("🤖 MarketScanner initialized - Spain timezone, 15-min synchronized");
         log.info("   Auto-execute: {}", ibkrProperties.autoExecute());
         log.info("   Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)");
         log.info("   Trailing stop monitor: ENABLED ({} min max hold, SMA20 trailing)", 90);
+        log.info("   Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)");
     }
 
     /**
@@ -230,7 +234,15 @@ public class MarketScanner {
                                 log.warn("⏭️ Skipping {} {} - macro unfavorable", signal.ticker(), signal.direction());
                                 continue;
                             }
-                            
+
+                            // Only execute during regular market hours (9:30 AM - 4:00 PM ET)
+                            // Pre-market orders get rejected by IBKR due to thin liquidity
+                            if (!marketCalendar.isRegularMarketHours(nowSpain)) {
+                                log.info("    ⏸️ Skipping execution - outside regular market hours (9:30 AM - 4:00 PM ET)");
+                                log.info("       Signal queued for execution at market open");
+                                continue;
+                            }
+
                             try {
                                 log.info("    🚀 AUTO-EXECUTING bracket order...");
                                 

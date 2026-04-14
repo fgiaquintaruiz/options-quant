@@ -156,23 +156,48 @@ public class TelegramService {
         if (!enabled || botToken == null || chatId == null) return;
 
         String emoji = direction.equals("CALL") ? "📈" : "📉";
-        String message = String.format("""
-                %s *NEW SIGNAL DETECTED*
+        boolean isCall = direction.equals("CALL");
 
-                📊 Ticker: *%s*
-                🎯 Strategy: *%s*
-                📍 Direction: *%s*
-                💰 Entry: $%.2f
+        String message;
+        if (isCall) {
+            // For CALL: SL < Entry < TP, show SL first then TP
+            message = String.format("""
+                    %s *NEW SIGNAL DETECTED*
 
-                🎯 Take Profit: $%.2f
-                🛑 Stop Loss: $%.2f
+                    📊 Ticker: *%s*
+                    🎯 Strategy: *%s*
+                    📍 Direction: *%s*
+                    💰 Entry: $%.2f
 
-                ⏰ %s
+                    🛑 Stop Loss: $%.2f
+                    🎯 Take Profit: $%.2f
 
-                [Execute Order](https://t.me/%s?start=%s)
-                """, emoji, ticker, strategy, direction, price, tp, sl,
-                java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
-                botToken.split(":")[0], orderId);
+                    ⏰ %s
+
+                    [Execute Order](https://t.me/%s?start=%s)
+                    """, emoji, ticker, strategy, direction, price, sl, tp,
+                    java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
+                    botToken.split(":")[0], orderId);
+        } else {
+            // For PUT: TP < Entry < SL, show TP first then SL
+            message = String.format("""
+                    %s *NEW SIGNAL DETECTED*
+
+                    📊 Ticker: *%s*
+                    🎯 Strategy: *%s*
+                    📍 Direction: *%s*
+                    💰 Entry: $%.2f
+
+                    🎯 Take Profit: $%.2f
+                    🛑 Stop Loss: $%.2f
+
+                    ⏰ %s
+
+                    [Execute Order](https://t.me/%s?start=%s)
+                    """, emoji, ticker, strategy, direction, price, tp, sl,
+                    java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
+                    botToken.split(":")[0], orderId);
+        }
 
         sendMessage(message, "Markdown");
     }
@@ -191,22 +216,46 @@ public class TelegramService {
         if (!enabled || botToken == null || chatId == null) return;
 
         String emoji = direction.equals("CALL") ? "📈" : "📉";
-        String message = String.format("""
-                %s *SIGNAL DETECTED & AUTO-EXECUTED*
+        boolean isCall = direction.equals("CALL");
 
-                📊 Ticker: *%s*
-                🎯 Strategy: *%s*
-                📍 Direction: *%s*
-                💰 Entry: $%.2f
+        String message;
+        if (isCall) {
+            // For CALL: SL < Entry < TP, show SL first then TP
+            message = String.format("""
+                    %s *SIGNAL DETECTED & AUTO-EXECUTED*
 
-                🎯 Take Profit: $%.2f
-                🛑 Stop Loss: $%.2f
+                    📊 Ticker: *%s*
+                    🎯 Strategy: *%s*
+                    📍 Direction: *%s*
+                    💰 Entry: $%.2f
 
-                ⏰ %s
+                    🛑 Stop Loss: $%.2f
+                    🎯 Take Profit: $%.2f
 
-                ✅ Order automatically sent to IBKR
-                """, emoji, ticker, strategy, direction, price, tp, sl,
-                java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+                    ⏰ %s
+
+                    ✅ Order automatically sent to IBKR
+                    """, emoji, ticker, strategy, direction, price, sl, tp,
+                    java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+        } else {
+            // For PUT: TP < Entry < SL, show TP first then SL
+            message = String.format("""
+                    %s *SIGNAL DETECTED & AUTO-EXECUTED*
+
+                    📊 Ticker: *%s*
+                    🎯 Strategy: *%s*
+                    📍 Direction: *%s*
+                    💰 Entry: $%.2f
+
+                    🎯 Take Profit: $%.2f
+                    🛑 Stop Loss: $%.2f
+
+                    ⏰ %s
+
+                    ✅ Order automatically sent to IBKR
+                    """, emoji, ticker, strategy, direction, price, tp, sl,
+                    java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+        }
 
         sendMessage(message, "Markdown");
     }
