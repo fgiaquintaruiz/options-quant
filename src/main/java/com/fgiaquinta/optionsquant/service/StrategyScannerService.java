@@ -186,7 +186,7 @@ public class StrategyScannerService {
 
         // SCAN HOT TICKERS FIRST (parallelized for performance)
         if (!hotTickersToScan.isEmpty()) {
-            currentBatchLabel.set("Scanning hot tickers (" + hotTickersToScan.size() + " parallel)");
+            currentBatchLabel.set("Hot tickers: 0/" + hotTickersToScan.size());
             currentBatchSize.set(hotTickersToScan.size());
             if (deterministicMode) {
                 log.info("🔥 [Deterministic] Scanning {} HOT tickers from cached data: {}", hotTickersToScan.size(), hotTickersToScan);
@@ -202,7 +202,7 @@ public class StrategyScannerService {
                         return Collections.<Signal>emptyList();
                     } finally {
                         int done = scannedCount.incrementAndGet();
-                        currentBatchLabel.set("Hot: " + done + "/" + currentBatchSize.get() + " done");
+                        currentBatchLabel.set("Hot tickers: " + done + "/" + currentBatchSize.get());
                     }
                 })
                 .collect(Collectors.toList());
@@ -217,7 +217,8 @@ public class StrategyScannerService {
 
         // SCAN REMAINING TICKERS (parallelized for performance)
         if (!remainingTickers.isEmpty()) {
-            currentBatchLabel.set("Scanning remaining tickers (" + remainingTickers.size() + " parallel)");
+            int hotDone = scannedCount.get();
+            currentBatchLabel.set("Remaining: " + hotDone + "/" + allTickers.size() + " total");
             currentBatchSize.set(remainingTickers.size());
             if (deterministicMode) {
                 log.info("📊 [Deterministic] Scanning {} remaining tickers from cached data (parallel)...", remainingTickers.size());
@@ -233,7 +234,7 @@ public class StrategyScannerService {
                         return Collections.<Signal>emptyList();
                     } finally {
                         int done = scannedCount.incrementAndGet();
-                        currentBatchLabel.set("Remaining: " + done + "/" + currentBatchSize.get() + " done");
+                        currentBatchLabel.set("Total: " + done + "/" + totalToScan.get());
                     }
                 })
                 .collect(Collectors.toList());
@@ -241,7 +242,7 @@ public class StrategyScannerService {
         }
 
         // Clear progress when done
-        currentBatchLabel.set("");
+        currentBatchLabel.set("Scan complete");
 
         long elapsed = System.currentTimeMillis() - startTime;
         log.info("<<< Scan complete: {} signals found across {} tickers in {}ms",

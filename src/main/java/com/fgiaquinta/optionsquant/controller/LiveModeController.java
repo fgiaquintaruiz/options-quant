@@ -459,7 +459,7 @@ public class LiveModeController {
         sb.append("e.className='log-entry log-'+type;e.textContent='['+t+'] '+msg;\n");
         sb.append("log.insertBefore(e,log.firstChild);while(log.children.length>100)log.removeChild(log.lastChild)}\n");
         sb.append("loadStatus();loadTickers();loadTws();loadSignals();\n");
-        sb.append("setInterval(loadStatus,2000);setInterval(loadTickers,5000);setInterval(loadTws,10000);setInterval(loadSignals,3000);\n");
+        sb.append("setInterval(loadStatus,500);setInterval(loadTickers,5000);setInterval(loadTws,10000);setInterval(loadSignals,3000);\n");
         sb.append("addLog('Live Trading Dashboard loaded','success');\n");
         sb.append("</script>\n</body>\n</html>");
 
