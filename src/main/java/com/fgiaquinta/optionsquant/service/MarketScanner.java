@@ -115,7 +115,7 @@ public class MarketScanner {
         // Skip if outside market hours (unless extended hours is enabled)
         int currentHour = nowSpain.getHour();
         boolean isExtendedHours = (currentHour >= 8 && currentHour < 10) || (currentHour >= 22 && currentHour < 24);
-        
+
         if (!liveModeController.isExtendedHoursEnabled()) {
             if (currentHour < 10 || currentHour >= 22) {
                 log.debug("⏸️ Outside market hours ({}:{} Spain) - skipping", currentHour, nowSpain.getMinute());
@@ -128,6 +128,13 @@ public class MarketScanner {
 
         // Skip weekend (double check - cron already handles this)
         if (nowSpain.getDayOfWeek().getValue() > 5) {
+            return;
+        }
+
+        // Skip if stop was requested
+        if (liveModeController.isStopRequested()) {
+            log.info("⏹️ Stop scan requested - skipping scheduled scan");
+            liveModeController.clearStopRequest();
             return;
         }
 

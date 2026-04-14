@@ -395,19 +395,30 @@ The following performance optimizations were identified but not all were fully i
 **Fix #16-20: Low impact fixes** (already done - DecimalFormat, DateTimeFormatter caching, AtomicReference, SPY cache, primitive boxing)
 
 ### Last Thing Done
-- Fixed 3 UI issues in LiveModeController:
-  1. **Hot tickers now rendered at top** of Tickers Queue (was showing first 50 alphabetically)
-  2. **Start/Stop scan button toggle** uses `currentTicker` instead of `currentIndex` for matching
-  3. **Health endpoint confirmed 200 UP** - app running correctly
-- Updated `/tickers` endpoint to return `currentTicker` instead of `currentIndex`
+- Fixed 6 live UI issues in LiveModeController:
+  1. **Health link**: `/health` → `/actuator/health` in nav bar
+  2. **Extended hours toggle**: Fixed `getAndSet` returning old value — now returns correct new state
+  3. **Ticker list**: Shows ALL tickers (was capped at 50 non-hot) with scrolling
+  4. **Signals feed**: Shows scan progress ("Scanning: NVDA") when scanning, "No signals" when done, and renders signals with TP/SL/pattern
+  5. **Balance polling**: TWS status polled every 10s (was only loading once)
+  6. **Stop scan**: Added `isStopRequested()`/`clearStopRequest()` methods; MarketScanner checks stop before scheduled scans; scan-now respects stop flag
+- Added `renderSignals()` JS function with 3 states: scanning/no-signals/signals-found
 - Build succeeds with zero errors/warnings
-- App verified running: health=UP, status=isScanning=true (background startup scan)
+- App verified running on port 9090
 
 ### Files Modified
 1. `src/main/java/com/fgiaquinta/optionsquant/controller/LiveModeController.java`
-   - Fixed `renderTickers()` JS to render HOT tickers first with badges
-   - Changed ticker matching from index-based to name-based (`currentTicker`)
-   - Updated `/tickers` endpoint to return `currentTicker` field
+   - Health nav link: `/health` → `/actuator/health`
+   - Extended hours toggle: `getAndSet` negation fix
+   - Ticker list: removed 50-cap, shows all tickers
+   - Added `loadSignals()`, `renderSignals()` with scan progress display
+   - Added `isStopRequested()`, `clearStopRequest()` methods
+   - TWS polling: added 10s interval (`setInterval(loadTws,10000)`)
+   - Signals polling: added 3s interval (`setInterval(loadSignals,3000)`)
+   - Stop scan: scan-now checks stopScanRequested after scanAll completes
+   - Status UI: shows "Stopping..." when stopScanRequested=true
+2. `src/main/java/com/fgiaquinta/optionsquant/service/MarketScanner.java`
+   - Added stop check before scheduled scans: `isStopRequested()` + `clearStopRequest()`
 
 ### Previous Session Summary (All Completed)
 - ✅ All 20 performance optimizations implemented and verified
@@ -415,4 +426,4 @@ The following performance optimizations were identified but not all were fully i
 - ✅ MarketScanner.onStartup() made non-blocking (CompletableFuture.runAsync)
 - ✅ Health endpoint returns 200 UP immediately
 - ✅ Stop check added in BacktestEngine per-ticker processing loop
-- ✅ Committed and pushed (commit c0ff324)
+- ✅ Committed and pushed (commit 0d19204)

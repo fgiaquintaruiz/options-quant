@@ -126,6 +126,7 @@ public class LiveModeController {
             isScanning.set(true);
             liveSignals.clear();
             currentTickerIndex.set(0);
+            signalsToday.set(0);
 
             List<String> allTickers = ibkrProperties.useCsvTickers()
                     ? tickerService.getTickerSymbols()
@@ -136,10 +137,16 @@ public class LiveModeController {
             long startTime = System.currentTimeMillis();
             try {
                 ScanResult result = scannerService.scanAll(true, true);
-                liveSignals.addAll(result.signals());
-                signalsToday.addAndGet(result.totalSignals());
-                lastScanDuration.set(System.currentTimeMillis() - startTime);
-                log.info("Manual scan complete: {} signals in {}ms", result.totalSignals(), result.elapsedMs());
+
+                // Only update signals if stop wasn't requested
+                if (!stopScanRequested.get()) {
+                    liveSignals.addAll(result.signals());
+                    signalsToday.addAndGet(result.totalSignals());
+                    lastScanDuration.set(System.currentTimeMillis() - startTime);
+                    log.info("Manual scan complete: {} signals in {}ms", result.totalSignals(), result.elapsedMs());
+                } else {
+                    log.info("Manual scan stopped by user after {}ms", System.currentTimeMillis() - startTime);
+                }
             } catch (Exception e) {
                 log.error("Manual scan failed: {}", e.getMessage(), e);
             } finally {
@@ -180,11 +187,11 @@ public class LiveModeController {
 
     @PostMapping("/toggle-extended-hours")
     public ResponseEntity<Map<String, Object>> toggleExtendedHours() {
-        boolean newState = extendedHoursEnabled.getAndSet(!extendedHoursEnabled.get());
+        boolean newState = !extendedHoursEnabled.getAndSet(!extendedHoursEnabled.get());
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", true);
         result.put("extendedHours", newState);
-        result.put("message", "Extended hours toggled");
+        result.put("message", "Extended hours " + (newState ? "enabled" : "disabled"));
         return ResponseEntity.ok(result);
     }
 
@@ -244,6 +251,14 @@ public class LiveModeController {
 
     public boolean isExtendedHoursEnabled() {
         return extendedHoursEnabled.get();
+    }
+
+    public boolean isStopRequested() {
+        return stopScanRequested.get();
+    }
+
+    public void clearStopRequest() {
+        stopScanRequested.set(false);
     }
 
     // ===== HTML Dashboard Builder =====
@@ -312,7 +327,7 @@ public class LiveModeController {
         sb.append("<div class=\"nav\">\n");
         sb.append("<a href=\"/live-ui\" class=\"active\">Live Trading</a>\n");
         sb.append("<a href=\"/backtest-ui\">Backtest</a>\n");
-        sb.append("<a href=\"/health\">Health</a>\n");
+        sb.append("<a href=\"/actuator/health\">Health</a>\n");
         sb.append("</div>\n");
         sb.append("<div class=\"grid\">\n");
 
@@ -356,9 +371,9 @@ public class LiveModeController {
         sb.append("<div class=\"card\"><h3>Live Signals Feed</h3>\n");
         sb.append("<div style=\"overflow-x:auto;max-height:500px;overflow-y:auto\">\n");
         sb.append("<table class=\"signals-table\"><thead><tr>\n");
-        sb.append("<th>Time</th><th>Ticker</th><th>Strategy</th><th>Dir</th><th>Price</th><th>TP</th><th>SL</th><th>Pattern</th><th>Action</th>\n");
+        sb.append("<th>Time</th><th>Ticker</th><th>Strategy</th><th>Dir</th><th>Price</th><th>TP</th><th>SL</th><th>Pattern</th><th>Status</th>\n");
         sb.append("</tr></thead><tbody id=\"signalsBody\">\n");
-        sb.append("<tr><td colspan=\"9\" style=\"text-align:center;padding:20px;color:#8b949e\">Waiting for signals...</td></tr>\n");
+        sb.append("<tr><td colspan=\"9\" style=\"text-align:center;padding:20px;color:#8b949e\" id=\"signalsPlaceholder\">Waiting for scan...</td></tr>\n");
         sb.append("</tbody></table></div></div>\n");
 
         // Console Log
@@ -377,9 +392,12 @@ public class LiveModeController {
         sb.append("document.getElementById('twsAccount').textContent=d.accountId||'-';\n");
         sb.append("document.getElementById('twsRisk').textContent=d.riskPerTrade||'-';\n");
         sb.append("document.getElementById('balance').textContent='$'+(d.balance||0).toLocaleString();\n");
-        sb.append("document.getElementById('activeTrades').textContent=d.activeTrades||0}catch(e){console.error(e)}}\n");
+        sb.append("document.getElementById('activeTrades').textContent=d.activeTrades||0}catch(e){}}\n");
+        sb.append("async function loadSignals(){try{var r=await fetch('/live-ui/signals');var d=await r.json();renderSignals(d)}catch(e){}}\n");
         sb.append("function updateUI(s){\n");
-        sb.append("document.getElementById('scanStatus').textContent=s.isScanning?'Scanning':'Idle';\n");
+        sb.append("var statusText=s.isScanning?'Scanning':'Idle';\n");
+        sb.append("if(s.stopScanRequested){statusText='Stopping...'}\n");
+        sb.append("document.getElementById('scanStatus').textContent=statusText;\n");
         sb.append("document.getElementById('currentTicker').textContent=s.currentTicker||'-';\n");
         sb.append("document.getElementById('scanProgress').textContent=s.currentTickerIndex+'/'+s.totalTickers;\n");
         sb.append("document.getElementById('progressBar').style.width=(s.totalTickers>0?(s.currentTickerIndex/s.totalTickers*100):0)+'%';\n");
@@ -388,7 +406,7 @@ public class LiveModeController {
         sb.append("document.getElementById('autoExecToggle').classList.toggle('active',s.autoExecute);\n");
         sb.append("document.getElementById('extHoursStatus').textContent=s.extendedHoursEnabled?'ON':'OFF';\n");
         sb.append("document.getElementById('extHoursToggle').classList.toggle('active',s.extendedHoursEnabled);\n");
-        sb.append("document.getElementById('startScanBtn').style.display=s.isScanning?'none':'block';\n");
+        sb.append("document.getElementById('startScanBtn').style.display=(s.isScanning||s.stopScanRequested)?'none':'block';\n");
         sb.append("document.getElementById('stopScanBtn').style.display=s.isScanning?'block':'none';\n");
         sb.append("if(s.lastScanTime){document.getElementById('lastScan').textContent=new Date(s.lastScanTime).toLocaleTimeString()}\n");
         sb.append("if(s.lastScanDuration){document.getElementById('scanDuration').textContent=(s.lastScanDuration/1000).toFixed(1)+'s'}}\n");
@@ -397,10 +415,26 @@ public class LiveModeController {
         sb.append("var h='';var currentTicker=d.currentTicker||'';var scanning=d.scanning;\n");
         sb.append("hot.forEach(function(t){var isScan=scanning&&t===currentTicker;\n");
         sb.append("h+='<div class=\"ticker-item'+(isScan?' scanning':'')+'\"><span><span class=\"badge badge-hot\">HOT</span> '+t+'</span>'+(isScan?'<span>Scanning...</span>':'')+'</div>'});\n");
-        sb.append("var shown=0;all.forEach(function(t,i){if(hot.indexOf(t)<0){if(shown<50){var isScan=scanning&&t===currentTicker;\n");
-        sb.append("h+='<div class=\"ticker-item'+(isScan?' scanning':'')+'\"><span>'+t+'</span>'+(isScan?'<span>Scanning...</span>':'')+'</div>';shown++}}});\n");
-        sb.append("var remaining=all.length-hot.length-shown;if(remaining>0)h+='<div style=\"text-align:center;padding:10px;color:#8b949e\">...+'+remaining+' more</div>';\n");
+        sb.append("all.forEach(function(t,i){if(hot.indexOf(t)<0){var isScan=scanning&&t===currentTicker;\n");
+        sb.append("h+='<div class=\"ticker-item'+(isScan?' scanning':'')+'\"><span>'+t+'</span>'+(isScan?'<span>Scanning...</span>':'')+'</div>'}});\n");
         sb.append("c.innerHTML=h}\n");
+        sb.append("function renderSignals(d){\n");
+        sb.append("var body=document.getElementById('signalsBody');var signals=d.signals||[];var count=d.count||0;\n");
+        sb.append("var statusEl=document.getElementById('scanStatus');var isScanning=statusEl&&statusEl.textContent==='Scanning';\n");
+        sb.append("var tickerEl=document.getElementById('currentTicker');var curTicker=tickerEl?tickerEl.textContent:'-';\n");
+        sb.append("if(count===0&&!isScanning){body.innerHTML='<tr><td colspan=\\'9\\' style=\\'text-align:center;padding:20px;color:#8b949e\\'>No signals today. Scan completed with no matches.</td></tr>'}\n");
+        sb.append("else if(count===0&&isScanning){body.innerHTML='<tr><td colspan=\\'9\\' style=\\'text-align:center;padding:20px;color:#58a6ff\\'>Scanning: '+curTicker+'</td></tr>'}\n");
+        sb.append("else if(count>0){var h='';signals.forEach(function(s){\n");
+        sb.append("var time=s.timestamp?s.timestamp.substring(11,16):'-';\n");
+        sb.append("var tp=s.tradePlan&&s.tradePlan.takeProfit?s.tradePlan.takeProfit:'-';\n");
+        sb.append("var sl=s.tradePlan&&s.tradePlan.stopLoss?s.tradePlan.stopLoss:'-';\n");
+        sb.append("var pattern=s.candlestickPattern||'-';\n");
+        sb.append("var dirClass=s.direction==='CALL'?'positive':'negative';\n");
+        sb.append("h+='<tr><td>'+time+'</td><td><strong>'+s.ticker+'</strong></td><td>'+s.strategy+'</td>';\n");
+        sb.append("h+='<td class=\\''+dirClass+'\\'>'+s.direction+'</td><td>$'+s.currentPrice+'</td>';\n");
+        sb.append("h+='<td>$'+tp+'</td><td>$'+sl+'</td><td>'+pattern+'</td><td><span class=\\'badge badge-hot\\'>NEW</span></td></tr>'});\n");
+        sb.append("body.innerHTML=h}\n");
+        sb.append("document.getElementById('signalsToday').textContent=d.signalsToday||count}\n");
         sb.append("async function startScan(){try{var r=await fetch('/live-ui/scan-now',{method:'POST'});var d=await r.json();\n");
         sb.append("addLog(d.success?'Scan started':'Error: '+d.message,d.success?'success':'error');loadStatus()}catch(e){addLog('Error: '+e.message,'error')}}\n");
         sb.append("async function stopScan(){try{var r=await fetch('/live-ui/stop-scan',{method:'POST'});var d=await r.json();\n");
@@ -415,8 +449,8 @@ public class LiveModeController {
         sb.append("var t=new Date().toLocaleTimeString();var e=document.createElement('div');\n");
         sb.append("e.className='log-entry log-'+type;e.textContent='['+t+'] '+msg;\n");
         sb.append("log.insertBefore(e,log.firstChild);while(log.children.length>100)log.removeChild(log.lastChild)}\n");
-        sb.append("loadStatus();loadTickers();loadTws();\n");
-        sb.append("setInterval(loadStatus,2000);setInterval(loadTickers,5000);\n");
+        sb.append("loadStatus();loadTickers();loadTws();loadSignals();\n");
+        sb.append("setInterval(loadStatus,2000);setInterval(loadTickers,5000);setInterval(loadTws,10000);setInterval(loadSignals,3000);\n");
         sb.append("addLog('Live Trading Dashboard loaded','success');\n");
         sb.append("</script>\n</body>\n</html>");
 
