@@ -6,6 +6,7 @@ slf4j = "2.0.16"
 ta4j = "0.15"
 fastutil = "8.5.18"
 jackson = "2.19.0"
+playwright = "1.52.0"
 
 [libraries]
 spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web", version.ref = "spring-boot" }
@@ -17,6 +18,7 @@ fastutil = { module = "it.unimi.dsi:fastutil", version.ref = "fastutil" }
 jackson-yaml = { module = "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml", version.ref = "jackson" }
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
 jackson-jsr310 = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jsr310", version.ref = "jackson" }
+playwright = { module = "com.microsoft.playwright:playwright", version.ref = "playwright" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
