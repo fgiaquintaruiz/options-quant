@@ -14,7 +14,8 @@
       "mcp__idea__execute_run_configuration",
       "Bash(dir *)",
       "mcp__idea__get_file_text_by_path",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(netstat *)"
     ]
   },
   "$version": 3

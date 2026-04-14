@@ -3,13 +3,6 @@
   <component name="CsvFileAttributes">
     <option name="attributeMap">
       <map>
-        <entry key="\AIAssistantInput-9cbab30e-2879-489d-996f-9fd2667da0aa.chatInput">
-          <value>
-            <Attribute>
-              <option name="separator" value="," />
-            </Attribute>
-          </value>
-        </entry>
         <entry key="\backtest\equity.csv">
           <value>
             <Attribute>

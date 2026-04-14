@@ -73,11 +73,11 @@ public class BacktestDashboardController {
 
     /**
      * Serves the main dashboard HTML page.
-     * GET /backtest-ui
+     * GET /backtest-ui - redirects to React SPA at /
      */
     @GetMapping
-    public String dashboard() {
-        return buildDashboardHtml();
+    public org.springframework.web.servlet.ModelAndView dashboard() {
+        return new org.springframework.web.servlet.ModelAndView("redirect:/");
     }
 
     /**

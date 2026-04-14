@@ -394,6 +394,14 @@ The following performance optimizations were identified but not all were fully i
 
 **Fix #16-20: Low impact fixes** (already done - DecimalFormat, DateTimeFormatter caching, AtomicReference, SPY cache, primitive boxing)
 
+### Pending Issues (To Fix Next Session)
+1. **Backtest UI**: Start Run button doesn't swap to "Stop Run" to cancel mid-run
+2. **Backtest UI**: Console with trades not appearing - can't access control charts
+3. **Live UI**: Balance still not showing despite TWS connection
+4. **Live UI**: Scan progress only shows ticker count, missing detailed scan info
+5. **Live UI**: Needs to populate with actual scanning data (ticker names, strategies checked, signals found in real-time)
+6. **Frontend Migration**: Consider migrating from raw HTML string building to React + Vite
+
 ### Last Thing Done
 - **Fixed balance display**: Auto-connect AccountManager at startup via `StartupInitializer`
   - Balance now shows actual TWS balance instead of "N/A (no TWS)"
@@ -401,7 +409,16 @@ The following performance optimizations were identified but not all were fully i
   - Progress shows "Hot tickers: X/14" then "Total: X/512" for clear visibility
   - Reduced status polling from 2s to 500ms for smoother updates
   - Shows "Scan complete" when done instead of empty string
-- Committed and pushed (commit d6e34e5)
+- **Added Playwright E2E Test Suite** - ~79 tests covering all UI pages, APIs, and interactions:
+  1. **BasePlaywrightTest** - Base class with random port, Spring Boot lifecycle, Playwright browser management
+  2. **HealthEndpointTest** (5 tests) - Health, liveness, readiness endpoints
+  3. **LiveUiDashboardTest** (25 tests) - Page rendering, status API, scan API, signals, tickers, TWS status, JS functions
+  4. **BacktestUiDashboardTest** (19 tests) - Page rendering, run/stop/checkpoint APIs, JS functions
+  5. **LiveModeInteractionTest** (5 tests) - Scan start/stop, toggle interactions
+  6. **BacktestInteractionTest** (7 tests) - Backtest run/improve/retest/stop/checkpoint
+  7. **NavigationTest** (8 tests) - Cross-page navigation, mobile viewport, HTML structure
+  8. **UiStylingTest** (14 tests) - CSS styles, dark theme, responsive design, badges, toggles, progress bars
+- Committed and pushed (commit 45d2931)
   1. **BasePlaywrightTest** - Base class with random port, Spring Boot lifecycle, Playwright browser management
   2. **HealthEndpointTest** (5 tests) - Health, liveness, readiness endpoints
   3. **LiveUiDashboardTest** (25 tests) - Page rendering, status API, scan API, signals, tickers, TWS status, JS functions

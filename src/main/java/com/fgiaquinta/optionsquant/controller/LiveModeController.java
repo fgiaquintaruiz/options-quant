@@ -57,8 +57,8 @@ public class LiveModeController {
     }
 
     @GetMapping
-    public String dashboard() {
-        return buildLiveDashboardHtml();
+    public org.springframework.web.servlet.ModelAndView dashboard() {
+        return new org.springframework.web.servlet.ModelAndView("redirect:/");
     }
 
     @GetMapping("/status")
