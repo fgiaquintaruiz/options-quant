@@ -395,7 +395,8 @@ The following performance optimizations were identified but not all were fully i
 **Fix #16-20: Low impact fixes** (already done - DecimalFormat, DateTimeFormatter caching, AtomicReference, SPY cache, primitive boxing)
 
 ### Last Thing Done
-- Fixed 6 live UI issues in LiveModeController:
+- Set extended hours toggle to ON by default (`AtomicBoolean(true)` instead of `false`)
+- Committed and pushed (commit 4252415)
   1. **Health link**: `/health` → `/actuator/health` in nav bar
   2. **Extended hours toggle**: Fixed `getAndSet` returning old value — now returns correct new state
   3. **Ticker list**: Shows ALL tickers (was capped at 50 non-hot) with scrolling
