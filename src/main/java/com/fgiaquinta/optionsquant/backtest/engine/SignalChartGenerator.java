@@ -90,7 +90,7 @@ public class SignalChartGenerator {
             String safeTicker = ticker.replaceAll("[^a-zA-Z0-9]", "_");
             String safeStrategy = strategy.replaceAll("[^a-zA-Z0-9]", "_");
             String signalTimeStr = signalTime.withZoneSameInstant(java.time.ZoneId.of("Europe/Madrid"))
-                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+                    .format(TIME_FMT);
             String filename = String.format("%s_%s_%s_%s.html",
                     safeTicker, safeStrategy, direction, signalTimeStr.replace(" ", "_").replace(":", "-"));
 

@@ -18,7 +18,8 @@ public record BacktestConfig(
         double commissionPerContract,
         int maxConcurrentTrades,
         TimeFrame executionTimeframe,
-        boolean includeTradePlans
+        boolean includeTradePlans,
+        boolean deterministicMode
 ) {
     public BacktestConfig {
         if (initialCapital <= 0) throw new IllegalArgumentException("Initial capital must be positive");
@@ -40,7 +41,8 @@ public record BacktestConfig(
                 0.65,       // $0.65 per contract (typical IBKR options commission)
                 3,          // max 3 concurrent trades
                 TimeFrame.MIN_15, // evaluate strategies every 15m candle
-                true
+                true,       // include trade plans
+                false       // deterministic mode off by default
         );
     }
 }

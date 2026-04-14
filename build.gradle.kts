@@ -31,6 +31,9 @@ dependencies {
     // TwsApi depends on protobuf
     implementation("com.google.protobuf:protobuf-java:4.34.1")
 
+    // Guava (for RateLimiter)
+    implementation("com.google.guava:guava:33.4.8-jre")
+
     // Jackson for JSON serialization (used by BacktestCli)
     implementation(libs.jackson.databind)
     implementation(libs.jackson.yaml)

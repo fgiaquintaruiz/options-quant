@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Tracks IBKR account balance and calculates position sizing based on configurable risk %.
@@ -28,7 +29,7 @@ public class AccountManager {
     // Per-strategy performance tracking
     private final Map<String, StrategyStats> strategyStats = new ConcurrentHashMap<>();
 
-    private EClientSocket client;
+    private final AtomicReference<EClientSocket> clientRef = new AtomicReference<>();
     private EJavaSignal signal;
 
     public AccountManager(IbkrProperties ibkrProperties) {
@@ -40,7 +41,8 @@ public class AccountManager {
      * This populates the balance from TWS.
      */
     public void connect() {
-        if (client != null && client.isConnected()) {
+        EClientSocket currentClient = clientRef.get();
+        if (currentClient != null && currentClient.isConnected()) {
             log.debug("AccountManager already connected");
             return;
         }
@@ -51,13 +53,15 @@ public class AccountManager {
         EWrapper wrapper = new DefaultEWrapper() {
             @Override
             public void connectAck() {
-                if (client.isAsyncEConnect()) client.startAPI();
+                EClientSocket client = clientRef.get();
+                if (client != null && client.isAsyncEConnect()) client.startAPI();
             }
 
             @Override
             public void nextValidId(int orderId) {
                 log.info("AccountManager connected, subscribing to account updates");
-                client.reqAccountUpdates(true, "");
+                EClientSocket client = clientRef.get();
+                if (client != null) client.reqAccountUpdates(true, "");
             }
 
             @Override
@@ -79,20 +83,23 @@ public class AccountManager {
             }
         };
 
-        this.client = new EClientSocket(wrapper, signal);
-        client.eConnect(ibkrProperties.host(), ibkrProperties.port(), 999);
+        EClientSocket newClient = new EClientSocket(wrapper, signal);
+        clientRef.set(newClient);
+        newClient.eConnect(ibkrProperties.host(), ibkrProperties.port(), 999);
 
-        if (!client.isConnected()) {
+        if (!newClient.isConnected()) {
             log.warn("Failed to connect AccountManager to TWS (TWS may not be running)");
             return;
         }
 
-        final EReader reader = new EReader(client, signal);
+        final EReader reader = new EReader(newClient, signal);
         reader.start();
         new Thread(() -> {
-            while (client.isConnected()) {
+            EClientSocket client = clientRef.get();
+            while (client != null && client.isConnected()) {
                 signal.waitForSignal();
                 try { reader.processMsgs(); } catch (Exception e) { /* ignore */ }
+                client = clientRef.get();
             }
         }, "account-manager-ereader").start();
     }
@@ -177,6 +184,7 @@ public class AccountManager {
     public double getCurrentBalance() { return currentBalance; }
 
     public void disconnect() {
+        EClientSocket client = clientRef.getAndSet(null);
         if (client != null && client.isConnected()) {
             client.reqAccountUpdates(false, "");
             client.eDisconnect();

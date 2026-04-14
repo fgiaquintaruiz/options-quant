@@ -4,6 +4,7 @@ import com.fgiaquinta.optionsquant.backtest.domain.BacktestReport;
 import com.fgiaquinta.optionsquant.backtest.domain.TradeRecord;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.BufferedReader;
 import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -12,10 +13,13 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
- * Records backtest results to CSV files and in-memory stats.
+ * Records backtest results to CSV files and computes stats on-demand.
+ *
+ * CSV is the single source of truth for trade data. Trades are NOT stored
+ * in-memory; they are read from CSV only when onFinish() is called.
+ * This eliminates duplicate storage (in-memory list + CSV + BacktestReport.trades).
  */
 @Slf4j
 public class CsvBacktestReporter implements BacktestReporter {
@@ -23,7 +27,6 @@ public class CsvBacktestReporter implements BacktestReporter {
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final Path outputDir;
-    private final List<TradeRecord> trades = Collections.synchronizedList(new ArrayList<>());
     private final List<BacktestReport.EquityPoint> equityCurve = Collections.synchronizedList(new ArrayList<>());
     private double initialCapital;
     private ZonedDateTime startTime;
@@ -44,7 +47,7 @@ public class CsvBacktestReporter implements BacktestReporter {
 
     @Override
     public void onTrade(TradeRecord trade) {
-        trades.add(trade);
+        // CSV is the single source of truth - no in-memory duplication
         appendTradeToCsv(trade);
     }
 
@@ -61,6 +64,8 @@ public class CsvBacktestReporter implements BacktestReporter {
 
     @Override
     public BacktestReport onFinish(long elapsedMs) {
+        // Read trades from CSV (single source of truth) instead of in-memory list
+        List<TradeRecord> trades = loadTradesFromCsv();
         double finalCapital = initialCapital + trades.stream().mapToDouble(TradeRecord::netPnl).sum();
         int wins = (int) trades.stream().filter(t -> t.netPnl() > 0).count();
         int losses = (int) trades.stream().filter(t -> t.netPnl() <= 0).count();
@@ -95,6 +100,57 @@ public class CsvBacktestReporter implements BacktestReporter {
         writeSummary(report);
         writeEquityCsv();
         return report;
+    }
+
+    /**
+     * Loads all trades from the CSV file. CSV is the single source of truth.
+     */
+    private List<TradeRecord> loadTradesFromCsv() {
+        List<TradeRecord> result = new ArrayList<>();
+        Path filePath = outputDir.resolve("trades.csv");
+        if (!Files.exists(filePath)) {
+            return result;
+        }
+        try (BufferedReader reader = Files.newBufferedReader(filePath)) {
+            String headerLine = reader.readLine(); // skip header
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.trim().isEmpty()) continue;
+                String[] parts = line.split(",", -1);
+                if (parts.length < 20) continue;
+                try {
+                    TradeRecord trade = new TradeRecord(
+                            parts[0],   // ticker
+                            parts[1],   // strategy
+                            parts[2],   // direction
+                            Integer.parseInt(parts[3]),  // quantity
+                            Double.parseDouble(parts[4]), // entryPrice
+                            ZonedDateTime.parse(parts[5], TS_FMT),  // entryTime
+                            Double.parseDouble(parts[6]), // exitPrice
+                            ZonedDateTime.parse(parts[7], TS_FMT),  // exitTime
+                            parts[8],   // exitReason
+                            Double.parseDouble(parts[9]),  // grossPnl
+                            Double.parseDouble(parts[10]), // commission
+                            Double.parseDouble(parts[11]), // slippage
+                            Double.parseDouble(parts[12]), // netPnl
+                            Double.parseDouble(parts[13]), // maxDrawdown
+                            Double.parseDouble(parts[14]), // maxRunup
+                            parts[15],  // candlestickPattern
+                            Double.parseDouble(parts[16]), // atrAtEntry
+                            Double.parseDouble(parts[17]), // vixAtEntry
+                            Integer.parseInt(parts[18]),   // entryHour
+                            parts[19],  // marketTrend
+                            new HashMap<>() // entryContext (not stored in CSV)
+                    );
+                    result.add(trade);
+                } catch (Exception e) {
+                    // Skip malformed lines
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load trades from CSV: {}", e.getMessage());
+        }
+        return result;
     }
 
     private void appendTradeToCsv(TradeRecord trade) {
@@ -167,17 +223,45 @@ public class CsvBacktestReporter implements BacktestReporter {
         return stdDev == 0 ? 0 : avg / stdDev * Math.sqrt(252);
     }
 
-    private Map<String, BacktestReport.StrategyStats> computePerGroupStats(List<TradeRecord> trades, Function<TradeRecord, String> grouper) {
-        return trades.stream().collect(Collectors.groupingBy(grouper, Collectors.collectingAndThen(
-                Collectors.toList(), group -> {
-                    int gWins = (int) group.stream().filter(t -> t.netPnl() > 0).count();
-                    double gProfit = group.stream().filter(t -> t.netPnl() > 0).mapToDouble(TradeRecord::netPnl).sum();
-                    double gLoss = Math.abs(group.stream().filter(t -> t.netPnl() < 0).mapToDouble(TradeRecord::netPnl).sum());
-                    double gPf = gLoss == 0 ? (gProfit > 0 ? Double.POSITIVE_INFINITY : 0) : gProfit / gLoss;
-                    return new BacktestReport.StrategyStats(group.size(), gWins,
-                            group.isEmpty() ? 0 : (double) gWins / group.size(),
-                            group.stream().mapToDouble(TradeRecord::netPnl).sum(), gPf,
-                            group.stream().mapToDouble(TradeRecord::maxDrawdown).max().orElse(0));
-                })));
+    private Map<String, BacktestReport.StrategyStats> computePerGroupStats(
+            List<TradeRecord> trades, java.util.function.Function<TradeRecord, String> grouper) {
+
+        // Single-pass accumulation using primitive fields
+        class GroupAccumulator {
+            int count = 0;
+            int wins = 0;
+            double totalPnl = 0;
+            double totalProfit = 0;
+            double totalLoss = 0;
+            double maxDrawdown = 0;
+        }
+
+        Map<String, GroupAccumulator> groups = new HashMap<>();
+        for (TradeRecord t : trades) {
+            String key = grouper.apply(t);
+            GroupAccumulator acc = groups.computeIfAbsent(key, k -> new GroupAccumulator());
+            acc.count++;
+            acc.totalPnl += t.netPnl();
+            if (t.netPnl() > 0) {
+                acc.wins++;
+                acc.totalProfit += t.netPnl();
+            } else if (t.netPnl() < 0) {
+                acc.totalLoss += Math.abs(t.netPnl());
+            }
+            acc.maxDrawdown = Math.max(acc.maxDrawdown, t.maxDrawdown());
+        }
+
+        Map<String, BacktestReport.StrategyStats> result = new LinkedHashMap<>();
+        for (Map.Entry<String, GroupAccumulator> entry : groups.entrySet()) {
+            GroupAccumulator acc = entry.getValue();
+            double profitFactor = acc.totalLoss == 0 ?
+                (acc.totalProfit > 0 ? Double.POSITIVE_INFINITY : 0) : acc.totalProfit / acc.totalLoss;
+            result.put(entry.getKey(), new BacktestReport.StrategyStats(
+                acc.count, acc.wins,
+                acc.count == 0 ? 0 : (double) acc.wins / acc.count,
+                acc.totalPnl, profitFactor, acc.maxDrawdown
+            ));
+        }
+        return result;
     }
 }

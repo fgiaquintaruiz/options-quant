@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.text.DecimalFormat;
 import java.util.List;
 
 /**
@@ -52,6 +53,16 @@ public class MacroEnvironmentFilter {
     private volatile double distanceFromSma50Pct = 0;
     private volatile long lastCheckTime = 0;
     private static final long CHECK_INTERVAL_MS = 15 * 60 * 1000; // Check every 15 minutes
+
+    // Pre-compiled DecimalFormat instances
+    private static final DecimalFormat FMT_2D = new DecimalFormat("#.00");
+    private static final DecimalFormat FMT_SIGNED_2D = new DecimalFormat("+0.00;-0.00");
+    private static final DecimalFormat FMT_SIGNED_3D = new DecimalFormat("+0.000;-0.000");
+
+    // SPY daily data cache (Fix #19)
+    private volatile List<Candle> spyDailyCache = null;
+    private volatile long spyCacheTimestamp = 0;
+    private static final long SPY_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
     @Autowired(required = false)
     private TelegramService telegramService;
@@ -105,14 +116,14 @@ public class MacroEnvironmentFilter {
         // STRONGLY_BEARISH + falling momentum = block CALLs (market crashing)
         if (regime == MarketRegime.STRONGLY_BEARISH && momentum == ShortTermMomentum.FALLING) {
             log.warn("🛑 [Macro Filter] BLOCKED CALL: STRONGLY bearish regime ({}% from 50-SMA) + falling momentum",
-                    String.format("%+.2f", distanceFromSma50Pct));
+                    FMT_SIGNED_2D.format(distanceFromSma50Pct));
             return false;
         }
 
         // BEARISH + falling momentum = warn but allow (counter-trend bounce plays exist)
         if (regime == MarketRegime.BEARISH && momentum == ShortTermMomentum.FALLING) {
             log.warn("⚠️ [Macro Filter] CAUTION on CALL: Bearish regime ({}%) + falling momentum — counter-trend trade",
-                    String.format("%+.2f", distanceFromSma50Pct));
+                    FMT_SIGNED_2D.format(distanceFromSma50Pct));
             return true;  // Allow but warn
         }
 
@@ -139,7 +150,7 @@ public class MacroEnvironmentFilter {
         // STRONGLY_BULLISH + rising momentum = block PUTs (market rocketing up)
         if ((regime == MarketRegime.STRONGLY_BULLISH) && momentum == ShortTermMomentum.RISING) {
             log.warn("🛑 [Macro Filter] BLOCKED PUT: STRONGLY bullish regime ({}% from 50-SMA) + rising momentum",
-                    String.format("%+.2f", distanceFromSma50Pct));
+                    FMT_SIGNED_2D.format(distanceFromSma50Pct));
             return false;
         }
 
@@ -147,7 +158,7 @@ public class MacroEnvironmentFilter {
         if ((regime == MarketRegime.BULLISH || regime == MarketRegime.STRONGLY_BULLISH)
                 && momentum == ShortTermMomentum.FALLING) {
             log.warn("⚠️ [Macro Filter] CAUTION on PUT: Bullish regime ({}%) but falling momentum — pullback trade",
-                    String.format("%+.2f", distanceFromSma50Pct));
+                    FMT_SIGNED_2D.format(distanceFromSma50Pct));
             return true;  // Allow — SPY is pulling back, good for PUTs
         }
 
@@ -166,11 +177,28 @@ public class MacroEnvironmentFilter {
     }
 
     /**
+     * Gets SPY daily candles with caching to avoid repeated CSV loads.
+     * Cache TTL is 24 hours since daily data doesn't change intraday.
+     */
+    private List<Candle> getSpyDailyCandles() {
+        long now = System.currentTimeMillis();
+        if (spyDailyCache == null || now - spyCacheTimestamp > SPY_CACHE_TTL_MS) {
+            synchronized (this) {
+                if (spyDailyCache == null || now - spyCacheTimestamp > SPY_CACHE_TTL_MS) {
+                    spyDailyCache = csvService.loadFromCsv("SPY", TimeFrame.DAY_1);
+                    spyCacheTimestamp = now;
+                }
+            }
+        }
+        return spyDailyCache;
+    }
+
+    /**
      * Updates the market analysis with multi-factor data.
      */
     private synchronized void updateMarketAnalysis() {
         try {
-            List<Candle> spyDaily = csvService.loadFromCsv("SPY", TimeFrame.DAY_1);
+            List<Candle> spyDaily = getSpyDailyCandles();
 
             if (spyDaily == null || spyDaily.size() < 50) {
                 log.warn("🌐 Macro filter: Not enough SPY data (need 50 days, have {})",
@@ -232,11 +260,11 @@ public class MacroEnvironmentFilter {
 
             // Log the analysis
             log.info("🌐 [Macro Filter] SPY ${} | 50-SMA ${} ({}%) | Regime: {}",
-                    String.format("%.2f", spyPrice), String.format("%.2f", sma50), 
-                    String.format("%+.2f", distanceFromSma50Pct), regime);
+                    FMT_2D.format(spyPrice), FMT_2D.format(sma50),
+                    FMT_SIGNED_2D.format(distanceFromSma50Pct), regime);
             log.info("   → 5-day SMA: ${} | 10-day SMA: ${} | Momentum: {} ({}%)",
-                    String.format("%.2f", sma5), String.format("%.2f", sma10), 
-                    momentum, String.format("%+.3f", momentumDiff));
+                    FMT_2D.format(sma5), FMT_2D.format(sma10),
+                    momentum, FMT_SIGNED_3D.format(momentumDiff));
             log.info("   → CALL trades: {} | PUT trades: {}",
                     regime == MarketRegime.STRONGLY_BEARISH && momentum == ShortTermMomentum.FALLING ? "BLOCKED" : "allowed",
                     regime == MarketRegime.STRONGLY_BULLISH && momentum == ShortTermMomentum.RISING ? "BLOCKED" : "allowed");
@@ -277,7 +305,7 @@ public class MacroEnvironmentFilter {
      * Gets market analysis as string for logging/Telegram.
      */
     public String getAnalysisString() {
-        return String.format("SPY $%.2f | 50-SMA $%.2f (%+.2f%%) | Regime: %s | Momentum: %s",
-                spyPrice, sma50, distanceFromSma50Pct, regime, momentum);
+        return String.format("SPY $%s | 50-SMA $%s (%s%%) | Regime: %s | Momentum: %s",
+                FMT_2D.format(spyPrice), FMT_2D.format(sma50), FMT_SIGNED_2D.format(distanceFromSma50Pct), regime, momentum);
     }
 }

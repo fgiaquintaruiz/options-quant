@@ -1,5 +1,6 @@
 package com.fgiaquinta.optionsquant.service;
 
+import com.google.common.util.concurrent.RateLimiter;
 import com.fgiaquinta.optionsquant.config.IbkrProperties;
 import com.fgiaquinta.optionsquant.domain.Candle;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
@@ -9,6 +10,7 @@ import com.fgiaquinta.optionsquant.strategy.model.TradePlan;
 import com.fgiaquinta.optionsquant.strategy.utils.CandlestickPatternDetector;
 import com.fgiaquinta.optionsquant.strategy.utils.RiskCalculator;
 import com.fgiaquinta.optionsquant.strategy.utils.SignalQualityFilter;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.ta4j.core.BarSeries;
@@ -20,6 +22,7 @@ import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 /**
  * Scans all configured tickers against all 12 strategies.
@@ -50,17 +53,22 @@ public class StrategyScannerService {
 
     // ===== IBKR RATE LIMITING =====
     // IBKR TWS API limit: 50 messages/second (Error 100)
-    // We use a conservative approach: 10 concurrent requests max, 100ms between each
+    // We use Guava's RateLimiter for precise rate limiting (non-blocking sleep)
+    // and a bounded executor queue with CallerRunsPolicy for backpressure.
     private static final int MAX_CONCURRENT_DOWNLOADS = 10;
-    private static final long DOWNLOAD_DELAY_MS = 100;  // 100ms = 10 req/sec max
+    private final RateLimiter downloadRateLimiter = RateLimiter.create(10.0); // 10 requests per second
     private final Semaphore downloadSemaphore = new Semaphore(MAX_CONCURRENT_DOWNLOADS);
-    private final ExecutorService downloadExecutor = Executors.newFixedThreadPool(
-            MAX_CONCURRENT_DOWNLOADS, 
+    private final ExecutorService downloadExecutor = new ThreadPoolExecutor(
+            MAX_CONCURRENT_DOWNLOADS,
+            MAX_CONCURRENT_DOWNLOADS,
+            60L, TimeUnit.SECONDS,
+            new ArrayBlockingQueue<>(MAX_CONCURRENT_DOWNLOADS * 5), // Bounded queue
             r -> {
                 Thread t = new Thread(r, "IBKR-Downloader");
                 t.setDaemon(true);
                 return t;
-            }
+            },
+            new ThreadPoolExecutor.CallerRunsPolicy() // Backpressure: run in calling thread if queue full
     );
     private final AtomicInteger activeDownloads = new AtomicInteger(0);
 
@@ -101,11 +109,43 @@ public class StrategyScannerService {
     }
 
     /**
+     * Shuts down the download executor on application context destruction.
+     * Ensures clean termination of background download threads.
+     */
+    @PreDestroy
+    public void shutdown() {
+        downloadExecutor.shutdown();
+        try {
+            if (!downloadExecutor.awaitTermination(30, TimeUnit.SECONDS)) {
+                downloadLog.warn("Download executor did not terminate gracefully, forcing shutdown...");
+                downloadExecutor.shutdownNow();
+                if (!downloadExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                    downloadLog.error("Download executor did not terminate even after shutdownNow()");
+                }
+            }
+        } catch (InterruptedException e) {
+            downloadExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
      * Scans all tickers against all strategies with hot tickers first.
      * Hot tickers (SPY, QQQ, AAPL, NVDA, TSLA, etc.) are scanned immediately,
      * then the remaining tickers are scanned.
+     *
+     * @param deterministicMode if true, skips delta downloads and uses only cached CSV data
      */
     public ScanResult scanAll(boolean includeTradePlans, boolean autoRefreshData) {
+        return scanAll(includeTradePlans, autoRefreshData, false);
+    }
+
+    /**
+     * Scans all tickers against all strategies with hot tickers first.
+     *
+     * @param deterministicMode if true, skips delta downloads and uses only cached CSV data for reproducible results
+     */
+    public ScanResult scanAll(boolean includeTradePlans, boolean autoRefreshData, boolean deterministicMode) {
         // Get all tickers from CSV or YAML
         List<String> allTickers = ibkrProperties.useCsvTickers() 
                 ? tickerService.getTickerSymbols()
@@ -131,32 +171,49 @@ public class StrategyScannerService {
         long startTime = System.currentTimeMillis();
         List<Signal> allSignals = new ArrayList<>();
 
-        // SCAN HOT TICKERS FIRST
+        // SCAN HOT TICKERS FIRST (parallelized for performance)
         if (!hotTickersToScan.isEmpty()) {
-            log.info("🔥 Scanning {} HOT tickers first: {}", hotTickersToScan.size(), hotTickersToScan);
-            for (String ticker : hotTickersToScan) {
-                try {
-                    List<Signal> tickerSignals = scanTicker(ticker, includeTradePlans, autoRefreshData);
-                    allSignals.addAll(tickerSignals);
-                } catch (Exception e) {
-                    log.error("Error scanning hot ticker {}: {}", ticker, e.getMessage());
-                }
+            if (deterministicMode) {
+                log.info("🔥 [Deterministic] Scanning {} HOT tickers from cached data: {}", hotTickersToScan.size(), hotTickersToScan);
+            } else {
+                log.info("🔥 Scanning {} HOT tickers first (parallel): {}", hotTickersToScan.size(), hotTickersToScan);
             }
-            log.info("✅ Hot tickers scan complete - {} signals found", 
-                    allSignals.size());
+            List<List<Signal>> hotResults = hotTickersToScan.parallelStream()
+                .map(ticker -> {
+                    try {
+                        return scanTicker(ticker, includeTradePlans, autoRefreshData && !deterministicMode);
+                    } catch (Exception e) {
+                        log.error("Error scanning hot ticker {}: {}", ticker, e.getMessage());
+                        return Collections.<Signal>emptyList();
+                    }
+                })
+                .collect(Collectors.toList());
+            hotResults.forEach(allSignals::addAll);
+            if (deterministicMode) {
+                log.info("✅ Hot tickers scan complete (deterministic) - {} signals found", allSignals.size());
+            } else {
+                log.info("✅ Hot tickers scan complete - {} signals found", allSignals.size());
+            }
         }
 
-        // SCAN REMAINING TICKERS
+        // SCAN REMAINING TICKERS (parallelized for performance)
         if (!remainingTickers.isEmpty()) {
-            log.info("📊 Scanning {} remaining tickers...", remainingTickers.size());
-            for (String ticker : remainingTickers) {
-                try {
-                    List<Signal> tickerSignals = scanTicker(ticker, includeTradePlans, autoRefreshData);
-                    allSignals.addAll(tickerSignals);
-                } catch (Exception e) {
-                    log.error("Error scanning ticker {}: {}", ticker, e.getMessage());
-                }
+            if (deterministicMode) {
+                log.info("📊 [Deterministic] Scanning {} remaining tickers from cached data (parallel)...", remainingTickers.size());
+            } else {
+                log.info("📊 Scanning {} remaining tickers (parallel)...", remainingTickers.size());
             }
+            List<List<Signal>> remainingResults = remainingTickers.parallelStream()
+                .map(ticker -> {
+                    try {
+                        return scanTicker(ticker, includeTradePlans, autoRefreshData && !deterministicMode);
+                    } catch (Exception e) {
+                        log.error("Error scanning ticker {}: {}", ticker, e.getMessage());
+                        return Collections.<Signal>emptyList();
+                    }
+                })
+                .collect(Collectors.toList());
+            remainingResults.forEach(allSignals::addAll);
         }
 
         long elapsed = System.currentTimeMillis() - startTime;
@@ -219,8 +276,8 @@ public class StrategyScannerService {
                             candlesByTimeframe.put(tf, freshData);
                             totalNewCandles.addAndGet(freshData.size());
                         }
-                        
-                        Thread.sleep(DOWNLOAD_DELAY_MS);  // Rate limit
+
+                        downloadRateLimiter.acquire();  // Rate limit
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         downloadLog.error("❌ Download interrupted for {} [{}]", ticker, tf);
@@ -231,7 +288,7 @@ public class StrategyScannerService {
                         downloadSemaphore.release();
                     }
                 }, downloadExecutor));
-                
+
             } else if (autoRefreshData && isStale(cachedCandles, tf)) {
                 // Need delta download - submit to parallel executor
                 final List<Candle> cached = cachedCandles;  // For lambda
@@ -253,8 +310,8 @@ public class StrategyScannerService {
                         } else {
                             candlesByTimeframe.put(tf, cached);
                         }
-                        
-                        Thread.sleep(DOWNLOAD_DELAY_MS);  // Rate limit
+
+                        downloadRateLimiter.acquire();  // Rate limit
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         downloadLog.error("❌ Download interrupted for {} [{}]", ticker, tf);
@@ -265,7 +322,7 @@ public class StrategyScannerService {
                         downloadSemaphore.release();
                     }
                 }, downloadExecutor));
-                
+
             } else {
                 // Use cached data (no download needed)
                 candlesByTimeframe.put(tf, cachedCandles);

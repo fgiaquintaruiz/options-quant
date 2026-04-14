@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.DecimalFormat;
 import java.time.LocalTime;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -36,14 +37,50 @@ public class TickerMemory {
 
     private static final Path MEMORY_FILE = Path.of("data/ticker-memory.json");
     private static final int MIN_TRADES_FOR_CONFIDENCE = 3;
+    private static final int SAVE_INTERVAL = 100;
+
+    // Pre-compiled DecimalFormat instances for formatting (thread-safe for read-only use)
+    private static final DecimalFormat FMT_1D = new DecimalFormat("#.0");
+    private static final DecimalFormat FMT_2D = new DecimalFormat("#.00");
+    private static final DecimalFormat FMT_0D = new DecimalFormat("#");
+    private static final DecimalFormat FMT_PCT_1D = new DecimalFormat("#.0");
+    private static final DecimalFormat FMT_SIGNED_2D = new DecimalFormat("+0.00;-0.00");
+
+    // Fast formatting helpers that avoid String.format's regex overhead
+    private static String fmt1(double v) {
+        return FMT_1D.format(v);
+    }
+    private static String fmt2(double v) {
+        return FMT_2D.format(v);
+    }
+    private static String fmt0(double v) {
+        return FMT_0D.format(v);
+    }
+    private static String padRight(String s, int w) {
+        if (s.length() >= w) return s.substring(0, Math.min(s.length(), w));
+        StringBuilder sb = new StringBuilder(w);
+        sb.append(s);
+        for (int i = s.length(); i < w; i++) sb.append(' ');
+        return sb.toString();
+    }
+    private static String padLeft(String s, int w) {
+        if (s.length() >= w) return s.substring(s.length() - w);
+        StringBuilder sb = new StringBuilder(w);
+        for (int i = 0; i < w - s.length(); i++) sb.append(' ');
+        sb.append(s);
+        return sb.toString();
+    }
 
     // Per-ticker aggregate stats
     private final Map<String, TickerStats> memory = new ConcurrentHashMap<>();
-    
+
     // Per-ticker, per-strategy learned profiles
     private final Map<String, TickerStrategyProfile> strategyProfiles = new ConcurrentHashMap<>();
-    
+
     private final ObjectMapper mapper = new ObjectMapper();
+
+    // Debounce counter for save operations
+    private int tradeCounter = 0;
 
     public TickerMemory() {
         mapper.registerModule(new JavaTimeModule());
@@ -73,18 +110,21 @@ public class TickerMemory {
         // Log significant events
         if (stats.totalTrades % 5 == 0) {
             log.info("🧠 [Memory] {} update: {} trades, {}% WR, PnL ${}, confidence {}%",
-                    ticker, stats.totalTrades, String.format("%.1f", stats.getWinRate() * 100), 
-                    String.format("%.2f", stats.totalPnl),
-                    String.format("%.0f", profile.confidenceScore));
+                    ticker, stats.totalTrades, FMT_PCT_1D.format(stats.getWinRate() * 100),
+                    FMT_2D.format(stats.totalPnl),
+                    FMT_0D.format(profile.confidenceScore));
         }
 
         // Log loss categorization for learning
         if (!isWin && lossCategory != null) {
             log.debug("📝 [Memory] {} loss categorized as: {} (strategy: {}, PnL: ${})",
-                    ticker, lossCategory, strategy, String.format("%.2f", pnl));
+                    ticker, lossCategory, strategy, FMT_2D.format(pnl));
         }
 
-        save();
+        tradeCounter++;
+        if (tradeCounter % SAVE_INTERVAL == 0) {
+            save();
+        }
     }
 
     /**
@@ -191,8 +231,8 @@ public class TickerMemory {
         TickerStats stats = memory.get(ticker);
         if (stats != null && stats.totalTrades >= 15 && stats.getWinRate() < 0.20) {
             log.warn("🚫 [Memory] BLOCKED {} — {} trades, {}% win rate, PnL ${}",
-                    ticker, stats.totalTrades, String.format("%.1f", stats.getWinRate() * 100), 
-                    String.format("%.2f", stats.totalPnl));
+                    ticker, stats.totalTrades, FMT_PCT_1D.format(stats.getWinRate() * 100),
+                    FMT_2D.format(stats.totalPnl));
             return true;
         }
 
@@ -280,8 +320,10 @@ public class TickerMemory {
         // Aggregate stats
         sb.append("\n📊 AGGREGATE TICKER STATS\n");
         sb.append("-".repeat(100)).append("\n");
-        sb.append(String.format("%-8s %6s %8s %10s %10s %8s %12s %s%n",
-                "Ticker", "Trades", "Win%", "PnL", "PF", "Streak", "Multiplier", "Last Strategy"));
+        sb.append(padRight("Ticker", 8)).append(padRight("Trades", 6))
+          .append(padRight("Win%", 8)).append(padRight("PnL", 10))
+          .append(padRight("PF", 10)).append(padRight("Streak", 8))
+          .append(padRight("Multiplier", 12)).append("Last Strategy\n");
         sb.append("-".repeat(100)).append("\n");
 
         memory.entrySet().stream()
@@ -290,32 +332,40 @@ public class TickerMemory {
                     String ticker = entry.getKey();
                     TickerStats stats = entry.getValue();
                     String blocked = isBlocked(ticker) ? " 🚫" : "";
-                    sb.append(String.format("%-8s %6d %7.1f%% $%9.2f %9.2f %5d %12.2fx %s%s%n",
-                            ticker, stats.totalTrades, stats.getWinRate() * 100,
-                            stats.totalPnl, stats.getProfitFactor(), stats.currentStreak,
-                            getPositionSizeMultiplier(ticker),
-                            stats.lastStrategy != null ? stats.lastStrategy : "N/A",
-                            blocked));
+                    sb.append(padRight(ticker, 8))
+                      .append(padLeft(String.valueOf(stats.totalTrades), 6))
+                      .append(padRight(fmt1(stats.getWinRate() * 100) + "%", 8))
+                      .append(" $").append(padLeft(fmt2(stats.totalPnl), 9))
+                      .append(" ").append(padLeft(fmt2(stats.getProfitFactor()), 9))
+                      .append(" ").append(padLeft(String.valueOf(stats.currentStreak), 5))
+                      .append(" ").append(padLeft(fmt2(getPositionSizeMultiplier(ticker)) + "x", 12))
+                      .append(stats.lastStrategy != null ? stats.lastStrategy : "N/A")
+                      .append(blocked).append("\n");
                 });
 
         // Strategy profiles
         if (!strategyProfiles.isEmpty()) {
             sb.append("\n🎯 STRATEGY PROFILES (Learned Adjustments)\n");
             sb.append("-".repeat(100)).append("\n");
-            sb.append(String.format("%-15s %-20s %6s %8s %10s %10s %8s %s%n",
-                    "Ticker", "Strategy", "Trades", "Win%", "PnL", "Confidence", "Size Mult", "Top Loss"));
+            sb.append(padRight("Ticker", 15)).append(padRight("Strategy", 20))
+              .append(padRight("Trades", 6)).append(padRight("Win%", 8))
+              .append(padRight("PnL", 10)).append(padRight("Confidence", 10))
+              .append(padRight("Size Mult", 8)).append("Top Loss\n");
             sb.append("-".repeat(100)).append("\n");
 
             strategyProfiles.values().stream()
                     .filter(p -> p.totalTrades > 0)
                     .sorted((a, b) -> Double.compare(b.confidenceScore, a.confidenceScore))
                     .forEach(profile -> {
-                        sb.append(String.format("%-15s %-20s %6d %7.1f%% $%9.2f %8.0f%% %8.2fx %s%n",
-                                profile.ticker, profile.strategy, profile.totalTrades,
-                                profile.getWinRate() * 100, profile.totalPnl,
-                                profile.confidenceScore, profile.getPositionSizeMultiplier(),
-                                profile.getTopLossCategory()));
-                        
+                        sb.append(padRight(profile.ticker, 15))
+                          .append(padRight(profile.strategy, 20))
+                          .append(padLeft(String.valueOf(profile.totalTrades), 6))
+                          .append(padRight(fmt1(profile.getWinRate() * 100) + "%", 8))
+                          .append(" $").append(padLeft(fmt2(profile.totalPnl), 9))
+                          .append(" ").append(padLeft(fmt0(profile.confidenceScore) + "%", 10))
+                          .append(" ").append(padLeft(fmt2(profile.getPositionSizeMultiplier()) + "x", 8))
+                          .append(profile.getTopLossCategory()).append("\n");
+
                         // Show pattern performance if available
                         if (!profile.patternPerformance.isEmpty()) {
                             sb.append("  Patterns: ");
@@ -324,8 +374,9 @@ public class TickerMemory {
                                     .forEach(ps -> {
                                         String status = profile.enabledPatterns.contains(ps.pattern) ? "✅" :
                                                        profile.disabledPatterns.contains(ps.pattern) ? "❌" : "⏳";
-                                        sb.append(String.format("%s %s (%.0f%%, %d trades), ",
-                                                status, ps.pattern, ps.getWinRate() * 100, ps.totalTrades));
+                                        sb.append(status).append(" ").append(ps.pattern)
+                                          .append(" (").append(fmt0(ps.getWinRate() * 100)).append("%, ")
+                                          .append(ps.totalTrades).append(" trades), ");
                                     });
                             sb.append("\n");
                         }
@@ -336,15 +387,19 @@ public class TickerMemory {
         sb.append("\n📝 LOSS CATEGORIZATION SUMMARY\n");
         sb.append("-".repeat(100)).append("\n");
         Map<String, Integer> totalLosses = new HashMap<>();
-        strategyProfiles.values().forEach(p -> 
+        strategyProfiles.values().forEach(p ->
             p.lossCategories.forEach((cat, count) -> totalLosses.merge(cat, count, Integer::sum))
         );
+        int totalLossCount = totalLosses.values().stream().mapToInt(Integer::intValue).sum();
+        final int finalTotalLossCount = totalLossCount;
         totalLosses.entrySet().stream()
                 .sorted((a, b) -> Integer.compare(b.getValue(), a.getValue()))
-                .forEach(e -> sb.append(String.format("  %-20s: %d losses (%.1f%%)%n",
-                        e.getKey(), e.getValue(), 
-                        totalLosses.values().stream().mapToInt(Integer::intValue).sum() > 0 ?
-                                (double) e.getValue() / totalLosses.values().stream().mapToInt(Integer::intValue).sum() * 100 : 0)));
+                .forEach(e -> {
+                    double pct = finalTotalLossCount > 0 ? (double) e.getValue() / finalTotalLossCount * 100 : 0;
+                    sb.append("  ").append(padRight(e.getKey(), 20))
+                      .append(": ").append(e.getValue()).append(" losses (")
+                      .append(fmt1(pct)).append("%)\n");
+                });
 
         return sb.toString();
     }
@@ -367,6 +422,18 @@ public class TickerMemory {
         strategyProfiles.clear();
         save();
         log.info("🧹 [Memory] Reset all ticker memory");
+    }
+
+    /**
+     * Flushes any remaining unsaved trades to disk.
+     * Should be called at the end of backtests/learning loops to ensure
+     * all trades are persisted even if the total count isn't a multiple of SAVE_INTERVAL.
+     */
+    public void flush() {
+        if (tradeCounter % SAVE_INTERVAL != 0) {
+            save();
+        }
+        tradeCounter = 0;
     }
 
     // ===== Persistence =====
@@ -572,8 +639,7 @@ public class TickerMemory {
 
         @Override
         public String toString() {
-            return String.format("%s: %d trades, %.1f%% WR, PF=%.2f, PnL=$%.2f, streak=%d",
-                    ticker, totalTrades, getWinRate() * 100, getProfitFactor(), totalPnl, currentStreak);
+            return ticker + ": " + totalTrades + " trades, " + fmt1(getWinRate() * 100) + "% WR, PF=" + fmt2(getProfitFactor()) + ", PnL=$" + fmt2(totalPnl) + ", streak=" + currentStreak;
         }
     }
 }

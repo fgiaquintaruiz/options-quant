@@ -142,16 +142,15 @@ public class TradingLearningAnalyzer {
     /**
      * Analyzes ticker+strategy combinations to find winners/losers.
      */
-    private Map<String, TickerStrategyAnalysis> analyzeTickerStrategyCombos(List<TradeRecord> trades) {
-        Map<String, List<TradeRecord>> byTickerStrategy = trades.stream()
-                .collect(Collectors.groupingBy(t -> t.ticker() + "::" + t.strategy()));
+    private Map<TickerStrategyKey, TickerStrategyAnalysis> analyzeTickerStrategyCombos(List<TradeRecord> trades) {
+        Map<TickerStrategyKey, List<TradeRecord>> byTickerStrategy = trades.stream()
+                .collect(Collectors.groupingBy(t -> new TickerStrategyKey(t.ticker(), t.strategy())));
 
-        Map<String, TickerStrategyAnalysis> result = new HashMap<>();
+        Map<TickerStrategyKey, TickerStrategyAnalysis> result = new HashMap<>();
 
         byTickerStrategy.forEach((key, comboTrades) -> {
-            String[] parts = key.split("::");
-            String ticker = parts[0];
-            String strategy = parts[1];
+            String ticker = key.ticker();
+            String strategy = key.strategy();
 
             long wins = comboTrades.stream().filter(TradeRecord::isWin).count();
             double winRate = (double) wins / comboTrades.size();
@@ -163,7 +162,7 @@ public class TradingLearningAnalyzer {
             Map<String, Long> patternCounts = comboTrades.stream()
                     .collect(Collectors.groupingBy(TradeRecord::candlestickPattern, Collectors.counting()));
             Map<String, Double> patternPnl = comboTrades.stream()
-                    .collect(Collectors.groupingBy(TradeRecord::candlestickPattern, 
+                    .collect(Collectors.groupingBy(TradeRecord::candlestickPattern,
                             Collectors.averagingDouble(TradeRecord::netPnl)));
 
             TickerStrategyAnalysis tsa = new TickerStrategyAnalysis();
@@ -204,8 +203,6 @@ public class TradingLearningAnalyzer {
         Map<String, Integer> categories = new HashMap<>();
         Map<String, List<TradeRecord>> losses = trades.stream()
                 .filter(t -> !t.isWin())
-                .collect(Collectors.toList())
-                .stream()
                 .collect(Collectors.groupingBy(t -> {
                     String lossCat = t.categorizeLoss();
                     return lossCat != null ? lossCat : "UNKNOWN";
@@ -439,6 +436,13 @@ public class TradingLearningAnalyzer {
         return sb.toString();
     }
 
+    // ===== Key Records =====
+
+    /**
+     * Composite key for ticker+strategy combinations (replaces string concatenation).
+     */
+    public record TickerStrategyKey(String ticker, String strategy) {}
+
     // ===== Analysis Result Records =====
 
     public static class LearningAnalysis {
@@ -448,7 +452,7 @@ public class TradingLearningAnalyzer {
         public double maxDrawdown;
         public Map<String, PatternEffectiveness> patternAnalysis;
         public TimeAnalysisResult timeAnalysis;
-        public Map<String, TickerStrategyAnalysis> tickerStrategyAnalysis;
+        public Map<TickerStrategyKey, TickerStrategyAnalysis> tickerStrategyAnalysis;
         public LossCategorizationResult lossCategorization;
         public List<String> recommendations;
         public List<String> autoAdjustments;
