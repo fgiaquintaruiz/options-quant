@@ -74,3 +74,30 @@ tasks.withType<JavaCompile> {
 tasks.bootJar {
     mainClass = "com.fgiaquinta.optionsquant.OptionsQuantApplication"
 }
+
+// ===== Frontend Build Tasks =====
+
+val npmInstall by tasks.registering(Exec::class) {
+    workingDir = file("frontend")
+    commandLine = if (System.getProperty("os.name").lowercase().contains("win")) {
+        listOf("cmd", "/c", "npm", "install")
+    } else {
+        listOf("npm", "install")
+    }
+    // Only run if node_modules doesn't exist
+    onlyIf { !file("frontend/node_modules").exists() }
+}
+
+val buildFrontend by tasks.registering(Exec::class) {
+    workingDir = file("frontend")
+    commandLine = if (System.getProperty("os.name").lowercase().contains("win")) {
+        listOf("cmd", "/c", "npm", "run", "build")
+    } else {
+        listOf("npm", "run", "build")
+    }
+    dependsOn(npmInstall)
+}
+
+// Build frontend before processResources and bootRun
+tasks.processResources { dependsOn(buildFrontend) }
+tasks.bootRun { dependsOn(buildFrontend) }

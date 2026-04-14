@@ -7,8 +7,8 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': 'http://localhost:9090',
-      '/live-ui': { target: 'http://localhost:9090', bypass: () => null },
-      '/backtest-ui': { target: 'http://localhost:9090', bypass: () => null },
+      '/live-ui': 'http://localhost:9090',
+      '/backtest-ui': 'http://localhost:9090',
       '/actuator': 'http://localhost:9090'
     }
   },
