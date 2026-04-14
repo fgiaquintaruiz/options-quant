@@ -43,14 +43,12 @@ class HealthEndpointTest extends BasePlaywrightTest {
     }
 
     @Test
-    @DisplayName("Root path or unknown returns 404 or error page")
+    @DisplayName("Unknown path does not return health data")
     void unknownPathReturns404() throws Exception {
         String json = getJson("/nonexistent");
-        // Spring Boot may return 200 with error page HTML
-        // Just verify it's not a valid API response
-        assertNotNull(json);
-        // It should not be a valid JSON API response
-        assertFalse(json.contains("\"status\":\"UP\"") && json.contains("\"groups\""),
-            "Unknown path should not return health data");
+        // Spring Boot returns an HTML error page for unknown paths
+        // Just verify it's not the health endpoint response
+        assertFalse(json.contains("\"groups\":") && json.contains("\"liveness\""),
+            "Unknown path should not return health groups");
     }
 }

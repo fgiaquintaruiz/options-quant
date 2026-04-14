@@ -77,7 +77,7 @@ public class LiveModeController {
 
         // Add scanner progress info
         status.put("scannerScanned", scannerService.getScannedCount());
-        status.put("scannerTicker", scannerService.getScanningTicker());
+        status.put("scannerBatchLabel", scannerService.getCurrentBatchLabel());
         status.put("scannerTotal", scannerService.getTotalToScan());
 
         ZonedDateTime nowSpain = ZonedDateTime.now(ZoneId.of("Europe/Madrid"));
@@ -396,14 +396,16 @@ public class LiveModeController {
         sb.append("document.getElementById('twsPort').textContent=d.port||'-';\n");
         sb.append("document.getElementById('twsAccount').textContent=d.accountId||'-';\n");
         sb.append("document.getElementById('twsRisk').textContent=d.riskPerTrade||'-';\n");
-        sb.append("document.getElementById('balance').textContent='$'+(d.balance||0).toLocaleString();\n");
+        sb.append("var bal=d.balance||0;\n");
+        sb.append("document.getElementById('balance').textContent=bal>0?'$'+bal.toLocaleString():'N/A (no TWS)';\n");
         sb.append("document.getElementById('activeTrades').textContent=d.activeTrades||0}catch(e){}}\n");
         sb.append("async function loadSignals(){try{var r=await fetch('/live-ui/signals');var d=await r.json();renderSignals(d)}catch(e){}}\n");
         sb.append("function updateUI(s){\n");
         sb.append("var statusText=s.isScanning?'Scanning':'Idle';\n");
         sb.append("if(s.stopScanRequested){statusText='Stopping...'}\n");
         sb.append("document.getElementById('scanStatus').textContent=statusText;\n");
-        sb.append("var curTicker=s.scannerTicker||s.currentTicker||'-';\n");
+        sb.append("var batchLabel=s.scannerBatchLabel||'';\n");
+        sb.append("var curTicker=s.scannerBatchLabel||s.currentTicker||'-';\n");
         sb.append("document.getElementById('currentTicker').textContent=curTicker;\n");
         sb.append("var scanned=s.scannerScanned||0;var total=s.scannerTotal||s.totalTickers||0;\n");
         sb.append("document.getElementById('scanProgress').textContent=scanned+'/'+total;\n");

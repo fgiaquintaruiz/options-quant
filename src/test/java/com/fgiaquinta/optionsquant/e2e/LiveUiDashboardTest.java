@@ -130,7 +130,7 @@ class LiveUiDashboardTest extends BasePlaywrightTest {
         assertTrue(json.contains("\"autoExecute\""));
         assertTrue(json.contains("\"marketHours\""));
         assertTrue(json.contains("\"scannerScanned\""));
-        assertTrue(json.contains("\"scannerTicker\""));
+        assertTrue(json.contains("\"scannerBatchLabel\""));
         assertTrue(json.contains("\"scannerTotal\""));
     }
 
