@@ -421,15 +421,17 @@ The following performance optimizations were identified but not all were fully i
 - Build and commit completed (commit 529c918)
 
 ### How to develop frontend
-```bash
-cd frontend && npm run dev    # Dev server with HMR (proxies API to :9090)
-npm run build                 # Build for production (outputs to build/resources/main/static)
-```
+**Option A: Production mode (recommended for testing)**
+Just run `OptionsQuantApplication` in IntelliJ. The frontend is automatically built before the server starts.
+- URL: http://localhost:9090/
+- Gradle task `buildFrontend` runs `npm run build` automatically
 
-### How to run the app
-```bash
-gradlew bootRun               # Serves React SPA + all API endpoints on port 9090
-```
+**Option B: Dev mode with HMR (hot reload)**
+1. Run `OptionsQuantApplication` in IntelliJ (port 9090)
+2. In a terminal: `cd frontend && npm run dev` (port 3000)
+3. Open http://localhost:3000 - API calls are proxied to :9090
+- Hot reload on code changes
+- API proxy forwards to Spring Boot backend
   1. **BasePlaywrightTest** - Base class with random port, Spring Boot lifecycle, Playwright browser management
   2. **HealthEndpointTest** (5 tests) - Health, liveness, readiness endpoints
   3. **LiveUiDashboardTest** (25 tests) - Page rendering, status API, scan API, signals, tickers, TWS status, JS functions
