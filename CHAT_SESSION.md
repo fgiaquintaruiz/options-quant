@@ -395,16 +395,35 @@ The following performance optimizations were identified but not all were fully i
 **Fix #16-20: Low impact fixes** (already done - DecimalFormat, DateTimeFormatter caching, AtomicReference, SPY cache, primitive boxing)
 
 ### Last Thing Done
-- **Fixed UI not updating during scan**: Added progress tracking to `StrategyScannerService`
-  - Added `scannedCount`, `scanningTicker`, `totalToScan` atomic counters
-  - Counters updated during parallelStream scan (each ticker updates `scanningTicker`, increments `scannedCount`)
-  - Exposed via `getScannedCount()`, `getScanningTicker()`, `getTotalToScan()` getters
-  - `LiveModeController.getStatus()` now includes `scannerScanned`, `scannerTicker`, `scannerTotal`
-  - JavaScript `updateUI()` now reads scanner progress and shows real-time ticker name and count
-  - Progress bar now updates: `scanned/total` with percentage width
-- Set extended hours toggle to ON by default (`AtomicBoolean(true)`)
-- Committed and pushed (commit 4252415, 63fe122)
-- **Note**: No Playwright or UI tests exist in the project
+- **Fixed balance display**: Auto-connect AccountManager at startup via `StartupInitializer`
+  - Balance now shows actual TWS balance instead of "N/A (no TWS)"
+- **Fixed scanner progress visibility**: 
+  - Progress shows "Hot tickers: X/14" then "Total: X/512" for clear visibility
+  - Reduced status polling from 2s to 500ms for smoother updates
+  - Shows "Scan complete" when done instead of empty string
+- Committed and pushed (commit d6e34e5)
+  1. **BasePlaywrightTest** - Base class with random port, Spring Boot lifecycle, Playwright browser management
+  2. **HealthEndpointTest** (5 tests) - Health, liveness, readiness endpoints
+  3. **LiveUiDashboardTest** (25 tests) - Page rendering, status API, scan API, signals, tickers, TWS status, JS functions
+  4. **BacktestUiDashboardTest** (19 tests) - Page rendering, run/stop/checkpoint APIs, JS functions
+  5. **LiveModeInteractionTest** (5 tests) - Scan start/stop, toggle interactions
+  6. **BacktestInteractionTest** (7 tests) - Backtest run/improve/retest/stop/checkpoint
+  7. **NavigationTest** (8 tests) - Cross-page navigation, mobile viewport, HTML structure
+  8. **UiStylingTest** (14 tests) - CSS styles, dark theme, responsive design, badges, toggles, progress bars
+- Added `com.microsoft.playwright:playwright:1.52.0` dependency
+- Tests use random available port to avoid conflicts
+- Chromium browser downloaded automatically on first run
+- Committed and pushed (commit 21f469d)
+
+### Files Added (Playwright Tests)
+1. `src/test/java/com/fgiaquinta/optionsquant/e2e/BasePlaywrightTest.java` - Infrastructure
+2. `src/test/java/com/fgiaquinta/optionsquant/e2e/HealthEndpointTest.java` - Health endpoint tests
+3. `src/test/java/com/fgiaquinta/optionsquant/e2e/LiveUiDashboardTest.java` - Live UI tests
+4. `src/test/java/com/fgiaquinta/optionsquant/e2e/BacktestUiDashboardTest.java` - Backtest UI tests
+5. `src/test/java/com/fgiaquinta/optionsquant/e2e/LiveModeInteractionTest.java` - Live mode interactions
+6. `src/test/java/com/fgiaquinta/optionsquant/e2e/BacktestInteractionTest.java` - Backtest interactions
+7. `src/test/java/com/fgiaquinta/optionsquant/e2e/NavigationTest.java` - Navigation tests
+8. `src/test/java/com/fgiaquinta/optionsquant/e2e/UiStylingTest.java` - CSS/styling tests
   1. **Health link**: `/health` → `/actuator/health` in nav bar
   2. **Extended hours toggle**: Fixed `getAndSet` returning old value — now returns correct new state
   3. **Ticker list**: Shows ALL tickers (was capped at 50 non-hot) with scrolling
