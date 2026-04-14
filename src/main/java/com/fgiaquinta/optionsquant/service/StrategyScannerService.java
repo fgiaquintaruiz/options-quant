@@ -22,6 +22,7 @@ import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 /**
@@ -32,6 +33,11 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 public class StrategyScannerService {
+
+    // Progress tracking for UI
+    private final AtomicInteger scannedCount = new AtomicInteger(0);
+    private final AtomicReference<String> scanningTicker = new AtomicReference<>("");
+    private final AtomicInteger totalToScan = new AtomicInteger(0);
 
     private final CandleCsvService csvService;
     private final IbkrService ibkrService;
@@ -171,6 +177,11 @@ public class StrategyScannerService {
         long startTime = System.currentTimeMillis();
         List<Signal> allSignals = new ArrayList<>();
 
+        // Reset progress counters
+        scannedCount.set(0);
+        scanningTicker.set("");
+        totalToScan.set(allTickers.size());
+
         // SCAN HOT TICKERS FIRST (parallelized for performance)
         if (!hotTickersToScan.isEmpty()) {
             if (deterministicMode) {
@@ -181,10 +192,13 @@ public class StrategyScannerService {
             List<List<Signal>> hotResults = hotTickersToScan.parallelStream()
                 .map(ticker -> {
                     try {
+                        scanningTicker.set(ticker);
                         return scanTicker(ticker, includeTradePlans, autoRefreshData && !deterministicMode);
                     } catch (Exception e) {
                         log.error("Error scanning hot ticker {}: {}", ticker, e.getMessage());
                         return Collections.<Signal>emptyList();
+                    } finally {
+                        scannedCount.incrementAndGet();
                     }
                 })
                 .collect(Collectors.toList());
@@ -206,15 +220,21 @@ public class StrategyScannerService {
             List<List<Signal>> remainingResults = remainingTickers.parallelStream()
                 .map(ticker -> {
                     try {
+                        scanningTicker.set(ticker);
                         return scanTicker(ticker, includeTradePlans, autoRefreshData && !deterministicMode);
                     } catch (Exception e) {
                         log.error("Error scanning ticker {}: {}", ticker, e.getMessage());
                         return Collections.<Signal>emptyList();
+                    } finally {
+                        scannedCount.incrementAndGet();
                     }
                 })
                 .collect(Collectors.toList());
             remainingResults.forEach(allSignals::addAll);
         }
+
+        // Clear progress when done
+        scanningTicker.set("");
 
         long elapsed = System.currentTimeMillis() - startTime;
         log.info("<<< Scan complete: {} signals found across {} tickers in {}ms",
@@ -562,6 +582,13 @@ public class StrategyScannerService {
     }
 
     // ---- Response Records ----
+
+    /** Returns how many tickers have been scanned so far in the current scan */
+    public int getScannedCount() { return scannedCount.get(); }
+    /** Returns the ticker currently being scanned (empty if not scanning) */
+    public String getScanningTicker() { return scanningTicker.get(); }
+    /** Returns total tickers to scan in current operation */
+    public int getTotalToScan() { return totalToScan.get(); }
 
     public record ScanResult(
             int totalSignals,

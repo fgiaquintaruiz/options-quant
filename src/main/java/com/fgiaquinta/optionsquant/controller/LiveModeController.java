@@ -75,6 +75,11 @@ public class LiveModeController {
         status.put("extendedHoursEnabled", extendedHoursEnabled.get());
         status.put("autoExecute", ibkrProperties.autoExecute());
 
+        // Add scanner progress info
+        status.put("scannerScanned", scannerService.getScannedCount());
+        status.put("scannerTicker", scannerService.getScanningTicker());
+        status.put("scannerTotal", scannerService.getTotalToScan());
+
         ZonedDateTime nowSpain = ZonedDateTime.now(ZoneId.of("Europe/Madrid"));
         int currentHour = nowSpain.getHour();
         boolean isMarketHours = currentHour >= 10 && currentHour < 22 && nowSpain.getDayOfWeek().getValue() <= 5;
@@ -398,9 +403,11 @@ public class LiveModeController {
         sb.append("var statusText=s.isScanning?'Scanning':'Idle';\n");
         sb.append("if(s.stopScanRequested){statusText='Stopping...'}\n");
         sb.append("document.getElementById('scanStatus').textContent=statusText;\n");
-        sb.append("document.getElementById('currentTicker').textContent=s.currentTicker||'-';\n");
-        sb.append("document.getElementById('scanProgress').textContent=s.currentTickerIndex+'/'+s.totalTickers;\n");
-        sb.append("document.getElementById('progressBar').style.width=(s.totalTickers>0?(s.currentTickerIndex/s.totalTickers*100):0)+'%';\n");
+        sb.append("var curTicker=s.scannerTicker||s.currentTicker||'-';\n");
+        sb.append("document.getElementById('currentTicker').textContent=curTicker;\n");
+        sb.append("var scanned=s.scannerScanned||0;var total=s.scannerTotal||s.totalTickers||0;\n");
+        sb.append("document.getElementById('scanProgress').textContent=scanned+'/'+total;\n");
+        sb.append("document.getElementById('progressBar').style.width=(total>0?(scanned/total*100):0)+'%';\n");
         sb.append("document.getElementById('signalsToday').textContent=s.signalsToday||0;\n");
         sb.append("document.getElementById('autoExecStatus').textContent=s.autoExecute?'ON':'OFF';\n");
         sb.append("document.getElementById('autoExecToggle').classList.toggle('active',s.autoExecute);\n");
@@ -421,9 +428,9 @@ public class LiveModeController {
         sb.append("function renderSignals(d){\n");
         sb.append("var body=document.getElementById('signalsBody');var signals=d.signals||[];var count=d.count||0;\n");
         sb.append("var statusEl=document.getElementById('scanStatus');var isScanning=statusEl&&statusEl.textContent==='Scanning';\n");
-        sb.append("var tickerEl=document.getElementById('currentTicker');var curTicker=tickerEl?tickerEl.textContent:'-';\n");
+        sb.append("var curTicker=document.getElementById('currentTicker');var tickerText=curTicker?curTicker.textContent:'-';\n");
         sb.append("if(count===0&&!isScanning){body.innerHTML='<tr><td colspan=\\'9\\' style=\\'text-align:center;padding:20px;color:#8b949e\\'>No signals today. Scan completed with no matches.</td></tr>'}\n");
-        sb.append("else if(count===0&&isScanning){body.innerHTML='<tr><td colspan=\\'9\\' style=\\'text-align:center;padding:20px;color:#58a6ff\\'>Scanning: '+curTicker+'</td></tr>'}\n");
+        sb.append("else if(count===0&&isScanning){body.innerHTML='<tr><td colspan=\\'9\\' style=\\'text-align:center;padding:20px;color:#58a6ff\\'>Scanning: '+tickerText+'</td></tr>'}\n");
         sb.append("else if(count>0){var h='';signals.forEach(function(s){\n");
         sb.append("var time=s.timestamp?s.timestamp.substring(11,16):'-';\n");
         sb.append("var tp=s.tradePlan&&s.tradePlan.takeProfit?s.tradePlan.takeProfit:'-';\n");

@@ -395,8 +395,16 @@ The following performance optimizations were identified but not all were fully i
 **Fix #16-20: Low impact fixes** (already done - DecimalFormat, DateTimeFormatter caching, AtomicReference, SPY cache, primitive boxing)
 
 ### Last Thing Done
-- Set extended hours toggle to ON by default (`AtomicBoolean(true)` instead of `false`)
-- Committed and pushed (commit 4252415)
+- **Fixed UI not updating during scan**: Added progress tracking to `StrategyScannerService`
+  - Added `scannedCount`, `scanningTicker`, `totalToScan` atomic counters
+  - Counters updated during parallelStream scan (each ticker updates `scanningTicker`, increments `scannedCount`)
+  - Exposed via `getScannedCount()`, `getScanningTicker()`, `getTotalToScan()` getters
+  - `LiveModeController.getStatus()` now includes `scannerScanned`, `scannerTicker`, `scannerTotal`
+  - JavaScript `updateUI()` now reads scanner progress and shows real-time ticker name and count
+  - Progress bar now updates: `scanned/total` with percentage width
+- Set extended hours toggle to ON by default (`AtomicBoolean(true)`)
+- Committed and pushed (commit 4252415, 63fe122)
+- **Note**: No Playwright or UI tests exist in the project
   1. **Health link**: `/health` → `/actuator/health` in nav bar
   2. **Extended hours toggle**: Fixed `getAndSet` returning old value — now returns correct new state
   3. **Ticker list**: Shows ALL tickers (was capped at 50 non-hot) with scrolling
