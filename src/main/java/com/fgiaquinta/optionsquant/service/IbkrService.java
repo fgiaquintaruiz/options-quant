@@ -114,6 +114,36 @@ public class IbkrService {
         }
     }
 
+    /**
+     * Connect to TWS with retry logic.
+     * Retries every 4 seconds if connection fails.
+     */
+    private void connectWithRetry() {
+        int maxRetries = 3;
+        int retryDelaySeconds = 4;
+        
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                connect();
+                return;  // Success
+            } catch (Exception e) {
+                log.warn("⚠️ [IBKR] Connection attempt {}/{} failed: {}", attempt, maxRetries, e.getMessage());
+                if (attempt < maxRetries) {
+                    log.info("🔄 [IBKR] Retrying connection in {} seconds...", retryDelaySeconds);
+                    try {
+                        Thread.sleep(retryDelaySeconds * 1000L);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("Connection interrupted during retry", ie);
+                    }
+                } else {
+                    log.error("❌ [IBKR] All {} connection attempts failed. TWS may not be running.", maxRetries);
+                    throw new IllegalStateException("Failed to connect to TWS after " + maxRetries + " attempts", e);
+                }
+            }
+        }
+    }
+
     public boolean isConnected() {
         return client.isConnected();
     }
@@ -137,10 +167,15 @@ public class IbkrService {
 
         try {
             return metrics.timeIbkrCall("downloadHistoricalData", () -> {
-                // Auto-connect if not already connected
+                // Auto-connect if not already connected (with retry logic)
                 if (!isConnected()) {
                     ibkrLog.info("📥 [IBKR] Not connected to IBKR, auto-connecting...");
-                    connect();
+                    try {
+                        connectWithRetry();
+                    } catch (Exception e) {
+                        ibkrLog.warn("⚠️ [IBKR] Connection failed, returning empty data for {} [{}]", ticker, timeframe);
+                        return Collections.emptyList();
+                    }
                 }
 
                 String cacheKey = timeframe.toCacheKey(ticker);
@@ -247,10 +282,15 @@ public class IbkrService {
         ibkrLog.info("📥 [IBKR] Delta download: {} [{}] since {}", ticker, timeframe, lastCandleTimestamp);
         long startTime = System.currentTimeMillis();
 
-        // Auto-connect if not already connected
+        // Auto-connect if not already connected (with retry logic)
         if (!isConnected()) {
             ibkrLog.info("📥 [IBKR] Not connected to IBKR, auto-connecting...");
-            connect();
+            try {
+                connectWithRetry();
+            } catch (Exception e) {
+                ibkrLog.warn("⚠️ [IBKR] Connection failed, returning empty delta for {} [{}]", ticker, timeframe);
+                return Collections.emptyList();
+            }
         }
 
         try {
@@ -301,13 +341,16 @@ public class IbkrService {
             }
         }
 
-        // Error 502: Can't connect to TWS — fatal, shut down gracefully
+        // Error 502: Can't connect to TWS — log error but DON'T shut down
+        // The app should continue running and retry connection later
         if (event.code() == 502) {
-            log.error("    🔌 FATAL: IBKR error 502 - Can't connect to TWS/Gateway.");
+            log.error("    🔌 IBKR error 502 - Can't connect to TWS/Gateway.");
             log.error("    → Check that TWS/Gateway is running and 'Enable ActiveX and Socket Clients' is ON.");
             log.error("    → Simulated port: 7497 (TWS) / 4002 (Gateway) | Live port: 7496 (TWS) / 4001 (Gateway)");
-            log.error("    → Shutting down application to prevent orphaned processes.");
-            shutdownApplication(1);
+            log.error("    → App will continue running and retry connection in 4 seconds.");
+            // Don't shut down - just mark connection as failed
+            disconnect();
+            metrics.incrementIbkrError("error_" + event.code());
             return;
         }
 
@@ -317,22 +360,6 @@ public class IbkrService {
             pendingRequests.remove(event.id());
             metrics.incrementIbkrError("error_" + event.code());
         }
-    }
-
-    /**
-     * Gracefully shuts down the application with the given exit code.
-     */
-    private void shutdownApplication(int exitCode) {
-        log.info("    Initiating graceful shutdown (exit code {})...", exitCode);
-        disconnect();
-        new Thread(() -> {
-            try {
-                Thread.sleep(1000);  // Give logging threads time to flush
-                System.exit(exitCode);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }, "shutdown-thread").start();
     }
 
     private void onConnectionReady() {

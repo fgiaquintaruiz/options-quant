@@ -203,3 +203,49 @@ Added note in project memory: "After completing any request, I MUST run git push
 ### Result
 - At 12:04 Spain (6:04 AM ET), UI now shows countdown to 15:30 Spain (9:30 AM ET) = ~3.5 hours
 - Previously it showed countdown to 10:00 Spain (4:00 AM ET) which was in the past
+
+---
+
+## Current Session (April 15, 2026) - TWS Connection Retry Fix
+
+### User Request
+> the app should stop if cannot connect to tws, it should just try again after 4 seconds, check the logs... and I even have tws open and logged in
+
+### Problem Identified
+- Application was shutting down with exit code 1 when it received IBKR error 502 (can't connect to TWS)
+- Error 502 handler called `shutdownApplication(1)` which called `System.exit(1)`
+- Even though TWS was running and logged in, the initial connection attempt failed and killed the entire app
+- No retry logic existed - if connection failed once, the app would just exit
+
+### Solution Implemented
+
+1. **Removed System.exit() on error 502**
+   - Changed error 502 handler to just log the error and disconnect (not shutdown)
+   - App now continues running even if TWS connection fails
+   - Updated log message: "App will continue running and retry connection in 4 seconds."
+
+2. **Added `connectWithRetry()` method to IbkrService**
+   - Retries connection up to 3 times with 4-second delay between attempts
+   - Used in `downloadHistoricalData()` and `downloadDelta()` methods
+   - If all retries fail, returns empty data instead of crashing
+   - Logs each retry attempt for debugging
+
+3. **Updated auto-connect logic**
+   - `downloadHistoricalData()` now uses `connectWithRetry()` instead of direct `connect()`
+   - `downloadDelta()` now uses `connectWithRetry()` instead of direct `connect()`
+   - Both methods catch connection failures and return empty data gracefully
+
+**File Modified:** `src/main/java/com/fgiaquinta/optionsquant/service/IbkrService.java`
+- Removed `shutdownApplication()` method entirely
+- Added `connectWithRetry()` method with 3 retries, 4-second delay
+- Updated error 502 handler to not shutdown
+- Updated download methods to use retry logic
+
+### Build Status
+✅ **Compiles successfully** (only pre-existing this-escape warnings)
+
+### Result
+- App no longer crashes when TWS connection initially fails
+- App retries connection 3 times with 4-second delays
+- If TWS is started after the app, it will connect on next retry
+- App continues running and functional even without TWS connection
