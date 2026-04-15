@@ -92,6 +92,14 @@ public class IbkrService {
                 metrics.incrementIbkrError("connection_timeout");
                 throw new IllegalStateException("Connection timeout after " + properties.syncTimeout() + " seconds");
             }
+            
+            // Verify connection is actually established (not failed with error 502)
+            if (!client.isConnected()) {
+                log.error("<<< connect() - Connection failed (TWS not available)");
+                metrics.incrementIbkrError("connection_failed");
+                throw new IllegalStateException("Failed to connect to TWS at " + properties.host() + ":" + properties.port());
+            }
+            
             long elapsed = System.currentTimeMillis() - startTime;
             log.info("<<< connect() - Successfully connected in {}ms", elapsed);
         } catch (InterruptedException e) {
@@ -350,6 +358,8 @@ public class IbkrService {
             log.error("    → App will continue running and retry connection in 4 seconds.");
             // Don't shut down - just mark connection as failed
             disconnect();
+            // Signal the connectionLatch to unblock any waiting connect() call
+            connectionLatch.countDown();
             metrics.incrementIbkrError("error_" + event.code());
             return;
         }
