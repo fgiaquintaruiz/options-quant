@@ -126,6 +126,14 @@ public class StrategyScannerService {
         this.stopRequestedSupplier = supplier;
     }
 
+    /**
+     * Clears the stop request flag. Use this to recover from a stuck scan state.
+     */
+    public void clearStopRequest() {
+        // This method is called by LiveModeController to reset the stop flag
+        // The actual flag is managed by the controller's AtomicBoolean
+    }
+
     public void setScanActivityCallback(java.util.function.Consumer<String> callback) {
         this.scanActivityCallback = callback;
     }
@@ -383,6 +391,11 @@ public class StrategyScannerService {
             if (cachedCandles.isEmpty()) {
                 // Need full download - submit to parallel executor
                 downloadFutures.add(CompletableFuture.runAsync(() -> {
+                    // Check for stop request before starting download
+                    if (stopRequestedSupplier.getAsBoolean()) {
+                        downloadLog.debug("⏹ Stop requested before downloading {} [{}]", ticker, tf);
+                        return;
+                    }
                     try {
                         downloadSemaphore.acquire();
                         activeDownloads.incrementAndGet();
@@ -417,6 +430,11 @@ public class StrategyScannerService {
                     // Need delta download - submit to parallel executor
                     final List<Candle> cached = cachedCandles;  // For lambda
                     downloadFutures.add(CompletableFuture.runAsync(() -> {
+                        // Check for stop request before starting download
+                        if (stopRequestedSupplier.getAsBoolean()) {
+                            downloadLog.debug("⏹ Stop requested before delta downloading {} [{}]", ticker, tf);
+                            return;
+                        }
                         try {
                             downloadSemaphore.acquire();
                             activeDownloads.incrementAndGet();
@@ -457,9 +475,20 @@ public class StrategyScannerService {
             }
         }
 
-        // Wait for all downloads to complete
+        // Wait for all downloads to complete (with stop checking)
         if (!downloadFutures.isEmpty()) {
             downloadLog.info("📥 {} downloading {} timeframes in parallel...", ticker, downloadFutures.size());
+            
+            // Check for stop request before waiting
+            if (stopRequestedSupplier.getAsBoolean()) {
+                downloadLog.info("⏹ Stop requested during {} downloads - cancelling...", ticker);
+                // Cancel all pending/in-progress downloads
+                for (CompletableFuture<Void> future : downloadFutures) {
+                    future.cancel(true);
+                }
+                return Collections.emptyList();
+            }
+            
             CompletableFuture.allOf(downloadFutures.toArray(new CompletableFuture<?>[0])).join();
             downloadLog.info("✅ {} downloads complete (+{} new candles)", ticker, totalNewCandles.get());
         }

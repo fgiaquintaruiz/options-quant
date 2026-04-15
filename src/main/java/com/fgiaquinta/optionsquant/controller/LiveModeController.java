@@ -269,6 +269,41 @@ public class LiveModeController {
         return ResponseEntity.ok(result);
     }
 
+    /**
+     * Force-stops any ongoing scan and resets all scanning state.
+     * Use this when the app is in an inconsistent state (e.g., after restart).
+     */
+    @PostMapping("/force-stop")
+    public ResponseEntity<Map<String, Object>> forceStop() {
+        boolean wasScanning = isScanning.get();
+        
+        // Set stop flag to interrupt any in-progress scanner operations
+        stopScanRequested.set(true);
+        
+        // Interrupt scan thread if running
+        if (scanThread != null && scanThread.isAlive()) {
+            scanThread.interrupt();
+            log.info("Force-stopped scan thread (was scanning: {})", wasScanning);
+        }
+        
+        // Reset all scanning state
+        isScanning.set(false);
+        stopScanRequested.set(false);
+        currentTicker.set("");
+        currentTickerIndex.set(0);
+        totalTickers.set(0);
+        scanActivity.clear();
+        
+        // Also reset scanner service state
+        scannerService.clearStopRequest();
+        
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", wasScanning ? "Force-stopped ongoing scan and reset state" : "Scanning state reset (no scan was running)");
+        result.put("wasScanning", wasScanning);
+        return ResponseEntity.ok(result);
+    }
+
     @PostMapping("/set-max-concurrent")
     public ResponseEntity<Map<String, Object>> setMaxConcurrent(@RequestParam int count) {
         if (count < 1 || count > 16) {
