@@ -8,3 +8,94 @@
 2026-04-15 07:27:27.120 INFO  [Ticker-Scanner] DataDownload : ✅ HOLX downloads complete (+0 new candles)
 2026-04-15 07:27:31.609 INFO  [Ticker-Scanner] DataDownload : 📥 METP downloading 4 timeframes in parallel...
 2026-04-15 07:27:32.359 INFO  [Ticker-Scanner] DataDownload : ✅ METP downloads complete (+0 new candles)
+2026-04-15 11:31:05.257 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AAPL [MIN_5]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:31:05.268 INFO  [Ticker-Scanner] DataDownload : 📥 AAPL downloading 4 timeframes in parallel...
+2026-04-15 11:31:05.271 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AAPL [MIN_15]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:31:05.287 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AAPL [HOUR_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:31:05.297 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AAPL [DAY_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:31:05.298 INFO  [Ticker-Scanner] DataDownload : ✅ AAPL downloads complete (+0 new candles)
+2026-04-15 11:31:05.431 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMD [MIN_5]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:31:05.451 INFO  [Ticker-Scanner] DataDownload : 📥 AMD downloading 4 timeframes in parallel...
+2026-04-15 11:31:05.451 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMD [MIN_15]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:31:05.466 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMD [HOUR_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:31:05.480 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMD [DAY_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:31:05.480 INFO  [Ticker-Scanner] DataDownload : ✅ AMD downloads complete (+0 new candles)
+2026-04-15 11:31:05.547 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMZN [MIN_5]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:31:05.564 INFO  [Ticker-Scanner] DataDownload : 📥 AMZN downloading 4 timeframes in parallel...
+2026-04-15 11:31:05.564 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMZN [MIN_15]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:31:05.584 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMZN [HOUR_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:31:05.595 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMZN [DAY_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:31:05.595 INFO  [Ticker-Scanner] DataDownload : ✅ AMZN downloads complete (+0 new candles)
+2026-04-15 11:31:05.634 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download GOOGL [MIN_5]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:31:05.647 INFO  [Ticker-Scanner] DataDownload : 📥 GOOGL downloading 4 timeframes in parallel...
+2026-04-15 11:31:05.653 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download GOOGL [MIN_15]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:31:05.671 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download GOOGL [DAY_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:31:05.689 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download GOOGL [HOUR_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:31:05.773 INFO  [Ticker-Scanner] DataDownload : ✅ GOOGL downloads complete (+0 new candles)
+2026-04-15 11:31:05.846 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download JNJ [MIN_15]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:31:05.846 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download JNJ [MIN_5]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:31:05.846 INFO  [Ticker-Scanner] DataDownload : 📥 JNJ downloading 4 timeframes in parallel...
+2026-04-15 11:31:05.865 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download JNJ [HOUR_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:31:05.877 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download JNJ [DAY_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:31:06.169 INFO  [Ticker-Scanner] DataDownload : ✅ JNJ downloads complete (+0 new candles)
+2026-04-15 11:31:06.287 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download JPM [MIN_5]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:05.309 INFO  [Ticker-Scanner] DataDownload : 📥 AAPL downloading 4 timeframes in parallel...
+2026-04-15 11:44:05.311 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AAPL [MIN_5]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:05.318 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AAPL [MIN_15]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:05.324 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AAPL [DAY_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:05.331 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AAPL [HOUR_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:05.331 INFO  [Ticker-Scanner] DataDownload : ✅ AAPL downloads complete (+0 new candles)
+2026-04-15 11:44:05.379 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMD [MIN_5]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:05.381 INFO  [Ticker-Scanner] DataDownload : 📥 AMD downloading 4 timeframes in parallel...
+2026-04-15 11:44:05.386 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMD [MIN_15]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:05.392 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMD [HOUR_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:05.399 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMD [DAY_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:05.429 INFO  [Ticker-Scanner] DataDownload : ✅ AMD downloads complete (+0 new candles)
+2026-04-15 11:44:05.447 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMZN [MIN_5]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:05.448 INFO  [Ticker-Scanner] DataDownload : 📥 AMZN downloading 4 timeframes in parallel...
+2026-04-15 11:44:05.455 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMZN [MIN_15]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:05.461 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMZN [HOUR_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:05.470 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMZN [DAY_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:05.829 INFO  [Ticker-Scanner] DataDownload : ✅ AMZN downloads complete (+0 new candles)
+2026-04-15 11:44:05.863 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download GOOGL [MIN_5]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:05.868 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download GOOGL [MIN_15]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:05.871 INFO  [Ticker-Scanner] DataDownload : 📥 GOOGL downloading 4 timeframes in parallel...
+2026-04-15 11:44:05.875 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download GOOGL [HOUR_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:05.883 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download GOOGL [DAY_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:06.229 INFO  [Ticker-Scanner] DataDownload : ✅ GOOGL downloads complete (+0 new candles)
+2026-04-15 11:44:06.252 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download JNJ [MIN_5]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:06.256 INFO  [Ticker-Scanner] DataDownload : 📥 JNJ downloading 4 timeframes in parallel...
+2026-04-15 11:44:06.258 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download JNJ [MIN_15]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:06.264 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download JNJ [HOUR_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:06.271 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download JNJ [DAY_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:06.629 INFO  [Ticker-Scanner] DataDownload : ✅ JNJ downloads complete (+0 new candles)
+2026-04-15 11:44:40.612 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AAPL [MIN_5]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:40.612 INFO  [Ticker-Scanner] DataDownload : 📥 AAPL downloading 4 timeframes in parallel...
+2026-04-15 11:44:40.619 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AAPL [HOUR_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:40.626 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AAPL [MIN_15]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:40.636 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AAPL [DAY_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:40.636 INFO  [Ticker-Scanner] DataDownload : ✅ AAPL downloads complete (+0 new candles)
+2026-04-15 11:44:40.696 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMD [MIN_5]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:40.699 INFO  [Ticker-Scanner] DataDownload : 📥 AMD downloading 4 timeframes in parallel...
+2026-04-15 11:44:40.705 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMD [HOUR_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:40.714 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMD [MIN_15]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:40.722 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMD [DAY_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:40.722 INFO  [Ticker-Scanner] DataDownload : ✅ AMD downloads complete (+0 new candles)
+2026-04-15 11:44:40.750 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMZN [MIN_5]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:40.753 INFO  [Ticker-Scanner] DataDownload : 📥 AMZN downloading 4 timeframes in parallel...
+2026-04-15 11:44:40.758 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMZN [MIN_15]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:40.766 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMZN [HOUR_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:40.773 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download AMZN [DAY_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:41.062 INFO  [Ticker-Scanner] DataDownload : ✅ AMZN downloads complete (+0 new candles)
+2026-04-15 11:44:41.092 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download GOOGL [MIN_5]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:41.096 INFO  [Ticker-Scanner] DataDownload : 📥 GOOGL downloading 4 timeframes in parallel...
+2026-04-15 11:44:41.102 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download GOOGL [MIN_15]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:41.110 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download GOOGL [DAY_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:41.119 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download GOOGL [HOUR_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:41.463 INFO  [Ticker-Scanner] DataDownload : ✅ GOOGL downloads complete (+0 new candles)
+2026-04-15 11:44:41.487 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download JNJ [MIN_5]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:41.490 INFO  [Ticker-Scanner] DataDownload : 📥 JNJ downloading 4 timeframes in parallel...
+2026-04-15 11:44:41.496 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download JNJ [MIN_15]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:41.504 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download JNJ [HOUR_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:41.514 ERROR [IBKR-Downloader] DataDownload : ❌ Failed to download JNJ [DAY_1]: Failed to connect to TWS at 127.0.0.1:7497
+2026-04-15 11:44:41.863 INFO  [Ticker-Scanner] DataDownload : ✅ JNJ downloads complete (+0 new candles)

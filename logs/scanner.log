@@ -52,3 +52,27 @@
 2026-04-15 07:52:57.738 INFO  [main] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
 2026-04-15 07:52:59.345 INFO  [main] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
 2026-04-15 07:52:59.345 INFO  [main] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
+2026-04-15 11:31:04.159 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
+2026-04-15 11:31:04.159 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
+2026-04-15 11:31:04.159 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
+2026-04-15 11:31:04.159 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
+2026-04-15 11:31:04.159 INFO  [main] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
+2026-04-15 11:31:05.205 INFO  [main] c.optionsquant.service.MarketScanner : 🔄 Market hours detected - downloading fresh candle delta in background...
+2026-04-15 11:31:05.205 INFO  [main] c.optionsquant.service.MarketScanner :    This may take a few minutes for 512 tickers...
+2026-04-15 11:31:05.205 INFO  [main] c.optionsquant.service.MarketScanner :    App is ready; scan will complete in background.
+2026-04-15 11:44:04.789 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
+2026-04-15 11:44:04.789 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
+2026-04-15 11:44:04.789 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
+2026-04-15 11:44:04.789 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
+2026-04-15 11:44:04.789 INFO  [main] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
+2026-04-15 11:44:05.290 INFO  [main] c.optionsquant.service.MarketScanner : 🔄 Market hours detected - downloading fresh candle delta in background...
+2026-04-15 11:44:05.290 INFO  [main] c.optionsquant.service.MarketScanner :    This may take a few minutes for 512 tickers...
+2026-04-15 11:44:05.290 INFO  [main] c.optionsquant.service.MarketScanner :    App is ready; scan will complete in background.
+2026-04-15 11:44:40.034 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
+2026-04-15 11:44:40.034 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
+2026-04-15 11:44:40.034 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
+2026-04-15 11:44:40.034 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
+2026-04-15 11:44:40.035 INFO  [main] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
+2026-04-15 11:44:40.588 INFO  [main] c.optionsquant.service.MarketScanner : 🔄 Market hours detected - downloading fresh candle delta in background...
+2026-04-15 11:44:40.588 INFO  [main] c.optionsquant.service.MarketScanner :    This may take a few minutes for 512 tickers...
+2026-04-15 11:44:40.588 INFO  [main] c.optionsquant.service.MarketScanner :    App is ready; scan will complete in background.
