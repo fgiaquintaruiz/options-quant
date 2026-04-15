@@ -285,3 +285,46 @@ Added note in project memory: "After completing any request, I MUST run git push
 - Error 502 now unblocks `connect()` immediately (~1 second instead of 30 seconds)
 - Retry logic kicks in much faster (4-second delay instead of 34-second delay)
 - App connects to TWS much quicker when it's running but initial connection fails
+
+---
+
+## Current Session (April 15, 2026) - Scan State Recovery and Force Stop
+
+### User Request
+> now the ui is not able to keep a consistent state because I stopped the app in the middle of a scan but when I restarted it was not able to recover to go back to the correct state and also I clicked on stop scan but the scan is still ongoing
+
+### Problem Identified
+1. **Scanning state lost on restart** - `isScanning`, `stopScanRequested`, and `scanThread` are all in-memory (volatile) state, reset to defaults on app restart
+2. **Downloads ignore stop flag** - The `CompletableFuture.allOf().join()` waits for all downloads without checking `stopRequestedSupplier`, so even if user clicks "stop", downloads continue for 120s each (IBKR timeout)
+3. **No recovery mechanism** - No way to forcefully reset scanning state when app gets into inconsistent state
+
+### Solution Implemented
+
+1. **Added stop checking to download tasks in `StrategyScannerService`**
+   - Downloads now check `stopRequestedSupplier.getAsBoolean()` before starting each download
+   - If stop is requested before waiting for downloads to complete, all `CompletableFuture`s are cancelled
+   - Returns empty results immediately instead of waiting for downloads to finish
+   - Applied to both full downloads and delta downloads
+
+2. **Added `/force-stop` endpoint to `LiveModeController`**
+   - Sets `stopScanRequested = true` to interrupt any in-progress scanner operations
+   - Interrupts scan thread if running (`scanThread.interrupt()`)
+   - Resets all scanning state: `isScanning`, `stopScanRequested`, `currentTicker`, `currentTickerIndex`, `totalTickers`, `scanActivity`
+   - Can be called even when no scan is running to clean up stuck state
+   - Returns `wasScanning` flag to indicate if a scan was in progress
+
+3. **Added `clearStopRequest()` method to `StrategyScannerService`**
+   - Called by `/force-stop` to ensure scanner service stop flag is also reset
+
+**Files Modified:**
+- `src/main/java/com/fgiaquinta/optionsquant/service/StrategyScannerService.java` - Added stop checking in download tasks and before waiting for downloads
+- `src/main/java/com/fgiaquinta/optionsquant/controller/LiveModeController.java` - Added `/force-stop` endpoint
+
+### Build Status
+✅ **Compiles successfully** (only pre-existing this-escape warning in LiveModeController)
+
+### Result
+- User can call `POST /live-ui/force-stop` to recover from stuck scan state
+- Downloads now check stop flag before starting, reducing wait time from 120s to ~1s
+- All `CompletableFuture` downloads are cancelled when stop is requested
+- App can recover from inconsistent state after restart
