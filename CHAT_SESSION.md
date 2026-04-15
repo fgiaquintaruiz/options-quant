@@ -249,3 +249,39 @@ Added note in project memory: "After completing any request, I MUST run git push
 - App retries connection 3 times with 4-second delays
 - If TWS is started after the app, it will connect on next retry
 - App continues running and functional even without TWS connection
+
+---
+
+## Current Session (April 15, 2026) - Fast TWS Connection Retry Fix
+
+### User Request
+> now the app is not downloading the candles if it needs to and not analyzing the tickers
+
+### Problem Identified
+- When error 502 was received, the error handler called `disconnect()` but didn't signal the `connectionLatch`
+- The `connect()` method was still waiting on `connectionLatch.await(30, SECONDS)` - it didn't know the connection had failed
+- This caused a 30-second delay before the retry logic could kick in
+- Logs showed: Error 502 at 12:20:54, but retry didn't happen until 12:21:24 (30 seconds later!)
+
+### Solution Implemented
+
+1. **Error 502 handler now calls `connectionLatch.countDown()`**
+   - This unblocks the waiting `connect()` call immediately instead of waiting 30 seconds
+   - Retry logic now kicks in after ~1 second instead of 31 seconds
+
+2. **Added connection verification after latch in `connect()`**
+   - After `connectionLatch.await()` returns, checks `client.isConnected()`
+   - If client is not connected (because error 502 called `disconnect()`), throws exception immediately
+   - This prevents `connect()` from thinking the connection succeeded when it actually failed
+
+**File Modified:** `src/main/java/com/fgiaquinta/optionsquant/service/IbkrService.java`
+- Added `connectionLatch.countDown()` in error 502 handler
+- Added `if (!client.isConnected())` check after latch wait in `connect()`
+
+### Build Status
+✅ **Compiles successfully** (only pre-existing this-escape warnings)
+
+### Result
+- Error 502 now unblocks `connect()` immediately (~1 second instead of 30 seconds)
+- Retry logic kicks in much faster (4-second delay instead of 34-second delay)
+- App connects to TWS much quicker when it's running but initial connection fails
