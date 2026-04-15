@@ -169,3 +169,37 @@ Added note in project memory: "After completing any request, I MUST run git push
 ### Notes
 - TWS status updates every 10 seconds in the header
 - Badge is visible on all pages for immediate awareness
+
+---
+
+## Current Session (April 15, 2026) - Market Hours Countdown Fix
+
+### User Request
+> read the chat session md to get the persisnte memory and help fix the time until market opens showing in the ui right now we are at 12:04 in spain and the market should open at 15:30 since is not a bank holiday or weekend
+
+### Problem Identified
+- UI was showing countdown to pre-market open (4:00 AM ET = 10:00 AM Spain) instead of regular market open (9:30 AM ET = 3:30 PM Spain)
+- At 12:04 Spain time (6:04 AM ET), the countdown was incorrectly showing time until 10:00 AM Spain instead of 15:30 Spain
+- The `/live-ui/market-status` endpoint was using `getNextMarketOpen()` which returns pre-market open
+
+### Solution Implemented
+1. **Added `getNextRegularMarketOpen()` method to `MarketCalendarService`**
+   - Returns next 9:30 AM ET (regular market open) instead of 4:00 AM ET (pre-market)
+   - Properly handles weekends and holidays
+   - Returns today's 9:30 AM ET if we're before market open on a trading day
+   - Returns next trading day's 9:30 AM ET if we're during/after market hours or on holiday/weekend
+
+2. **Updated `/live-ui/market-status` endpoint in `LiveModeController`**
+   - Changed from `getNextMarketOpen()` to `getNextRegularMarketOpen()`
+   - Now shows countdown to 9:30 AM ET (15:30 Spain in EDT) instead of 4:00 AM ET (10:00 Spain)
+
+**Files Modified:**
+- `src/main/java/com/fgiaquinta/optionsquant/service/MarketCalendarService.java` - Added `getNextRegularMarketOpen()` method
+- `src/main/java/com/fgiaquinta/optionsquant/controller/LiveModeController.java` - Updated market status endpoint to use regular market open
+
+### Build Status
+✅ **Compiles successfully** (only pre-existing this-escape warning in LiveModeController)
+
+### Result
+- At 12:04 Spain (6:04 AM ET), UI now shows countdown to 15:30 Spain (9:30 AM ET) = ~3.5 hours
+- Previously it showed countdown to 10:00 Spain (4:00 AM ET) which was in the past

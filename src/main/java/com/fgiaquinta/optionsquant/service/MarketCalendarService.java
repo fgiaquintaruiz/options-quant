@@ -246,6 +246,41 @@ public class MarketCalendarService {
     }
 
     /**
+     * Returns the next REGULAR market open time from now (9:30 AM ET).
+     * This is used for UI countdown display when users want to know when
+     * regular trading hours begin (not pre-market).
+     */
+    public ZonedDateTime getNextRegularMarketOpen() {
+        ZonedDateTime now = ZonedDateTime.now(ET);
+        LocalDate today = now.toLocalDate();
+
+        // Check if today is a regular trading day
+        boolean isTradingDay = !MARKET_HOLIDAYS.contains(today) &&
+                now.getDayOfWeek().getValue() < 6;
+
+        if (isTradingDay) {
+            // If we're before regular market open today, return today's regular open
+            if (now.toLocalTime().isBefore(MARKET_OPEN)) {
+                return today.atTime(MARKET_OPEN).atZone(ET);
+            }
+            // If we're during regular hours or after, return next trading day
+            LocalDate nextTrading = findNextTradingDay(today);
+            if (nextTrading != null) {
+                return nextTrading.atTime(MARKET_OPEN).atZone(ET);
+            }
+        } else {
+            // Today is holiday or weekend, find next trading day
+            LocalDate nextTrading = findNextTradingDay(today);
+            if (nextTrading != null) {
+                return nextTrading.atTime(MARKET_OPEN).atZone(ET);
+            }
+        }
+
+        // Fallback: just return tomorrow at regular market open
+        return today.plusDays(1).atTime(MARKET_OPEN).atZone(ET);
+    }
+
+    /**
      * Checks if a given date is a US market holiday.
      */
     public boolean isMarketHoliday(LocalDate date) {

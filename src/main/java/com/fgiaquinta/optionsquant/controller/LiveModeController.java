@@ -86,7 +86,9 @@ public class LiveModeController {
         else if (open) session = "OPEN (EXT)";
         else session = "CLOSED";
 
-        ZonedDateTime nextOpen = marketCalendarService.getNextMarketOpen();
+        // Use regular market open for countdown (9:30 AM ET = 3:30 PM Spain in EDT)
+        // instead of pre-market open (4:00 AM ET = 10:00 AM Spain)
+        ZonedDateTime nextOpen = marketCalendarService.getNextRegularMarketOpen();
         long seconds = Math.max(0, Duration.between(nowEt, nextOpen).getSeconds());
 
         Map<String, Object> result = new LinkedHashMap<>();
