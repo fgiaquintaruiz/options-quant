@@ -78,6 +78,34 @@ default String getName() {
 3. `src/main/java/com/fgiaquinta/optionsquant/service/MarketCalendarService.java` - Added `isRegularMarketHours()` method
 4. `src/main/java/com/fgiaquinta/optionsquant/service/MarketScanner.java` - Added regular market hours execution guard
 
+---
+
+## Current Session (April 15, 2026) - TWS Connection Guards
+
+### User Request
+> the balance is not showing because the application was started even if the tws was not connected, I guess that is fine but the app shouldn't allow you to do anything if the tws app is not connected
+
+### Problem Identified
+- Application starts even when TWS is not connected
+- Balance shows "$0" or "N/A (no TWS)" when TWS is disconnected
+- User can still trigger scans and execute trades even when TWS is not connected, which will fail
+
+### Solution Implemented
+Added TWS connection guards to `LiveModeController`:
+
+1. **Added IbkrService dependency** to track TWS connection status
+2. **Updated `/live-ui/status` endpoint** to include `twsConnected` field
+3. **Added connection guard to `/scan-now`** - rejects with "TWS not connected. Please connect to TWS before scanning." if not connected
+4. **Added connection guard to `/execute-trade`** - rejects with "TWS not connected. Please connect to TWS before executing trades." if not connected
+
+**File Modified:** `src/main/java/com/fgiaquinta/optionsquant/controller/LiveModeController.java`
+- Added `IbkrService ibkrService` field and constructor parameter
+- Added `status.put("twsConnected", ibkrService.isConnected())` to `/status` endpoint
+- Added `if (!ibkrService.isConnected())` check at start of `/scan-now` and `/execute-trade` endpoints
+
+### Build Status
+✅ **Compiles successfully** (only pre-existing this-escape warning in LiveModeController)
+
 ### Notes
 - This file should be loaded at the start of a new chat to restore context
 - Update this file as the conversation progresses

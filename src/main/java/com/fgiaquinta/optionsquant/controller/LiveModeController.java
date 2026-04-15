@@ -28,6 +28,7 @@ public class LiveModeController {
     private final TradingService tradingService;
     private final TickerService tickerService;
     private final AccountManager accountManager;
+    private final IbkrService ibkrService;
 
     // Live scanning state
     private final AtomicBoolean isScanning = new AtomicBoolean(false);
@@ -37,22 +38,34 @@ public class LiveModeController {
     private final AtomicReference<String> currentTicker = new AtomicReference<>("");
     private final AtomicReference<List<String>> scanningTickers = new AtomicReference<>(Collections.emptyList());
     private final CopyOnWriteArrayList<Signal> liveSignals = new CopyOnWriteArrayList<>();
+    // Scan activity log: shows what's being scanned in real-time
+    private final CopyOnWriteArrayList<ScanActivity> scanActivity = new CopyOnWriteArrayList<>();
     private final AtomicLong lastScanTime = new AtomicLong(0);
     private final AtomicLong lastScanDuration = new AtomicLong(0);
     private final AtomicInteger signalsToday = new AtomicInteger(0);
     private final AtomicBoolean extendedHoursEnabled = new AtomicBoolean(true);
     private Thread scanThread = null;
 
+    public record ScanActivity(String time, String ticker, String status, String detail) {}
+
     public LiveModeController(StrategyScannerService scannerService,
                               IbkrProperties ibkrProperties,
                               TradingService tradingService,
                               TickerService tickerService,
-                              AccountManager accountManager) {
+                              AccountManager accountManager,
+                              IbkrService ibkrService) {
         this.scannerService = scannerService;
         this.ibkrProperties = ibkrProperties;
         this.tradingService = tradingService;
         this.tickerService = tickerService;
         this.accountManager = accountManager;
+        this.ibkrService = ibkrService;
+        // Wire stop flag into scanner for immediate interruption
+        scannerService.setStopRequestedSupplier(stopScanRequested::get);
+        // Wire scan activity callback for real-time ticker tracking in feed
+        scannerService.setScanActivityCallback(this::addTickerScanActivity);
+        // Wire scan complete callback to mark tickers as done in feed
+        scannerService.setScanCompleteCallback(this::addTickerScanComplete);
         log.info("LiveModeController initialized");
     }
 
@@ -74,6 +87,10 @@ public class LiveModeController {
         status.put("signalsToday", signalsToday.get());
         status.put("extendedHoursEnabled", extendedHoursEnabled.get());
         status.put("autoExecute", ibkrProperties.autoExecute());
+        status.put("twsConnected", ibkrService.isConnected());
+
+        // Add max concurrent scans setting
+        status.put("maxConcurrentScans", scannerService.getMaxConcurrentScans());
 
         // Add scanner progress info
         status.put("scannerScanned", scannerService.getScannedCount());
@@ -99,6 +116,17 @@ public class LiveModeController {
         return ResponseEntity.ok(result);
     }
 
+    @GetMapping("/scan-activity")
+    public ResponseEntity<Map<String, Object>> getScanActivity() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("activity", scanActivity);
+        result.put("isScanning", isScanning.get());
+        result.put("batchLabel", scannerService.getCurrentBatchLabel());
+        result.put("scanned", scannerService.getScannedCount());
+        result.put("total", scannerService.getTotalToScan());
+        return ResponseEntity.ok(result);
+    }
+
     @GetMapping("/tickers")
     public ResponseEntity<Map<String, Object>> getTickers() {
         List<String> allTickers = ibkrProperties.useCsvTickers()
@@ -119,6 +147,13 @@ public class LiveModeController {
 
     @PostMapping("/scan-now")
     public ResponseEntity<Map<String, Object>> triggerScan() {
+        if (!ibkrService.isConnected()) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("success", false);
+            result.put("message", "TWS not connected. Please connect to TWS before scanning.");
+            return ResponseEntity.ok(result);
+        }
+        
         if (isScanning.get()) {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("success", false);
@@ -127,6 +162,7 @@ public class LiveModeController {
         }
 
         stopScanRequested.set(false);
+        scanActivity.clear();
         scanThread = new Thread(() -> {
             isScanning.set(true);
             liveSignals.clear();
@@ -139,6 +175,9 @@ public class LiveModeController {
             totalTickers.set(allTickers.size());
             scanningTickers.set(allTickers);
 
+            String time = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+            scanActivity.add(new ScanActivity(time, "---", "STARTING", "Scanning " + allTickers.size() + " tickers against 12 strategies"));
+
             long startTime = System.currentTimeMillis();
             try {
                 ScanResult result = scannerService.scanAll(true, true);
@@ -148,12 +187,19 @@ public class LiveModeController {
                     liveSignals.addAll(result.signals());
                     signalsToday.addAndGet(result.totalSignals());
                     lastScanDuration.set(System.currentTimeMillis() - startTime);
+
+                    String endTime = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+                    scanActivity.add(new ScanActivity(endTime, "---", "COMPLETE",
+                            String.format("%d tickers scanned, %d signals found in %.1fs",
+                                    result.tickersScanned(), result.totalSignals(), result.elapsedMs() / 1000.0)));
                     log.info("Manual scan complete: {} signals in {}ms", result.totalSignals(), result.elapsedMs());
                 } else {
                     log.info("Manual scan stopped by user after {}ms", System.currentTimeMillis() - startTime);
                 }
             } catch (Exception e) {
                 log.error("Manual scan failed: {}", e.getMessage(), e);
+                String errTime = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+                scanActivity.add(new ScanActivity(errTime, "---", "ERROR", e.getMessage()));
             } finally {
                 isScanning.set(false);
                 stopScanRequested.set(false);
@@ -190,6 +236,22 @@ public class LiveModeController {
         return ResponseEntity.ok(result);
     }
 
+    @PostMapping("/set-max-concurrent")
+    public ResponseEntity<Map<String, Object>> setMaxConcurrent(@RequestParam int count) {
+        if (count < 1 || count > 16) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("success", false);
+            result.put("message", "Count must be between 1 and 16");
+            return ResponseEntity.badRequest().body(result);
+        }
+        scannerService.setMaxConcurrentScans(count);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("maxConcurrentScans", count);
+        result.put("message", "Max concurrent scans set to " + count);
+        return ResponseEntity.ok(result);
+    }
+
     @PostMapping("/toggle-extended-hours")
     public ResponseEntity<Map<String, Object>> toggleExtendedHours() {
         boolean newState = !extendedHoursEnabled.getAndSet(!extendedHoursEnabled.get());
@@ -206,6 +268,13 @@ public class LiveModeController {
             @RequestParam String direction,
             @RequestParam double price,
             @RequestParam(defaultValue = "manual") String strategy) {
+        if (!ibkrService.isConnected()) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("success", false);
+            result.put("message", "TWS not connected. Please connect to TWS before executing trades.");
+            return ResponseEntity.ok(result);
+        }
+        
         try {
             boolean success = tradingService.executeManualTrade(ticker, strategy, direction, price);
             Map<String, Object> result = new LinkedHashMap<>();
@@ -264,6 +333,39 @@ public class LiveModeController {
 
     public void clearStopRequest() {
         stopScanRequested.set(false);
+    }
+
+    /**
+     * Called by scanner when a ticker starts being analyzed. Adds a SCANNING row to the feed.
+     */
+    void addTickerScanActivity(String ticker) {
+        String time = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+        currentTicker.set(ticker);
+        int scanned = scannerService.getScannedCount();
+        int total = scannerService.getTotalToScan();
+        String batchLabel = scannerService.getCurrentBatchLabel();
+        String detail = batchLabel != null && !batchLabel.isEmpty() ? batchLabel : ("Analyzing 12 strategies...");
+        scanActivity.add(new ScanActivity(time, ticker, "SCANNING", detail));
+        // Keep only last 200 entries to prevent memory growth
+        while (scanActivity.size() > 200) {
+            scanActivity.remove(0);
+        }
+    }
+
+    /**
+     * Called by scanner when a ticker scan completes. Updates the SCANNING row to COMPLETE.
+     * @param ticker the ticker that was scanned
+     * @param signalCount number of signals found (0 = no signals, -1 = error)
+     */
+    void addTickerScanComplete(String ticker, int signalCount) {
+        String time = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+        String status = signalCount < 0 ? "ERROR" : (signalCount > 0 ? "SIGNAL" : "OK");
+        String detail = signalCount < 0 ? "Scan failed" : (signalCount > 0 ? signalCount + " signal(s) found" : "No signals");
+        scanActivity.add(new ScanActivity(time, ticker, status, detail));
+        // Keep only last 200 entries to prevent memory growth
+        while (scanActivity.size() > 200) {
+            scanActivity.remove(0);
+        }
     }
 
     // ===== HTML Dashboard Builder =====
