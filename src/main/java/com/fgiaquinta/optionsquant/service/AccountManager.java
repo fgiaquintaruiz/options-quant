@@ -37,6 +37,14 @@ public class AccountManager {
     }
 
     /**
+     * True if the account stream socket is connected to TWS/Gateway.
+     */
+    public boolean isConnected() {
+        EClientSocket c = clientRef.get();
+        return c != null && c.isConnected();
+    }
+
+    /**
      * Connects to IBKR and subscribes to account updates.
      * This populates the balance from TWS.
      */
@@ -45,6 +53,9 @@ public class AccountManager {
         if (currentClient != null && currentClient.isConnected()) {
             log.debug("AccountManager already connected");
             return;
+        }
+        if (currentClient != null) {
+            disconnect();
         }
 
         log.info("Connecting AccountManager to IBKR at {}:{}", ibkrProperties.host(), ibkrProperties.port());
@@ -114,9 +125,10 @@ public class AccountManager {
      */
     public void updateBalance(double balance) {
         this.currentBalance = balance;
-        double riskPerTrade = balance * ibkrProperties.riskPerTradePct();
-        log.info("💰 Account balance: $%.2f | risk limit (%.0f%%): $%.2f",
-                balance, ibkrProperties.riskPerTradePct() * 100, riskPerTrade);
+        double riskPct = ibkrProperties.riskPerTradePct();
+        double riskPerTrade = balance * riskPct;
+        log.info("💰 Account balance: ${} | risk limit ({}%): ${}",
+                String.format("%,.2f", balance), (int) (riskPct * 100), String.format("%,.2f", riskPerTrade));
     }
 
     /**
@@ -172,8 +184,9 @@ public class AccountManager {
         // Track strategy performance
         strategyStats.computeIfAbsent(strategy, k -> new StrategyStats()).recordPosition(qty);
 
-        log.info("📐 Position sizing: balance=$%.2f | risk=%.0f%%= $%.2f | risk/contract=$%.2f | qty=%d (capped at %d) | strategy={}",
-                currentBalance, riskPct * 100, maxRiskDollars, riskPerContract, qty, MAX_CONTRACTS_PER_TRADE, strategy);
+        log.info("📐 Position sizing: balance=${} | risk={}%= ${} | risk/contract=${} | qty={} (capped at {}) | strategy={}",
+                String.format("%,.2f", currentBalance), (int) (riskPct * 100), String.format("%,.2f", maxRiskDollars),
+                String.format("%,.2f", riskPerContract), qty, MAX_CONTRACTS_PER_TRADE, strategy);
 
         return qty;
     }

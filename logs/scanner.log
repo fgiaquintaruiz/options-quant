@@ -1,98 +1,54 @@
-2026-04-14 06:09:04.358 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-14 06:09:04.363 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
-2026-04-14 06:09:04.363 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-14 06:09:04.363 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-14 06:09:04.903 INFO  [main] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
-2026-04-14 06:09:04.904 INFO  [main] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
-2026-04-14 06:18:26.621 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-14 06:18:26.621 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
-2026-04-14 06:18:26.622 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-14 06:18:26.622 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-14 06:22:11.720 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-14 06:22:11.720 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
-2026-04-14 06:22:11.720 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-14 06:22:11.720 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-14 06:22:12.360 INFO  [main] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
-2026-04-14 06:22:12.360 INFO  [main] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
-2026-04-14 06:25:59.024 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-14 06:25:59.025 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
-2026-04-14 06:25:59.025 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-14 06:25:59.025 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-14 06:25:59.658 INFO  [main] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
-2026-04-14 06:25:59.658 INFO  [main] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
-2026-04-14 06:35:55.407 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-14 06:35:55.407 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
-2026-04-14 06:35:55.408 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-14 06:35:55.408 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-14 06:35:55.971 INFO  [main] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
-2026-04-14 06:35:55.972 INFO  [main] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
-2026-04-14 06:37:03.469 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-14 06:37:03.470 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
-2026-04-14 06:37:03.471 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-14 06:37:03.471 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-14 06:37:04.065 INFO  [main] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
-2026-04-14 06:37:04.065 INFO  [main] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
-2026-04-14 06:45:49.458 INFO  [Test worker] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-14 06:45:49.460 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Auto-execute: false
-2026-04-14 06:45:49.460 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-14 06:45:49.460 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-14 06:45:50.494 INFO  [Test worker] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
-2026-04-14 06:45:50.495 INFO  [Test worker] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
-2026-04-14 06:47:02.130 INFO  [Test worker] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-14 06:47:02.131 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Auto-execute: false
-2026-04-14 06:47:02.131 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-14 06:47:02.132 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-14 06:48:41.535 INFO  [Test worker] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-14 06:48:41.536 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Auto-execute: false
-2026-04-14 06:48:41.536 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-14 06:48:41.536 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-14 06:48:42.567 INFO  [Test worker] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
-2026-04-14 06:48:42.567 INFO  [Test worker] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
-2026-04-14 06:49:22.657 INFO  [Test worker] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-14 06:49:22.659 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Auto-execute: false
-2026-04-14 06:49:22.659 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-14 06:49:22.659 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-14 06:49:23.702 INFO  [Test worker] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
-2026-04-14 06:49:23.702 INFO  [Test worker] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
-2026-04-14 06:49:36.992 INFO  [Test worker] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-14 06:49:36.994 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Auto-execute: false
-2026-04-14 06:49:36.994 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-14 06:49:36.994 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-14 06:49:37.280 INFO  [Test worker] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
-2026-04-14 06:49:37.280 INFO  [Test worker] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
-2026-04-14 06:52:54.844 INFO  [Test worker] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-14 06:52:54.844 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Auto-execute: false
-2026-04-14 06:52:54.844 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-14 06:52:54.844 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-14 06:52:55.084 INFO  [Test worker] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
-2026-04-14 06:52:55.084 INFO  [Test worker] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
-2026-04-14 06:53:23.262 INFO  [Test worker] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-14 06:53:23.262 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Auto-execute: false
-2026-04-14 06:53:23.262 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-14 06:53:23.262 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-14 06:53:23.424 INFO  [Test worker] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
-2026-04-14 06:53:23.425 INFO  [Test worker] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
-2026-04-14 06:53:31.579 INFO  [Test worker] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-14 06:53:31.580 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Auto-execute: false
-2026-04-14 06:53:31.580 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-14 06:53:31.580 INFO  [Test worker] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-14 06:53:31.697 INFO  [Test worker] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
-2026-04-14 06:53:31.697 INFO  [Test worker] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
-2026-04-14 06:54:57.913 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-14 06:54:57.914 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
-2026-04-14 06:54:57.915 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-14 06:54:57.915 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-14 06:54:58.518 INFO  [main] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
-2026-04-14 06:54:58.518 INFO  [main] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
-2026-04-14 07:03:53.253 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-14 07:03:53.253 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
-2026-04-14 07:03:53.253 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-14 07:03:53.253 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-14 07:03:53.847 INFO  [main] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
-2026-04-14 07:03:53.847 INFO  [main] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
-2026-04-14 07:14:36.313 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-14 07:14:36.313 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
-2026-04-14 07:14:36.313 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-14 07:14:36.313 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-14 07:14:36.907 INFO  [main] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
-2026-04-14 07:14:36.907 INFO  [main] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
+2026-04-15 06:09:22.812 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
+2026-04-15 06:09:22.835 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
+2026-04-15 06:09:22.836 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
+2026-04-15 06:09:22.837 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
+2026-04-15 06:09:22.837 INFO  [main] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
+2026-04-15 06:09:25.136 INFO  [main] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
+2026-04-15 06:09:25.137 INFO  [main] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
+2026-04-15 06:16:25.455 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
+2026-04-15 06:16:25.455 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
+2026-04-15 06:16:25.455 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
+2026-04-15 06:16:25.455 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
+2026-04-15 06:16:25.455 INFO  [main] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
+2026-04-15 06:16:26.165 INFO  [main] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
+2026-04-15 06:16:26.165 INFO  [main] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
+2026-04-15 06:30:41.688 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
+2026-04-15 06:30:41.690 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
+2026-04-15 06:30:41.690 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
+2026-04-15 06:30:41.691 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
+2026-04-15 06:30:41.691 INFO  [main] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
+2026-04-15 06:30:43.039 INFO  [main] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
+2026-04-15 06:30:43.039 INFO  [main] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
+2026-04-15 06:42:46.553 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
+2026-04-15 06:42:46.553 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
+2026-04-15 06:42:46.553 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
+2026-04-15 06:42:46.553 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
+2026-04-15 06:42:46.553 INFO  [main] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
+2026-04-15 06:42:47.111 INFO  [main] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
+2026-04-15 06:42:47.111 INFO  [main] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
+2026-04-15 07:11:25.919 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
+2026-04-15 07:11:25.919 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
+2026-04-15 07:11:25.919 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
+2026-04-15 07:11:25.919 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
+2026-04-15 07:11:25.919 INFO  [main] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
+2026-04-15 07:16:33.280 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
+2026-04-15 07:16:33.281 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
+2026-04-15 07:16:33.281 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
+2026-04-15 07:16:33.281 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
+2026-04-15 07:16:33.282 INFO  [main] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
+2026-04-15 07:16:34.201 INFO  [main] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
+2026-04-15 07:16:34.201 INFO  [main] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
+2026-04-15 07:27:11.101 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
+2026-04-15 07:27:11.102 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
+2026-04-15 07:27:11.102 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
+2026-04-15 07:27:11.102 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
+2026-04-15 07:27:11.102 INFO  [main] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
+2026-04-15 07:27:11.458 INFO  [main] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
+2026-04-15 07:27:11.458 INFO  [main] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
+2026-04-15 07:52:57.732 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
+2026-04-15 07:52:57.736 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
+2026-04-15 07:52:57.737 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
+2026-04-15 07:52:57.738 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
+2026-04-15 07:52:57.738 INFO  [main] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
+2026-04-15 07:52:59.345 INFO  [main] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
+2026-04-15 07:52:59.345 INFO  [main] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday

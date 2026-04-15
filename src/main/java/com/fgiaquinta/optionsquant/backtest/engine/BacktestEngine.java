@@ -44,6 +44,10 @@ public class BacktestEngine {
     private final CandleCsvService csvService;
     private final TickerMemory tickerMemory;
 
+    // Runtime-configurable max concurrent tickers for backtest processing
+    private final AtomicInteger maxConcurrentScans = new AtomicInteger(
+            Math.min(Runtime.getRuntime().availableProcessors(), 8));
+
     public BacktestEngine(CandleCsvService csvService, TickerMemory tickerMemory) {
         this.csvService = csvService;
         this.tickerMemory = tickerMemory;
@@ -61,6 +65,24 @@ public class BacktestEngine {
                 new com.fgiaquinta.optionsquant.strategy.P5ContinuationPutStrategy(),
                 new com.fgiaquinta.optionsquant.strategy.P6ReversalPutStrategy()
         );
+    }
+
+    /**
+     * Get the current max concurrent scans value for backtest processing.
+     */
+    public int getMaxConcurrentScans() {
+        return maxConcurrentScans.get();
+    }
+
+    /**
+     * Set the max concurrent scans for backtest processing at runtime.
+     * Takes effect on the next backtest run (the thread pool size is determined
+     * at the start of each backtest based on this value).
+     */
+    public void setMaxConcurrentScans(int count) {
+        int newValue = Math.max(1, Math.min(Runtime.getRuntime().availableProcessors(), count));
+        maxConcurrentScans.set(newValue);
+        log.info("Backtest max concurrent scans set to {}", newValue);
     }
 
     /**
@@ -235,7 +257,7 @@ public class BacktestEngine {
         // ============================================================
         // STEP 1: Load candle data in parallel
         // ============================================================
-        int numThreads = Math.min(Runtime.getRuntime().availableProcessors(), Math.max(1, remainingTickers.size()));
+        int numThreads = Math.min(maxConcurrentScans.get(), Math.max(1, remainingTickers.size()));
         Map<String, Map<TimeFrame, List<Candle>>> allData = new ConcurrentHashMap<>();
         AtomicInteger loadedCount = new AtomicInteger(0);
 

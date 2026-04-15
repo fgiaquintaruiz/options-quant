@@ -10,6 +10,7 @@ export default function BacktestDashboard() {
   const [logs, setLogs] = useState([])
   const [elapsed, setElapsed] = useState(0)
   const [checkpoint, setCheckpoint] = useState(null)
+  const [maxConcurrent, setMaxConcurrent] = useState(4)
 
   const addLog = useCallback((msg, type = 'info') => {
     setLogs(prev => [{ time: new Date().toLocaleTimeString(), msg, type }, ...prev].slice(0, 100))
@@ -47,6 +48,13 @@ export default function BacktestDashboard() {
   // Check for checkpoint
   useEffect(() => {
     backtestApi.getCheckpoint().then(setCheckpoint).catch(() => {})
+  }, [])
+
+  // Fetch max concurrent scans on mount
+  useEffect(() => {
+    backtestApi.getMaxConcurrent().then(d => {
+      if (d.maxConcurrentScans) setMaxConcurrent(d.maxConcurrentScans)
+    }).catch(() => {})
   }, [])
 
   const handleRun = async () => {
@@ -93,6 +101,16 @@ export default function BacktestDashboard() {
     handleRun()
   }
 
+  const handleMaxConcurrentChange = async (newVal) => {
+    const val = parseInt(newVal, 10)
+    if (isNaN(val) || val < 1 || val > 16) return
+    setMaxConcurrent(val)
+    try {
+      const res = await backtestApi.setMaxConcurrent(val)
+      addLog(res.success ? `Max concurrent set to ${val}` : res.message, res.success ? 'success' : 'error')
+    } catch (e) { addLog(`Error: ${e.message}`, 'error') }
+  }
+
   return (
     <div>
       {/* Run Backtest Card */}
@@ -117,6 +135,18 @@ export default function BacktestDashboard() {
             <RefreshCw size={16} /> Resume ({checkpoint.processedCount} tickers)
           </button>
         )}
+
+        <div style={{ marginTop: 15, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ color: '#8b949e', fontSize: 14 }}>Concurrent Tickers:</span>
+          <input type="number" min="1" max="16" value={maxConcurrent}
+                 onChange={(e) => handleMaxConcurrentChange(e.target.value)}
+                 disabled={running}
+                 style={{
+                   width: 60, padding: '4px 8px', background: '#0d1117', border: '1px solid #30363d',
+                   borderRadius: 6, color: '#c9d1d9', fontSize: 14, textAlign: 'center'
+                 }}
+                 title="Number of tickers to analyze concurrently (1-16). Takes effect on next backtest run." />
+        </div>
 
         {running && (
           <span style={{ marginLeft: 15, color: '#58a6ff' }}>

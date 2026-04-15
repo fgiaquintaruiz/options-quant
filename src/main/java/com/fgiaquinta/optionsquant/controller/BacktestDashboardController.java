@@ -599,6 +599,29 @@ public class BacktestDashboardController {
         return ResponseEntity.ok(result);
     }
 
+    @GetMapping("/max-concurrent")
+    public ResponseEntity<Map<String, Object>> getMaxConcurrent() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("maxConcurrentScans", backtestEngine.getMaxConcurrentScans());
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/set-max-concurrent")
+    public ResponseEntity<Map<String, Object>> setMaxConcurrent(@RequestParam int count) {
+        if (count < 1 || count > 16) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("success", false);
+            result.put("message", "Count must be between 1 and 16");
+            return ResponseEntity.badRequest().body(result);
+        }
+        backtestEngine.setMaxConcurrentScans(count);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("maxConcurrentScans", count);
+        result.put("message", "Max concurrent scans set to " + count);
+        return ResponseEntity.ok(result);
+    }
+
     /**
      * GET /backtest-ui/checkpoint - Check if a checkpoint exists and get processed tickers
      */

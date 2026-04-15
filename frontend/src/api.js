@@ -7,9 +7,11 @@ export const liveApi = {
   getSignals: () => fetch(`${API}/live-ui/signals`).then(r => r.json()),
   getTickers: () => fetch(`${API}/live-ui/tickers`).then(r => r.json()),
   getTwsStatus: () => fetch(`${API}/live-ui/tws-status`).then(r => r.json()),
+  getMarketStatus: () => fetch(`${API}/live-ui/market-status`).then(r => r.json()),
   startScan: () => fetch(`${API}/live-ui/scan-now`, { method: 'POST' }).then(r => r.json()),
   stopScan: () => fetch(`${API}/live-ui/stop-scan`, { method: 'POST' }).then(r => r.json()),
   toggleExtendedHours: () => fetch(`${API}/live-ui/toggle-extended-hours`, { method: 'POST' }).then(r => r.json()),
+  setMaxConcurrent: (count) => fetch(`${API}/live-ui/set-max-concurrent?count=${count}`, { method: 'POST' }).then(r => r.json()),
 };
 
 // ===== Backtest API =====
@@ -21,6 +23,8 @@ export const backtestApi = {
   stopBacktest: () => fetch(`${API}/backtest-ui/stop`, { method: 'POST' }).then(r => r.json()),
   getCheckpoint: () => fetch(`${API}/backtest-ui/checkpoint`).then(r => r.json()),
   clearCheckpoint: () => fetch(`${API}/backtest-ui/checkpoint/clear`, { method: 'POST' }).then(r => r.json()),
+  getMaxConcurrent: () => fetch(`${API}/backtest-ui/max-concurrent`).then(r => r.json()),
+  setMaxConcurrent: (count) => fetch(`${API}/backtest-ui/set-max-concurrent?count=${count}`, { method: 'POST' }).then(r => r.json()),
   improveStrategy: (name) => fetch(`${API}/backtest-ui/improve/${name}`, { method: 'POST' }).then(r => r.json()),
   retestStrategy: (name) => fetch(`${API}/backtest-ui/retest/${name}`, { method: 'POST' }).then(r => r.json()),
 };

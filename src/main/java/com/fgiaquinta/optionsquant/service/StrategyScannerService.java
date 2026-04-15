@@ -23,6 +23,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
 /**
@@ -39,6 +40,9 @@ public class StrategyScannerService {
     private final AtomicInteger currentBatchSize = new AtomicInteger(0);
     private final AtomicReference<String> currentBatchLabel = new AtomicReference<>("");
     private final AtomicInteger totalToScan = new AtomicInteger(0);
+    private volatile BooleanSupplier stopRequestedSupplier = () -> false;
+    private volatile java.util.function.Consumer<String> scanActivityCallback = s -> {};
+    private volatile java.util.function.BiConsumer<String, Integer> scanCompleteCallback = (ticker, signals) -> {};
 
     private final CandleCsvService csvService;
     private final IbkrService ibkrService;
@@ -46,6 +50,7 @@ public class StrategyScannerService {
     private final TickerService tickerService;
     private final TickerMemory tickerMemory;
     private final EarningsDateService earningsService;
+    private final MarketCalendarService marketCalendar;
 
     private final List<TradingStrategy> callStrategies;
     private final List<TradingStrategy> putStrategies;
@@ -89,13 +94,15 @@ public class StrategyScannerService {
 
     public StrategyScannerService(CandleCsvService csvService, IbkrService ibkrService,
                                    IbkrProperties ibkrProperties, TickerService tickerService,
-                                   TickerMemory tickerMemory, EarningsDateService earningsService) {
+                                   TickerMemory tickerMemory, EarningsDateService earningsService,
+                                   MarketCalendarService marketCalendar) {
         this.csvService = csvService;
         this.ibkrService = ibkrService;
         this.ibkrProperties = ibkrProperties;
         this.tickerService = tickerService;
         this.tickerMemory = tickerMemory;
         this.earningsService = earningsService;
+        this.marketCalendar = marketCalendar;
 
         this.callStrategies = List.of(
                 new C1SqueezeCallStrategy(),
@@ -113,6 +120,18 @@ public class StrategyScannerService {
                 new P5ContinuationPutStrategy(),
                 new P6ReversalPutStrategy()
         );
+    }
+
+    public void setStopRequestedSupplier(BooleanSupplier supplier) {
+        this.stopRequestedSupplier = supplier;
+    }
+
+    public void setScanActivityCallback(java.util.function.Consumer<String> callback) {
+        this.scanActivityCallback = callback;
+    }
+
+    public void setScanCompleteCallback(java.util.function.BiConsumer<String, Integer> callback) {
+        this.scanCompleteCallback = callback;
     }
 
     /**
@@ -136,6 +155,42 @@ public class StrategyScannerService {
         }
     }
 
+    // Maximum number of tickers to scan concurrently (runtime-configurable)
+    // Default is 4, can be changed at runtime via setMaxConcurrentScans()
+    private final AtomicInteger maxConcurrentTickerScans = new AtomicInteger(4);
+    private final ExecutorService tickerScanExecutor = new ThreadPoolExecutor(
+            1,  // core pool size (min)
+            16, // max pool size (will be capped by setMaxConcurrentScans)
+            60L, TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(),
+            r -> {
+                Thread t = new Thread(r, "Ticker-Scanner");
+                t.setDaemon(true);
+                return t;
+            }
+    );
+
+    /**
+     * Get the current max concurrent ticker scans value.
+     */
+    public int getMaxConcurrentScans() {
+        return maxConcurrentTickerScans.get();
+    }
+
+    /**
+     * Set the max concurrent ticker scans at runtime.
+     * Takes effect immediately on the next scan batch (or immediately if a scan is in progress
+     * by adjusting the number of active threads in the pool).
+     */
+    public void setMaxConcurrentScans(int count) {
+        int newValue = Math.max(1, Math.min(16, count));
+        maxConcurrentTickerScans.set(newValue);
+        // Update the executor's maximum pool size dynamically
+        ThreadPoolExecutor tpe = (ThreadPoolExecutor) tickerScanExecutor;
+        tpe.setMaximumPoolSize(newValue);
+        log.info("Max concurrent ticker scans set to {}", newValue);
+    }
+
     /**
      * Scans all tickers against all strategies with hot tickers first.
      * Hot tickers (SPY, QQQ, AAPL, NVDA, TSLA, etc.) are scanned immediately,
@@ -154,29 +209,29 @@ public class StrategyScannerService {
      */
     public ScanResult scanAll(boolean includeTradePlans, boolean autoRefreshData, boolean deterministicMode) {
         // Get all tickers from CSV or YAML
-        List<String> allTickers = ibkrProperties.useCsvTickers() 
+        List<String> allTickers = ibkrProperties.useCsvTickers()
                 ? tickerService.getTickerSymbols()
                 : ibkrProperties.tickers();
-        
+
         // Get hot tickers (priority list)
-        List<String> hotTickers = ibkrProperties.hotTickers() != null 
-                ? ibkrProperties.hotTickers() 
+        List<String> hotTickers = ibkrProperties.hotTickers() != null
+                ? ibkrProperties.hotTickers()
                 : List.of("SPY", "QQQ", "AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "META", "GOOGL", "AMD");
-        
+
         // Separate hot tickers from the rest
         List<String> hotTickersToScan = allTickers.stream()
                 .filter(hotTickers::contains)
                 .toList();
-        
+
         List<String> remainingTickers = allTickers.stream()
                 .filter(t -> !hotTickers.contains(t))
                 .toList();
-        
-        log.info(">>> Scanning {} tickers ({} hot first, {} remaining) against 12 strategies (autoRefresh={})", 
+
+        log.info(">>> Scanning {} tickers ({} hot first, {} remaining) against 12 strategies (autoRefresh={})",
                 allTickers.size(), hotTickersToScan.size(), remainingTickers.size(), autoRefreshData);
-        
+
         long startTime = System.currentTimeMillis();
-        List<Signal> allSignals = new ArrayList<>();
+        List<Signal> allSignals = Collections.synchronizedList(new ArrayList<>());
 
         // Reset progress counters
         scannedCount.set(0);
@@ -184,29 +239,46 @@ public class StrategyScannerService {
         currentBatchSize.set(0);
         totalToScan.set(allTickers.size());
 
-        // SCAN HOT TICKERS FIRST (parallelized for performance)
+        // SCAN HOT TICKERS FIRST (parallel with stop support)
         if (!hotTickersToScan.isEmpty()) {
             currentBatchLabel.set("Hot tickers: 0/" + hotTickersToScan.size());
             currentBatchSize.set(hotTickersToScan.size());
             if (deterministicMode) {
                 log.info("🔥 [Deterministic] Scanning {} HOT tickers from cached data: {}", hotTickersToScan.size(), hotTickersToScan);
             } else {
-                log.info("🔥 Scanning {} HOT tickers first (parallel): {}", hotTickersToScan.size(), hotTickersToScan);
+                log.info("🔥 Scanning {} HOT tickers first (parallel, {} threads): {}", hotTickersToScan.size(), maxConcurrentTickerScans.get(), hotTickersToScan);
             }
-            List<List<Signal>> hotResults = hotTickersToScan.parallelStream()
-                .map(ticker -> {
+            List<Future<List<Signal>>> hotFutures = new ArrayList<>();
+            for (String ticker : hotTickersToScan) {
+                if (stopRequestedSupplier.getAsBoolean()) {
+                    log.info("⏹ Scan stopped by user during hot tickers scan");
+                    currentBatchLabel.set("Stopped");
+                    break;
+                }
+                scanActivityCallback.accept(ticker);
+                final String t = ticker;
+                hotFutures.add(tickerScanExecutor.submit(() -> {
                     try {
-                        return scanTicker(ticker, includeTradePlans, autoRefreshData && !deterministicMode);
-                    } catch (Exception e) {
-                        log.error("Error scanning hot ticker {}: {}", ticker, e.getMessage());
-                        return Collections.<Signal>emptyList();
-                    } finally {
+                        List<Signal> signals = scanTicker(t, includeTradePlans, autoRefreshData && !deterministicMode);
                         int done = scannedCount.incrementAndGet();
                         currentBatchLabel.set("Hot tickers: " + done + "/" + currentBatchSize.get());
+                        scanCompleteCallback.accept(t, signals.size());
+                        return signals;
+                    } catch (Exception e) {
+                        log.error("Error scanning hot ticker {}: {}", t, e.getMessage());
+                        scanCompleteCallback.accept(t, -1);
+                        return Collections.<Signal>emptyList();
                     }
-                })
-                .collect(Collectors.toList());
-            hotResults.forEach(allSignals::addAll);
+                }));
+            }
+            // Collect results
+            for (Future<List<Signal>> future : hotFutures) {
+                try {
+                    allSignals.addAll(future.get());
+                } catch (Exception e) {
+                    log.error("Error collecting hot ticker result: {}", e.getMessage());
+                }
+            }
             currentBatchLabel.set("");
             if (deterministicMode) {
                 log.info("✅ Hot tickers scan complete (deterministic) - {} signals found", allSignals.size());
@@ -215,30 +287,47 @@ public class StrategyScannerService {
             }
         }
 
-        // SCAN REMAINING TICKERS (parallelized for performance)
+        // SCAN REMAINING TICKERS (parallel with stop support)
         if (!remainingTickers.isEmpty()) {
             int hotDone = scannedCount.get();
-            currentBatchLabel.set("Remaining: " + hotDone + "/" + allTickers.size() + " total");
+            currentBatchLabel.set("Remaining: 0/" + remainingTickers.size() + " (" + hotDone + "/" + allTickers.size() + " total)");
             currentBatchSize.set(remainingTickers.size());
             if (deterministicMode) {
                 log.info("📊 [Deterministic] Scanning {} remaining tickers from cached data (parallel)...", remainingTickers.size());
             } else {
-                log.info("📊 Scanning {} remaining tickers (parallel)...", remainingTickers.size());
+                log.info("📊 Scanning {} remaining tickers (parallel, {} threads)...", remainingTickers.size(), maxConcurrentTickerScans.get());
             }
-            List<List<Signal>> remainingResults = remainingTickers.parallelStream()
-                .map(ticker -> {
+            List<Future<List<Signal>>> remainingFutures = new ArrayList<>();
+            for (String ticker : remainingTickers) {
+                if (stopRequestedSupplier.getAsBoolean()) {
+                    log.info("⏹ Scan stopped by user during remaining tickers scan");
+                    currentBatchLabel.set("Stopped");
+                    break;
+                }
+                scanActivityCallback.accept(ticker);
+                final String t = ticker;
+                remainingFutures.add(tickerScanExecutor.submit(() -> {
                     try {
-                        return scanTicker(ticker, includeTradePlans, autoRefreshData && !deterministicMode);
-                    } catch (Exception e) {
-                        log.error("Error scanning ticker {}: {}", ticker, e.getMessage());
-                        return Collections.<Signal>emptyList();
-                    } finally {
+                        List<Signal> signals = scanTicker(t, includeTradePlans, autoRefreshData && !deterministicMode);
                         int done = scannedCount.incrementAndGet();
                         currentBatchLabel.set("Total: " + done + "/" + totalToScan.get());
+                        scanCompleteCallback.accept(t, signals.size());
+                        return signals;
+                    } catch (Exception e) {
+                        log.error("Error scanning ticker {}: {}", t, e.getMessage());
+                        scanCompleteCallback.accept(t, -1);
+                        return Collections.<Signal>emptyList();
                     }
-                })
-                .collect(Collectors.toList());
-            remainingResults.forEach(allSignals::addAll);
+                }));
+            }
+            // Collect results
+            for (Future<List<Signal>> future : remainingFutures) {
+                try {
+                    allSignals.addAll(future.get());
+                } catch (Exception e) {
+                    log.error("Error collecting remaining ticker result: {}", e.getMessage());
+                }
+            }
         }
 
         // Clear progress when done
@@ -290,14 +379,14 @@ public class StrategyScannerService {
 
         for (TimeFrame tf : timeframesToLoad) {
             List<Candle> cachedCandles = csvService.loadFromCsv(ticker, tf);
-            
+
             if (cachedCandles.isEmpty()) {
                 // Need full download - submit to parallel executor
                 downloadFutures.add(CompletableFuture.runAsync(() -> {
                     try {
                         downloadSemaphore.acquire();
                         activeDownloads.incrementAndGet();
-                        
+
                         List<Candle> freshData = downloadTimeframeDelta(ticker, tf, null);
                         if (!freshData.isEmpty()) {
                             csvService.saveToCsv(ticker, tf, freshData);
@@ -317,40 +406,51 @@ public class StrategyScannerService {
                     }
                 }, downloadExecutor));
 
-            } else if (autoRefreshData && isStale(cachedCandles, tf)) {
-                // Need delta download - submit to parallel executor
-                final List<Candle> cached = cachedCandles;  // For lambda
-                downloadFutures.add(CompletableFuture.runAsync(() -> {
-                    try {
-                        downloadSemaphore.acquire();
-                        activeDownloads.incrementAndGet();
-                        
-                        ZonedDateTime lastTimestamp = getLastTimestamp(cached);
-                        List<Candle> deltaData = downloadTimeframeDelta(ticker, tf, lastTimestamp);
-                        
-                        if (!deltaData.isEmpty()) {
-                            List<Candle> mergedCandles = mergeCandles(cached, deltaData);
-                            csvService.saveToCsv(ticker, tf, mergedCandles);
-                            candlesByTimeframe.put(tf, mergedCandles);
-                            totalNewCandles.addAndGet(deltaData.size());
-                            downloadLog.info("✅ {} [{}] delta: +{} new candles (cached: {} → merged: {})",
-                                    ticker, tf, deltaData.size(), cached.size(), mergedCandles.size());
-                        } else {
-                            candlesByTimeframe.put(tf, cached);
+            } else if (autoRefreshData) {
+                // Check if we should download using market-aware logic
+                ZonedDateTime lastTimestamp = getLastTimestamp(cachedCandles);
+                int tfMinutes = timeframeToMinutes(tf);
+                Duration threshold = FRESHNESS_THRESHOLDS.getOrDefault(tf, Duration.ofHours(2));
+                int thresholdMinutes = (int) threshold.toMinutes();
+
+                if (marketCalendar.shouldDownloadData(lastTimestamp, tfMinutes, thresholdMinutes)) {
+                    // Need delta download - submit to parallel executor
+                    final List<Candle> cached = cachedCandles;  // For lambda
+                    downloadFutures.add(CompletableFuture.runAsync(() -> {
+                        try {
+                            downloadSemaphore.acquire();
+                            activeDownloads.incrementAndGet();
+
+                            List<Candle> deltaData = downloadTimeframeDelta(ticker, tf, lastTimestamp);
+
+                            if (!deltaData.isEmpty()) {
+                                List<Candle> mergedCandles = mergeCandles(cached, deltaData);
+                                csvService.saveToCsv(ticker, tf, mergedCandles);
+                                candlesByTimeframe.put(tf, mergedCandles);
+                                totalNewCandles.addAndGet(deltaData.size());
+                                downloadLog.info("✅ {} [{}] delta: +{} new candles (cached: {} → merged: {})",
+                                        ticker, tf, deltaData.size(), cached.size(), mergedCandles.size());
+                            } else {
+                                candlesByTimeframe.put(tf, cached);
+                            }
+
+                            downloadRateLimiter.acquire();  // Rate limit
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            downloadLog.error("❌ Download interrupted for {} [{}]", ticker, tf);
+                        } catch (Exception e) {
+                            downloadLog.error("❌ Failed to download {} [{}]: {}", ticker, tf, e.getMessage());
+                        } finally {
+                            activeDownloads.decrementAndGet();
+                            downloadSemaphore.release();
                         }
-
-                        downloadRateLimiter.acquire();  // Rate limit
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        downloadLog.error("❌ Download interrupted for {} [{}]", ticker, tf);
-                    } catch (Exception e) {
-                        downloadLog.error("❌ Failed to download {} [{}]: {}", ticker, tf, e.getMessage());
-                    } finally {
-                        activeDownloads.decrementAndGet();
-                        downloadSemaphore.release();
-                    }
-                }, downloadExecutor));
-
+                    }, downloadExecutor));
+                } else {
+                    // Market calendar says no new data possible, use cached
+                    downloadLog.debug("📅 {} [{}] skipping download - market calendar says no new data (last candle: {})",
+                            ticker, tf, lastTimestamp);
+                    candlesByTimeframe.put(tf, cachedCandles);
+                }
             } else {
                 // Use cached data (no download needed)
                 candlesByTimeframe.put(tf, cachedCandles);
@@ -428,7 +528,7 @@ public class StrategyScannerService {
 
                 TradePlan tradePlan = null;
                 if (includeTradePlans) {
-                    tradePlan = RiskCalculator.generatePlan(data, ticker, currentTime, !isCall, currentPrice);
+                    tradePlan = RiskCalculator.generatePlan(data, ticker, currentTime, isCall, currentPrice, strategy.getName());
                 }
 
                 Signal signal = new Signal(
@@ -436,7 +536,7 @@ public class StrategyScannerService {
                         strategy.getName(),
                         isCall ? "CALL" : "PUT",
                         currentPrice,
-                        nyTime,
+                        currentTime,
                         tradePlan,
                         combinedPattern  // Include pattern in signal
                 );
@@ -527,21 +627,20 @@ public class StrategyScannerService {
         return scanTicker(ticker, includeTradePlans, true);
     }
 
-    // ===== Data Freshness Checks =====
+    // ===== Helpers =====
 
-    private boolean isStale(List<Candle> candles, TimeFrame tf) {
-        if (candles.isEmpty()) return true;
-        ZonedDateTime lastTimestamp = candles.get(candles.size() - 1).timestamp();
-        Duration threshold = FRESHNESS_THRESHOLDS.getOrDefault(tf, Duration.ofHours(2));
-        Duration age = Duration.between(lastTimestamp, ZonedDateTime.now(ZoneId.of("America/New_York")));
-        return age.compareTo(threshold) > 0;
+    private static int timeframeToMinutes(TimeFrame tf) {
+        return switch (tf) {
+            case MIN_5 -> 5;
+            case MIN_15 -> 15;
+            case HOUR_1 -> 60;
+            case DAY_1 -> 1440;
+        };
     }
 
     private ZonedDateTime getLastTimestamp(List<Candle> candles) {
         return candles.get(candles.size() - 1).timestamp();
     }
-
-    // ===== Helpers =====
 
     /**
      * Extracts a human-readable pattern name from the strategy name.

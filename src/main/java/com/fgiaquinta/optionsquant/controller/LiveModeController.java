@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.ZonedDateTime;
 import java.time.ZoneId;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.*;
@@ -29,6 +30,7 @@ public class LiveModeController {
     private final TickerService tickerService;
     private final AccountManager accountManager;
     private final IbkrService ibkrService;
+    private final MarketCalendarService marketCalendarService;
 
     // Live scanning state
     private final AtomicBoolean isScanning = new AtomicBoolean(false);
@@ -37,6 +39,8 @@ public class LiveModeController {
     private final AtomicInteger totalTickers = new AtomicInteger(0);
     private final AtomicReference<String> currentTicker = new AtomicReference<>("");
     private final AtomicReference<List<String>> scanningTickers = new AtomicReference<>(Collections.emptyList());
+    /** Throttle AccountManager reconnect attempts from UI polling */
+    private final AtomicLong lastTwsReconnectAttemptMs = new AtomicLong(0);
     private final CopyOnWriteArrayList<Signal> liveSignals = new CopyOnWriteArrayList<>();
     // Scan activity log: shows what's being scanned in real-time
     private final CopyOnWriteArrayList<ScanActivity> scanActivity = new CopyOnWriteArrayList<>();
@@ -53,13 +57,15 @@ public class LiveModeController {
                               TradingService tradingService,
                               TickerService tickerService,
                               AccountManager accountManager,
-                              IbkrService ibkrService) {
+                              IbkrService ibkrService,
+                              MarketCalendarService marketCalendarService) {
         this.scannerService = scannerService;
         this.ibkrProperties = ibkrProperties;
         this.tradingService = tradingService;
         this.tickerService = tickerService;
         this.accountManager = accountManager;
         this.ibkrService = ibkrService;
+        this.marketCalendarService = marketCalendarService;
         // Wire stop flag into scanner for immediate interruption
         scannerService.setStopRequestedSupplier(stopScanRequested::get);
         // Wire scan activity callback for real-time ticker tracking in feed
@@ -67,6 +73,28 @@ public class LiveModeController {
         // Wire scan complete callback to mark tickers as done in feed
         scannerService.setScanCompleteCallback(this::addTickerScanComplete);
         log.info("LiveModeController initialized");
+    }
+
+    @GetMapping("/market-status")
+    public ResponseEntity<Map<String, Object>> getMarketStatus() {
+        ZonedDateTime nowEt = marketCalendarService.nowET();
+        boolean open = marketCalendarService.isMarketOpen(nowEt);
+        boolean regular = marketCalendarService.isRegularMarketHours(nowEt);
+
+        String session;
+        if (regular) session = "REGULAR";
+        else if (open) session = "OPEN (EXT)";
+        else session = "CLOSED";
+
+        ZonedDateTime nextOpen = marketCalendarService.getNextMarketOpen();
+        long seconds = Math.max(0, Duration.between(nowEt, nextOpen).getSeconds());
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("session", session);
+        result.put("nowEt", nowEt.toString());
+        result.put("nextOpenEt", nextOpen.toString());
+        result.put("secondsToNextOpen", seconds);
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping
@@ -87,7 +115,7 @@ public class LiveModeController {
         status.put("signalsToday", signalsToday.get());
         status.put("extendedHoursEnabled", extendedHoursEnabled.get());
         status.put("autoExecute", ibkrProperties.autoExecute());
-        status.put("twsConnected", ibkrService.isConnected());
+        status.put("twsConnected", ibkrService.isConnected() || accountManager.isConnected());
 
         // Add max concurrent scans setting
         status.put("maxConcurrentScans", scannerService.getMaxConcurrentScans());
@@ -147,10 +175,13 @@ public class LiveModeController {
 
     @PostMapping("/scan-now")
     public ResponseEntity<Map<String, Object>> triggerScan() {
-        if (!ibkrService.isConnected()) {
+        if (!ibkrService.isConnected() && !accountManager.isConnected()) {
+            tradingService.connectAccountManager();
+        }
+        if (!ibkrService.isConnected() && !accountManager.isConnected()) {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("success", false);
-            result.put("message", "TWS not connected. Please connect to TWS before scanning.");
+            result.put("message", "Please login in TWS with your account before scanning.");
             return ResponseEntity.ok(result);
         }
         
@@ -268,10 +299,13 @@ public class LiveModeController {
             @RequestParam String direction,
             @RequestParam double price,
             @RequestParam(defaultValue = "manual") String strategy) {
-        if (!ibkrService.isConnected()) {
+        if (!ibkrService.isConnected() && !accountManager.isConnected()) {
+            tradingService.connectAccountManager();
+        }
+        if (!ibkrService.isConnected() && !accountManager.isConnected()) {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("success", false);
-            result.put("message", "TWS not connected. Please connect to TWS before executing trades.");
+            result.put("message", "Please login in TWS with your account before executing trades.");
             return ResponseEntity.ok(result);
         }
         
@@ -291,7 +325,16 @@ public class LiveModeController {
 
     @GetMapping("/tws-status")
     public ResponseEntity<Map<String, Object>> getTwsStatus() {
+        if (!ibkrService.isConnected() && !accountManager.isConnected()) {
+            long now = System.currentTimeMillis();
+            if (now - lastTwsReconnectAttemptMs.get() >= 4_000) {
+                lastTwsReconnectAttemptMs.set(now);
+                tradingService.connectAccountManager();
+            }
+        }
         Map<String, Object> result = new LinkedHashMap<>();
+        boolean connected = ibkrService.isConnected() || accountManager.isConnected();
+        result.put("connected", connected);
         result.put("host", ibkrProperties.host());
         result.put("port", ibkrProperties.port());
         result.put("accountId", ibkrProperties.accountId());
@@ -305,6 +348,10 @@ public class LiveModeController {
     // ===== Public Methods for Internal State Updates =====
 
     public void updateScanningState(boolean scanning, String ticker, int index, int total) {
+        // Reset scan-activity feed when a new scan starts (manual or scheduled)
+        if (scanning && !isScanning.get()) {
+            scanActivity.clear();
+        }
         isScanning.set(scanning);
         currentTicker.set(ticker);
         currentTickerIndex.set(index);
@@ -429,6 +476,7 @@ public class LiveModeController {
         sb.append("<h1>Live Trading Dashboard</h1>\n");
         sb.append("<div style=\"display:flex;gap:10px;align-items:center\">\n");
         sb.append("<span id=\"clock\" style=\"color:#8b949e;font-size:14px\">").append(currentTime).append("</span>\n");
+        sb.append("<span id=\"twsStatusBadge\" style=\"padding:8px 16px;border-radius:6px;font-size:12px;font-weight:600;background:#6e7681;color:#fff\">TWS: Checking...</span>\n");
         sb.append("<span class=\"status ").append(statusClass).append("\">LIVE MODE</span>\n");
         sb.append("</div></div>\n");
         sb.append("<div class=\"nav\">\n");

@@ -143,3 +143,29 @@ Added TWS connection guards to `LiveModeController`:
 
 ### Last Commit Before This Session
 - Commit: 21f469d (Playwright tests)
+
+---
+
+## Current Session (April 15, 2026) - Push Requirement Note + TWS Status UI
+
+### Push Requirement Note Added ✅
+Added note in project memory: "After completing any request, I MUST run git push to push changes to the remote repository. This is a mandatory step that should not be skipped."
+
+### TWS Connection Status in Header ✅
+**Problem:** TWS connection status was only visible in a card below, not prominently displayed.
+
+**Solution:** 
+- Added TWS status polling to App.jsx
+- Added prominent TWS connection badge in the header next to the clock
+- Badge shows "🔌 TWS Connected" (green) or "❌ TWS Disconnected" (red) based on connection status
+
+**Files Modified:**
+- `CHAT_SESSION.md` - Added push requirement note
+- `frontend/src/App.jsx` - Added TWS status polling and header badge
+
+### Build Status
+✅ **Frontend compiles successfully**
+
+### Notes
+- TWS status updates every 10 seconds in the header
+- Badge is visible on all pages for immediate awareness

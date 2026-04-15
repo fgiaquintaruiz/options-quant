@@ -31,7 +31,7 @@ class LiveUiDashboardTest extends BasePlaywrightTest {
         assertTrue(content.contains("Live Trading Dashboard"), "Should have title");
         assertTrue(content.contains("Scanning Status"), "Should have scanning status card");
         assertTrue(content.contains("Signals Today"), "Should have signals card");
-        assertTrue(content.contains("TWS Connection"), "Should have TWS card");
+        assertTrue(content.contains("Account:"), "Account info shown with Signals Today");
         assertTrue(content.contains("Tickers Queue"), "Should have tickers queue");
         assertTrue(content.contains("Live Signals Feed"), "Should have signals feed");
         assertTrue(content.contains("Console Log"), "Should have console log");

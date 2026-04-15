@@ -1,29 +1,38 @@
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Play, Square, Activity, TrendingUp, TrendingDown, DollarSign, Users } from 'lucide-react'
 import { liveApi } from '../api'
 
-export default function LiveDashboard() {
+export default function LiveDashboard({ twsStatus }) {
   const [status, setStatus] = useState(null)
   const [signals, setSignals] = useState([])
   const [tickers, setTickers] = useState({ allTickers: [], hotTickers: [] })
-  const [twsStatus, setTwsStatus] = useState(null)
   const [logs, setLogs] = useState([])
+  const [maxConcurrent, setMaxConcurrent] = useState(4)
 
   const addLog = useCallback((msg, type = 'info') => {
     setLogs(prev => [{ time: new Date().toLocaleTimeString(), msg, type }, ...prev].slice(0, 100))
   }, [])
 
   // Poll status every 500ms
+  const lastLabelRef = useRef('')
+  const lastScanCompleteTimeRef = useRef(0)
   useEffect(() => {
     const fetchStatus = async () => {
       try {
         const s = await liveApi.getStatus()
         setStatus(s)
-        if (s.isScanning && s.scannerBatchLabel) {
-          addLog(`Scan: ${s.scannerBatchLabel} (${s.scannerScanned}/${s.scannerTotal})`, 'info')
+        if (s.maxConcurrentScans !== undefined) {
+          setMaxConcurrent(s.maxConcurrentScans)
         }
-        if (s.lastScanDuration && !s.isScanning) {
-          addLog(`Scan complete in ${(s.lastScanDuration / 1000).toFixed(1)}s`, 'success')
+        // Only log when progress actually changes (avoid spam)
+        const label = s.scannerBatchLabel || ''
+        if (label && label !== lastLabelRef.current) {
+          lastLabelRef.current = label
+          addLog(`📊 ${label} (${s.scannerScanned}/${s.scannerTotal})`, 'info')
+        }
+        if (!s.isScanning && s.lastScanDuration && s.lastScanTime && s.lastScanTime !== lastScanCompleteTimeRef.current) {
+          lastScanCompleteTimeRef.current = s.lastScanTime
+          addLog(`✅ Scan complete in ${(s.lastScanDuration / 1000).toFixed(1)}s`, 'success')
         }
       } catch (e) { /* silent */ }
     }
@@ -31,6 +40,43 @@ export default function LiveDashboard() {
     const interval = setInterval(fetchStatus, 500)
     return () => clearInterval(interval)
   }, [addLog])
+
+  // Poll scan activity every 1s for the feed table
+  const [scanActivity, setScanActivity] = useState([])
+  const feedRef = useRef(null)
+  const followFeedRef = useRef(true)
+  const lastActivityCompleteKeyRef = useRef('')
+
+  // Auto-scroll feed to bottom when activity changes
+  useEffect(() => {
+    if (feedRef.current && followFeedRef.current) {
+      feedRef.current.scrollTop = feedRef.current.scrollHeight
+    }
+  }, [scanActivity])
+
+  useEffect(() => {
+    const fetchActivity = async () => {
+      try {
+        const data = await fetch('/live-ui/scan-activity').then(r => r.json())
+        setScanActivity(data.activity || [])
+        if (!data.isScanning && data.scanned > 0) {
+          const key = `${data.scanned}-${data.total || ''}-${data.lastScanTime || ''}`
+          if (key !== lastActivityCompleteKeyRef.current) {
+            lastActivityCompleteKeyRef.current = key
+            setScanActivity(prev => [...prev.slice(-50), {
+              time: new Date().toLocaleTimeString(),
+              ticker: '---',
+              status: '✅ Complete',
+              detail: `${data.scanned} tickers analyzed`
+            }])
+          }
+        }
+      } catch (e) { /* silent */ }
+    }
+    fetchActivity()
+    const interval = setInterval(fetchActivity, 1000)
+    return () => clearInterval(interval)
+  }, [])
 
   // Poll signals every 3s
   useEffect(() => {
@@ -58,20 +104,11 @@ export default function LiveDashboard() {
     return () => clearInterval(interval)
   }, [])
 
-  // Poll TWS status every 10s
-  useEffect(() => {
-    const fetchTws = async () => {
-      try {
-        const data = await liveApi.getTwsStatus()
-        setTwsStatus(data)
-      } catch (e) { /* silent */ }
-    }
-    fetchTws()
-    const interval = setInterval(fetchTws, 10000)
-    return () => clearInterval(interval)
-  }, [])
-
   const handleStartScan = async () => {
+    if (!twsStatus?.connected) {
+      addLog('Please login in TWS with your account before scanning.', 'warn')
+      return
+    }
     try {
       const res = await liveApi.startScan()
       addLog(res.success ? 'Scan started' : res.message, res.success ? 'success' : 'error')
@@ -85,6 +122,16 @@ export default function LiveDashboard() {
     } catch (e) { addLog(`Error: ${e.message}`, 'error') }
   }
 
+  const handleMaxConcurrentChange = async (newVal) => {
+    const val = parseInt(newVal, 10)
+    if (isNaN(val) || val < 1 || val > 16) return
+    setMaxConcurrent(val)
+    try {
+      const res = await liveApi.setMaxConcurrent(val)
+      addLog(res.success ? `Max concurrent set to ${val}` : res.message, res.success ? 'success' : 'error')
+    } catch (e) { addLog(`Error: ${e.message}`, 'error') }
+  }
+
   const handleToggleExtendedHours = async () => {
     try {
       const res = await liveApi.toggleExtendedHours()
@@ -94,8 +141,22 @@ export default function LiveDashboard() {
 
   const scanning = status?.isScanning || false
   const stopRequested = status?.stopScanRequested || false
+  const twsConnected = twsStatus?.connected || false
   const progress = status?.scannerTotal > 0
     ? (status.scannerScanned / status.scannerTotal * 100) : 0
+  const scannedTickers = new Set(
+    scanActivity
+      .filter(a => a && a.ticker && a.ticker !== '---')
+      .filter(a => ['OK', 'SIGNAL', 'ERROR'].includes(a.status))
+      .map(a => a.ticker)
+  )
+
+  const formatSignalTime = (ts) => {
+    if (!ts) return '-'
+    const d = new Date(ts)
+    if (isNaN(d.getTime())) return String(ts).substring(11, 16) || '-'
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
 
   return (
     <div>
@@ -119,6 +180,16 @@ export default function LiveDashboard() {
           <div className="progress-bar">
             <div className="progress-fill" style={{ width: `${progress}%` }} />
           </div>
+          <div className="stat">
+            <span className="stat-label">Concurrent Tickers:</span>
+            <input type="number" min="1" max="16" value={maxConcurrent}
+                   onChange={(e) => handleMaxConcurrentChange(e.target.value)}
+                   style={{
+                     width: 60, padding: '4px 8px', background: '#0d1117', border: '1px solid #30363d',
+                     borderRadius: 6, color: '#c9d1d9', fontSize: 14, marginLeft: 8, textAlign: 'center'
+                   }}
+                   title="Number of tickers to analyze concurrently (1-16)" />
+          </div>
           {status?.lastScanTime && (
             <div className="stat">
               <span className="stat-label">Last Scan:</span>
@@ -128,10 +199,15 @@ export default function LiveDashboard() {
               </span>
             </div>
           )}
-          <button className="btn btn-primary" onClick={handleStartScan} disabled={scanning}
+          <button className="btn btn-primary" onClick={handleStartScan} disabled={scanning || !twsConnected}
                   style={{ width: '100%', marginTop: 10, display: scanning || stopRequested ? 'none' : 'inline-flex' }}>
             <Play size={16} /> Start Scan
           </button>
+          {!scanning && !stopRequested && !twsConnected && (
+            <div style={{ marginTop: 8, color: '#f0883e', fontSize: 12 }}>
+              Please login in TWS with your account
+            </div>
+          )}
           <button className="btn btn-danger" onClick={handleStopScan} disabled={!scanning}
                   style={{ width: '100%', marginTop: 10, display: scanning ? 'inline-flex' : 'none' }}>
             <Square size={16} /> Stop Scan
@@ -161,6 +237,14 @@ export default function LiveDashboard() {
             </div>
           </div>
           <div className="stat">
+            <span className="stat-label">Account:</span>
+            <span className="stat-value">{twsStatus?.accountId || '-'}</span>
+          </div>
+          <div className="stat">
+            <span className="stat-label">Risk/Trade:</span>
+            <span className="stat-value">{twsStatus?.riskPerTrade || '-'}</span>
+          </div>
+          <div className="stat">
             <span className="stat-label">Balance:</span>
             <span className="stat-value">
               {twsStatus?.balance > 0 ? `$${twsStatus.balance.toLocaleString()}` : 'N/A (no TWS)'}
@@ -172,51 +256,30 @@ export default function LiveDashboard() {
           </div>
         </div>
 
-        {/* TWS Connection */}
-        <div className="card">
-          <h3>🔌 TWS Connection</h3>
-          <div className="stat">
-            <span className="stat-label">Host:</span>
-            <span className="stat-value">{twsStatus?.host || '-'}</span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">Port:</span>
-            <span className="stat-value">{twsStatus?.port || '-'}</span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">Account:</span>
-            <span className="stat-value">{twsStatus?.accountId || '-'}</span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">Risk/Trade:</span>
-            <span className="stat-value">{twsStatus?.riskPerTrade || '-'}</span>
-          </div>
-        </div>
-
         {/* Tickers Queue */}
         <div className="card">
           <h3>📋 Tickers Queue</h3>
           <div className="ticker-list">
             {tickers.hotTickers.map(t => (
               <div key={t} className="ticker-item">
-                <span><span className="badge badge-hot">HOT</span> {t}</span>
+                <span>
+                  <span className="badge badge-hot">HOT</span> {t}
+                  {scannedTickers.has(t) && <span style={{ marginLeft: 6, color: '#3fb950' }}>✓</span>}
+                </span>
                 {scanning && status?.currentTicker === t && <span>Scanning...</span>}
               </div>
             ))}
             {tickers.allTickers
               .filter(t => !tickers.hotTickers.includes(t))
-              .slice(0, 50)
               .map(t => (
                 <div key={t} className="ticker-item">
-                  <span>{t}</span>
+                  <span>
+                    {t}
+                    {scannedTickers.has(t) && <span style={{ marginLeft: 6, color: '#3fb950' }}>✓</span>}
+                  </span>
                   {scanning && status?.currentTicker === t && <span>Scanning...</span>}
                 </div>
               ))}
-            {tickers.allTickers.length > 50 + tickers.hotTickers.length && (
-              <div style={{ textAlign: 'center', padding: 10, color: '#8b949e' }}>
-                ...+{tickers.allTickers.length - 50 - tickers.hotTickers.length} more
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -224,7 +287,16 @@ export default function LiveDashboard() {
       {/* Live Signals Feed */}
       <div className="card">
         <h3>🎯 Live Signals Feed</h3>
-        <div className="table-wrap">
+        <div
+          className="table-wrap"
+          ref={feedRef}
+          onScroll={() => {
+            const el = feedRef.current
+            if (!el) return
+            const nearBottom = (el.scrollHeight - el.scrollTop - el.clientHeight) < 32
+            followFeedRef.current = nearBottom
+          }}
+        >
           <table>
             <thead>
               <tr>
@@ -233,25 +305,49 @@ export default function LiveDashboard() {
               </tr>
             </thead>
             <tbody>
-              {signals.length === 0 ? (
+              {signals.length === 0 && scanActivity.length === 0 ? (
                 <tr>
                   <td colSpan={9} style={{ textAlign: 'center', padding: 20, color: '#8b949e' }}>
-                    {scanning ? `Scanning: ${status?.scannerBatchLabel || '...'}` : 'No signals today'}
+                    {scanning ? 'Waiting for scan activity...' : 'No signals today'}
                   </td>
                 </tr>
-              ) : signals.map((s, i) => (
-                <tr key={i}>
-                  <td>{s.timestamp?.substring(11, 16) || '-'}</td>
-                  <td><strong>{s.ticker}</strong></td>
-                  <td>{s.strategy}</td>
-                  <td className={s.direction === 'CALL' ? 'positive' : 'negative'}>{s.direction}</td>
-                  <td>${s.currentPrice}</td>
-                  <td>${s.tradePlan?.takeProfit || '-'}</td>
-                  <td>${s.tradePlan?.stopLoss || '-'}</td>
-                  <td>{s.candlestickPattern || '-'}</td>
-                  <td><span className="badge badge-hot">NEW</span></td>
-                </tr>
-              ))}
+              ) : (
+                <>
+                  {/* Show scan activity entries */}
+                  {scanActivity.slice(-50).reverse().map((a, i) => (
+                    <tr key={`activity-${i}`} style={a.status === 'SCANNING' ? { background: '#1f6feb10' } : {}}>
+                      <td>{a.time || '-'}</td>
+                      <td><strong>{a.ticker}</strong></td>
+                      <td colSpan={5} style={{ color: '#8b949e' }}>{a.detail || ''}</td>
+                      <td>-</td>
+                      <td><span className={`badge ${
+                        a.status === 'ERROR' ? 'badge-error' :
+                        a.status === 'SIGNAL' ? 'badge-signal' :
+                        a.status === 'OK' ? 'badge-ok' :
+                        a.status === 'SCANNING' ? 'badge-scanning' :
+                        a.status === 'COMPLETE' || a.status === '✅ Complete' ? 'badge-success' :
+                        'badge-info'
+                      }`}>
+                        {a.status}
+                      </span></td>
+                    </tr>
+                  ))}
+                  {/* Show actual signals */}
+                  {signals.map((s, i) => (
+                    <tr key={`signal-${i}`}>
+                      <td>{formatSignalTime(s.timestamp)}</td>
+                      <td><strong>{s.ticker}</strong></td>
+                      <td>{s.strategy}</td>
+                      <td className={s.direction === 'CALL' ? 'positive' : 'negative'}>{s.direction}</td>
+                      <td>${s.currentPrice}</td>
+                      <td>${s.tradePlan?.takeProfit || '-'}</td>
+                      <td>${s.tradePlan?.stopLoss || '-'}</td>
+                      <td>{s.candlestickPattern || '-'}</td>
+                      <td><span className="badge badge-hot">NEW</span></td>
+                    </tr>
+                  ))}
+                </>
+              )}
             </tbody>
           </table>
         </div>

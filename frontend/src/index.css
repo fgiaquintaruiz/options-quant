@@ -57,7 +57,16 @@ tr:hover { background: #161b22; }
 .badge { padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
 .badge-hot { background: #9e6a03; color: #fff; }
 .badge-success { background: #238636; color: #fff; }
-.badge-danger { background: #da3633; color: #fff; }
+.badge-error { background: #da3633; color: #fff; }
+.badge-info { background: #388bfd; color: #fff; }
+.badge-scanning { background: #1f6feb; color: #fff; animation: pulse 1.5s infinite; }
+.badge-signal { background: #238636; color: #fff; animation: pulse 2s infinite; }
+.badge-ok { background: #30363d; color: #8b949e; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
 
 .progress-bar { height: 8px; background: #21262d; border-radius: 4px; overflow: hidden; margin: 10px 0; }
 .progress-fill { height: 100%; background: linear-gradient(90deg, #58a6ff, #238636); transition: width 0.3s; }

@@ -15,7 +15,8 @@
       "Bash(dir *)",
       "mcp__idea__get_file_text_by_path",
       "Bash(curl *)",
-      "Bash(netstat *)"
+      "Bash(netstat *)",
+      "Bash(del *)"
     ]
   },
   "$version": 3
