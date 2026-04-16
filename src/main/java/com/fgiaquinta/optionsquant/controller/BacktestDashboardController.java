@@ -50,6 +50,7 @@ public class BacktestDashboardController {
 
     // Shared backtest running flag (for stop functionality)
     private static final AtomicBoolean backtestRunning = new AtomicBoolean(false);
+    private static final AtomicBoolean stopRequested = new AtomicBoolean(false);
     private static Thread currentBacktestThread = null;
 
     // Checkpoint file path for resume capability
@@ -152,10 +153,11 @@ public class BacktestDashboardController {
                 final BacktestReport[] finalReport = new BacktestReport[1];
                 final Exception[] backtestError = new Exception[1];
                 
+                stopRequested.set(false);
                 Thread backtestThread = new Thread(() -> {
                     try {
                         log.info("Starting backtest engine...");
-                        finalReport[0] = backtestEngine.run(config, false, backtestRunning);
+                        finalReport[0] = backtestEngine.run(config, false, stopRequested);
                         log.info("Backtest engine completed");
                     } catch (Exception e) {
                         log.error("Backtest engine failed: {}", e.getMessage(), e);
@@ -451,6 +453,7 @@ public class BacktestDashboardController {
             return ResponseEntity.ok(error);
         }
 
+        stopRequested.set(false);
         try {
             // Get tickers: hot first, then rest
             List<String> hotTickers = tickerService.getHotTickers();
@@ -477,7 +480,7 @@ public class BacktestDashboardController {
             final Exception[] errorHolder = new Exception[1];
             currentBacktestThread = new Thread(() -> {
                 try {
-                    reportHolder[0] = backtestEngine.run(config, false, backtestRunning);
+                    reportHolder[0] = backtestEngine.run(config, false, stopRequested);
                 } catch (Exception e) {
                     errorHolder[0] = e;
                 }
@@ -546,8 +549,8 @@ public class BacktestDashboardController {
             result.put("tickerCount", tickers.size());
             result.put("hotTickers", hotTickers.size());
 
-            log.info("Backtest complete via UI: {} trades, {:.1f}% WR, ${:.2f} PnL",
-                    report.totalTrades(), report.winRate() * 100, report.finalCapital() - report.initialCapital());
+            log.info("Backtest complete via UI: {} trades, {}% WR, ${} PnL",
+                    report.totalTrades(), String.format("%.1f", report.winRate() * 100), String.format("%.2f", report.finalCapital() - report.initialCapital()));
 
             return ResponseEntity.ok(result);
         } catch (Exception e) {
@@ -585,6 +588,7 @@ public class BacktestDashboardController {
         }
 
         log.info("Stop requested for running backtest");
+        stopRequested.set(true);
         backtestRunning.set(false);
 
         Thread bt = currentBacktestThread;
@@ -752,9 +756,10 @@ public class BacktestDashboardController {
 
                 final BacktestReport[] reportHolder = new BacktestReport[1];
                 final Exception[] errorHolder = new Exception[1];
+                stopRequested.set(false);
                 currentBacktestThread = new Thread(() -> {
                     try {
-                        reportHolder[0] = backtestEngine.run(config, true, backtestRunning);
+                        reportHolder[0] = backtestEngine.run(config, true, stopRequested);
                     } catch (Exception e) {
                         errorHolder[0] = e;
                     }
@@ -979,8 +984,8 @@ public class BacktestDashboardController {
             result.put("current", current);
             result.put("improvement", improvement);
 
-            log.info("Retest complete for {}: Before PnL=${:.2f}, After PnL=${:.2f}, Diff=${:.2f}",
-                    strategyName, previousPnl, currentPnl, currentPnl - previousPnl);
+            log.info("Retest complete for {}: Before PnL=${}, After PnL=${}, Diff=${}",
+                    strategyName, String.format("%.2f", previousPnl), String.format("%.2f", currentPnl), String.format("%.2f", currentPnl - previousPnl));
 
             return ResponseEntity.ok(result);
         } catch (Exception e) {

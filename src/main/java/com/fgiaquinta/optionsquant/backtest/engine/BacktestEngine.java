@@ -344,9 +344,9 @@ public class BacktestEngine {
                             saveCheckpoint(new ArrayList<>(allProcessedNow));
                         }
 
-                        log.info("[{}/{}] Completed ticker: {} - {} trades, PnL=${:.2f}",
+                        log.info("[{}/{}] Completed ticker: {} - {} trades, PnL=${}",
                                 idx, totalRemaining, ticker, result.trades.size(),
-                                result.trades.stream().mapToDouble(TradeRecord::netPnl).sum());
+                                String.format("%.2f", result.trades.stream().mapToDouble(TradeRecord::netPnl).sum()));
                     } catch (Exception e) {
                         log.error("Failed to process ticker {}: {}", ticker, e.getMessage(), e);
                         tickerResults.put(ticker, new TickerResult(List.of(), List.of(), 0));
@@ -488,8 +488,8 @@ public class BacktestEngine {
         // Clear checkpoint on successful completion
         clearCheckpoint();
 
-        log.info("<<< Backtest complete: equity=${:.2f}, elapsed={}ms ({:.1f}s), {} new + {} resumed trades",
-                finalCapital, elapsed, elapsed / 1000.0, newTrades.size(), resumedTrades.size());
+        log.info("<<< Backtest complete: equity=${}, elapsed={}ms ({}s), {} new + {} resumed trades",
+                String.format("%.2f", finalCapital), elapsed, String.format("%.1f", elapsed / 1000.0), newTrades.size(), resumedTrades.size());
         return report;
     }
 
@@ -791,7 +791,8 @@ public class BacktestEngine {
         writeEquityCsv(equityCurve);
         clearCheckpoint();
 
-        log.info("<<< Backtest resumed: equity=${:.2f}, {} total trades (all from checkpoint)", finalCapital, allTrades.size());
+        log.info("<<< Backtest resumed: equity=${}, {} total trades (all from checkpoint)",
+                String.format("%.2f", finalCapital), allTrades.size());
         return report;
     }
 

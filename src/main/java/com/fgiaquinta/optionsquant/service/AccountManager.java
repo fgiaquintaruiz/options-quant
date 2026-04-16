@@ -201,6 +201,7 @@ public class AccountManager {
     public int getActiveTradeCount() { return activeTrades.get(); }
     public double getCurrentBalance() { return currentBalance; }
 
+    @jakarta.annotation.PreDestroy
     public void disconnect() {
         EClientSocket client = clientRef.getAndSet(null);
         if (client != null && client.isConnected()) {

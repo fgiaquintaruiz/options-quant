@@ -203,8 +203,8 @@ public class ContinuousLearningLoop {
                 log.info("   Last:  {} trades, {}% WR, ${} PnL",
                         last.totalTrades, String.format("%.1f", last.winRate * 100), 
                         String.format("%.2f", last.totalPnl));
-                log.info("   Δ Win Rate: {:+.1f}%", (last.winRate - first.winRate) * 100);
-                log.info("   Δ PnL: ${:+.2f}", last.totalPnl - first.totalPnl);
+                log.info("   Δ Win Rate: {}%", String.format("%+.1f", (last.winRate - first.winRate) * 100));
+                log.info("   Δ PnL: ${}", String.format("%+.2f", last.totalPnl - first.totalPnl));
             }
 
             log.info("\n{}", tickerMemory.getLearningReport());

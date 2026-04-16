@@ -127,6 +127,17 @@ public class StrategyScannerService {
     }
 
     /**
+     * Resets all progress counters to zero. Called on startup to clear stale state
+     * from a previous session that may have been interrupted mid-scan.
+     */
+    public void resetProgress() {
+        scannedCount.set(0);
+        currentBatchSize.set(0);
+        currentBatchLabel.set("");
+        totalToScan.set(0);
+    }
+
+    /**
      * Clears the stop request flag. Use this to recover from a stuck scan state.
      */
     public void clearStopRequest() {
@@ -279,12 +290,35 @@ public class StrategyScannerService {
                     }
                 }));
             }
-            // Collect results
+            // Collect results with stop support
             for (Future<List<Signal>> future : hotFutures) {
+                if (stopRequestedSupplier.getAsBoolean()) {
+                    future.cancel(true);
+                    continue;
+                }
                 try {
-                    allSignals.addAll(future.get());
+                    // Use a short timeout to keep checking stopRequestedSupplier
+                    allSignals.addAll(future.get(1, TimeUnit.SECONDS));
+                } catch (TimeoutException te) {
+                    // Try again in next iteration of inner while/loop or just re-get
+                    boolean collected = false;
+                    while (!collected && !stopRequestedSupplier.getAsBoolean()) {
+                        try {
+                            allSignals.addAll(future.get(1, TimeUnit.SECONDS));
+                            collected = true;
+                        } catch (TimeoutException innerTe) {
+                            // Still waiting...
+                        } catch (InterruptedException | ExecutionException e) {
+                            log.error("Error during hot ticker collection: {}", e.getMessage());
+                            break;
+                        }
+                    }
+                    if (!collected) future.cancel(true);
+                } catch (InterruptedException | ExecutionException e) {
+                    log.error("Interrupted or execution error for hot ticker: {}", e.getMessage());
+                    future.cancel(true);
                 } catch (Exception e) {
-                    log.error("Error collecting hot ticker result: {}", e.getMessage());
+                    log.error("Unexpected error collecting hot ticker result: {}", e.getMessage());
                 }
             }
             currentBatchLabel.set("");
@@ -328,12 +362,34 @@ public class StrategyScannerService {
                     }
                 }));
             }
-            // Collect results
+            // Collect results with stop support
             for (Future<List<Signal>> future : remainingFutures) {
+                if (stopRequestedSupplier.getAsBoolean()) {
+                    future.cancel(true);
+                    continue;
+                }
                 try {
-                    allSignals.addAll(future.get());
+                    // Use a short timeout to keep checking stopRequestedSupplier
+                    allSignals.addAll(future.get(1, TimeUnit.SECONDS));
+                } catch (TimeoutException te) {
+                    boolean collected = false;
+                    while (!collected && !stopRequestedSupplier.getAsBoolean()) {
+                        try {
+                            allSignals.addAll(future.get(1, TimeUnit.SECONDS));
+                            collected = true;
+                        } catch (TimeoutException innerTe) {
+                            // Still waiting...
+                        } catch (InterruptedException | ExecutionException e) {
+                            log.error("Error during ticker collection: {}", e.getMessage());
+                            break;
+                        }
+                    }
+                    if (!collected) future.cancel(true);
+                } catch (InterruptedException | ExecutionException e) {
+                    log.error("Interrupted or execution error for ticker: {}", e.getMessage());
+                    future.cancel(true);
                 } catch (Exception e) {
-                    log.error("Error collecting remaining ticker result: {}", e.getMessage());
+                    log.error("Unexpected error collecting ticker result: {}", e.getMessage());
                 }
             }
         }

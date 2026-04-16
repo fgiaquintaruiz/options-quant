@@ -66,13 +66,26 @@ public class LiveModeController {
         this.accountManager = accountManager;
         this.ibkrService = ibkrService;
         this.marketCalendarService = marketCalendarService;
+        
+        // CRITICAL: Reset all scanning state on startup to recover from any previous stuck state
+        isScanning.set(false);
+        stopScanRequested.set(false);
+        currentTicker.set("");
+        currentTickerIndex.set(0);
+        totalTickers.set(0);
+        scanActivity.clear();
+        liveSignals.clear();
+        signalsToday.set(0);
+        // Also reset scanner service progress counters to avoid stale data in /status
+        scannerService.resetProgress();
+        log.info("LiveModeController initialized - scanning state reset to clean");
+        
         // Wire stop flag into scanner for immediate interruption
         scannerService.setStopRequestedSupplier(stopScanRequested::get);
         // Wire scan activity callback for real-time ticker tracking in feed
         scannerService.setScanActivityCallback(this::addTickerScanActivity);
         // Wire scan complete callback to mark tickers as done in feed
         scannerService.setScanCompleteCallback(this::addTickerScanComplete);
-        log.info("LiveModeController initialized");
     }
 
     @GetMapping("/market-status")
@@ -154,6 +167,7 @@ public class LiveModeController {
         result.put("batchLabel", scannerService.getCurrentBatchLabel());
         result.put("scanned", scannerService.getScannedCount());
         result.put("total", scannerService.getTotalToScan());
+        result.put("lastScanTime", lastScanTime.get());
         return ResponseEntity.ok(result);
     }
 
@@ -402,6 +416,7 @@ public class LiveModeController {
 
     public void updateScanComplete(long durationMs) {
         isScanning.set(false);
+        stopScanRequested.set(false);
         lastScanTime.set(System.currentTimeMillis());
         lastScanDuration.set(durationMs);
         currentTicker.set("");

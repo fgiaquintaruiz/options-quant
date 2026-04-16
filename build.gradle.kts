@@ -25,7 +25,7 @@ dependencies {
     implementation(platform("org.springframework.boot:spring-boot-dependencies:4.0.4"))
     implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.starter.actuator)
-
+    developmentOnly(libs.spring.boot.devtools)
     // IBKR TWS API (local JAR)
     implementation(files("libs/TwsApi.jar"))
     // TwsApi depends on protobuf
@@ -88,7 +88,10 @@ val npmInstall by tasks.registering(Exec::class) {
     onlyIf { !file("frontend/node_modules").exists() }
 }
 
+// Build frontend task (manual execution or via buildJar)
 val buildFrontend by tasks.registering(Exec::class) {
+    group = "build"
+    description = "Builds the React frontend and copies it to static resources"
     workingDir = file("frontend")
     commandLine = if (System.getProperty("os.name").lowercase().contains("win")) {
         listOf("cmd", "/c", "npm", "run", "build")
@@ -98,6 +101,11 @@ val buildFrontend by tasks.registering(Exec::class) {
     dependsOn(npmInstall)
 }
 
-// Build frontend before processResources and bootRun
-tasks.processResources { dependsOn(buildFrontend) }
-tasks.bootRun { dependsOn(buildFrontend) }
+// Ensure frontend is built when creating a JAR for production
+tasks.bootJar {
+    dependsOn(buildFrontend)
+}
+
+// NOTE: To run separately during development:
+// 1. Backend: ./gradlew bootRun
+// 2. Frontend: cd frontend && npm run dev

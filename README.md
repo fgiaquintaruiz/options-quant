@@ -4,6 +4,39 @@
 
 Un motor de trading algorítmico híbrido diseñado para Interactive Brokers (TWS/Gateway). Diseñado para una ejecución ultrarrápida, gestión de riesgo estricta, análisis automatizado de backtests y filtrado inteligente de tickers.
 
+
+---
+
+## 🚀 Quick Start: How to Run
+
+### 1. Prerequisites
+- **Java 25** installed and in PATH.
+- **TWS or IB Gateway** running and logged in (Paper or Live).
+- **API Port** configured in TWS (7497 for paper, 7496 for live) and matching `application.yml`.
+- **Node.js 20+** (for the frontend).
+
+### 2. Run the Backend (Spring Boot)
+Open your terminal in the project root:
+```bash
+# Using Gradle Wrapper
+./gradlew bootRun
+```
+*The backend will start on port `9090` and the MarketScanner will begin its background task.*
+
+### 3. Run the Frontend (React + Vite)
+Open a new terminal in the `frontend` directory:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+*The UI will usually be available at `http://localhost:5173`.*
+
+### 4. IntelliJ IDEA Setup
+- **Import Project:** Select `build.gradle.kts`.
+- **Run Config:** Create a "Spring Boot" configuration for `OptionsQuantApplication`.
+- **Lombok:** Ensure the Lombok plugin is enabled.
+
 ---
 
 ## 🏗️ Project Architecture
@@ -103,7 +136,7 @@ curl telnet://localhost:7070
 #### A. Trading CLI (General Purpose)
 Para escaneo de estrategias y trading en vivo:
 ```bash
-java -jar target/options-quant.jar --cli.enabled=true
+./gradlew bootRun --args='--cli.enabled=true'
 ```
 
 Menú interactivo:
@@ -117,7 +150,7 @@ Menú interactivo:
 #### B. Backtest Analyzer CLI (Advanced)
 Para ejecutar backtests con análisis detallado y guardar resultados en JSON para ajuste de estrategias:
 ```bash
-java -jar target/options-quant.jar --backtest-cli.enabled=true
+./gradlew bootRun --args='--backtest-cli.enabled=true'
 ```
 
 Menú interactivo:

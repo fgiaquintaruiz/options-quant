@@ -58,7 +58,18 @@ export default function LiveDashboard({ twsStatus }) {
     const fetchActivity = async () => {
       try {
         const data = await fetch('/live-ui/scan-activity').then(r => r.json())
-        setScanActivity(data.activity || [])
+        let activity = data.activity || []
+        // Clean up stale SCANNING entries when no scan is running OR stop was requested
+        // This handles cases where app restarts OR user interrupts the scan
+        const stopRequested = data.stopScanRequested || false
+        if (!data.isScanning || stopRequested) {
+          activity = activity.map(a =>
+            a.status === 'SCANNING'
+              ? { ...a, status: 'STALE', detail: stopRequested ? 'Stopped by user' : 'Interrupted (app restarted)' }
+              : a
+          )
+        }
+        setScanActivity(activity)
         if (!data.isScanning && data.scanned > 0) {
           const key = `${data.scanned}-${data.total || ''}-${data.lastScanTime || ''}`
           if (key !== lastActivityCompleteKeyRef.current) {
@@ -284,85 +295,90 @@ export default function LiveDashboard({ twsStatus }) {
         </div>
       </div>
 
-      {/* Live Signals Feed */}
-      <div className="card">
-        <h3>🎯 Live Signals Feed</h3>
-        <div
-          className="table-wrap"
-          ref={feedRef}
-          onScroll={() => {
-            const el = feedRef.current
-            if (!el) return
-            const nearBottom = (el.scrollHeight - el.scrollTop - el.clientHeight) < 32
-            followFeedRef.current = nearBottom
-          }}
-        >
-          <table>
-            <thead>
-              <tr>
-                <th>Time</th><th>Ticker</th><th>Strategy</th><th>Dir</th>
-                <th>Price</th><th>TP</th><th>SL</th><th>Pattern</th><th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {signals.length === 0 && scanActivity.length === 0 ? (
+      {/* Side-by-Side: Signals Feed & Console Log */}
+      <div className="grid" style={{ gridTemplateColumns: '1.5fr 1fr' }}>
+        {/* Live Signals Feed */}
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '500px' }}>
+          <h3>🎯 Live Signals Feed</h3>
+          <div
+            className="table-wrap"
+            ref={feedRef}
+            style={{ flex: 1 }}
+            onScroll={() => {
+              const el = feedRef.current
+              if (!el) return
+              const nearBottom = (el.scrollHeight - el.scrollTop - el.clientHeight) < 32
+              followFeedRef.current = nearBottom
+            }}
+          >
+            <table>
+              <thead>
                 <tr>
-                  <td colSpan={9} style={{ textAlign: 'center', padding: 20, color: '#8b949e' }}>
-                    {scanning ? 'Waiting for scan activity...' : 'No signals today'}
-                  </td>
+                  <th>Time</th><th>Ticker</th><th>Strategy</th><th>Dir</th>
+                  <th>Price</th><th>TP</th><th>SL</th><th>Pattern</th><th>Status</th>
                 </tr>
-              ) : (
-                <>
-                  {/* Show scan activity entries */}
-                  {scanActivity.slice(-50).reverse().map((a, i) => (
-                    <tr key={`activity-${i}`} style={a.status === 'SCANNING' ? { background: '#1f6feb10' } : {}}>
-                      <td>{a.time || '-'}</td>
-                      <td><strong>{a.ticker}</strong></td>
-                      <td colSpan={5} style={{ color: '#8b949e' }}>{a.detail || ''}</td>
-                      <td>-</td>
-                      <td><span className={`badge ${
-                        a.status === 'ERROR' ? 'badge-error' :
-                        a.status === 'SIGNAL' ? 'badge-signal' :
-                        a.status === 'OK' ? 'badge-ok' :
-                        a.status === 'SCANNING' ? 'badge-scanning' :
-                        a.status === 'COMPLETE' || a.status === '✅ Complete' ? 'badge-success' :
-                        'badge-info'
-                      }`}>
-                        {a.status}
-                      </span></td>
-                    </tr>
-                  ))}
-                  {/* Show actual signals */}
-                  {signals.map((s, i) => (
-                    <tr key={`signal-${i}`}>
-                      <td>{formatSignalTime(s.timestamp)}</td>
-                      <td><strong>{s.ticker}</strong></td>
-                      <td>{s.strategy}</td>
-                      <td className={s.direction === 'CALL' ? 'positive' : 'negative'}>{s.direction}</td>
-                      <td>${s.currentPrice}</td>
-                      <td>${s.tradePlan?.takeProfit || '-'}</td>
-                      <td>${s.tradePlan?.stopLoss || '-'}</td>
-                      <td>{s.candlestickPattern || '-'}</td>
-                      <td><span className="badge badge-hot">NEW</span></td>
-                    </tr>
-                  ))}
-                </>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {signals.length === 0 && scanActivity.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} style={{ textAlign: 'center', padding: 20, color: '#8b949e' }}>
+                      {scanning ? 'Waiting for scan activity...' : 'No signals today'}
+                    </td>
+                  </tr>
+                ) : (
+                  <>
+                    {/* Show actual signals first (pinned to top) */}
+                    {signals.map((s, i) => (
+                      <tr key={`signal-${i}`} style={{ background: '#23863615' }}>
+                        <td>{formatSignalTime(s.timestamp)}</td>
+                        <td><strong>{s.ticker}</strong></td>
+                        <td>{s.strategy}</td>
+                        <td className={s.direction === 'CALL' ? 'positive' : 'negative'}>{s.direction}</td>
+                        <td>${s.currentPrice}</td>
+                        <td>${s.tradePlan?.takeProfit || '-'}</td>
+                        <td>${s.tradePlan?.stopLoss || '-'}</td>
+                        <td>{s.candlestickPattern || '-'}</td>
+                        <td><span className="badge badge-signal">NEW</span></td>
+                      </tr>
+                    ))}
+                    {/* Show scan activity entries */}
+                    {scanActivity.slice(-50).reverse().map((a, i) => (
+                      <tr key={`activity-${i}`} style={a.status === 'SCANNING' ? { background: '#1f6feb10' } : {}}>
+                        <td>{a.time || '-'}</td>
+                        <td><strong>{a.ticker}</strong></td>
+                        <td colSpan={5} style={{ color: '#8b949e' }}>{a.detail || ''}</td>
+                        <td>-</td>
+                        <td><span className={`badge ${
+                          a.status === 'ERROR' ? 'badge-error' :
+                          a.status === 'SIGNAL' ? 'badge-signal' :
+                          a.status === 'OK' ? 'badge-ok' :
+                          a.status === 'SCANNING' ? 'badge-scanning' :
+                          a.status === 'STALE' ? 'badge-error' :
+                          a.status === 'COMPLETE' || a.status === '✅ Complete' ? 'badge-success' :
+                          'badge-info'
+                        }`}>
+                          {a.status}
+                        </span></td>
+                      </tr>
+                    ))}
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
 
-      {/* Console Log */}
-      <div className="card" style={{ marginTop: 20 }}>
-        <h3>💻 Console Log</h3>
-        <div className="console-log">
-          {logs.map((l, i) => (
-            <div key={i} className={`log-entry log-${l.type}`}>
-              [{l.time}] {l.msg}
-            </div>
-          ))}
-          {logs.length === 0 && <div style={{ color: '#8b949e' }}>Waiting for activity...</div>}
+        {/* Console Log */}
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '500px' }}>
+          <h3>💻 Console Log</h3>
+          <div className="console-log" style={{ flex: 1, maxHeight: 'none' }}>
+            {logs.map((l, i) => (
+              <div key={i} className={`log-entry log-${l.type}`}>
+                [{l.time}] {l.msg}
+              </div>
+            ))}
+            {logs.length === 0 && <div style={{ color: '#8b949e' }}>Waiting for activity...</div>}
+          </div>
         </div>
       </div>
     </div>

@@ -323,6 +323,7 @@ public class OrderExecutionService {
         activeOrders.remove(orderId);
     }
 
+    @jakarta.annotation.PreDestroy
     public void disconnect() {
         if (client.isConnected()) {
             client.eDisconnect();

@@ -5,6 +5,15 @@ spring:
   main:
     web-application-type: servlet
 
+  devtools:
+    restart:
+      enabled: true
+      quiet-period: 2s
+      poll-interval: 3s
+      additional-exclude: "data/**,logs/**,backtest/**"
+    livereload:
+      enabled: false  # Not needed - frontend uses Vite HMR
+
 server:
   port: 9090
   tomcat:

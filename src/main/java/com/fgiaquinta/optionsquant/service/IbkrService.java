@@ -112,6 +112,7 @@ public class IbkrService {
     /**
      * Disconnect from TWS.
      */
+    @jakarta.annotation.PreDestroy
     public void disconnect() {
         log.info(">>> disconnect() - Disconnecting from IBKR");
         if (client.isConnected()) {

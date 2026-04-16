@@ -88,11 +88,23 @@ public class MarketScanner {
             
             // Run on background thread so the app reaches "ready" state immediately
             CompletableFuture.runAsync(() -> {
+                List<String> allTickers = ibkrProperties.useCsvTickers()
+                        ? tickerService.getTickerSymbols()
+                        : ibkrProperties.tickers();
+
+                // Coordinate with LiveModeController so UI shows correct scanning state
+                liveModeController.updateScanningState(true, "Startup scan...", 0, allTickers.size());
                 try {
                     long startTime = System.currentTimeMillis();
                     // Include trade plans so we see TP/SL in logs
                     ScanResult result = scannerService.scanAll(true, true);
                     long elapsed = System.currentTimeMillis() - startTime;
+
+                    // Update UI with scan results
+                    liveModeController.updateScanComplete(elapsed);
+                    for (Signal signal : result.signals()) {
+                        liveModeController.addLiveSignal(signal);
+                    }
                     
                     log.info("✅ Startup delta download complete!");
                     log.info("   Tickers refreshed: {}", result.tickersScanned());
@@ -101,6 +113,8 @@ public class MarketScanner {
                     log.info("   Next scan: at next 15-min boundary");
                 } catch (Exception e) {
                     log.warn("⚠️ Startup delta download failed: {} (will retry at next scan)", e.getMessage());
+                    // Always reset scanning state on failure
+                    liveModeController.updateScanComplete(0);
                 }
             });
         } else {

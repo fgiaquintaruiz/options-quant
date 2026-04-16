@@ -1,0 +1,82 @@
+2026-04-16 07:20:52 - FGIAQUINTA@INNO-CML MINGW64 ~/IdeaProjects/options-quant (main)
+$ ./gradlew bootRun
+
+> Task :bootRun
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v4.0.4)
+
+2026-04-16 07:33:08.382 INFO  [restartedMain] c.optionsquant.OptionsQuantApplication : Starting OptionsQuantApplication using Java 25.0.1 with PID 52376 (C:\Users\FGIAQUINTA\IdeaProjects\options-quant\build\classes\java\main started by FGIAQUINTA in C:\Users\FGIAQUINTA\IdeaProjects\options-quant)
+2026-04-16 07:33:08.385 DEBUG [restartedMain] c.optionsquant.OptionsQuantApplication : Running with Spring Boot v4.0.4, Spring v7.0.6  
+2026-04-16 07:33:08.389 INFO  [restartedMain] c.optionsquant.OptionsQuantApplication : No active profile set, falling back to 1 default profile: "default"
+2026-04-16 07:33:12.899 INFO  [restartedMain] c.optionsquant.service.TickerMemory : ­ƒºá [Memory] Loaded 503 tickers and 1789 profiles from data\ticker-memory.json
+2026-04-16 07:33:13.429 INFO  [restartedMain] c.y.controller.LiveModeController : LiveModeController initialized - scanning state reset to clean
+2026-04-16 07:33:13.460 INFO  [restartedMain] c.y.service.MacroEnvironmentFilter : ­ƒîÉ [Macro Filter] Initializing - multi-factor analysis (50-SMA + short-term momentum)...
+2026-04-16 07:33:13.461 DEBUG [restartedMain] c.y.service.CandleCsvService : >>> loadFromCsv(ticker=SPY, timeframe=DAY_1)
+2026-04-16 07:33:13.481 INFO  [restartedMain] c.y.service.MacroEnvironmentFilter : ­ƒîÉ [Macro Filter] SPY $694.46 | 50-SMA $674.11 (+3.02%) | Regime: STRONGLY_BULLISH
+2026-04-16 07:33:13.481 INFO  [restartedMain] c.y.service.MacroEnvironmentFilter :    ÔåÆ 5-day SMA: $682.47 | 10-day SMA: $669.19 | Momentum: RISING (+1.985%)
+2026-04-16 07:33:13.482 INFO  [restartedMain] c.y.service.MacroEnvironmentFilter :    ÔåÆ CALL trades: allowed | PUT trades: BLOCKED 
+2026-04-16 07:33:13.489 INFO  [restartedMain] c.y.service.TrailingStopMonitor : ­ƒÄ» [TrailingStop] Initialized - trailing at 0.35% profit, time stop at 90 min
+2026-04-16 07:33:13.531 INFO  [restartedMain] c.optionsquant.service.MarketScanner : ­ƒñû MarketScanner initialized - Spain timezone, 15-min synchronized
+2026-04-16 07:33:13.533 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Auto-execute: true
+2026-04-16 07:33:13.536 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
+2026-04-16 07:33:13.537 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
+2026-04-16 07:33:13.537 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
+2026-04-16 07:33:14.454 WARN  [restartedMain] o.s.b.w.s.s.c.AnnotationConfigServletWebServerApplicationContext : Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.BeanCreationException: Error creating bean with name 'classPathFileSystemWatcher' defined in class path resource [org/springframework/boot/devtools/autoconfigure/LocalDevToolsAutoConfiguration$RestartConfiguration.class]: Failed to instantiate [org.springframework.boot.devtools.classpath.ClassPathFileSystemWatcher]: Factory method 'classPathFileSystemWatcher' threw exception with message: 'pollInterval' must be greater than QuietPeriod
+2026-04-16 07:33:14.457 INFO  [restartedMain] com.fgiaquinta.optionsquant.service.IbkrService : >>> disconnect() - Disconnecting from IBKR       
+2026-04-16 07:33:14.457 DEBUG [restartedMain] com.fgiaquinta.optionsquant.service.IbkrService : <<< disconnect() - Already disconnected
+2026-04-16 07:33:14.549 ERROR [restartedMain] o.s.boot.SpringApplication : Application run failed
+org.springframework.beans.factory.BeanCreationException: Error creating bean with name 'classPathFileSystemWatcher' defined in class path resource [org/springframework/boot/devtools/autoconfigure/LocalDevToolsAutoConfiguration$RestartConfiguration.class]: Failed to instantiate [org.springframework.boot.devtools.classpath.ClassPathFileSystemWatcher]: Factory method 'classPathFileSystemWatcher' threw exception with message: 'pollInterval' must be greater than QuietPeriod
+        at org.springframework.beans.factory.support.ConstructorResolver.instantiate(ConstructorResolver.java:657)
+        at org.springframework.beans.factory.support.ConstructorResolver.instantiateUsingFactoryMethod(ConstructorResolver.java:645) 
+        at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.instantiateUsingFactoryMethod(AbstractAutowireCapableBeanFactory.java:1362)
+        at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBeanInstance(AbstractAutowireCapableBeanFactory.java:1194)
+        at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:565)
+        at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:525)
+        at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:333)
+        at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:371)
+        at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:331)
+        at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:196)
+        at org.springframework.beans.factory.support.DefaultListableBeanFactory.instantiateSingleton(DefaultListableBeanFactory.java:1218)
+        at org.springframework.beans.factory.support.DefaultListableBeanFactory.preInstantiateSingleton(DefaultListableBeanFactory.java:1184)
+        at org.springframework.beans.factory.support.DefaultListableBeanFactory.preInstantiateSingletons(DefaultListableBeanFactory.java:1121)
+        at org.springframework.context.support.AbstractApplicationContext.finishBeanFactoryInitialization(AbstractApplicationContext.java:994)
+        at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:621)
+        at org.springframework.boot.web.server.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:143)
+        at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:756)
+        at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:445)
+        at org.springframework.boot.SpringApplication.run(SpringApplication.java:321)
+        at org.springframework.boot.SpringApplication.run(SpringApplication.java:1365)
+        at org.springframework.boot.SpringApplication.run(SpringApplication.java:1354)
+        at com.fgiaquinta.optionsquant.OptionsQuantApplication.main(OptionsQuantApplication.java:13)
+        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+        at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+        at org.springframework.boot.devtools.restart.RestartLauncher.run(RestartLauncher.java:52)
+Caused by: org.springframework.beans.BeanInstantiationException: Failed to instantiate [org.springframework.boot.devtools.classpath.ClassPathFileSystemWatcher]: Factory method 'classPathFileSystemWatcher' threw exception with message: 'pollInterval' must be greater than QuietPeriod
+        at org.springframework.beans.factory.support.SimpleInstantiationStrategy.lambda$instantiate$0(SimpleInstantiationStrategy.java:183)
+        at org.springframework.beans.factory.support.SimpleInstantiationStrategy.instantiateWithFactoryMethod(SimpleInstantiationStrategy.java:72)
+        at org.springframework.beans.factory.support.SimpleInstantiationStrategy.instantiate(SimpleInstantiationStrategy.java:152)
+        at org.springframework.beans.factory.support.ConstructorResolver.instantiate(ConstructorResolver.java:653)
+        ... 24 common frames omitted
+Caused by: java.lang.IllegalArgumentException: 'pollInterval' must be greater than QuietPeriod
+        at org.springframework.util.Assert.isTrue(Assert.java:117)
+        at org.springframework.boot.devtools.filewatch.FileSystemWatcher.<init>(FileSystemWatcher.java:104)
+        at org.springframework.boot.devtools.autoconfigure.LocalDevToolsAutoConfiguration$RestartConfiguration.newFileSystemWatcher(LocalDevToolsAutoConfiguration.java:149)
+        at org.springframework.boot.devtools.classpath.ClassPathFileSystemWatcher.<init>(ClassPathFileSystemWatcher.java:62)
+        at org.springframework.boot.devtools.autoconfigure.LocalDevToolsAutoConfiguration$RestartConfiguration.classPathFileSystemWatcher(LocalDevToolsAutoConfiguration.java:122)
+        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+        at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+        at org.springframework.beans.factory.support.SimpleInstantiationStrategy.lambda$instantiate$0(SimpleInstantiationStrategy.java:155)
+        ... 27 common frames omitted
+
+BUILD SUCCESSFUL in 17s
+4 actionable tasks: 2 executed, 2 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.3.0/userguide/configuration_cache_enabling.html
+2026-04-16 07:33:16 - FGIAQUINTA@INNO-CML MINGW64 ~/IdeaProjects/options-quant (main)
+$ 
