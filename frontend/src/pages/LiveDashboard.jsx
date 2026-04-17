@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Play, Square } from 'lucide-react'
+import { Play, Square, Zap } from 'lucide-react'
 import { liveApi } from '../api'
 import LiveTradeGrid from '../components/LiveTradeGrid'
 import TickerSelector from '../components/TickerSelector'
@@ -11,15 +11,11 @@ function OnOffToggle({ value, onClick, disabled }) {
     <strong
       onClick={!disabled ? onClick : undefined}
       className={`badge ${value ? 'badge-success' : 'badge-error'}`}
-      style={{ cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1, width: 45, textAlign: 'center' }}
+      style={{ cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1, width: 40, textAlign: 'center', fontSize: '9px', padding: '2px 4px' }}
     >
       {value ? 'ON' : 'OFF'}
     </strong>
   )
-}
-
-function Divider() {
-  return <div className="divider-v" />
 }
 
 export default function LiveDashboard({ twsStatus }) {
@@ -293,7 +289,7 @@ export default function LiveDashboard({ twsStatus }) {
       )}
 
       {mockMarketOpen && (
-        <div className="card mb-12" style={{ background: '#f0883e18', border: '1px solid #f0883e55', padding: '7px 14px' }}>
+        <div className="card mb-12" style={{ background: '#f0883e18', border: '1px solid #f0883e55', padding: '6px 12px' }}>
           <div className="flex-align-center gap-8 text-sm">
             <span style={{ fontSize: 16 }}>⚠️</span>
             <strong style={{ color: '#f0883e' }}>Mock Market Open</strong>
@@ -302,126 +298,127 @@ export default function LiveDashboard({ twsStatus }) {
         </div>
       )}
 
-      {/* Toolbar */}
-      <div className="card toolbar-card">
-        <div className="toolbar-section">
-          
-          {/* Tickers */}
-          <div style={{ minWidth: 280, flex: 1 }}>
-            <TickerSelector value={tickerFilter} onChange={handleFilterChange} disabled={scanning} />
+      {/* Optimized Toolbar */}
+      <div className="card" style={{ padding: '12px 16px', marginBottom: 20 }}>
+        <div className="flex-col gap-12">
+          {/* Row 1: Tickers */}
+          <div className="flex-align-center gap-15">
+            <div className="stat-label-sm color-muted" style={{ whiteSpace: 'nowrap' }}>Tickers to scan</div>
+            <div style={{ flex: 1 }}>
+              <TickerSelector value={tickerFilter} onChange={handleFilterChange} disabled={scanning} />
+            </div>
           </div>
 
-          <Divider />
-
-          {/* Controls */}
-          <div className="toolbar-controls">
-            {scanning || stopRequested ? (
-              <button className="btn btn-danger" onClick={handleStopScan} style={{ padding: '8px 16px' }}>
-                <Square size={16} /> Stop Scan
-              </button>
-            ) : (
-              <button className="btn btn-primary" onClick={handleStartScan}
-                disabled={!canScan} style={{ padding: '8px 16px' }}>
-                <Play size={16} /> Start Scan
-              </button>
-            )}
-
-            {mockMarketOpen && (
-              <button className="btn" onClick={handleInjectMockSignal}
-                style={{ padding: '6px 12px', background: '#f0883e22', border: '1px solid #f0883e66', color: '#f0883e', fontSize: 13 }}>
-                ⚡ Signal
-              </button>
-            )}
-
-            <div className="flex-col gap-4">
-              <label className="flex-align-center gap-4 text-sm color-muted" style={{ cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={status?.schedulerEnabled || false}
-                  onChange={() => liveApi.toggleScheduler().catch(() => {})}
-                  style={{ accentColor: '#58a6ff' }}
-                />
-                Auto
-              </label>
-              {status?.schedulerEnabled && (
-                <span className="color-info font-bold" style={{ fontSize: 9 }}>
-                  {formatMinSec(nextScanSecs)}
-                </span>
+          {/* Row 2: Controls & Status */}
+          <div className="flex-between flex-wrap gap-15">
+            
+            <div className="flex-align-center gap-12">
+              {scanning || stopRequested ? (
+                <button className="btn btn-danger" onClick={handleStopScan} style={{ padding: '6px 12px', fontSize: 12 }}>
+                  <Square size={14} /> Stop
+                </button>
+              ) : (
+                <button className="btn btn-primary" onClick={handleStartScan}
+                  disabled={!canScan} style={{ padding: '6px 12px', fontSize: 12 }}>
+                  <Play size={14} /> Start Scan
+                </button>
               )}
-            </div>
-          </div>
 
-          <Divider />
+              <button className="btn" onClick={handleInjectMockSignal}
+                style={{ padding: '6px 12px', background: '#f0883e22', border: '1px solid #f0883e66', color: '#f0883e', fontSize: 12 }}>
+                <Zap size={14} /> Signal
+              </button>
 
-          <div className="flex-align-center gap-15">
-            <div className="stat-box">
-              <span className="stat-label-sm">Concurrent:</span>
-              <input type="number" min="1" max="16" value={maxConcurrent}
-                onChange={e => handleMaxConcurrentChange(e.target.value)} disabled={scanning}
-                style={{ width: 45, padding: '4px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 12, textAlign: 'center' }} />
-            </div>
+              <div className="flex-align-center gap-6">
+                <label className="flex-align-center gap-3 text-sm color-muted" style={{ cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={status?.schedulerEnabled || false}
+                    onChange={() => liveApi.toggleScheduler().catch(() => {})}
+                    style={{ accentColor: '#58a6ff' }}
+                  />
+                  Auto
+                </label>
+                {status?.schedulerEnabled && (
+                  <span className="color-info font-bold" style={{ fontSize: 11, minWidth: 40 }}>
+                    {formatMinSec(nextScanSecs)}
+                  </span>
+                )}
+              </div>
 
-            <div className="stat-box">
-              <span className="stat-label-sm">Universe:</span>
-              <div className="flex-align-center gap-4">
-                <button
-                  className="btn"
-                  disabled={scanning}
-                  onClick={() => handleScopeChange('ALL')}
-                  style={{ padding: '4px 6px', background: tickerScope === 'ALL' ? '#1f6feb' : '#21262d', color: '#fff', fontSize: 10, border: '1px solid #30363d' }}
-                >
-                  All
-                </button>
-                <button
-                  className="btn"
-                  disabled={scanning}
-                  onClick={() => handleScopeChange('HOT')}
-                  style={{ padding: '4px 6px', background: tickerScope === 'HOT' ? '#9e6a03' : '#21262d', color: '#fff', fontSize: 10, border: '1px solid #30363d' }}
-                >
-                  Hot
-                </button>
+              <div className="divider-v" style={{ height: 20 }} />
+
+              <div className="flex-align-center gap-10">
+                <div className="flex-align-center gap-4">
+                  <span className="stat-label-sm color-muted">Concurrent:</span>
+                  <input type="number" min="1" max="16" value={maxConcurrent}
+                    onChange={e => handleMaxConcurrentChange(e.target.value)} disabled={scanning}
+                    style={{ width: 35, padding: '2px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 11, textAlign: 'center' }} />
+                </div>
+
+                <div className="flex-align-center gap-4">
+                  <span className="stat-label-sm color-muted">Universe:</span>
+                  <div className="flex-align-center gap-2">
+                    <button
+                      className="btn"
+                      disabled={scanning}
+                      onClick={() => handleScopeChange('ALL')}
+                      style={{ padding: '2px 6px', background: tickerScope === 'ALL' ? '#1f6feb' : '#21262d', color: '#fff', fontSize: 10, border: '1px solid #30363d' }}
+                    >
+                      All
+                    </button>
+                    <button
+                      className="btn"
+                      disabled={scanning}
+                      onClick={() => handleScopeChange('HOT')}
+                      style={{ padding: '2px 6px', background: tickerScope === 'HOT' ? '#9e6a03' : '#21262d', color: '#fff', fontSize: 10, border: '1px solid #30363d' }}
+                    >
+                      Hot
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        <div className="toolbar-settings">
-          <div className="flex-align-center gap-10">
-            <div className="flex-align-center gap-4">
-              <span className="text-xs">Exec:</span>
-              <OnOffToggle value={status?.autoExecute} onClick={handleToggleAutoExecute} />
-            </div>
-            <div className="flex-align-center gap-4">
-              <span className="text-xs">Mock:</span>
-              <OnOffToggle value={mockMarketOpen} onClick={handleToggleMockMarket} />
-            </div>
-          </div>
-
-          <Divider />
-
-          <div className="flex-align-center gap-15">
-            <div className="stat-box">
-              <span className="stat-label-sm">Account:</span>
-              <strong className="stat-value-md">{twsStatus?.accountId || 'OFFLINE'}</strong>
-            </div>
-            <div className="stat-box">
-              <span className="stat-label-sm">Risk:</span>
-              <div className="flex-align-center gap-4">
-                <input
-                  type="number" step="0.1" min="0.1" max="10"
-                  value={riskInput}
-                  onChange={e => setRiskInput(e.target.value)}
-                  onBlur={handleRiskBlur}
-                  style={{ width: 40, padding: '2px 4px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 12, textAlign: 'right' }}
-                />
-                <span className="text-xs">%</span>
+            <div className="flex-align-center gap-15">
+              <div className="flex-align-center gap-8">
+                <div className="flex-align-center gap-3">
+                  <span className="text-xs color-muted">Exec:</span>
+                  <OnOffToggle value={status?.autoExecute} onClick={handleToggleAutoExecute} />
+                </div>
+                <div className="flex-align-center gap-3">
+                  <span className="text-xs color-muted">Mock:</span>
+                  <OnOffToggle value={mockMarketOpen} onClick={handleToggleMockMarket} />
+                </div>
               </div>
-            </div>
-            <div className="stat-box">
-              <span className="stat-label-sm">Balance:</span>
-              <strong className="stat-value-md color-success">
-                {twsStatus?.balance > 0 ? `$${Number(twsStatus.balance).toLocaleString()}` : '$0'}
-              </strong>
+
+              <div className="divider-v" style={{ height: 20 }} />
+
+              <div className="flex-align-center gap-12">
+                <div className="stat-box">
+                  <span className="stat-label-sm color-muted">Account:</span>
+                  <strong className="text-sm">{twsStatus?.accountId || 'OFFLINE'}</strong>
+                </div>
+                <div className="stat-box">
+                  <span className="stat-label-sm color-muted">Risk:</span>
+                  <div className="flex-align-center gap-2">
+                    <input
+                      type="number" step="0.1" min="0.1" max="10"
+                      value={riskInput}
+                      onChange={e => setRiskInput(e.target.value)}
+                      onBlur={handleRiskBlur}
+                      style={{ width: 35, padding: '2px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 11, textAlign: 'right' }}
+                    />
+                    <span className="text-xs color-muted">%</span>
+                  </div>
+                </div>
+                <div className="stat-box">
+                  <span className="stat-label-sm color-muted">Balance:</span>
+                  <strong className="text-sm color-success">
+                    {twsStatus?.balance > 0 ? `$${Number(twsStatus.balance).toLocaleString()}` : '$0'}
+                  </strong>
+                </div>
+              </div>
             </div>
           </div>
         </div>
