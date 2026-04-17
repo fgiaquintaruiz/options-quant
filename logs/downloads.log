@@ -2375,3 +2375,299 @@
 2026-04-17 15:15:58.009 INFO  [Ticker-Scanner] DataDownload : 📥 DOW downloading 3 timeframes in parallel...
 2026-04-17 15:16:33.708 INFO  [Ticker-Scanner] DataDownload : ✅ DOW downloads complete (+0 new candles)
 2026-04-17 15:16:49.838 INFO  [Ticker-Scanner] DataDownload : 📥 AAPL downloading 3 timeframes in parallel...
+2026-04-17 15:18:54.081 INFO  [Ticker-Scanner] DataDownload : ✅ AAPL downloads complete (+0 new candles)
+2026-04-17 15:18:54.142 INFO  [Ticker-Scanner] DataDownload : 📥 AMD downloading 3 timeframes in parallel...
+2026-04-17 15:20:54.390 INFO  [Ticker-Scanner] DataDownload : ✅ AMD downloads complete (+0 new candles)
+2026-04-17 15:20:54.531 INFO  [Ticker-Scanner] DataDownload : 📥 AMZN downloading 3 timeframes in parallel...
+2026-04-17 15:22:54.921 INFO  [Ticker-Scanner] DataDownload : ✅ AMZN downloads complete (+0 new candles)
+2026-04-17 15:22:54.961 INFO  [Ticker-Scanner] DataDownload : 📥 GOOGL downloading 3 timeframes in parallel...
+2026-04-17 15:24:55.031 INFO  [Ticker-Scanner] DataDownload : ✅ GOOGL downloads complete (+0 new candles)
+2026-04-17 15:24:55.119 INFO  [Ticker-Scanner] DataDownload : 📥 JNJ downloading 3 timeframes in parallel...
+2026-04-17 15:26:55.193 INFO  [Ticker-Scanner] DataDownload : ✅ JNJ downloads complete (+0 new candles)
+2026-04-17 15:26:55.288 INFO  [Ticker-Scanner] DataDownload : 📥 JPM downloading 3 timeframes in parallel...
+2026-04-17 15:28:55.534 INFO  [Ticker-Scanner] DataDownload : ✅ JPM downloads complete (+0 new candles)
+2026-04-17 15:28:55.583 INFO  [Ticker-Scanner] DataDownload : 📥 META downloading 3 timeframes in parallel...
+2026-04-17 15:30:55.666 INFO  [Ticker-Scanner] DataDownload : ✅ META downloads complete (+0 new candles)
+2026-04-17 15:30:55.737 INFO  [Ticker-Scanner] DataDownload : 📥 MSFT downloading 3 timeframes in parallel...
+2026-04-17 15:32:55.909 INFO  [Ticker-Scanner] DataDownload : ✅ MSFT downloads complete (+0 new candles)
+2026-04-17 15:32:55.999 INFO  [Ticker-Scanner] DataDownload : 📥 NVDA downloading 3 timeframes in parallel...
+2026-04-17 15:34:56.055 INFO  [Ticker-Scanner] DataDownload : ✅ NVDA downloads complete (+0 new candles)
+2026-04-17 15:34:56.147 INFO  [Ticker-Scanner] DataDownload : 📥 QQQ downloading 3 timeframes in parallel...
+2026-04-17 15:36:56.204 INFO  [Ticker-Scanner] DataDownload : ✅ QQQ downloads complete (+0 new candles)
+2026-04-17 15:36:56.276 INFO  [Ticker-Scanner] DataDownload : 📥 SPY downloading 3 timeframes in parallel...
+2026-04-17 15:38:56.412 INFO  [Ticker-Scanner] DataDownload : ✅ SPY downloads complete (+0 new candles)
+2026-04-17 15:38:56.505 INFO  [Ticker-Scanner] DataDownload : 📥 TSLA downloading 3 timeframes in parallel...
+2026-04-17 15:41:00.917 INFO  [Ticker-Scanner] DataDownload : ✅ TSLA downloads complete (+0 new candles)
+2026-04-17 15:41:00.992 INFO  [Ticker-Scanner] DataDownload : 📥 V downloading 3 timeframes in parallel...
+2026-04-17 15:43:01.096 INFO  [Ticker-Scanner] DataDownload : ✅ V downloads complete (+0 new candles)
+2026-04-17 15:43:01.194 INFO  [Ticker-Scanner] DataDownload : 📥 XOM downloading 3 timeframes in parallel...
+2026-04-17 15:45:01.196 INFO  [Ticker-Scanner] DataDownload : ✅ XOM downloads complete (+0 new candles)
+2026-04-17 15:45:01.240 INFO  [Ticker-Scanner] DataDownload : 📥 AAPL downloading 3 timeframes in parallel...
+2026-04-17 15:47:01.354 INFO  [Ticker-Scanner] DataDownload : ✅ AAPL downloads complete (+0 new candles)
+2026-04-17 15:47:01.453 INFO  [Ticker-Scanner] DataDownload : 📥 AMD downloading 3 timeframes in parallel...
+2026-04-17 15:49:01.536 INFO  [Ticker-Scanner] DataDownload : ✅ AMD downloads complete (+0 new candles)
+2026-04-17 15:49:01.599 INFO  [Ticker-Scanner] DataDownload : 📥 AMZN downloading 3 timeframes in parallel...
+2026-04-17 15:51:01.652 INFO  [Ticker-Scanner] DataDownload : ✅ AMZN downloads complete (+0 new candles)
+2026-04-17 15:51:01.778 INFO  [Ticker-Scanner] DataDownload : 📥 GOOGL downloading 3 timeframes in parallel...
+2026-04-17 15:53:01.881 INFO  [Ticker-Scanner] DataDownload : ✅ GOOGL downloads complete (+0 new candles)
+2026-04-17 15:53:01.956 INFO  [Ticker-Scanner] DataDownload : 📥 JNJ downloading 3 timeframes in parallel...
+2026-04-17 15:53:02.691 INFO  [IBKR-Downloader] DataDownload : ✅ JNJ [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 15:55:02.017 INFO  [Ticker-Scanner] DataDownload : ✅ JNJ downloads complete (+1 new candles)
+2026-04-17 15:55:02.017 INFO  [Ticker-Scanner] DataDownload : 📊 JNJ refresh complete: +1 new candles across timeframes
+2026-04-17 15:55:02.177 INFO  [Ticker-Scanner] DataDownload : 📥 JPM downloading 3 timeframes in parallel...
+2026-04-17 15:55:02.808 INFO  [IBKR-Downloader] DataDownload : ✅ JPM [MIN_5] delta: +2 new candles (cached: 1170 → merged: 1172)
+2026-04-17 15:55:03.014 INFO  [IBKR-Downloader] DataDownload : ✅ JPM [MIN_15] delta: +1 new candles (cached: 676 → merged: 677)
+2026-04-17 15:55:03.387 INFO  [IBKR-Downloader] DataDownload : ✅ JPM [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 15:55:03.388 INFO  [Ticker-Scanner] DataDownload : ✅ JPM downloads complete (+4 new candles)
+2026-04-17 15:55:03.388 INFO  [Ticker-Scanner] DataDownload : 📊 JPM refresh complete: +4 new candles across timeframes
+2026-04-17 15:55:03.504 INFO  [Ticker-Scanner] DataDownload : 📥 META downloading 3 timeframes in parallel...
+2026-04-17 15:55:04.140 INFO  [IBKR-Downloader] DataDownload : ✅ META [MIN_15] delta: +1 new candles (cached: 676 → merged: 677)
+2026-04-17 15:55:04.149 INFO  [IBKR-Downloader] DataDownload : ✅ META [MIN_5] delta: +2 new candles (cached: 1170 → merged: 1172)
+2026-04-17 15:55:08.698 INFO  [IBKR-Downloader] DataDownload : ✅ META [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 15:55:08.698 INFO  [Ticker-Scanner] DataDownload : ✅ META downloads complete (+4 new candles)
+2026-04-17 15:55:08.698 INFO  [Ticker-Scanner] DataDownload : 📊 META refresh complete: +4 new candles across timeframes
+2026-04-17 15:55:08.771 INFO  [Ticker-Scanner] DataDownload : 📥 MSFT downloading 3 timeframes in parallel...
+2026-04-17 15:55:09.444 INFO  [IBKR-Downloader] DataDownload : ✅ MSFT [MIN_5] delta: +2 new candles (cached: 1170 → merged: 1172)
+2026-04-17 15:55:14.919 INFO  [IBKR-Downloader] DataDownload : ✅ MSFT [MIN_15] delta: +1 new candles (cached: 676 → merged: 677)
+2026-04-17 15:55:15.127 INFO  [IBKR-Downloader] DataDownload : ✅ MSFT [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 15:55:15.129 INFO  [Ticker-Scanner] DataDownload : ✅ MSFT downloads complete (+4 new candles)
+2026-04-17 15:55:15.129 INFO  [Ticker-Scanner] DataDownload : 📊 MSFT refresh complete: +4 new candles across timeframes
+2026-04-17 15:55:15.211 INFO  [Ticker-Scanner] DataDownload : 📥 NVDA downloading 3 timeframes in parallel...
+2026-04-17 15:55:20.943 INFO  [IBKR-Downloader] DataDownload : ✅ NVDA [MIN_5] delta: +2 new candles (cached: 1170 → merged: 1172)
+2026-04-17 15:55:21.028 INFO  [IBKR-Downloader] DataDownload : ✅ NVDA [MIN_15] delta: +1 new candles (cached: 676 → merged: 677)
+2026-04-17 15:55:26.770 INFO  [IBKR-Downloader] DataDownload : ✅ NVDA [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 15:55:26.770 INFO  [Ticker-Scanner] DataDownload : ✅ NVDA downloads complete (+4 new candles)
+2026-04-17 15:55:26.770 INFO  [Ticker-Scanner] DataDownload : 📊 NVDA refresh complete: +4 new candles across timeframes
+2026-04-17 15:55:26.832 INFO  [Ticker-Scanner] DataDownload : 📥 QQQ downloading 3 timeframes in parallel...
+2026-04-17 15:55:38.794 INFO  [IBKR-Downloader] DataDownload : ✅ QQQ [MIN_15] delta: +1 new candles (cached: 676 → merged: 677)
+2026-04-17 15:55:44.687 INFO  [IBKR-Downloader] DataDownload : ✅ QQQ [MIN_5] delta: +2 new candles (cached: 1170 → merged: 1172)
+2026-04-17 15:55:50.761 INFO  [IBKR-Downloader] DataDownload : ✅ QQQ [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 15:55:50.762 INFO  [Ticker-Scanner] DataDownload : ✅ QQQ downloads complete (+4 new candles)
+2026-04-17 15:55:50.762 INFO  [Ticker-Scanner] DataDownload : 📊 QQQ refresh complete: +4 new candles across timeframes
+2026-04-17 15:55:50.832 INFO  [Ticker-Scanner] DataDownload : 📥 SPY downloading 3 timeframes in parallel...
+2026-04-17 15:56:02.941 INFO  [IBKR-Downloader] DataDownload : ✅ SPY [MIN_5] delta: +3 new candles (cached: 1092 → merged: 1095)
+2026-04-17 15:56:03.143 INFO  [IBKR-Downloader] DataDownload : ✅ SPY [MIN_15] delta: +1 new candles (cached: 650 → merged: 651)
+2026-04-17 15:56:03.367 INFO  [IBKR-Downloader] DataDownload : ✅ SPY [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 15:56:03.367 INFO  [Ticker-Scanner] DataDownload : ✅ SPY downloads complete (+5 new candles)
+2026-04-17 15:56:03.367 INFO  [Ticker-Scanner] DataDownload : 📊 SPY refresh complete: +5 new candles across timeframes
+2026-04-17 15:56:03.431 INFO  [Ticker-Scanner] DataDownload : 📥 TSLA downloading 3 timeframes in parallel...
+2026-04-17 15:56:04.417 INFO  [IBKR-Downloader] DataDownload : ✅ TSLA [MIN_15] delta: +1 new candles (cached: 650 → merged: 651)
+2026-04-17 15:56:04.419 INFO  [IBKR-Downloader] DataDownload : ✅ TSLA [MIN_5] delta: +3 new candles (cached: 1092 → merged: 1095)
+2026-04-17 15:56:08.751 INFO  [IBKR-Downloader] DataDownload : ✅ TSLA [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 15:56:08.751 INFO  [Ticker-Scanner] DataDownload : ✅ TSLA downloads complete (+5 new candles)
+2026-04-17 15:56:08.751 INFO  [Ticker-Scanner] DataDownload : 📊 TSLA refresh complete: +5 new candles across timeframes
+2026-04-17 15:56:08.808 INFO  [Ticker-Scanner] DataDownload : 📥 V downloading 3 timeframes in parallel...
+2026-04-17 15:56:09.353 INFO  [IBKR-Downloader] DataDownload : ✅ V [MIN_5] delta: +3 new candles (cached: 1092 → merged: 1095)
+2026-04-17 15:56:14.775 INFO  [IBKR-Downloader] DataDownload : ✅ V [MIN_15] delta: +1 new candles (cached: 650 → merged: 651)
+2026-04-17 15:56:15.012 INFO  [IBKR-Downloader] DataDownload : ✅ V [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 15:56:15.012 INFO  [Ticker-Scanner] DataDownload : ✅ V downloads complete (+5 new candles)
+2026-04-17 15:56:15.013 INFO  [Ticker-Scanner] DataDownload : 📊 V refresh complete: +5 new candles across timeframes
+2026-04-17 15:56:15.081 INFO  [Ticker-Scanner] DataDownload : 📥 XOM downloading 3 timeframes in parallel...
+2026-04-17 15:56:21.051 INFO  [IBKR-Downloader] DataDownload : ✅ XOM [MIN_5] delta: +3 new candles (cached: 1092 → merged: 1095)
+2026-04-17 15:56:21.173 INFO  [IBKR-Downloader] DataDownload : ✅ XOM [MIN_15] delta: +1 new candles (cached: 650 → merged: 651)
+2026-04-17 15:56:26.903 INFO  [IBKR-Downloader] DataDownload : ✅ XOM [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 15:56:26.903 INFO  [Ticker-Scanner] DataDownload : ✅ XOM downloads complete (+5 new candles)
+2026-04-17 15:56:26.903 INFO  [Ticker-Scanner] DataDownload : 📊 XOM refresh complete: +5 new candles across timeframes
+2026-04-17 15:56:26.959 INFO  [Ticker-Scanner] DataDownload : 📥 A downloading 3 timeframes in parallel...
+2026-04-17 15:56:38.569 INFO  [IBKR-Downloader] DataDownload : ✅ A [MIN_5] delta: +3 new candles (cached: 1092 → merged: 1095)
+2026-04-17 15:56:44.657 INFO  [IBKR-Downloader] DataDownload : ✅ A [MIN_15] delta: +1 new candles (cached: 650 → merged: 651)
+2026-04-17 15:56:50.755 INFO  [IBKR-Downloader] DataDownload : ✅ A [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 15:56:50.755 INFO  [Ticker-Scanner] DataDownload : ✅ A downloads complete (+5 new candles)
+2026-04-17 15:56:50.755 INFO  [Ticker-Scanner] DataDownload : 📊 A refresh complete: +5 new candles across timeframes
+2026-04-17 15:56:50.832 INFO  [Ticker-Scanner] DataDownload : 📥 AAL downloading 3 timeframes in parallel...
+2026-04-17 15:57:02.797 INFO  [IBKR-Downloader] DataDownload : ✅ AAL [MIN_5] delta: +68 new candles (cached: 1027 → merged: 1095)
+2026-04-17 15:57:02.911 INFO  [IBKR-Downloader] DataDownload : ✅ AAL [MIN_15] delta: +22 new candles (cached: 629 → merged: 651)
+2026-04-17 15:57:03.050 INFO  [IBKR-Downloader] DataDownload : ✅ AAL [HOUR_1] delta: +6 new candles (cached: 885 → merged: 891)
+2026-04-17 15:57:03.050 INFO  [Ticker-Scanner] DataDownload : ✅ AAL downloads complete (+96 new candles)
+2026-04-17 15:57:03.051 INFO  [Ticker-Scanner] DataDownload : 📊 AAL refresh complete: +96 new candles across timeframes
+2026-04-17 15:57:03.112 INFO  [Ticker-Scanner] DataDownload : 📥 ABBV downloading 3 timeframes in parallel...
+2026-04-17 15:57:03.679 INFO  [IBKR-Downloader] DataDownload : ✅ ABBV [MIN_5] delta: +3 new candles (cached: 1092 → merged: 1095)
+2026-04-17 15:57:03.786 INFO  [IBKR-Downloader] DataDownload : ✅ ABBV [MIN_15] delta: +1 new candles (cached: 650 → merged: 651)
+2026-04-17 15:57:08.781 INFO  [IBKR-Downloader] DataDownload : ✅ ABBV [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 15:57:08.781 INFO  [Ticker-Scanner] DataDownload : ✅ ABBV downloads complete (+5 new candles)
+2026-04-17 15:57:08.781 INFO  [Ticker-Scanner] DataDownload : 📊 ABBV refresh complete: +5 new candles across timeframes
+2026-04-17 15:57:08.838 INFO  [Ticker-Scanner] DataDownload : 📥 ABNB downloading 4 timeframes in parallel...
+2026-04-17 15:57:09.507 INFO  [IBKR-Downloader] DataDownload : ✅ ABNB [MIN_5] delta: +68 new candles (cached: 1027 → merged: 1095)
+2026-04-17 15:57:09.612 INFO  [IBKR-Downloader] DataDownload : ✅ ABNB [DAY_1] delta: +2 new candles (cached: 253 → merged: 255)
+2026-04-17 15:57:14.831 INFO  [IBKR-Downloader] DataDownload : ✅ ABNB [MIN_15] delta: +22 new candles (cached: 629 → merged: 651)
+2026-04-17 15:57:14.949 INFO  [IBKR-Downloader] DataDownload : ✅ ABNB [HOUR_1] delta: +6 new candles (cached: 885 → merged: 891)
+2026-04-17 15:57:14.949 INFO  [Ticker-Scanner] DataDownload : ✅ ABNB downloads complete (+98 new candles)
+2026-04-17 15:57:14.949 INFO  [Ticker-Scanner] DataDownload : 📊 ABNB refresh complete: +98 new candles across timeframes
+2026-04-17 15:57:14.998 INFO  [Ticker-Scanner] DataDownload : 📥 ABT downloading 4 timeframes in parallel...
+2026-04-17 15:57:16.359 INFO  [IBKR-Downloader] DataDownload : ✅ ABT [DAY_1] delta: +2 new candles (cached: 253 → merged: 255)
+2026-04-17 15:57:20.739 INFO  [IBKR-Downloader] DataDownload : ✅ ABT [MIN_5] delta: +68 new candles (cached: 1027 → merged: 1095)
+2026-04-17 15:57:20.874 INFO  [IBKR-Downloader] DataDownload : ✅ ABT [MIN_15] delta: +22 new candles (cached: 629 → merged: 651)
+2026-04-17 15:57:26.704 INFO  [IBKR-Downloader] DataDownload : ✅ ABT [HOUR_1] delta: +6 new candles (cached: 885 → merged: 891)
+2026-04-17 15:57:26.705 INFO  [Ticker-Scanner] DataDownload : ✅ ABT downloads complete (+98 new candles)
+2026-04-17 15:57:26.705 INFO  [Ticker-Scanner] DataDownload : 📊 ABT refresh complete: +98 new candles across timeframes
+2026-04-17 15:57:26.765 INFO  [Ticker-Scanner] DataDownload : 📥 ACGL downloading 4 timeframes in parallel...
+2026-04-17 15:57:27.632 INFO  [IBKR-Downloader] DataDownload : ✅ ACGL [DAY_1] delta: +2 new candles (cached: 253 → merged: 255)
+2026-04-17 15:57:38.555 INFO  [IBKR-Downloader] DataDownload : ✅ ACGL [MIN_5] delta: +68 new candles (cached: 1027 → merged: 1095)
+2026-04-17 15:57:44.744 INFO  [IBKR-Downloader] DataDownload : ✅ ACGL [MIN_15] delta: +22 new candles (cached: 629 → merged: 651)
+2026-04-17 15:57:50.646 INFO  [IBKR-Downloader] DataDownload : ✅ ACGL [HOUR_1] delta: +6 new candles (cached: 885 → merged: 891)
+2026-04-17 15:57:50.646 INFO  [Ticker-Scanner] DataDownload : ✅ ACGL downloads complete (+98 new candles)
+2026-04-17 15:57:50.646 INFO  [Ticker-Scanner] DataDownload : 📊 ACGL refresh complete: +98 new candles across timeframes
+2026-04-17 15:57:50.698 INFO  [Ticker-Scanner] DataDownload : 📥 ACN downloading 4 timeframes in parallel...
+2026-04-17 15:57:52.120 INFO  [IBKR-Downloader] DataDownload : ✅ ACN [DAY_1] delta: +2 new candles (cached: 253 → merged: 255)
+2026-04-17 15:58:02.979 INFO  [IBKR-Downloader] DataDownload : ✅ ACN [MIN_5] delta: +68 new candles (cached: 1027 → merged: 1095)
+2026-04-17 15:58:03.100 INFO  [IBKR-Downloader] DataDownload : ✅ ACN [MIN_15] delta: +22 new candles (cached: 629 → merged: 651)
+2026-04-17 15:58:03.206 INFO  [IBKR-Downloader] DataDownload : ✅ ACN [HOUR_1] delta: +6 new candles (cached: 885 → merged: 891)
+2026-04-17 15:58:03.206 INFO  [Ticker-Scanner] DataDownload : ✅ ACN downloads complete (+98 new candles)
+2026-04-17 15:58:03.206 INFO  [Ticker-Scanner] DataDownload : 📊 ACN refresh complete: +98 new candles across timeframes
+2026-04-17 15:58:03.263 INFO  [Ticker-Scanner] DataDownload : 📥 ADBE downloading 4 timeframes in parallel...
+2026-04-17 15:58:04.009 INFO  [IBKR-Downloader] DataDownload : ✅ ADBE [MIN_5] delta: +68 new candles (cached: 1027 → merged: 1095)
+2026-04-17 15:58:04.130 INFO  [IBKR-Downloader] DataDownload : ✅ ADBE [MIN_15] delta: +22 new candles (cached: 629 → merged: 651)
+2026-04-17 15:58:04.247 INFO  [IBKR-Downloader] DataDownload : ✅ ADBE [DAY_1] delta: +2 new candles (cached: 253 → merged: 255)
+2026-04-17 15:58:08.732 INFO  [IBKR-Downloader] DataDownload : ✅ ADBE [HOUR_1] delta: +6 new candles (cached: 885 → merged: 891)
+2026-04-17 15:58:08.732 INFO  [Ticker-Scanner] DataDownload : ✅ ADBE downloads complete (+98 new candles)
+2026-04-17 15:58:08.732 INFO  [Ticker-Scanner] DataDownload : 📊 ADBE refresh complete: +98 new candles across timeframes
+2026-04-17 15:58:08.816 INFO  [Ticker-Scanner] DataDownload : 📥 ADI downloading 4 timeframes in parallel...
+2026-04-17 15:58:10.005 INFO  [IBKR-Downloader] DataDownload : ✅ ADI [MIN_5] delta: +68 new candles (cached: 1027 → merged: 1095)
+2026-04-17 15:58:10.024 INFO  [IBKR-Downloader] DataDownload : ✅ ADI [DAY_1] delta: +2 new candles (cached: 253 → merged: 255)
+2026-04-17 15:58:14.898 INFO  [IBKR-Downloader] DataDownload : ✅ ADI [MIN_15] delta: +22 new candles (cached: 629 → merged: 651)
+2026-04-17 15:58:15.023 INFO  [IBKR-Downloader] DataDownload : ✅ ADI [HOUR_1] delta: +6 new candles (cached: 885 → merged: 891)
+2026-04-17 15:58:15.023 INFO  [Ticker-Scanner] DataDownload : ✅ ADI downloads complete (+98 new candles)
+2026-04-17 15:58:15.023 INFO  [Ticker-Scanner] DataDownload : 📊 ADI refresh complete: +98 new candles across timeframes
+2026-04-17 15:58:15.047 INFO  [Ticker-Scanner] DataDownload : 📥 ADM downloading 4 timeframes in parallel...
+2026-04-17 15:58:16.047 INFO  [IBKR-Downloader] DataDownload : ✅ ADM [DAY_1] delta: +2 new candles (cached: 253 → merged: 255)
+2026-04-17 15:58:20.743 INFO  [IBKR-Downloader] DataDownload : ✅ ADM [MIN_5] delta: +68 new candles (cached: 1027 → merged: 1095)
+2026-04-17 15:58:20.821 INFO  [IBKR-Downloader] DataDownload : ✅ ADM [MIN_15] delta: +22 new candles (cached: 629 → merged: 651)
+2026-04-17 15:58:26.816 INFO  [IBKR-Downloader] DataDownload : ✅ ADM [HOUR_1] delta: +6 new candles (cached: 885 → merged: 891)
+2026-04-17 15:58:26.816 INFO  [Ticker-Scanner] DataDownload : ✅ ADM downloads complete (+98 new candles)
+2026-04-17 15:58:26.816 INFO  [Ticker-Scanner] DataDownload : 📊 ADM refresh complete: +98 new candles across timeframes
+2026-04-17 15:58:26.881 INFO  [Ticker-Scanner] DataDownload : 📥 ADP downloading 4 timeframes in parallel...
+2026-04-17 15:58:28.099 INFO  [IBKR-Downloader] DataDownload : ✅ ADP [DAY_1] delta: +2 new candles (cached: 253 → merged: 255)
+2026-04-17 15:58:32.854 INFO  [IBKR-Downloader] DataDownload : ✅ ADP [MIN_15] delta: +22 new candles (cached: 629 → merged: 651)
+2026-04-17 15:58:44.835 INFO  [IBKR-Downloader] DataDownload : ✅ ADP [HOUR_1] delta: +6 new candles (cached: 885 → merged: 891)
+2026-04-17 15:58:50.548 INFO  [IBKR-Downloader] DataDownload : ✅ ADP [MIN_5] delta: +68 new candles (cached: 1027 → merged: 1095)
+2026-04-17 15:58:50.548 INFO  [Ticker-Scanner] DataDownload : ✅ ADP downloads complete (+98 new candles)
+2026-04-17 15:58:50.548 INFO  [Ticker-Scanner] DataDownload : 📊 ADP refresh complete: +98 new candles across timeframes
+2026-04-17 15:58:50.600 INFO  [Ticker-Scanner] DataDownload : 📥 ADSK downloading 4 timeframes in parallel...
+2026-04-17 15:58:51.373 INFO  [IBKR-Downloader] DataDownload : ✅ ADSK [DAY_1] delta: +2 new candles (cached: 253 → merged: 255)
+2026-04-17 15:59:02.783 INFO  [IBKR-Downloader] DataDownload : ✅ ADSK [MIN_5] delta: +68 new candles (cached: 1027 → merged: 1095)
+2026-04-17 15:59:02.793 INFO  [IBKR-Downloader] DataDownload : ✅ ADSK [MIN_15] delta: +22 new candles (cached: 629 → merged: 651)
+2026-04-17 15:59:02.797 INFO  [IBKR-Downloader] DataDownload : ✅ ADSK [HOUR_1] delta: +6 new candles (cached: 885 → merged: 891)
+2026-04-17 15:59:02.797 INFO  [Ticker-Scanner] DataDownload : ✅ ADSK downloads complete (+98 new candles)
+2026-04-17 15:59:02.797 INFO  [Ticker-Scanner] DataDownload : 📊 ADSK refresh complete: +98 new candles across timeframes
+2026-04-17 15:59:02.852 INFO  [Ticker-Scanner] DataDownload : 📥 AEE downloading 4 timeframes in parallel...
+2026-04-17 15:59:03.852 INFO  [IBKR-Downloader] DataDownload : ✅ AEE [DAY_1] delta: +2 new candles (cached: 253 → merged: 255)
+2026-04-17 15:59:03.853 INFO  [IBKR-Downloader] DataDownload : ✅ AEE [MIN_5] delta: +68 new candles (cached: 1027 → merged: 1095)
+2026-04-17 15:59:03.948 INFO  [IBKR-Downloader] DataDownload : ✅ AEE [MIN_15] delta: +22 new candles (cached: 629 → merged: 651)
+2026-04-17 15:59:08.860 INFO  [IBKR-Downloader] DataDownload : ✅ AEE [HOUR_1] delta: +6 new candles (cached: 885 → merged: 891)
+2026-04-17 15:59:08.860 INFO  [Ticker-Scanner] DataDownload : ✅ AEE downloads complete (+98 new candles)
+2026-04-17 15:59:08.860 INFO  [Ticker-Scanner] DataDownload : 📊 AEE refresh complete: +98 new candles across timeframes
+2026-04-17 15:59:08.949 INFO  [Ticker-Scanner] DataDownload : 📥 AEP downloading 4 timeframes in parallel...
+2026-04-17 15:59:10.034 INFO  [IBKR-Downloader] DataDownload : ✅ AEP [MIN_5] delta: +68 new candles (cached: 1027 → merged: 1095)
+2026-04-17 15:59:10.273 INFO  [IBKR-Downloader] DataDownload : ✅ AEP [DAY_1] delta: +2 new candles (cached: 253 → merged: 255)
+2026-04-17 15:59:14.942 INFO  [IBKR-Downloader] DataDownload : ✅ AEP [MIN_15] delta: +22 new candles (cached: 629 → merged: 651)
+2026-04-17 15:59:15.154 INFO  [IBKR-Downloader] DataDownload : ✅ AEP [HOUR_1] delta: +6 new candles (cached: 885 → merged: 891)
+2026-04-17 15:59:15.154 INFO  [Ticker-Scanner] DataDownload : ✅ AEP downloads complete (+98 new candles)
+2026-04-17 15:59:15.154 INFO  [Ticker-Scanner] DataDownload : 📊 AEP refresh complete: +98 new candles across timeframes
+2026-04-17 15:59:15.218 INFO  [Ticker-Scanner] DataDownload : 📥 AES downloading 3 timeframes in parallel...
+2026-04-17 15:59:20.671 INFO  [IBKR-Downloader] DataDownload : ✅ AES [MIN_5] delta: +68 new candles (cached: 1027 → merged: 1095)
+2026-04-17 15:59:20.770 INFO  [IBKR-Downloader] DataDownload : ✅ AES [MIN_15] delta: +22 new candles (cached: 629 → merged: 651)
+2026-04-17 15:59:26.743 INFO  [IBKR-Downloader] DataDownload : ✅ AES [HOUR_1] delta: +6 new candles (cached: 885 → merged: 891)
+2026-04-17 15:59:26.744 INFO  [Ticker-Scanner] DataDownload : ✅ AES downloads complete (+96 new candles)
+2026-04-17 15:59:26.744 INFO  [Ticker-Scanner] DataDownload : 📊 AES refresh complete: +96 new candles across timeframes
+2026-04-17 15:59:26.807 INFO  [Ticker-Scanner] DataDownload : 📥 AFG downloading 3 timeframes in parallel...
+2026-04-17 15:59:32.665 INFO  [IBKR-Downloader] DataDownload : ✅ AFG [MIN_15] delta: +1 new candles (cached: 650 → merged: 651)
+2026-04-17 15:59:38.529 INFO  [IBKR-Downloader] DataDownload : ✅ AFG [MIN_5] delta: +3 new candles (cached: 1092 → merged: 1095)
+2026-04-17 15:59:50.936 INFO  [IBKR-Downloader] DataDownload : ✅ AFG [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 15:59:50.937 INFO  [Ticker-Scanner] DataDownload : ✅ AFG downloads complete (+5 new candles)
+2026-04-17 15:59:50.937 INFO  [Ticker-Scanner] DataDownload : 📊 AFG refresh complete: +5 new candles across timeframes
+2026-04-17 15:59:50.998 INFO  [Ticker-Scanner] DataDownload : 📥 AFL downloading 3 timeframes in parallel...
+2026-04-17 16:00:02.695 INFO  [IBKR-Downloader] DataDownload : ✅ AFL [MIN_5] delta: +3 new candles (cached: 1092 → merged: 1095)
+2026-04-17 16:00:02.796 INFO  [IBKR-Downloader] DataDownload : ✅ AFL [MIN_15] delta: +1 new candles (cached: 650 → merged: 651)
+2026-04-17 16:00:03.019 INFO  [IBKR-Downloader] DataDownload : ✅ AFL [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 16:00:03.019 INFO  [Ticker-Scanner] DataDownload : ✅ AFL downloads complete (+5 new candles)
+2026-04-17 16:00:03.019 INFO  [Ticker-Scanner] DataDownload : 📊 AFL refresh complete: +5 new candles across timeframes
+2026-04-17 16:00:03.058 INFO  [Ticker-Scanner] DataDownload : 📥 AFRM downloading 3 timeframes in parallel...
+2026-04-17 16:00:03.498 INFO  [IBKR-Downloader] DataDownload : ✅ AFRM [MIN_5] delta: +3 new candles (cached: 1092 → merged: 1095)
+2026-04-17 16:00:03.600 INFO  [IBKR-Downloader] DataDownload : ✅ AFRM [MIN_15] delta: +1 new candles (cached: 650 → merged: 651)
+2026-04-17 16:00:08.662 INFO  [IBKR-Downloader] DataDownload : ✅ AFRM [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 16:00:08.662 INFO  [Ticker-Scanner] DataDownload : ✅ AFRM downloads complete (+5 new candles)
+2026-04-17 16:00:08.662 INFO  [Ticker-Scanner] DataDownload : 📊 AFRM refresh complete: +5 new candles across timeframes
+2026-04-17 16:00:08.714 INFO  [Ticker-Scanner] DataDownload : 📥 AIG downloading 3 timeframes in parallel...
+2026-04-17 16:00:09.240 INFO  [IBKR-Downloader] DataDownload : ✅ AIG [MIN_5] delta: +3 new candles (cached: 1092 → merged: 1095)
+2026-04-17 16:00:14.796 INFO  [IBKR-Downloader] DataDownload : ✅ AIG [MIN_15] delta: +1 new candles (cached: 650 → merged: 651)
+2026-04-17 16:00:14.817 INFO  [IBKR-Downloader] DataDownload : ✅ AIG [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 16:00:14.817 INFO  [Ticker-Scanner] DataDownload : ✅ AIG downloads complete (+5 new candles)
+2026-04-17 16:00:14.817 INFO  [Ticker-Scanner] DataDownload : 📊 AIG refresh complete: +5 new candles across timeframes
+2026-04-17 16:00:14.874 INFO  [Ticker-Scanner] DataDownload : 📥 AIZ downloading 3 timeframes in parallel...
+2026-04-17 16:00:20.657 INFO  [IBKR-Downloader] DataDownload : ✅ AIZ [MIN_5] delta: +3 new candles (cached: 1092 → merged: 1095)
+2026-04-17 16:00:20.757 INFO  [IBKR-Downloader] DataDownload : ✅ AIZ [MIN_15] delta: +1 new candles (cached: 650 → merged: 651)
+2026-04-17 16:00:26.829 INFO  [IBKR-Downloader] DataDownload : ✅ AIZ [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 16:00:26.829 INFO  [Ticker-Scanner] DataDownload : ✅ AIZ downloads complete (+5 new candles)
+2026-04-17 16:00:26.829 INFO  [Ticker-Scanner] DataDownload : 📊 AIZ refresh complete: +5 new candles across timeframes
+2026-04-17 16:00:26.900 INFO  [Ticker-Scanner] DataDownload : 📥 AJG downloading 3 timeframes in parallel...
+2026-04-17 16:00:32.797 INFO  [IBKR-Downloader] DataDownload : ✅ AJG [MIN_15] delta: +1 new candles (cached: 650 → merged: 651)
+2026-04-17 16:00:38.585 INFO  [IBKR-Downloader] DataDownload : ✅ AJG [MIN_5] delta: +3 new candles (cached: 1092 → merged: 1095)
+2026-04-17 16:00:50.829 INFO  [IBKR-Downloader] DataDownload : ✅ AJG [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 16:00:50.830 INFO  [Ticker-Scanner] DataDownload : ✅ AJG downloads complete (+5 new candles)
+2026-04-17 16:00:50.830 INFO  [Ticker-Scanner] DataDownload : 📊 AJG refresh complete: +5 new candles across timeframes
+2026-04-17 16:00:50.944 INFO  [Ticker-Scanner] DataDownload : 📥 AKAM downloading 3 timeframes in parallel...
+2026-04-17 16:01:02.755 INFO  [IBKR-Downloader] DataDownload : ✅ AKAM [MIN_5] delta: +4 new candles (cached: 1092 → merged: 1096)
+2026-04-17 16:01:02.797 INFO  [IBKR-Downloader] DataDownload : ✅ AKAM [MIN_15] delta: +2 new candles (cached: 650 → merged: 652)
+2026-04-17 16:01:02.861 INFO  [IBKR-Downloader] DataDownload : ✅ AKAM [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 16:01:02.861 INFO  [Ticker-Scanner] DataDownload : ✅ AKAM downloads complete (+7 new candles)
+2026-04-17 16:01:02.861 INFO  [Ticker-Scanner] DataDownload : 📊 AKAM refresh complete: +7 new candles across timeframes
+2026-04-17 16:01:02.906 INFO  [Ticker-Scanner] DataDownload : 📥 ALB downloading 3 timeframes in parallel...
+2026-04-17 16:01:03.436 INFO  [IBKR-Downloader] DataDownload : ✅ ALB [MIN_5] delta: +4 new candles (cached: 1092 → merged: 1096)
+2026-04-17 16:01:03.552 INFO  [IBKR-Downloader] DataDownload : ✅ ALB [MIN_15] delta: +2 new candles (cached: 650 → merged: 652)
+2026-04-17 16:01:08.913 INFO  [IBKR-Downloader] DataDownload : ✅ ALB [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 16:01:08.913 INFO  [Ticker-Scanner] DataDownload : ✅ ALB downloads complete (+7 new candles)
+2026-04-17 16:01:08.913 INFO  [Ticker-Scanner] DataDownload : 📊 ALB refresh complete: +7 new candles across timeframes
+2026-04-17 16:01:08.996 INFO  [Ticker-Scanner] DataDownload : 📥 ALGN downloading 3 timeframes in parallel...
+2026-04-17 16:01:09.377 INFO  [IBKR-Downloader] DataDownload : ✅ ALGN [MIN_5] delta: +4 new candles (cached: 1092 → merged: 1096)
+2026-04-17 16:01:14.686 INFO  [IBKR-Downloader] DataDownload : ✅ ALGN [MIN_15] delta: +2 new candles (cached: 650 → merged: 652)
+2026-04-17 16:01:14.873 INFO  [IBKR-Downloader] DataDownload : ✅ ALGN [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 16:01:14.873 INFO  [Ticker-Scanner] DataDownload : ✅ ALGN downloads complete (+7 new candles)
+2026-04-17 16:01:14.875 INFO  [Ticker-Scanner] DataDownload : 📊 ALGN refresh complete: +7 new candles across timeframes
+2026-04-17 16:01:14.942 INFO  [Ticker-Scanner] DataDownload : 📥 ALL downloading 3 timeframes in parallel...
+2026-04-17 16:01:20.774 INFO  [IBKR-Downloader] DataDownload : ✅ ALL [MIN_5] delta: +4 new candles (cached: 1092 → merged: 1096)
+2026-04-17 16:01:20.894 INFO  [IBKR-Downloader] DataDownload : ✅ ALL [MIN_15] delta: +2 new candles (cached: 650 → merged: 652)
+2026-04-17 16:01:26.838 INFO  [IBKR-Downloader] DataDownload : ✅ ALL [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 16:01:26.838 INFO  [Ticker-Scanner] DataDownload : ✅ ALL downloads complete (+7 new candles)
+2026-04-17 16:01:26.838 INFO  [Ticker-Scanner] DataDownload : 📊 ALL refresh complete: +7 new candles across timeframes
+2026-04-17 16:01:26.895 INFO  [Ticker-Scanner] DataDownload : 📥 ALLE downloading 3 timeframes in parallel...
+2026-04-17 16:01:32.651 INFO  [IBKR-Downloader] DataDownload : ✅ ALLE [MIN_15] delta: +2 new candles (cached: 650 → merged: 652)
+2026-04-17 16:01:44.703 INFO  [IBKR-Downloader] DataDownload : ✅ ALLE [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 16:01:50.547 INFO  [IBKR-Downloader] DataDownload : ✅ ALLE [MIN_5] delta: +4 new candles (cached: 1092 → merged: 1096)
+2026-04-17 16:01:50.547 INFO  [Ticker-Scanner] DataDownload : ✅ ALLE downloads complete (+7 new candles)
+2026-04-17 16:01:50.547 INFO  [Ticker-Scanner] DataDownload : 📊 ALLE refresh complete: +7 new candles across timeframes
+2026-04-17 16:01:50.643 INFO  [Ticker-Scanner] DataDownload : 📥 AMAT downloading 3 timeframes in parallel...
+2026-04-17 16:02:02.758 INFO  [IBKR-Downloader] DataDownload : ✅ AMAT [MIN_5] delta: +4 new candles (cached: 1092 → merged: 1096)
+2026-04-17 16:02:02.867 INFO  [IBKR-Downloader] DataDownload : ✅ AMAT [MIN_15] delta: +2 new candles (cached: 650 → merged: 652)
+2026-04-17 16:02:03.007 INFO  [IBKR-Downloader] DataDownload : ✅ AMAT [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 16:02:03.007 INFO  [Ticker-Scanner] DataDownload : ✅ AMAT downloads complete (+7 new candles)
+2026-04-17 16:02:03.007 INFO  [Ticker-Scanner] DataDownload : 📊 AMAT refresh complete: +7 new candles across timeframes
+2026-04-17 16:02:03.049 INFO  [Ticker-Scanner] DataDownload : 📥 AMCR downloading 3 timeframes in parallel...
+2026-04-17 16:02:03.686 INFO  [IBKR-Downloader] DataDownload : ✅ AMCR [MIN_5] delta: +4 new candles (cached: 1092 → merged: 1096)
+2026-04-17 16:02:03.783 INFO  [IBKR-Downloader] DataDownload : ✅ AMCR [MIN_15] delta: +2 new candles (cached: 650 → merged: 652)
+2026-04-17 16:02:08.987 INFO  [IBKR-Downloader] DataDownload : ✅ AMCR [HOUR_1] delta: +1 new candles (cached: 925 → merged: 926)
+2026-04-17 16:02:08.987 INFO  [Ticker-Scanner] DataDownload : ✅ AMCR downloads complete (+7 new candles)
+2026-04-17 16:02:08.987 INFO  [Ticker-Scanner] DataDownload : 📊 AMCR refresh complete: +7 new candles across timeframes
+2026-04-17 16:02:09.074 INFO  [Ticker-Scanner] DataDownload : 📥 AMDL downloading 3 timeframes in parallel...
+2026-04-17 16:02:09.503 INFO  [IBKR-Downloader] DataDownload : ✅ AMDL [MIN_5] delta: +4 new candles (cached: 1092 → merged: 1096)
+2026-04-17 16:02:14.775 INFO  [IBKR-Downloader] DataDownload : ✅ AMDL [MIN_15] delta: +2 new candles (cached: 650 → merged: 652)
+2026-04-17 16:02:14.777 INFO  [IBKR-Downloader] DataDownload : ✅ AMDL [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 16:02:14.777 INFO  [Ticker-Scanner] DataDownload : ✅ AMDL downloads complete (+7 new candles)
+2026-04-17 16:02:14.777 INFO  [Ticker-Scanner] DataDownload : 📊 AMDL refresh complete: +7 new candles across timeframes
+2026-04-17 16:02:14.831 INFO  [Ticker-Scanner] DataDownload : 📥 AME downloading 3 timeframes in parallel...
+2026-04-17 16:02:20.806 INFO  [IBKR-Downloader] DataDownload : ✅ AME [MIN_5] delta: +4 new candles (cached: 1092 → merged: 1096)
+2026-04-17 16:02:20.828 INFO  [IBKR-Downloader] DataDownload : ✅ AME [MIN_15] delta: +2 new candles (cached: 650 → merged: 652)
+2026-04-17 16:02:26.728 INFO  [IBKR-Downloader] DataDownload : ✅ AME [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 16:02:26.728 INFO  [Ticker-Scanner] DataDownload : ✅ AME downloads complete (+7 new candles)
+2026-04-17 16:02:26.729 INFO  [Ticker-Scanner] DataDownload : 📊 AME refresh complete: +7 new candles across timeframes
+2026-04-17 16:02:26.772 INFO  [Ticker-Scanner] DataDownload : 📥 AMGN downloading 3 timeframes in parallel...
+2026-04-17 16:02:38.541 INFO  [IBKR-Downloader] DataDownload : ✅ AMGN [MIN_5] delta: +4 new candles (cached: 1092 → merged: 1096)
+2026-04-17 16:02:44.693 INFO  [IBKR-Downloader] DataDownload : ✅ AMGN [MIN_15] delta: +2 new candles (cached: 650 → merged: 652)
+2026-04-17 16:02:50.687 INFO  [IBKR-Downloader] DataDownload : ✅ AMGN [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 16:02:50.687 INFO  [Ticker-Scanner] DataDownload : ✅ AMGN downloads complete (+7 new candles)
+2026-04-17 16:02:50.687 INFO  [Ticker-Scanner] DataDownload : 📊 AMGN refresh complete: +7 new candles across timeframes
+2026-04-17 16:02:50.727 INFO  [Ticker-Scanner] DataDownload : 📥 AMT downloading 3 timeframes in parallel...
+2026-04-17 16:03:02.792 INFO  [IBKR-Downloader] DataDownload : ✅ AMT [MIN_5] delta: +4 new candles (cached: 1092 → merged: 1096)
+2026-04-17 16:03:02.805 INFO  [IBKR-Downloader] DataDownload : ✅ AMT [MIN_15] delta: +2 new candles (cached: 650 → merged: 652)
+2026-04-17 16:03:02.926 INFO  [IBKR-Downloader] DataDownload : ✅ AMT [HOUR_1] delta: +1 new candles (cached: 890 → merged: 891)
+2026-04-17 16:03:02.926 INFO  [Ticker-Scanner] DataDownload : ✅ AMT downloads complete (+7 new candles)
+2026-04-17 16:03:02.926 INFO  [Ticker-Scanner] DataDownload : 📊 AMT refresh complete: +7 new candles across timeframes

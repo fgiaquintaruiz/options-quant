@@ -355,6 +355,40 @@ export default function LiveDashboard({ twsStatus }) {
               )}
             </div>
           </div>
+
+          <div className="divider-v" />
+
+          {/* New Section: Engine Params */}
+          <div className="flex-align-center gap-20">
+            <div className="stat-box">
+              <span className="stat-label-sm">Concurrent</span>
+              <input type="number" min="1" max="16" value={maxConcurrent}
+                onChange={e => handleMaxConcurrentChange(e.target.value)} disabled={scanning}
+                style={{ width: 50, padding: '4px 6px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 13, textAlign: 'center' }} />
+            </div>
+
+            <div className="stat-box">
+              <span className="stat-label-sm">Universe</span>
+              <div className="flex-align-center gap-4">
+                <button
+                  className="btn"
+                  disabled={scanning}
+                  onClick={() => handleScopeChange('ALL')}
+                  style={{ padding: '4px 8px', background: tickerScope === 'ALL' ? '#1f6feb' : '#21262d', color: '#fff', fontSize: 11, border: '1px solid #30363d' }}
+                >
+                  All
+                </button>
+                <button
+                  className="btn"
+                  disabled={scanning}
+                  onClick={() => handleScopeChange('HOT')}
+                  style={{ padding: '4px 8px', background: tickerScope === 'HOT' ? '#9e6a03' : '#21262d', color: '#fff', fontSize: 11, border: '1px solid #30363d' }}
+                >
+                  Hot
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="toolbar-settings">

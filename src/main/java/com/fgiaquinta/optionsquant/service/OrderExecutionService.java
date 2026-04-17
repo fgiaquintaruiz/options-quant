@@ -35,6 +35,7 @@ public class OrderExecutionService {
     // Option chain data
     private final Map<String, Integer> tickerToUnderlyingConId = new ConcurrentHashMap<>();
     private final Map<String, String> tickerToBestExpiration = new ConcurrentHashMap<>();
+    private final Map<String, String> tickerToTradingClass = new ConcurrentHashMap<>();
     private final Map<String, Set<Double>> tickerToValidStrikes = new ConcurrentHashMap<>();
     private final Map<Integer, String> orderIdToTicker = new ConcurrentHashMap<>();
     private final Map<Integer, Contract> activeContracts = new ConcurrentHashMap<>();
@@ -104,6 +105,13 @@ public class OrderExecutionService {
                         String bestExpiration = validExps.get(0);
                         tickerToBestExpiration.put(ticker, bestExpiration);
                         tickerToValidStrikes.put(ticker, strikes);
+                        
+                        // Prioritize trading class that matches symbol if possible (standard class)
+                        String currentTradingClass = tickerToTradingClass.get(ticker);
+                        if (currentTradingClass == null || tradingClass.equals(ticker)) {
+                            tickerToTradingClass.put(ticker, tradingClass);
+                        }
+
                         log.info("📅 Option chain loaded for {}: expiry={}, strikes={}, tradingClass={}",
                                 ticker, bestExpiration, strikes.size(), tradingClass);
                     }
@@ -196,7 +204,7 @@ public class OrderExecutionService {
         // Check if we already have the data
         String existingExpiry = tickerToBestExpiration.get(ticker);
         if (existingExpiry != null) {
-            return new OptionChainResult(existingExpiry, tickerToValidStrikes.getOrDefault(ticker, Set.of()));
+            return new OptionChainResult(existingExpiry, tickerToValidStrikes.getOrDefault(ticker, Set.of()), tickerToTradingClass.get(ticker));
         }
 
         // Request contract details
@@ -225,12 +233,13 @@ public class OrderExecutionService {
 
         String expiry = tickerToBestExpiration.get(ticker);
         Set<Double> strikes = tickerToValidStrikes.getOrDefault(ticker, Set.of());
+        String tClass = tickerToTradingClass.get(ticker);
 
         if (expiry == null) {
             throw new RuntimeException("Failed to resolve option chain for " + ticker);
         }
 
-        return new OptionChainResult(expiry, strikes);
+        return new OptionChainResult(expiry, strikes, tClass);
     }
 
     /**
@@ -265,6 +274,7 @@ public class OrderExecutionService {
         // 1. Resolve option chain
         OptionChainResult chain = resolveOptionChain(ticker);
         String expiration = chain.expiration();
+        String tradingClass = chain.tradingClass();
         double bestStrike = findBestStrike(ticker, tradePlan.entryPrice);
 
         // 2. Get underlying conId for price triggers
@@ -283,7 +293,7 @@ public class OrderExecutionService {
 
         // 4. Build option contract
         String right = isCall ? "C" : "P";
-        Contract optionContract = ContractFactory.createOptionContract(ticker, expiration, bestStrike, right);
+        Contract optionContract = ContractFactory.createOptionContract(ticker, expiration, bestStrike, right, tradingClass);
 
         // 5. Generate bracket order IDs
         int pId = nextOrderId.getAndIncrement();
@@ -339,7 +349,7 @@ public class OrderExecutionService {
 
     // ===== Response Records =====
 
-    public record OptionChainResult(String expiration, Set<Double> validStrikes) {}
+    public record OptionChainResult(String expiration, Set<Double> validStrikes, String tradingClass) {}
 
     public record OrderResult(int parentId, int tpOrderId, int slOrderId, double strike, String expiration, String right) {}
 }

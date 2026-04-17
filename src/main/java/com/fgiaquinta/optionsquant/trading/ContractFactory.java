@@ -15,10 +15,11 @@ public class ContractFactory {
      * @param expiration Expiration date in YYYYMMDD format
      * @param strike Strike price
      * @param right "C" for Call, "P" for Put
+     * @param tradingClass The specific trading class (e.g., "NVDA", "2NVDA") to avoid Flex option errors.
      */
-    public static Contract createOptionContract(String ticker, String expiration, double strike, String right) {
+    public static Contract createOptionContract(String ticker, String expiration, double strike, String right, String tradingClass) {
         Contract contract = new Contract();
-        String sanitizedTicker = ticker.replaceAll("[^a-zA-Z]", "").toUpperCase().trim();
+        String sanitizedTicker = ticker.replaceAll("[^a-zA-Z0-9]", "").toUpperCase().trim();
 
         contract.symbol(sanitizedTicker);
         contract.secType("OPT");
@@ -28,6 +29,10 @@ public class ContractFactory {
         contract.lastTradeDateOrContractMonth(expiration.trim());
         contract.strike(strike);
         contract.right(right.toUpperCase().startsWith("C") ? "C" : "P");
+        
+        if (tradingClass != null && !tradingClass.isBlank()) {
+            contract.tradingClass(tradingClass);
+        }
 
         return contract;
     }
