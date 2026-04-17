@@ -131,7 +131,7 @@ public class TelegramWebhookController {
             telegramService.answerCallbackQuery(callbackQueryId, "✅ Order sent to IBKR 🚀");
 
             // Execute the trade
-            boolean success = tradingService.executeManualTrade(ticker, strategy, direction, price);
+            boolean success = tradingService.executeManualTrade(ticker, strategy, direction, price) != null;
 
             if (success) {
                 log.info("✅ Trade executed successfully: {} {} @ ${}", ticker, direction, price);

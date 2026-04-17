@@ -1,4 +1,4 @@
-import { Routes, Route, NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { Activity, BarChart3, HeartPulse } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { liveApi } from './api'
@@ -11,8 +11,15 @@ export default function App() {
   const [twsStatus, setTwsStatus] = useState(null)
   const [marketStatus, setMarketStatus] = useState(null)
   const [marketCountdown, setMarketCountdown] = useState(null)
+  const [now, setNow] = useState(new Date())
 
-  // Poll TWS status every 10s
+  // Clock interval updates every second
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Poll TWS status every 5s
   useEffect(() => {
     const fetchTws = async () => {
       try {
@@ -38,13 +45,14 @@ export default function App() {
     return () => clearInterval(interval)
   }, [])
 
+  // Fixed dependency array: [marketCountdown] instead of [marketCountdown === null]
   useEffect(() => {
-    if (marketCountdown == null) return
+    if (marketCountdown == null || marketCountdown <= 0) return
     const interval = setInterval(() => {
-      setMarketCountdown(prev => (prev == null ? prev : Math.max(0, prev - 1)))
+      setMarketCountdown(prev => (prev == null ? null : Math.max(0, prev - 1)))
     }, 1000)
     return () => clearInterval(interval)
-  }, [marketCountdown != null])
+  }, [marketCountdown])
 
   const formatCountdown = (seconds) => {
     if (seconds == null) return ''
@@ -56,54 +64,59 @@ export default function App() {
     return `${s}s`
   }
 
+  const isLive     = location.pathname === '/' || location.pathname.startsWith('/live')
+  const isBacktest = location.pathname.startsWith('/backtest')
+  const isHealth   = location.pathname.startsWith('/health')
+
   return (
     <div className="container">
-      <div className="header">
-        <h1>🧠 Options Quant Platform</h1>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          {location.pathname.startsWith('/live') && (
-            <span className="badge badge-hot" style={{ fontSize: 12 }}>LIVE MODE</span>
-          )}
-          {location.pathname.startsWith('/live') && marketStatus && (
-            <span style={{ color: '#8b949e', fontSize: 12 }}>
+      <div className="header-compact">
+        <div className="flex-align-center gap-20">
+          <h1 className="header-title">🧠 Options Quant Platform</h1>
+          
+          <div className="nav-compact">
+            <NavLink to="/live" className={({ isActive }) => isActive ? 'active' : ''}>
+              <Activity size={14} /> Loving Mode
+            </NavLink>
+            <NavLink to="/backtest" className={({ isActive }) => isActive ? 'active' : ''}>
+              <BarChart3 size={14} /> Loved Mode
+            </NavLink>
+            <NavLink to="/health" className={({ isActive }) => isActive ? 'active' : ''}>
+              <HeartPulse size={14} /> Health
+            </NavLink>
+          </div>
+        </div>
+
+        <div className="status-bar">
+          {isLive && marketStatus && (
+            <span className="market-badge">
               {marketStatus.session}
-              {marketCountdown != null && marketStatus.session !== 'REGULAR' && (
-                <> · opens in {formatCountdown(marketCountdown)}</>
+              {marketCountdown != null && marketStatus.session !== 'REGULAR' && marketCountdown > 0 && (
+                <> · {formatCountdown(marketCountdown)}</>
               )}
             </span>
           )}
-          {location.pathname.startsWith('/live') && twsStatus && (
-            <span style={{ color: '#8b949e', fontSize: 12 }}>
-              {twsStatus.host}:{twsStatus.port}
-            </span>
-          )}
-          <span className={`badge ${twsStatus?.connected ? 'badge-success' : 'badge-error'}`} style={{ fontSize: 12 }}>
-            {twsStatus?.connected ? '🔌 TWS Connected' : '🔐 Please login in TWS with your account'}
+          
+          <span className={`badge ${twsStatus?.connected ? 'badge-success' : 'badge-error'}`}>
+            {twsStatus?.connected ? '🔌 TWS' : '🔐 TWS'}
           </span>
-          <span id="clock" style={{ color: '#8b949e', fontSize: 14 }}>
-            {new Date().toLocaleTimeString()}
+
+          <span className="color-muted text-md" style={{ minWidth: 65, textAlign: 'right' }}>
+            {now.toLocaleTimeString()}
           </span>
         </div>
       </div>
 
-      <div className="nav">
-        <NavLink to="/live" className={({ isActive }) => isActive ? 'active' : ''}>
-          <Activity size={16} /> Live Trading
-        </NavLink>
-        <NavLink to="/backtest" className={({ isActive }) => isActive ? 'active' : ''}>
-          <BarChart3 size={16} /> Backtest
-        </NavLink>
-        <NavLink to="/health" className={({ isActive }) => isActive ? 'active' : ''}>
-          <HeartPulse size={16} /> Health
-        </NavLink>
+      {/* Page Content */}
+      <div style={{ display: isLive ? 'block' : 'none' }}>
+        <LiveDashboard twsStatus={twsStatus} />
       </div>
-
-      <Routes>
-        <Route path="/" element={<LiveDashboard twsStatus={twsStatus} />} />
-        <Route path="/live" element={<LiveDashboard twsStatus={twsStatus} />} />
-        <Route path="/backtest" element={<BacktestDashboard />} />
-        <Route path="/health" element={<HealthPage />} />
-      </Routes>
+      <div style={{ display: isBacktest ? 'block' : 'none' }}>
+        <BacktestDashboard />
+      </div>
+      <div style={{ display: isHealth ? 'block' : 'none' }}>
+        <HealthPage />
+      </div>
     </div>
   )
 }

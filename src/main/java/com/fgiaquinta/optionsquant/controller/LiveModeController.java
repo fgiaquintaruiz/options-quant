@@ -4,7 +4,9 @@ import com.fgiaquinta.optionsquant.config.IbkrProperties;
 import com.fgiaquinta.optionsquant.service.*;
 import com.fgiaquinta.optionsquant.service.StrategyScannerService.ScanResult;
 import com.fgiaquinta.optionsquant.service.StrategyScannerService.Signal;
+import com.fgiaquinta.optionsquant.strategy.model.TradePlan;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,10 +33,13 @@ public class LiveModeController {
     private final AccountManager accountManager;
     private final IbkrService ibkrService;
     private final MarketCalendarService marketCalendarService;
+    private final com.fgiaquinta.optionsquant.service.MarketScanner marketScanner;
 
     // Live scanning state
     private final AtomicBoolean isScanning = new AtomicBoolean(false);
+    private final AtomicBoolean isAutoScan = new AtomicBoolean(false);
     private final AtomicBoolean stopScanRequested = new AtomicBoolean(false);
+    private final AtomicBoolean mockMarketOpen = new AtomicBoolean(false);
     private final AtomicInteger currentTickerIndex = new AtomicInteger(0);
     private final AtomicInteger totalTickers = new AtomicInteger(0);
     private final AtomicReference<String> currentTicker = new AtomicReference<>("");
@@ -42,15 +47,29 @@ public class LiveModeController {
     /** Throttle AccountManager reconnect attempts from UI polling */
     private final AtomicLong lastTwsReconnectAttemptMs = new AtomicLong(0);
     private final CopyOnWriteArrayList<Signal> liveSignals = new CopyOnWriteArrayList<>();
+    // Manual close requests: ticker → ClosedTradeInfo
+    private final java.util.concurrent.ConcurrentHashMap<String, ClosedTradeInfo> closedTrades = new java.util.concurrent.ConcurrentHashMap<>();
+    // Manual executions: ticker → ExecutedTradeInfo
+    private final java.util.concurrent.ConcurrentHashMap<String, ExecutedTradeInfo> executedTrades = new java.util.concurrent.ConcurrentHashMap<>();
+    // Per-ticker scan timing for SCAN STARTED / SCAN FINISHED columns
+    private final java.util.concurrent.ConcurrentHashMap<String, String> tickerScanStartTimes = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<String, String> tickerScanEndTimes = new java.util.concurrent.ConcurrentHashMap<>();
     // Scan activity log: shows what's being scanned in real-time
     private final CopyOnWriteArrayList<ScanActivity> scanActivity = new CopyOnWriteArrayList<>();
     private final AtomicLong lastScanTime = new AtomicLong(0);
     private final AtomicLong lastScanDuration = new AtomicLong(0);
     private final AtomicInteger signalsToday = new AtomicInteger(0);
     private final AtomicBoolean extendedHoursEnabled = new AtomicBoolean(true);
+    // Runtime-overridable settings (survive scan but reset on restart)
+    private volatile boolean runtimeAutoExecute;
+    private volatile double runtimeRiskPct;
+    private final AtomicReference<String> liveTickerFilter = new AtomicReference<>("");
+    private final AtomicReference<String> liveTickerScope  = new AtomicReference<>("HOT");
     private Thread scanThread = null;
 
-    public record ScanActivity(String time, String ticker, String status, String detail) {}
+    public record ScanActivity(String time, String ticker, String status, String detail, String scanStarted, String scanEnded, String duration) {}
+    public record ClosedTradeInfo(String ticker, double closePrice, String closeTime, String exitReason) {}
+    public record ExecutedTradeInfo(String ticker, String executeTime, boolean success, String message, Integer orderId) {}
 
     public LiveModeController(StrategyScannerService scannerService,
                               IbkrProperties ibkrProperties,
@@ -58,7 +77,8 @@ public class LiveModeController {
                               TickerService tickerService,
                               AccountManager accountManager,
                               IbkrService ibkrService,
-                              MarketCalendarService marketCalendarService) {
+                              MarketCalendarService marketCalendarService,
+                              @Lazy com.fgiaquinta.optionsquant.service.MarketScanner marketScanner) {
         this.scannerService = scannerService;
         this.ibkrProperties = ibkrProperties;
         this.tradingService = tradingService;
@@ -66,7 +86,12 @@ public class LiveModeController {
         this.accountManager = accountManager;
         this.ibkrService = ibkrService;
         this.marketCalendarService = marketCalendarService;
+        this.marketScanner = marketScanner;
         
+        // Initialize runtime-overridable settings from config
+        this.runtimeAutoExecute = ibkrProperties.autoExecute();
+        this.runtimeRiskPct = ibkrProperties.riskPerTradePct();
+
         // CRITICAL: Reset all scanning state on startup to recover from any previous stuck state
         isScanning.set(false);
         stopScanRequested.set(false);
@@ -121,6 +146,7 @@ public class LiveModeController {
     public ResponseEntity<Map<String, Object>> getStatus() {
         Map<String, Object> status = new LinkedHashMap<>();
         status.put("isScanning", isScanning.get());
+        status.put("isAutoScan", isAutoScan.get());
         status.put("stopScanRequested", stopScanRequested.get());
         status.put("currentTicker", currentTicker.get());
         status.put("currentTickerIndex", currentTickerIndex.get());
@@ -129,8 +155,19 @@ public class LiveModeController {
         status.put("lastScanDuration", lastScanDuration.get());
         status.put("signalsToday", signalsToday.get());
         status.put("extendedHoursEnabled", extendedHoursEnabled.get());
-        status.put("autoExecute", ibkrProperties.autoExecute());
+        status.put("autoExecute", runtimeAutoExecute);
+        status.put("riskPct", Math.round(runtimeRiskPct * 100 * 10.0) / 10.0);
+        status.put("liveTickerFilter", liveTickerFilter.get());
+        status.put("liveTickerScope", liveTickerScope.get());
         status.put("twsConnected", ibkrService.isConnected() || accountManager.isConnected());
+
+        // Include hot tickers list for UI badge display
+        List<String> hotTickers = ibkrProperties.hotTickers() != null
+                ? ibkrProperties.hotTickers()
+                : List.of("SPY", "QQQ", "AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "META", "GOOGL", "AMD");
+        status.put("hotTickersList", hotTickers);
+        status.put("schedulerEnabled", marketScanner.isSchedulerEnabled());
+        status.put("mockMarketOpen", mockMarketOpen.get());
 
         // Add max concurrent scans setting
         status.put("maxConcurrentScans", scannerService.getMaxConcurrentScans());
@@ -152,10 +189,31 @@ public class LiveModeController {
 
     @GetMapping("/signals")
     public ResponseEntity<Map<String, Object>> getSignals() {
+        List<Map<String, Object>> signalData = liveSignals.stream().map(s -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("ticker", s.ticker());
+            map.put("strategy", s.strategy());
+            map.put("direction", s.direction());
+            map.put("currentPrice", s.currentPrice());
+            map.put("timestamp", s.timestamp());
+            map.put("tradePlan", s.tradePlan());
+            map.put("candlestickPattern", s.candlestickPattern());
+            
+            ExecutedTradeInfo exec = executedTrades.get(s.ticker());
+            if (exec != null) {
+                map.put("executeTime", exec.executeTime());
+                map.put("tradeStatus", exec.success() ? "EXECUTED" : "FAILED");
+                map.put("orderId", exec.orderId());
+            }
+            return map;
+        }).toList();
+
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("signals", liveSignals);
-        result.put("count", liveSignals.size());
+        result.put("signals", signalData);
+        result.put("count", signalData.size());
         result.put("signalsToday", signalsToday.get());
+        result.put("closedTrades", closedTrades);
+        result.put("executedTrades", executedTrades);
         return ResponseEntity.ok(result);
     }
 
@@ -168,6 +226,8 @@ public class LiveModeController {
         result.put("scanned", scannerService.getScannedCount());
         result.put("total", scannerService.getTotalToScan());
         result.put("lastScanTime", lastScanTime.get());
+        result.put("scanStartTimes", tickerScanStartTimes);
+        result.put("scanEndTimes", tickerScanEndTimes);
         return ResponseEntity.ok(result);
     }
 
@@ -191,14 +251,17 @@ public class LiveModeController {
 
     @PostMapping("/scan-now")
     public ResponseEntity<Map<String, Object>> triggerScan() {
-        if (!ibkrService.isConnected() && !accountManager.isConnected()) {
-            tradingService.connectAccountManager();
-        }
-        if (!ibkrService.isConnected() && !accountManager.isConnected()) {
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("success", false);
-            result.put("message", "Please login in TWS with your account before scanning.");
-            return ResponseEntity.ok(result);
+        boolean mock = mockMarketOpen.get();
+        if (!mock) {
+            if (!ibkrService.isConnected() && !accountManager.isConnected()) {
+                tradingService.connectAccountManager();
+            }
+            if (!ibkrService.isConnected() && !accountManager.isConnected()) {
+                Map<String, Object> result = new LinkedHashMap<>();
+                result.put("success", false);
+                result.put("message", "Please login in TWS with your account before scanning.");
+                return ResponseEntity.ok(result);
+            }
         }
         
         if (isScanning.get()) {
@@ -209,25 +272,51 @@ public class LiveModeController {
         }
 
         stopScanRequested.set(false);
+        isAutoScan.set(false);
         scanActivity.clear();
+        final boolean isMockScan = mock;
         scanThread = new Thread(() -> {
             isScanning.set(true);
             liveSignals.clear();
+            closedTrades.clear();
+            executedTrades.clear();
+            tickerScanStartTimes.clear();
+            tickerScanEndTimes.clear();
             currentTickerIndex.set(0);
             signalsToday.set(0);
 
+            // Build ticker list respecting scope and filter
             List<String> allTickers = ibkrProperties.useCsvTickers()
                     ? tickerService.getTickerSymbols()
                     : ibkrProperties.tickers();
+            List<String> hotList = ibkrProperties.hotTickers() != null
+                    ? ibkrProperties.hotTickers()
+                    : List.of("SPY", "QQQ", "AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "META", "GOOGL", "AMD");
+            java.util.Set<String> hotSet = new java.util.HashSet<>(hotList);
+
+            String scope = liveTickerScope.get();
+            if ("HOT".equals(scope)) {
+                allTickers = allTickers.stream().filter(hotSet::contains).toList();
+            }
+            String filter = liveTickerFilter.get();
+            if (filter != null && !filter.isBlank()) {
+                java.util.Set<String> filterSet = java.util.Arrays.stream(filter.split("[,\\s]+"))
+                        .map(String::trim).map(String::toUpperCase)
+                        .filter(s -> !s.isEmpty()).collect(java.util.stream.Collectors.toSet());
+                if (!filterSet.isEmpty()) allTickers = allTickers.stream().filter(filterSet::contains).toList();
+            }
+            scannerService.setTickerOverride(allTickers);
+
             totalTickers.set(allTickers.size());
             scanningTickers.set(allTickers);
 
             String time = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
-            scanActivity.add(new ScanActivity(time, "---", "STARTING", "Scanning " + allTickers.size() + " tickers against 12 strategies"));
+            scanActivity.add(new ScanActivity(time, "---", "STARTING", "Scanning " + allTickers.size() + " tickers against 12 strategies", "-", "-", "-"));
 
             long startTime = System.currentTimeMillis();
             try {
-                ScanResult result = scannerService.scanAll(true, true);
+                // In mock mode: skip data refresh — scan from existing CSVs (simulates 15-min candle close)
+                ScanResult result = scannerService.scanAll(true, !isMockScan);
 
                 // Only update signals if stop wasn't requested
                 if (!stopScanRequested.get()) {
@@ -235,10 +324,26 @@ public class LiveModeController {
                     signalsToday.addAndGet(result.totalSignals());
                     lastScanDuration.set(System.currentTimeMillis() - startTime);
 
+                    // Auto-execute mock signals via TWS when auto-execute is ON
+                    if (isMockScan && runtimeAutoExecute && (ibkrService.isConnected() || accountManager.isConnected())) {
+                        for (Signal signal : result.signals()) {
+                            if (stopScanRequested.get()) break;
+                            try {
+                                OrderExecutionService.OrderResult orderResult = tradingService.executeManualTrade(signal.ticker(), signal.strategy(), signal.direction(), signal.currentPrice());
+                                boolean ok = orderResult != null;
+                                String exTime = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+                                executedTrades.put(signal.ticker(), new ExecutedTradeInfo(signal.ticker(), exTime, ok, ok ? "Auto-executed" : "Failed", ok ? orderResult.parentId() : null));
+                                log.info("Auto-executed mock signal {} {}: {}", signal.ticker(), signal.direction(), ok ? "OK (orderId=" + orderResult.parentId() + ")" : "FAILED");
+                            } catch (Exception ex) {
+                                log.error("Auto-execute failed for {}: {}", signal.ticker(), ex.getMessage());
+                            }
+                        }
+                    }
+
                     String endTime = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
                     scanActivity.add(new ScanActivity(endTime, "---", "COMPLETE",
                             String.format("%d tickers scanned, %d signals found in %.1fs",
-                                    result.tickersScanned(), result.totalSignals(), result.elapsedMs() / 1000.0)));
+                                    result.tickersScanned(), result.totalSignals(), result.elapsedMs() / 1000.0), "-", "-", "-"));
                     log.info("Manual scan complete: {} signals in {}ms", result.totalSignals(), result.elapsedMs());
                 } else {
                     log.info("Manual scan stopped by user after {}ms", System.currentTimeMillis() - startTime);
@@ -246,12 +351,14 @@ public class LiveModeController {
             } catch (Exception e) {
                 log.error("Manual scan failed: {}", e.getMessage(), e);
                 String errTime = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
-                scanActivity.add(new ScanActivity(errTime, "---", "ERROR", e.getMessage()));
+                scanActivity.add(new ScanActivity(errTime, "---", "ERROR", e.getMessage(), "-", "-", "-"));
             } finally {
                 isScanning.set(false);
+                isAutoScan.set(false);
                 stopScanRequested.set(false);
                 lastScanTime.set(System.currentTimeMillis());
                 currentTicker.set("");
+                scannerService.clearTickerOverride();
                 scanThread = null;
             }
         });
@@ -273,9 +380,11 @@ public class LiveModeController {
         }
 
         stopScanRequested.set(true);
+        // Interrupt the main scan thread AND all in-flight download threads
         if (scanThread != null) {
             scanThread.interrupt();
         }
+        scannerService.stopDownloads();
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", true);
@@ -344,34 +453,204 @@ public class LiveModeController {
         return ResponseEntity.ok(result);
     }
 
+    @PostMapping("/toggle-auto-execute")
+    public ResponseEntity<Map<String, Object>> toggleAutoExecute() {
+        runtimeAutoExecute = !runtimeAutoExecute;
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("autoExecute", runtimeAutoExecute);
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/set-risk")
+    public ResponseEntity<Map<String, Object>> setRisk(@RequestParam double pct) {
+        runtimeRiskPct = pct / 100.0;
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("riskPct", pct);
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/toggle-scheduler")
+    public ResponseEntity<Map<String, Object>> toggleScheduler() {
+        boolean newState = !marketScanner.isSchedulerEnabled();
+        marketScanner.setSchedulerEnabled(newState);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("schedulerEnabled", newState);
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/toggle-mock-market")
+    public ResponseEntity<Map<String, Object>> toggleMockMarket() {
+        boolean newState = !mockMarketOpen.get();
+        mockMarketOpen.set(newState);
+        log.info("Mock market open set to: {}", newState);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("mockMarketOpen", newState);
+        return ResponseEntity.ok(result);
+    }
+
+    private static final List<String> MOCK_STRATEGIES = List.of(
+        "C1 Squeeze Breakout", "C2 Trend Continuation", "C3 Bounce",
+        "C4 Opening Reversal", "C5 Continuation", "C6 Reversal",
+        "P1 Squeeze Breakdown", "P2 Trend Rejection", "P3 Resistance Rejection",
+        "P4 Opening Trap", "P5 Continuation", "P6 Reversal"
+    );
+    private final java.util.concurrent.atomic.AtomicInteger mockSignalIdx = new java.util.concurrent.atomic.AtomicInteger(0);
+
+    @PostMapping("/inject-mock-signal")
+    public ResponseEntity<Map<String, Object>> injectMockSignal(
+            @RequestParam(defaultValue = "SPY") String ticker,
+            @RequestParam(required = false) String strategy,
+            @RequestParam(required = false) String direction) {
+        // Cycle through strategies each call if not specified
+        String strat = (strategy != null && !strategy.isBlank())
+                ? strategy
+                : MOCK_STRATEGIES.get(mockSignalIdx.getAndIncrement() % MOCK_STRATEGIES.size());
+
+        boolean isCall = direction == null ? strat.startsWith("C") : "CALL".equalsIgnoreCase(direction);
+        String dir = isCall ? "CALL" : "PUT";
+        double price = 500.0;
+        double atr = price * 0.012;
+        double tp = isCall ? price + atr * 3.0 : price - atr * 3.0;
+        double sl = isCall ? price - atr * 2.0 : price + atr * 2.0;
+
+        TradePlan plan = new TradePlan(price, tp, sl, isCall, java.time.LocalTime.of(21, 55), atr);
+        Signal mockSignal = new Signal(ticker, strat, dir, price, ZonedDateTime.now(), plan, "mock_signal + hammer");
+        liveSignals.add(mockSignal);
+        signalsToday.incrementAndGet();
+
+        log.info("Injected mock signal: {} {} {}", ticker, dir, strat);
+
+        // Auto-execute injected signal via TWS when auto-execute is ON and TWS is connected
+        boolean autoExec = false;
+        if (runtimeAutoExecute && (ibkrService.isConnected() || accountManager.isConnected())) {
+            try {
+                OrderExecutionService.OrderResult orderResult = tradingService.executeManualTrade(ticker, strat, dir, price);
+                boolean ok = orderResult != null;
+                String exTime = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+                executedTrades.put(ticker, new ExecutedTradeInfo(ticker, exTime, ok, ok ? "Auto-executed" : "Failed", ok ? orderResult.parentId() : null));
+                autoExec = ok;
+                log.info("Auto-executed injected signal {} {}: {}", ticker, dir, ok ? "OK (orderId=" + orderResult.parentId() + ")" : "FAILED");
+            } catch (Exception e) {
+                log.error("Auto-execute for injected signal {} failed: {}", ticker, e.getMessage());
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("ticker", ticker);
+        result.put("strategy", strat);
+        result.put("direction", dir);
+        result.put("entryPrice", price);
+        result.put("takeProfit", tp);
+        result.put("stopLoss", sl);
+        result.put("autoExecuted", autoExec);
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/set-scan-filter")
+    public ResponseEntity<Map<String, Object>> setScanFilter(
+            @RequestParam(defaultValue = "") String filter,
+            @RequestParam(defaultValue = "HOT") String scope) {
+        liveTickerFilter.set(filter.trim());
+        liveTickerScope.set(scope.toUpperCase());
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("filter", filter.trim());
+        result.put("scope", scope.toUpperCase());
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/execute-signal")
+    public ResponseEntity<Map<String, Object>> executeSignal(
+            @RequestParam String ticker,
+            @RequestParam String direction,
+            @RequestParam double price,
+            @RequestParam(defaultValue = "manual") String strategy) {
+        return executeTrade(ticker, direction, price, strategy);
+    }
+
     @PostMapping("/execute-trade")
     public ResponseEntity<Map<String, Object>> executeTrade(
             @RequestParam String ticker,
             @RequestParam String direction,
             @RequestParam double price,
             @RequestParam(defaultValue = "manual") String strategy) {
+        log.info("🎯 Manual execute request received for {} {} @ ${} (strategy: {})", ticker, direction, price, strategy);
+        
         if (!ibkrService.isConnected() && !accountManager.isConnected()) {
             tradingService.connectAccountManager();
         }
+        
         if (!ibkrService.isConnected() && !accountManager.isConnected()) {
+            log.error("❌ Cannot execute trade: TWS/Gateway not connected.");
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("success", false);
-            result.put("message", "Please login in TWS with your account before executing trades.");
+            result.put("message", "TWS/Gateway not connected. Please login and check connection.");
             return ResponseEntity.ok(result);
         }
         
         try {
-            boolean success = tradingService.executeManualTrade(ticker, strategy, direction, price);
+            OrderExecutionService.OrderResult orderResult = tradingService.executeManualTrade(ticker, strategy, direction, price);
+            boolean ok = orderResult != null;
+            String exTime = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+            
+            if (ok) {
+                executedTrades.put(ticker, new ExecutedTradeInfo(ticker, exTime, true, "Executed", orderResult.parentId()));
+                log.info("✅ Manual trade sent to TWS: {} {} @ ${} | orderId={}", ticker, direction, price, orderResult.parentId());
+            } else {
+                executedTrades.put(ticker, new ExecutedTradeInfo(ticker, exTime, false, "Failed", null));
+                log.error("❌ Manual trade failed: No order ID returned from execution service.");
+            }
+            
             Map<String, Object> result = new LinkedHashMap<>();
-            result.put("success", success);
-            result.put("message", success ? "Trade executed" : "Trade failed");
+            result.put("success", ok);
+            result.put("message", ok ? "Order sent to TWS successfully." : "Trade execution failed in IBKR service.");
+            result.put("executeTime", exTime);
+            if (ok) result.put("orderId", orderResult.parentId());
             return ResponseEntity.ok(result);
         } catch (Exception e) {
+            log.error("❌ Manual trade exception: {}", e.getMessage(), e);
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("success", false);
-            result.put("message", e.getMessage());
+            result.put("message", "Internal Error: " + e.getMessage());
             return ResponseEntity.ok(result);
         }
+    }
+
+    @PostMapping("/close-trade")
+    public ResponseEntity<Map<String, Object>> closeTrade(
+            @RequestParam String ticker,
+            @RequestParam double price) {
+        String closeTime = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+        closedTrades.put(ticker, new ClosedTradeInfo(ticker, price, closeTime, "MANUAL_CLOSE"));
+        log.info("Manual close requested for {} at price {}", ticker, price);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("ticker", ticker);
+        result.put("closePrice", price);
+        result.put("closeTime", closeTime);
+        result.put("message", "Trade marked as closed at " + price);
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/cancel-trade")
+    public ResponseEntity<Map<String, Object>> cancelTrade(
+            @RequestParam String ticker,
+            @RequestParam int orderId) {
+        log.info("Manual cancel requested for {} (orderId={})", ticker, orderId);
+        boolean success = tradingService.cancelTrade(orderId);
+        if (success) {
+            String closeTime = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+            closedTrades.put(ticker, new ClosedTradeInfo(ticker, 0.0, closeTime, "CANCELLED"));
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", success);
+        result.put("message", success ? "Order cancellation sent to TWS" : "Failed to send cancellation");
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping("/tws-status")
@@ -397,6 +676,10 @@ public class LiveModeController {
     }
 
     // ===== Public Methods for Internal State Updates =====
+
+    public void setAutoScan(boolean auto) {
+        isAutoScan.set(auto);
+    }
 
     public void updateScanningState(boolean scanning, String ticker, int index, int total) {
         // Reset scan-activity feed when a new scan starts (manual or scheduled)
@@ -435,16 +718,39 @@ public class LiveModeController {
     }
 
     /**
-     * Called by scanner when a ticker starts being analyzed. Adds a SCANNING row to the feed.
+     * Called by scanner when a ticker starts being analyzed. Adds a row to the feed.
      */
-    void addTickerScanActivity(String ticker) {
+    void addTickerScanActivity(String payload) {
+        String ticker = payload;
+        String status = "SCANNING";
+        if (payload.contains(":")) {
+            String[] parts = payload.split(":");
+            ticker = parts[0];
+            status = parts[1];
+        }
+
         String time = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
         currentTicker.set(ticker);
+        
+        // Track start time for the "Scan Started" column
+        if (!ticker.equals("---")) {
+            tickerScanStartTimes.put(ticker, time);
+        }
+
         int scanned = scannerService.getScannedCount();
         int total = scannerService.getTotalToScan();
         String batchLabel = scannerService.getCurrentBatchLabel();
-        String detail = batchLabel != null && !batchLabel.isEmpty() ? batchLabel : ("Analyzing 12 strategies...");
-        scanActivity.add(new ScanActivity(time, ticker, "SCANNING", detail));
+        
+        String detail;
+        if (status.equals("LOADING")) {
+            detail = "Downloading fresh candles...";
+        } else if (batchLabel != null && !batchLabel.isEmpty()) {
+            detail = batchLabel;
+        } else {
+            detail = "Analyzing 12 strategies...";
+        }
+
+        scanActivity.add(new ScanActivity(time, ticker, status, detail, tickerScanStartTimes.getOrDefault(ticker, "-"), "-", "-"));
         // Keep only last 200 entries to prevent memory growth
         while (scanActivity.size() > 200) {
             scanActivity.remove(0);
@@ -460,7 +766,22 @@ public class LiveModeController {
         String time = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
         String status = signalCount < 0 ? "ERROR" : (signalCount > 0 ? "SIGNAL" : "OK");
         String detail = signalCount < 0 ? "Scan failed" : (signalCount > 0 ? signalCount + " signal(s) found" : "No signals");
-        scanActivity.add(new ScanActivity(time, ticker, status, detail));
+        
+        String started = tickerScanStartTimes.getOrDefault(ticker, "-");
+        String duration = "-";
+        if (!started.equals("-")) {
+            try {
+                java.time.LocalTime startTime = java.time.LocalTime.parse(started);
+                java.time.LocalTime endTime = java.time.LocalTime.parse(time);
+                java.time.Duration d = java.time.Duration.between(startTime, endTime);
+                duration = String.format("%.1fs", d.toMillis() / 1000.0);
+            } catch (Exception e) {
+                // Ignore parse errors
+            }
+        }
+        tickerScanEndTimes.put(ticker, time);
+
+        scanActivity.add(new ScanActivity(time, ticker, status, detail, started, time, duration));
         // Keep only last 200 entries to prevent memory growth
         while (scanActivity.size() > 200) {
             scanActivity.remove(0);

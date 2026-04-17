@@ -1,293 +1,305 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Play, Square, TrendingUp, TrendingDown, DollarSign, BarChart3, RefreshCw } from 'lucide-react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { Play, Square, Activity, Settings, RefreshCw } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { backtestApi } from '../api'
+import UnifiedDataGrid from '../components/UnifiedDataGrid'
+import TickerSelector from '../components/TickerSelector'
+import { LS } from '../utils/storage'
 
 export default function BacktestDashboard() {
+  // Transient scan state
   const [running, setRunning] = useState(false)
   const [report, setReport] = useState(null)
   const [equityData, setEquityData] = useState([])
   const [logs, setLogs] = useState([])
+  const [activities, setActivities] = useState([])
   const [elapsed, setElapsed] = useState(0)
-  const [checkpoint, setCheckpoint] = useState(null)
   const [maxConcurrent, setMaxConcurrent] = useState(4)
+
+  // User settings
+  const [tickerFilter, setTickerFilter] = useState(() => LS.get('bt_tickerFilter', ''))
+  const [tickerScope, setTickerScope] = useState(() => LS.get('bt_tickerScope', 'HOT'))
+  const [startParams, setStartParams] = useState(() => LS.get('bt_params', { capital: 50000, risk: 0.02 }))
+  
+  const eventSourceRef = useRef(null)
+
+  // Side effects belonging in mount hook
+  useEffect(() => {
+    // Remove stale result keys left from older versions
+    ;['bt_activities', 'bt_report', 'bt_equity', 'bt_logs', 'bt_running'].forEach(k => LS.remove(k))
+  }, [])
 
   const addLog = useCallback((msg, type = 'info') => {
     setLogs(prev => [{ time: new Date().toLocaleTimeString(), msg, type }, ...prev].slice(0, 100))
   }, [])
 
-  // Poll running state every 1s
   useEffect(() => {
     const checkRunning = async () => {
+      if (eventSourceRef.current) return
       try {
         const data = await backtestApi.isRunning()
-        if (data.running && !running) {
-          setRunning(true)
-          addLog('Backtest started', 'info')
-        } else if (!data.running && running) {
-          setRunning(false)
-          addLog('Backtest completed', 'success')
-        }
+        setRunning(prev => {
+          if (data.running && !prev) return true
+          if (!data.running && prev) return false
+          return prev
+        })
       } catch (e) { /* silent */ }
     }
     checkRunning()
-    const interval = setInterval(checkRunning, 1000)
+    const interval = setInterval(checkRunning, 2000)
     return () => clearInterval(interval)
-  }, [running, addLog])
+  }, [])
 
-  // Update elapsed time while running
   useEffect(() => {
-    if (!running) return
+    if (!running) { setElapsed(0); return }
     const start = Date.now()
-    const interval = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - start) / 1000))
-    }, 1000)
+    const interval = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000)
     return () => clearInterval(interval)
   }, [running])
 
-  // Check for checkpoint
-  useEffect(() => {
-    backtestApi.getCheckpoint().then(setCheckpoint).catch(() => {})
-  }, [])
-
-  // Fetch max concurrent scans on mount
   useEffect(() => {
     backtestApi.getMaxConcurrent().then(d => {
       if (d.maxConcurrentScans) setMaxConcurrent(d.maxConcurrentScans)
     }).catch(() => {})
   }, [])
 
-  const handleRun = async () => {
+  useEffect(() => { LS.set('bt_params', startParams) }, [startParams])
+  useEffect(() => { LS.set('bt_tickerScope', tickerScope) }, [tickerScope])
+  useEffect(() => { LS.set('bt_tickerFilter', tickerFilter) }, [tickerFilter])
+
+  const mapTradesToActivities = useCallback((trades = []) => {
+    return trades.map(t => ({
+      ticker: t.ticker,
+      pattern: t.pattern,
+      strategy: t.strategy,
+      direction: t.direction,
+      startTime: t.entryTime || new Date().toLocaleTimeString(),
+      endTime: t.exitTime || '-',
+      status: 'Complete',
+      ep: t.ep || t.entryPrice || '0.00',
+      xp: t.xp || t.exitPrice || '0.00',
+      exitReason: t.exitReason,
+      netPnl: t.netPnl,
+      chartPath: t.chartPath || null
+    }))
+  }, [])
+
+  const handleStartScan = async () => {
     setRunning(true)
     setElapsed(0)
     setReport(null)
-    addLog('Starting backtest...', 'info')
-    try {
-      const data = await backtestApi.runBacktest()
-      if (data.stopped) {
-        addLog('Backtest was stopped by user', 'warn')
+    setEquityData([])
+    setActivities([])
+    addLog('Connecting to progress stream...', 'info')
+    
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close()
+    }
+    
+    const source = new EventSource('/backtest-ui/stream')
+    eventSourceRef.current = source
+    
+    source.onopen = () => {
+      addLog('🚀 Stream connected! Starting engines...', 'success')
+      
+      backtestApi.runBacktest(startParams.capital, startParams.risk, tickerFilter, tickerScope).then(data => {
         setRunning(false)
-        return
-      }
-      if (data.success === false) {
-        addLog(`Error: ${data.error}`, 'error')
+        addLog('🏁 Backend scan loop finished', 'info')
+        if (eventSourceRef.current) {
+          eventSourceRef.current.close()
+          eventSourceRef.current = null
+        }
+        if (data.stopped) {
+          addLog('⏹ Backtest stopped', 'warn')
+          return
+        }
+        if (data.success === false) {
+          addLog(`❌ Error: ${data.error}`, 'error')
+          return
+        }
+        setReport(data)
+        setEquityData(data.equityCurve || [])
+        if (data.trades && data.trades.length > 0) {
+          setActivities(mapTradesToActivities(data.trades))
+        }
+        addLog(`✅ Report generated: ${data.totalTrades} trades`, 'success')
+      }).catch(e => {
         setRunning(false)
-        return
-      }
+        addLog(`❌ Fatal: ${e.message}`, 'error')
+      })
+    }
+    
+    source.addEventListener('ticker_progress', (e) => {
+      try {
+        const d = JSON.parse(e.data)
+        if (d.ticker && d.ticker !== 'ALL') {
+          setActivities(prev => {
+            const existing = prev.find(a => a.ticker === d.ticker && a.status !== 'Complete')
+            if (existing) {
+              return prev.map(a =>
+                a.ticker === d.ticker && a.status !== 'Complete'
+                  ? { ...a, status: d.status, detail: d.detail }
+                  : a
+              )
+            }
+            return [...prev, {
+              ticker: d.ticker,
+              pattern: '-',
+              strategy: 'N/A',
+              direction: '-',
+              startTime: d.time || new Date().toLocaleTimeString(),
+              endTime: '-',
+              status: d.status,
+              detail: d.detail
+            }].slice(-500)
+          })
+        }
+      } catch (err) {}
+    })
 
-      setReport(data)
-      setRunning(false)
-      addLog(`Backtest complete: ${data.totalTrades} trades, ${data.winRate.toFixed(1)}% WR, $${data.totalPnl.toFixed(2)} PnL`, 'success')
+    source.addEventListener('trades', (e) => {
+      try {
+        const d = JSON.parse(e.data)
+        if (d.trades) {
+           const mapped = mapTradesToActivities(d.trades)
+           setActivities(prev => [...prev, ...mapped].slice(-500)) 
+           addLog(`📥 Received ${mapped.length} historical trades`, 'info')
+        }
+      } catch (err) {}
+    })
 
-      // Process equity curve
-      if (data.equityCurve && data.equityCurve.length > 0) {
-        setEquityData(data.equityCurve.map(p => ({ time: p.time, equity: p.equity })))
-      }
-    } catch (e) {
-      addLog(`Error: ${e.message}`, 'error')
-      setRunning(false)
+    source.onerror = () => {
+      addLog('⚠️ Stream connection issue (waiting for engine...)', 'warn')
     }
   }
 
-  const handleStop = async () => {
+  const handleStopScan = async () => {
     try {
       await backtestApi.stopBacktest()
-      addLog('Stop requested', 'warn')
-    } catch (e) { addLog(`Error: ${e.message}`, 'error') }
+      addLog('⏹ Stop signal sent to backend', 'warn')
+    } catch (e) { addLog(`❌ Stop failed: ${e.message}`, 'error') }
   }
 
-  const handleResume = async () => {
-    addLog(`Resuming from checkpoint (${checkpoint?.processedCount || 0} tickers done)...`, 'info')
-    handleRun()
-  }
-
-  const handleMaxConcurrentChange = async (newVal) => {
-    const val = parseInt(newVal, 10)
-    if (isNaN(val) || val < 1 || val > 16) return
-    setMaxConcurrent(val)
-    try {
-      const res = await backtestApi.setMaxConcurrent(val)
-      addLog(res.success ? `Max concurrent set to ${val}` : res.message, res.success ? 'success' : 'error')
-    } catch (e) { addLog(`Error: ${e.message}`, 'error') }
+  const handleMaxConcurrentChange = async (val) => {
+    const n = parseInt(val, 10)
+    if (isNaN(n) || n < 1 || n > 16) return
+    setMaxConcurrent(n)
+    try { await backtestApi.setMaxConcurrent(n) } catch (e) {}
   }
 
   return (
-    <div>
-      {/* Run Backtest Card */}
-      <div className="card" style={{ marginBottom: 20 }}>
-        <h3>🚀 Run Backtest</h3>
-        <p style={{ color: '#8b949e', marginBottom: 15 }}>
-          Default: Hot tickers first, 1 year history, $50k capital, 2% risk
-        </p>
+    <div className="flex-col gap-20">
+      
+      {/* Configuration Toolbar */}
+      <div className="card toolbar-card">
+        <div className="toolbar-section">
+          
+          <div className="flex-align-center gap-10">
+            {running ? (
+              <button className="btn btn-danger" onClick={handleStopScan} style={{ minWidth: 140 }}>
+                <Square size={16} /> Stop Engine
+              </button>
+            ) : (
+              <button className="btn btn-primary" onClick={handleStartScan} style={{ minWidth: 140 }}>
+                <Play size={16} /> Run Backtest
+              </button>
+            )}
+          </div>
 
-        <button className="btn btn-primary" onClick={handleRun} disabled={running}
-                style={{ display: running ? 'none' : 'inline-flex' }}>
-          <Play size={16} /> Run Backtest
-        </button>
-        <button className="btn btn-danger" onClick={handleStop} disabled={!running}
-                style={{ display: running ? 'inline-flex' : 'none', marginLeft: 10 }}>
-          <Square size={16} /> Stop Run
-        </button>
+          <div className="divider-v" />
 
-        {checkpoint?.exists && (
-          <button className="btn btn-warning" onClick={handleResume} disabled={running}
-                  style={{ marginLeft: 10 }}>
-            <RefreshCw size={16} /> Resume ({checkpoint.processedCount} tickers)
-          </button>
-        )}
+          <div className="stat-box" style={{ minWidth: 120 }}>
+            <span className="stat-label-sm">Concurrent</span>
+            <input type="number" min="1" max="16" value={maxConcurrent}
+              onChange={e => handleMaxConcurrentChange(e.target.value)} disabled={running}
+              style={{ width: 60, padding: '4px 8px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 13 }} />
+          </div>
 
-        <div style={{ marginTop: 15, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ color: '#8b949e', fontSize: 14 }}>Concurrent Tickers:</span>
-          <input type="number" min="1" max="16" value={maxConcurrent}
-                 onChange={(e) => handleMaxConcurrentChange(e.target.value)}
-                 disabled={running}
-                 style={{
-                   width: 60, padding: '4px 8px', background: '#0d1117', border: '1px solid #30363d',
-                   borderRadius: 6, color: '#c9d1d9', fontSize: 14, textAlign: 'center'
-                 }}
-                 title="Number of tickers to analyze concurrently (1-16). Takes effect on next backtest run." />
+          <div className="stat-box">
+            <span className="stat-label-sm">Scope</span>
+            <div className="flex-align-center gap-8">
+              <button className="btn" disabled={running} onClick={() => setTickerScope('ALL')}
+                style={{ padding: '4px 10px', background: tickerScope === 'ALL' ? '#1f6feb' : '#21262d', color: '#fff', fontSize: 12 }}>All</button>
+              <button className="btn" disabled={running} onClick={() => setTickerScope('HOT')}
+                style={{ padding: '4px 10px', background: tickerScope === 'HOT' ? '#9e6a03' : '#21262d', color: '#fff', fontSize: 12 }}>Hot</button>
+            </div>
+          </div>
+
+          <div className="divider-v" />
+
+          <div className="flex-col gap-6" style={{ flex: 1, minWidth: 300 }}>
+            <span className="stat-label-sm">Filter List:</span>
+            <TickerSelector value={tickerFilter} onChange={setTickerFilter} disabled={running} />
+          </div>
+          
+          {running && (
+            <span className="color-info font-bold text-md">Running... {elapsed}s</span>
+          )}
         </div>
-
-        {running && (
-          <span style={{ marginLeft: 15, color: '#58a6ff' }}>
-            Running... {elapsed}s elapsed
-          </span>
-        )}
       </div>
 
-      {/* Results */}
-      {report && (
-        <>
-          {/* Stats Cards */}
-          <div className="grid">
+      <div className="grid" style={{ gridTemplateColumns: '1fr 350px' }}>
+        <div className="flex-col gap-20">
+          {report && (
             <div className="card">
-              <h3>📊 Results</h3>
-              <div className="stat">
-                <span className="stat-label">Total Trades:</span>
-                <span className="stat-value">{report.totalTrades}</span>
+              <div className="flex-between mb-12">
+                <h3>Backtest Report: {report.tickerScope} {tickerFilter ? `(${tickerFilter})` : ''}</h3>
+                <span className="badge badge-success" style={{ fontSize: 14 }}>{report.winRatePct}% Win Rate</span>
               </div>
-              <div className="stat">
-                <span className="stat-label">Win Rate:</span>
-                <span className={`stat-value ${report.winRate >= 50 ? 'positive' : 'negative'}`}>
-                  {report.winRate.toFixed(1)}%
-                </span>
+              <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                <StatCard label="Total Trades" value={report.totalTrades} />
+                <StatCard label="Profit Factor" value={report.profitFactor} color={report.profitFactor > 1 ? '#3fb950' : '#f85149'} />
+                <StatCard label="Net PnL" value={`$${report.netPnl.toLocaleString()}`} color={report.netPnl >= 0 ? '#3fb950' : '#f85149'} />
+                <StatCard label="Max Drawdown" value={`$${report.maxDrawdown.toLocaleString()}`} color="#f85149" />
               </div>
-              <div className="stat">
-                <span className="stat-label">Total PnL:</span>
-                <span className={`stat-value ${report.totalPnl >= 0 ? 'positive' : 'negative'}`}>
-                  ${report.totalPnl.toFixed(2)}
-                </span>
-              </div>
-              <div className="stat">
-                <span className="stat-label">Profit Factor:</span>
-                <span className="stat-value">{report.profitFactor.toFixed(2)}</span>
-              </div>
-              <div className="stat">
-                <span className="stat-label">Max Drawdown:</span>
-                <span className="stat-value">${report.maxDrawdown.toFixed(2)}</span>
-              </div>
-            </div>
-
-            {/* Equity Curve Chart */}
-            <div className="card" style={{ gridColumn: 'span 2' }}>
-              <h3>📈 Equity Curve</h3>
-              {equityData.length > 0 ? (
-                <div className="chart-container">
-                  <ResponsiveContainer width="100%" height="100%">
+              
+              {equityData.length > 0 && (
+                <div className="chart-container" style={{ marginTop: 20 }}>
+                  <ResponsiveContainer>
                     <LineChart data={equityData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
-                      <XAxis dataKey="time" tick={{ fill: '#8b949e' }} />
-                      <YAxis tick={{ fill: '#8b949e' }} />
-                      <Tooltip contentStyle={{ background: '#161b22', border: '1px solid #30363d' }} />
+                      <XAxis dataKey="trade" stroke="#8b949e" fontSize={10} />
+                      <YAxis stroke="#8b949e" fontSize={10} />
+                      <Tooltip contentStyle={{ background: '#161b22', border: '1px solid #30363d', fontSize: 12 }} />
                       <Line type="monotone" dataKey="equity" stroke="#58a6ff" strokeWidth={2} dot={false} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-              ) : (
-                <p style={{ color: '#8b949e' }}>No equity data</p>
               )}
             </div>
+          )}
+
+          <div className="card">
+            <h3>Trade Log</h3>
+            <UnifiedDataGrid data={activities} />
           </div>
+        </div>
 
-          {/* Strategy Performance */}
-          {report.byStrategy && Object.keys(report.byStrategy).length > 0 && (
-            <div className="card" style={{ marginBottom: 20 }}>
-              <h3>🎯 Performance by Strategy</h3>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Strategy</th><th>Trades</th><th>Win Rate</th>
-                      <th>Total PnL</th><th>Profit Factor</th><th>Max DD</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(report.byStrategy).map(([name, stats]) => (
-                      <tr key={name}>
-                        <td>{name}</td>
-                        <td>{stats.trades}</td>
-                        <td className={stats.winRate >= 50 ? 'positive' : 'negative'}>
-                          {(stats.winRate * 100).toFixed(1)}%
-                        </td>
-                        <td className={stats.totalPnl >= 0 ? 'positive' : 'negative'}>
-                          ${stats.totalPnl.toFixed(2)}
-                        </td>
-                        <td>{stats.profitFactor.toFixed(2)}</td>
-                        <td>${stats.maxDrawdown.toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div className="flex-between mb-12">
+            <h3>Backend Logs</h3>
+            <button className="btn" onClick={() => setLogs([])} style={{ padding: '2px 8px', fontSize: 11 }}>Clear</button>
+          </div>
+          <div className="console-log" style={{ flex: 1, minHeight: 600 }}>
+            {logs.map((log, i) => (
+              <div key={i} className={`log-entry log-${log.type}`}>
+                <span className="color-muted" style={{ marginRight: 8 }}>[{log.time}]</span>
+                {log.msg}
               </div>
-            </div>
-          )}
-
-          {/* Ticker Performance */}
-          {report.byTicker && Object.keys(report.byTicker).length > 0 && (
-            <div className="card">
-              <h3>📋 Performance by Ticker</h3>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Ticker</th><th>Trades</th><th>Win Rate</th>
-                      <th>Total PnL</th><th>Profit Factor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(report.byTicker).map(([ticker, stats]) => (
-                      <tr key={ticker}>
-                        <td><strong>{ticker}</strong></td>
-                        <td>{stats.trades}</td>
-                        <td className={stats.winRate >= 50 ? 'positive' : 'negative'}>
-                          {(stats.winRate * 100).toFixed(1)}%
-                        </td>
-                        <td className={stats.totalPnl >= 0 ? 'positive' : 'negative'}>
-                          ${stats.totalPnl.toFixed(2)}
-                        </td>
-                        <td>{stats.profitFactor.toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Console Log */}
-      <div className="card" style={{ marginTop: 20 }}>
-        <h3>💻 Console Log</h3>
-        <div className="console-log">
-          {logs.map((l, i) => (
-            <div key={i} className={`log-entry log-${l.type}`}>
-              [{l.time}] {l.msg}
-            </div>
-          ))}
-          {logs.length === 0 && <div style={{ color: '#8b949e' }}>Waiting for backtest...</div>}
+            ))}
+            {logs.length === 0 && <div className="color-muted" style={{ textAlign: 'center', marginTop: 100 }}>No logs yet.</div>}
+          </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function StatCard({ label, value, color }) {
+  return (
+    <div className="bg-card border-main rounded-md p-10-15 flex-col flex-center">
+      <div className="stat-label-sm color-muted">{label}</div>
+      <div className="stat-value-md" style={{ color: color || '#c9d1d9', fontSize: 18 }}>{value}</div>
     </div>
   )
 }

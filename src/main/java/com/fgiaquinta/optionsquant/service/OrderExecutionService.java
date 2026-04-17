@@ -159,7 +159,7 @@ public class OrderExecutionService {
         }
 
         log.info("Connecting to IBKR for order execution at {}:{}", ibkrProperties.host(), ibkrProperties.port());
-        client.eConnect(ibkrProperties.host(), ibkrProperties.port(), 0);
+        client.eConnect(ibkrProperties.host(), ibkrProperties.port(), 2);
 
         if (!client.isConnected()) {
             throw new IllegalStateException("Failed to connect to TWS at " + ibkrProperties.host() + ":" + ibkrProperties.port());
@@ -315,6 +315,12 @@ public class OrderExecutionService {
         log.info("✅ Bracket sent! Parent={} TP={} SL={}", pId, tpId, slId);
 
         return new OrderResult(pId, tpId, slId, bestStrike, expiration, right);
+    }
+
+    public void cancelOrder(int orderId) {
+        connect();
+        log.info("🚫 Cancelling order ID: {}", orderId);
+        client.cancelOrder(orderId, new OrderCancel());
     }
 
     private void cleanupOrderId(int orderId, String ticker) {

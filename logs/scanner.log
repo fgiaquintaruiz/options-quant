@@ -1,48 +1,133 @@
-2026-04-16 06:40:03.871 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-16 06:40:03.876 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
-2026-04-16 06:40:03.876 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-16 06:40:03.876 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-16 06:40:03.876 INFO  [main] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
-2026-04-16 06:40:04.263 INFO  [main] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
-2026-04-16 06:40:04.264 INFO  [main] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
-2026-04-16 06:49:56.889 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-16 06:49:56.890 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
-2026-04-16 06:49:56.890 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-16 06:49:56.890 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-16 06:49:56.890 INFO  [main] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
-2026-04-16 06:49:57.252 INFO  [main] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
-2026-04-16 06:49:57.252 INFO  [main] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
-2026-04-16 07:00:18.812 INFO  [main] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-16 07:00:18.813 INFO  [main] c.optionsquant.service.MarketScanner :    Auto-execute: true
-2026-04-16 07:00:18.813 INFO  [main] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-16 07:00:18.813 INFO  [main] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-16 07:00:18.813 INFO  [main] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
-2026-04-16 07:00:19.231 INFO  [main] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
-2026-04-16 07:00:19.231 INFO  [main] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
-2026-04-16 07:07:33.316 INFO  [restartedMain] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-16 07:07:33.317 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Auto-execute: true
-2026-04-16 07:07:33.317 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-16 07:07:33.317 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-16 07:07:33.317 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
-2026-04-16 07:20:50.180 INFO  [restartedMain] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-16 07:20:50.182 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Auto-execute: true
-2026-04-16 07:20:50.182 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-16 07:20:50.182 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-16 07:20:50.182 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
-2026-04-16 07:33:13.531 INFO  [restartedMain] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-16 07:33:13.533 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Auto-execute: true
-2026-04-16 07:33:13.536 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-16 07:33:13.537 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-16 07:33:13.537 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
-2026-04-16 07:39:16.203 INFO  [restartedMain] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-16 07:39:16.203 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Auto-execute: true
-2026-04-16 07:39:16.204 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-16 07:39:16.204 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-16 07:39:16.204 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
-2026-04-16 07:39:16.820 INFO  [restartedMain] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
-2026-04-16 07:39:16.820 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
-2026-04-16 07:39:26.056 INFO  [restartedMain] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
-2026-04-16 07:39:26.056 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Auto-execute: true
-2026-04-16 07:39:26.056 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
-2026-04-16 07:39:26.056 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
-2026-04-16 07:39:26.056 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
+2026-04-17 05:43:28.345 INFO  [scheduling-1] c.optionsquant.service.MarketScanner : 
+📈 === SCAN SUMMARY ===
+2026-04-17 05:43:28.357 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   Time: 17:00:02.010312 (Spain)
+2026-04-17 05:43:28.357 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   Tickers scanned: 512
+2026-04-17 05:43:28.357 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   Signals found: 4
+2026-04-17 05:43:28.357 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   Scan duration: 45806334ms
+2026-04-17 05:43:28.358 INFO  [scheduling-1] c.optionsquant.service.MarketScanner : 
+🎯 SIGNALS DETECTED:
+2026-04-17 05:43:28.358 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   CBRE PUT @ $147.79 - p6 reversal at 2026-04-16T15:55-04:00[US/Eastern]
+2026-04-17 05:43:28.358 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :     TP: $145.57 | SL: $150.16 | Entry: $147.79
+2026-04-17 05:43:29.488 WARN  [scheduling-1] c.optionsquant.service.MarketScanner : ⏭️ Skipping CBRE PUT - macro unfavorable
+2026-04-17 05:43:29.488 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   CHTR PUT @ $220.26 - p6 reversal at 2026-04-15T22:00+02:00[Europe/Madrid]
+2026-04-17 05:43:29.488 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :     TP: $216.96 | SL: $225.6 | Entry: $220.26
+2026-04-17 05:43:29.571 WARN  [scheduling-1] c.optionsquant.service.MarketScanner : ⏭️ Skipping CHTR PUT - macro unfavorable
+2026-04-17 05:43:29.571 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   DGX PUT @ $191.43 - p6 reversal at 2026-04-15T22:00+02:00[Europe/Madrid]
+2026-04-17 05:43:29.571 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :     TP: $188.56 | SL: $193.96 | Entry: $191.43
+2026-04-17 05:43:29.665 WARN  [scheduling-1] c.optionsquant.service.MarketScanner : ⏭️ Skipping DGX PUT - macro unfavorable
+2026-04-17 05:43:29.665 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   MRNA PUT @ $50.68 - p2 trend at 2026-04-13T22:00+02:00[Europe/Madrid]
+2026-04-17 05:43:29.665 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :     TP: $49.92 | SL: $52.55 | Entry: $50.68
+2026-04-17 05:43:29.753 WARN  [scheduling-1] c.optionsquant.service.MarketScanner : ⏭️ Skipping MRNA PUT - macro unfavorable
+2026-04-17 05:43:29.754 INFO  [scheduling-1] c.optionsquant.service.MarketScanner : ======================
+
+2026-04-17 06:11:03.518 INFO  [restartedMain] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
+2026-04-17 06:11:03.519 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Auto-execute: true
+2026-04-17 06:11:03.519 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
+2026-04-17 06:11:03.519 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
+2026-04-17 06:11:03.519 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
+2026-04-17 06:11:04.275 INFO  [restartedMain] c.optionsquant.service.MarketScanner : ⏸️ Outside market hours - skipping startup delta download
+2026-04-17 06:11:04.275 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    MarketScanner will activate at 10:00 Spain time on next weekday
+2026-04-17 10:00:02.264 INFO  [scheduling-1] c.optionsquant.service.MarketScanner : 
+🔍 === MARKET SCAN === 10:00:02.264223300 (Spain) ===
+2026-04-17 12:47:47.304 INFO  [scheduling-1] c.optionsquant.service.MarketScanner : 
+📈 === SCAN SUMMARY ===
+2026-04-17 12:47:47.304 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   Time: 10:00:02.264223300 (Spain)
+2026-04-17 12:47:47.305 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   Tickers scanned: 512
+2026-04-17 12:47:47.305 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   Signals found: 9
+2026-04-17 12:47:47.305 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   Scan duration: 10065023ms
+2026-04-17 12:47:47.306 INFO  [scheduling-1] c.optionsquant.service.MarketScanner : 
+🎯 SIGNALS DETECTED:
+2026-04-17 12:47:47.306 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   CBRE PUT @ $147.79 - p6 reversal at 2026-04-16T16:00-04:00[America/New_York]
+2026-04-17 12:47:47.307 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :     TP: $145.57 | SL: $150.16 | Entry: $147.79
+2026-04-17 12:47:48.740 WARN  [scheduling-1] c.optionsquant.service.MarketScanner : ⏭️ Skipping CBRE PUT - macro unfavorable
+2026-04-17 12:47:48.740 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   COF PUT @ $200.7 - p6 reversal at 2026-04-16T16:00-04:00[America/New_York]
+2026-04-17 12:47:48.740 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :     TP: $197.69 | SL: $203.64 | Entry: $200.7
+2026-04-17 12:47:48.865 WARN  [scheduling-1] c.optionsquant.service.MarketScanner : ⏭️ Skipping COF PUT - macro unfavorable
+2026-04-17 12:47:48.865 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   DECK PUT @ $108.36 - p6 reversal at 2026-04-16T16:00-04:00[America/New_York]
+2026-04-17 12:47:48.865 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :     TP: $106.73 | SL: $110.35 | Entry: $108.36
+2026-04-17 12:47:48.963 WARN  [scheduling-1] c.optionsquant.service.MarketScanner : ⏭️ Skipping DECK PUT - macro unfavorable
+2026-04-17 12:47:48.963 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   DOV PUT @ $214.17 - p2 trend at 2026-04-16T16:00-04:00[America/New_York]
+2026-04-17 12:47:48.963 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :     TP: $210.96 | SL: $217.3 | Entry: $214.17
+2026-04-17 12:47:49.067 WARN  [scheduling-1] c.optionsquant.service.MarketScanner : ⏭️ Skipping DOV PUT - macro unfavorable
+2026-04-17 12:47:49.067 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   GWW PUT @ $1133.54 - p2 trend at 2026-04-16T16:00-04:00[America/New_York]
+2026-04-17 12:47:49.067 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :     TP: $1116.54 | SL: $1150.0 | Entry: $1133.54
+2026-04-17 12:47:49.192 WARN  [scheduling-1] c.optionsquant.service.MarketScanner : ⏭️ Skipping GWW PUT - macro unfavorable
+2026-04-17 12:47:49.192 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   IQV PUT @ $171.92 - p6 reversal at 2026-04-16T16:00-04:00[America/New_York]
+2026-04-17 12:47:49.192 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :     TP: $169.34 | SL: $176.03 | Entry: $171.92
+2026-04-17 12:47:49.325 WARN  [scheduling-1] c.optionsquant.service.MarketScanner : ⏭️ Skipping IQV PUT - macro unfavorable
+2026-04-17 12:47:49.325 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   KDP PUT @ $26.05 - p3 bounce at 2026-04-16T16:00-04:00[America/New_York]
+2026-04-17 12:47:49.325 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :     TP: $25.66 | SL: $26.47 | Entry: $26.05
+2026-04-17 12:47:49.430 WARN  [scheduling-1] c.optionsquant.service.MarketScanner : ⏭️ Skipping KDP PUT - macro unfavorable
+2026-04-17 12:47:49.430 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   KDP PUT @ $26.05 - p6 reversal at 2026-04-16T16:00-04:00[America/New_York]
+2026-04-17 12:47:49.430 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :     TP: $25.66 | SL: $26.47 | Entry: $26.05
+2026-04-17 12:47:49.527 WARN  [scheduling-1] c.optionsquant.service.MarketScanner : ⏭️ Skipping KDP PUT - macro unfavorable
+2026-04-17 12:47:49.527 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   KIM PUT @ $23.73 - c1 squeeze at 2026-04-16T16:00-04:00[America/New_York]
+2026-04-17 12:47:49.527 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :     TP: $23.43 | SL: $23.98 | Entry: $23.73
+2026-04-17 12:47:49.623 WARN  [scheduling-1] c.optionsquant.service.MarketScanner : ⏭️ Skipping KIM PUT - macro unfavorable
+2026-04-17 12:47:49.623 INFO  [scheduling-1] c.optionsquant.service.MarketScanner : ======================
+
+2026-04-17 13:00:02.077 INFO  [scheduling-1] c.optionsquant.service.MarketScanner : 
+🔍 === MARKET SCAN === 13:00:02.077242900 (Spain) ===
+2026-04-17 13:03:02.346 INFO  [scheduling-1] c.optionsquant.service.MarketScanner : 
+📈 === SCAN SUMMARY ===
+2026-04-17 13:03:02.346 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   Time: 13:00:02.077242900 (Spain)
+2026-04-17 13:03:02.346 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   Tickers scanned: 512
+2026-04-17 13:03:02.346 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   Signals found: 0
+2026-04-17 13:03:02.346 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   Scan duration: 180266ms
+2026-04-17 13:03:02.346 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   No signals detected this scan
+2026-04-17 13:03:02.346 INFO  [scheduling-1] c.optionsquant.service.MarketScanner : ======================
+
+2026-04-17 13:07:11.686 INFO  [restartedMain] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
+2026-04-17 13:07:11.686 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Auto-execute: true
+2026-04-17 13:07:11.686 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
+2026-04-17 13:07:11.686 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
+2026-04-17 13:07:11.686 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
+2026-04-17 13:07:12.015 INFO  [restartedMain] c.optionsquant.service.MarketScanner : 🔄 Market hours detected - downloading fresh candle delta in background...
+2026-04-17 13:07:12.015 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    This may take a few minutes for 512 tickers...
+2026-04-17 13:07:12.015 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    App is ready; scan will complete in background.
+2026-04-17 13:08:15.094 INFO  [restartedMain] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
+2026-04-17 13:08:15.098 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Auto-execute: true
+2026-04-17 13:08:15.098 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
+2026-04-17 13:08:15.098 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
+2026-04-17 13:08:15.098 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
+2026-04-17 13:08:15.248 INFO  [restartedMain] c.optionsquant.service.MarketScanner : 🔄 Market hours detected - downloading fresh candle delta in background...
+2026-04-17 13:08:15.248 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    This may take a few minutes for 512 tickers...
+2026-04-17 13:08:15.248 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    App is ready; scan will complete in background.
+2026-04-17 13:08:51.437 INFO  [restartedMain] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
+2026-04-17 13:08:51.437 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Auto-execute: true
+2026-04-17 13:08:51.437 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
+2026-04-17 13:08:51.438 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
+2026-04-17 13:08:51.438 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
+2026-04-17 13:08:51.603 INFO  [restartedMain] c.optionsquant.service.MarketScanner : 🔄 Market hours detected - downloading fresh candle delta in background...
+2026-04-17 13:08:51.603 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    This may take a few minutes for 512 tickers...
+2026-04-17 13:08:51.603 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    App is ready; scan will complete in background.
+2026-04-17 13:15:02.047 INFO  [scheduling-1] c.optionsquant.service.MarketScanner : 
+🔍 === MARKET SCAN === 13:15:02.047362700 (Spain) ===
+2026-04-17 13:15:15.878 INFO  [ForkJoinPool.commonPool-worker-3] c.optionsquant.service.MarketScanner : ✅ Startup scan complete: 512 tickers, 0 signals in 384273ms
+2026-04-17 13:45:51.404 INFO  [restartedMain] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
+2026-04-17 13:45:51.406 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Auto-execute: true
+2026-04-17 13:45:51.406 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
+2026-04-17 13:45:51.407 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
+2026-04-17 13:45:51.407 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
+2026-04-17 13:45:51.756 INFO  [restartedMain] c.optionsquant.service.MarketScanner : 🔄 Market hours detected - downloading fresh candle delta in background...
+2026-04-17 13:45:51.756 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    This may take a few minutes for 512 tickers...
+2026-04-17 13:45:51.756 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    App is ready; scan will complete in background.
+2026-04-17 13:46:27.966 INFO  [restartedMain] c.optionsquant.service.MarketScanner : 🤖 MarketScanner initialized - Spain timezone, 15-min synchronized
+2026-04-17 13:46:27.968 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Auto-execute: true
+2026-04-17 13:46:27.968 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)
+2026-04-17 13:46:27.968 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Trailing stop monitor: ENABLED (90 min max hold, SMA20 trailing)
+2026-04-17 13:46:27.968 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)
+2026-04-17 13:46:28.175 INFO  [restartedMain] c.optionsquant.service.MarketScanner : 🔄 Market hours detected - downloading fresh candle delta in background...
+2026-04-17 13:46:28.177 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    This may take a few minutes for 512 tickers...
+2026-04-17 13:46:28.177 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    App is ready; scan will complete in background.
+2026-04-17 14:00:02.048 INFO  [scheduling-1] c.optionsquant.service.MarketScanner : 
+🔍 === MARKET SCAN === 14:00:02.046284400 (Spain) ===
+2026-04-17 14:20:28.408 INFO  [scheduling-1] c.optionsquant.service.MarketScanner : 
+📈 === SCAN SUMMARY ===
+2026-04-17 14:20:28.408 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   Time: 14:00:02.046284400 (Spain)
+2026-04-17 14:20:28.408 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   Tickers scanned: 512
+2026-04-17 14:20:28.408 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   Signals found: 0
+2026-04-17 14:20:28.408 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   Scan duration: 1226358ms
+2026-04-17 14:20:28.408 INFO  [scheduling-1] c.optionsquant.service.MarketScanner :   No signals detected this scan
+2026-04-17 14:20:28.408 INFO  [scheduling-1] c.optionsquant.service.MarketScanner : ======================
+

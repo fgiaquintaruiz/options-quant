@@ -200,26 +200,30 @@ public class TradingService {
     }
 
     /**
-     * Executes a manual trade from Telegram webhook callback.
-     * Format: ticker, strategy, direction, price
+     * Executes a manual trade from Telegram or UI.
+     * Returns the OrderResult containing order IDs.
      */
-    public boolean executeManualTrade(String ticker, String strategy, String direction, double price) {
-        log.info(">>> executeManualTrade: ticker={}, strategy={}, direction={}, price={}", 
+    public OrderExecutionService.OrderResult executeManualTrade(String ticker, String strategy, String direction, double price) {
+        log.info("🎯 executeManualTrade START: ticker={}, strategy={}, direction={}, price={}",
                 ticker, strategy, direction, price);
 
         try {
-            boolean isCall = "CALL".equalsIgnoreCase(direction);
-            
+            boolean isCall = "CALL".equalsIgnoreCase(direction) || direction.toUpperCase().contains("CALL");
+            log.debug("Determined direction: {} (from: {})", isCall ? "CALL" : "PUT", direction);
+
             // Create a simple trade plan with default TP/SL (20% TP, 10% SL)
-            double tp = price * 1.20;  // 20% profit target
-            double sl = price * 0.90;  // 10% stop loss
+            double tp = isCall ? price * 1.20 : price * 0.80;
+            double sl = isCall ? price * 0.90 : price * 1.10;
             TradePlan plan = new TradePlan(price, tp, sl, isCall, java.time.LocalTime.of(15, 55));
+            log.debug("Trade Plan created: Entry=${} TP=${} SL=${}", price, tp, sl);
 
             // Calculate position size
             int qty = accountManager.calculateQuantity(price, sl);
             if (qty < 1) {
+                log.warn("Quantity calculation resulted in {}, defaulting to 1 contract", qty);
                 qty = 1;  // Default to 1 contract if calculation fails
             }
+            log.info("Placing bracket order for {} contracts of {}", qty, ticker);
 
             // Place the bracket order
             OrderExecutionService.OrderResult orderResult = orderExecutionService.placeOptionBracket(
@@ -228,14 +232,27 @@ public class TradingService {
 
             if (orderResult != null) {
                 accountManager.addActiveTrade();
-                log.info("✅ Manual trade executed: {} {} @ ${}, qty={}", ticker, direction, price, qty);
-                return true;
+                log.info("✅ executeManualTrade SUCCESS: ticker={}, parentId={}", ticker, orderResult.parentId());
+                return orderResult;
             } else {
-                log.error("❌ Manual trade failed: order result was null");
-                return false;
+                log.error("❌ executeManualTrade FAILED: orderExecutionService returned null for {}", ticker);
+                return null;
             }
         } catch (Exception e) {
-            log.error("❌ Manual trade execution failed: {}", e.getMessage(), e);
+            log.error("❌ executeManualTrade EXCEPTION for {}: {}", ticker, e.getMessage(), e);
+            return null;
+        }
+    }
+    /**
+     * Cancels an active order in TWS.
+     */
+    public boolean cancelTrade(int orderId) {
+        log.info(">>> cancelTrade: orderId={}", orderId);
+        try {
+            orderExecutionService.cancelOrder(orderId);
+            return true;
+        } catch (Exception e) {
+            log.error("❌ Failed to cancel order {}: {}", orderId, e.getMessage());
             return false;
         }
     }

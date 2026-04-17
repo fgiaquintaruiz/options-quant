@@ -15,6 +15,7 @@ import java.time.ZonedDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Automatically scans market and executes trades during market hours.
@@ -45,6 +46,12 @@ public class MarketScanner {
     private final com.fgiaquinta.optionsquant.controller.LiveModeController liveModeController;
     private final TickerService tickerService;
     private final MarketCalendarService marketCalendar;
+
+    /** When false, scheduled scans are skipped (user can toggle from UI). */
+    private final AtomicBoolean schedulerEnabled = new AtomicBoolean(true);
+
+    public boolean isSchedulerEnabled() { return schedulerEnabled.get(); }
+    public void setSchedulerEnabled(boolean enabled) { schedulerEnabled.set(enabled); }
 
     public MarketScanner(StrategyScannerService scannerService,
                          IbkrProperties ibkrProperties,
@@ -88,33 +95,31 @@ public class MarketScanner {
             
             // Run on background thread so the app reaches "ready" state immediately
             CompletableFuture.runAsync(() -> {
+                if (!schedulerEnabled.get()) {
+                    log.info("⏸️ Scheduler disabled — skipping startup scan");
+                    return;
+                }
                 List<String> allTickers = ibkrProperties.useCsvTickers()
                         ? tickerService.getTickerSymbols()
                         : ibkrProperties.tickers();
 
-                // Coordinate with LiveModeController so UI shows correct scanning state
+                liveModeController.setAutoScan(true);
                 liveModeController.updateScanningState(true, "Startup scan...", 0, allTickers.size());
+                long startTime = System.currentTimeMillis();
                 try {
-                    long startTime = System.currentTimeMillis();
-                    // Include trade plans so we see TP/SL in logs
                     ScanResult result = scannerService.scanAll(true, true);
                     long elapsed = System.currentTimeMillis() - startTime;
-
-                    // Update UI with scan results
-                    liveModeController.updateScanComplete(elapsed);
                     for (Signal signal : result.signals()) {
                         liveModeController.addLiveSignal(signal);
                     }
-                    
-                    log.info("✅ Startup delta download complete!");
-                    log.info("   Tickers refreshed: {}", result.tickersScanned());
-                    log.info("   Signals found: {}", result.totalSignals());
-                    log.info("   Duration: {}ms ({} min)", elapsed, String.format("%.1f", elapsed / 60000.0));
-                    log.info("   Next scan: at next 15-min boundary");
+                    log.info("✅ Startup scan complete: {} tickers, {} signals in {}ms",
+                            result.tickersScanned(), result.totalSignals(), elapsed);
                 } catch (Exception e) {
-                    log.warn("⚠️ Startup delta download failed: {} (will retry at next scan)", e.getMessage());
-                    // Always reset scanning state on failure
-                    liveModeController.updateScanComplete(0);
+                    log.warn("⚠️ Startup scan failed: {}", e.getMessage());
+                } finally {
+                    // Always reset scanning state so Stop Scan can clear it
+                    liveModeController.updateScanComplete(System.currentTimeMillis() - startTime);
+                    liveModeController.setAutoScan(false);
                 }
             });
         } else {
@@ -149,34 +154,31 @@ public class MarketScanner {
             return;
         }
 
-        // Skip if stop was requested
+        // Skip if scheduler disabled or stop was requested
+        if (!schedulerEnabled.get()) {
+            log.debug("⏸️ Scheduler disabled — skipping scheduled scan");
+            return;
+        }
         if (liveModeController.isStopRequested()) {
             log.info("⏹️ Stop scan requested - skipping scheduled scan");
             liveModeController.clearStopRequest();
             return;
         }
 
-        log.info("\n🔍 === MARKET SCAN === {} (Spain) ===",
-                nowSpain.toLocalTime());
+        log.info("\n🔍 === MARKET SCAN === {} (Spain) ===", nowSpain.toLocalTime());
 
         long scanStartTime = System.currentTimeMillis();
 
         try {
-            // Get all tickers for progress tracking
             List<String> allTickers = ibkrProperties.useCsvTickers()
                     ? tickerService.getTickerSymbols()
                     : ibkrProperties.tickers();
-            
-            // Update UI: scanning started
+
+            liveModeController.setAutoScan(true);
             liveModeController.updateScanningState(true, "Starting...", 0, allTickers.size());
 
-            // Scan all tickers with trade plans, auto-refresh data
             ScanResult result = scannerService.scanAll(true, true);
 
-            // Update UI: scan complete
-            liveModeController.updateScanComplete(System.currentTimeMillis() - scanStartTime);
-
-            // Update UI: add all signals
             for (Signal signal : result.signals()) {
                 liveModeController.addLiveSignal(signal);
             }
@@ -299,9 +301,13 @@ public class MarketScanner {
             }
             
             log.info("======================\n");
-            
+
         } catch (Exception e) {
             log.error("❌ MarketScanner error: {}", e.getMessage(), e);
+        } finally {
+            // Always reset scanning state so Stop Scan works
+            liveModeController.updateScanComplete(System.currentTimeMillis() - scanStartTime);
+            liveModeController.setAutoScan(false);
         }
     }
 }

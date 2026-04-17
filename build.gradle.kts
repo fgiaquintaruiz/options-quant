@@ -1,6 +1,8 @@
 plugins {
     id("java")
+    jacoco
     alias(libs.plugins.spring.boot)
+    alias(libs.plugins.owasp.dependency.check)
 }
 
 group = "com.fgiaquinta.optionsquant"
@@ -22,7 +24,7 @@ repositories {
 
 dependencies {
     // Spring Boot 4
-    implementation(platform("org.springframework.boot:spring-boot-dependencies:4.0.4"))
+    implementation(platform("org.springframework.boot:spring-boot-dependencies:4.0.5"))
     implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.starter.actuator)
     developmentOnly(libs.spring.boot.devtools)
@@ -109,3 +111,16 @@ tasks.bootJar {
 // NOTE: To run separately during development:
 // 1. Backend: ./gradlew bootRun
 // 2. Frontend: cd frontend && npm run dev
+
+dependencyCheck {
+    failBuildOnCVSS = 7.0f
+    formats = listOf("HTML", "JSON")
+    analyzers.assemblyEnabled = false
+}
+
+tasks.jacocoTestReport {
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+}

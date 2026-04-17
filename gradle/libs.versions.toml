@@ -1,5 +1,5 @@
 [versions]
-spring-boot = "4.0.4"
+spring-boot = "4.0.5"
 java = "25"
 lombok = "1.18.42"
 slf4j = "2.0.16"
@@ -23,3 +23,5 @@ playwright = { module = "com.microsoft.playwright:playwright", version.ref = "pl
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+owasp-dependency-check = { id = "org.owasp.dependencycheck", version = "12.1.0" }
+

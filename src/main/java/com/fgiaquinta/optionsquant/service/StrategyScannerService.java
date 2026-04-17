@@ -44,6 +44,9 @@ public class StrategyScannerService {
     private volatile java.util.function.Consumer<String> scanActivityCallback = s -> {};
     private volatile java.util.function.BiConsumer<String, Integer> scanCompleteCallback = (ticker, signals) -> {};
 
+    /** When set, scanAll uses this list instead of loading from config/CSV */
+    private final AtomicReference<List<String>> tickerOverride = new AtomicReference<>(null);
+
     private final CandleCsvService csvService;
     private final IbkrService ibkrService;
     private final IbkrProperties ibkrProperties;
@@ -70,18 +73,33 @@ public class StrategyScannerService {
     private static final int MAX_CONCURRENT_DOWNLOADS = 10;
     private final RateLimiter downloadRateLimiter = RateLimiter.create(10.0); // 10 requests per second
     private final Semaphore downloadSemaphore = new Semaphore(MAX_CONCURRENT_DOWNLOADS);
-    private final ExecutorService downloadExecutor = new ThreadPoolExecutor(
-            MAX_CONCURRENT_DOWNLOADS,
-            MAX_CONCURRENT_DOWNLOADS,
-            60L, TimeUnit.SECONDS,
-            new ArrayBlockingQueue<>(MAX_CONCURRENT_DOWNLOADS * 5), // Bounded queue
-            r -> {
-                Thread t = new Thread(r, "IBKR-Downloader");
-                t.setDaemon(true);
-                return t;
-            },
-            new ThreadPoolExecutor.CallerRunsPolicy() // Backpressure: run in calling thread if queue full
-    );
+    private volatile ExecutorService downloadExecutor = createDownloadExecutor();
+
+    private static ExecutorService createDownloadExecutor() {
+        return new ThreadPoolExecutor(
+                MAX_CONCURRENT_DOWNLOADS,
+                MAX_CONCURRENT_DOWNLOADS,
+                60L, TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(MAX_CONCURRENT_DOWNLOADS * 5),
+                r -> {
+                    Thread t = new Thread(r, "IBKR-Downloader");
+                    t.setDaemon(true);
+                    return t;
+                },
+                new ThreadPoolExecutor.CallerRunsPolicy()
+        );
+    }
+
+    /**
+     * Interrupts all in-flight downloads immediately by replacing the executor
+     * pool and shutting down the old one. Call this on scan stop.
+     */
+    public void stopDownloads() {
+        ExecutorService old = downloadExecutor;
+        downloadExecutor = createDownloadExecutor();
+        old.shutdownNow(); // sends interrupt to every download thread
+        downloadSemaphore.release(MAX_CONCURRENT_DOWNLOADS); // unblock any waiting acquires
+    }
     private final AtomicInteger activeDownloads = new AtomicInteger(0);
 
     // Maximum age for data to be considered "fresh"
@@ -226,11 +244,16 @@ public class StrategyScannerService {
      *
      * @param deterministicMode if true, skips delta downloads and uses only cached CSV data for reproducible results
      */
+    // Override which tickers the next scanAll will use (null = use config default).
+    public void setTickerOverride(List<String> tickers) { tickerOverride.set(tickers); }
+    public void clearTickerOverride() { tickerOverride.set(null); }
+
     public ScanResult scanAll(boolean includeTradePlans, boolean autoRefreshData, boolean deterministicMode) {
-        // Get all tickers from CSV or YAML
-        List<String> allTickers = ibkrProperties.useCsvTickers()
-                ? tickerService.getTickerSymbols()
-                : ibkrProperties.tickers();
+        // Get all tickers from CSV or YAML (or from override set by the caller)
+        List<String> override = tickerOverride.get();
+        List<String> allTickers = (override != null && !override.isEmpty())
+                ? override
+                : (ibkrProperties.useCsvTickers() ? tickerService.getTickerSymbols() : ibkrProperties.tickers());
 
         // Get hot tickers (priority list)
         List<String> hotTickers = ibkrProperties.hotTickers() != null
@@ -274,10 +297,11 @@ public class StrategyScannerService {
                     currentBatchLabel.set("Stopped");
                     break;
                 }
-                scanActivityCallback.accept(ticker);
+                scanActivityCallback.accept(ticker + ":LOADING"); // Emitting granular status
                 final String t = ticker;
                 hotFutures.add(tickerScanExecutor.submit(() -> {
                     try {
+                        scanActivityCallback.accept(t + ":SCANNING");
                         List<Signal> signals = scanTicker(t, includeTradePlans, autoRefreshData && !deterministicMode);
                         int done = scannedCount.incrementAndGet();
                         currentBatchLabel.set("Hot tickers: " + done + "/" + currentBatchSize.get());
@@ -346,10 +370,11 @@ public class StrategyScannerService {
                     currentBatchLabel.set("Stopped");
                     break;
                 }
-                scanActivityCallback.accept(ticker);
+                scanActivityCallback.accept(ticker + ":LOADING");
                 final String t = ticker;
                 remainingFutures.add(tickerScanExecutor.submit(() -> {
                     try {
+                        scanActivityCallback.accept(t + ":SCANNING");
                         List<Signal> signals = scanTicker(t, includeTradePlans, autoRefreshData && !deterministicMode);
                         int done = scannedCount.incrementAndGet();
                         currentBatchLabel.set("Total: " + done + "/" + totalToScan.get());
@@ -453,7 +478,14 @@ public class StrategyScannerService {
                         return;
                     }
                     try {
-                        downloadSemaphore.acquire();
+                        // Poll the semaphore so we can abort while waiting for a free slot
+                        while (!downloadSemaphore.tryAcquire(200, TimeUnit.MILLISECONDS)) {
+                            if (stopRequestedSupplier.getAsBoolean() || Thread.currentThread().isInterrupted()) {
+                                downloadLog.debug("⏹ Abort while waiting for semaphore {} [{}]", ticker, tf);
+                                return;
+                            }
+                        }
+                        if (stopRequestedSupplier.getAsBoolean()) { downloadSemaphore.release(); return; }
                         activeDownloads.incrementAndGet();
 
                         List<Candle> freshData = downloadTimeframeDelta(ticker, tf, null);
@@ -492,7 +524,13 @@ public class StrategyScannerService {
                             return;
                         }
                         try {
-                            downloadSemaphore.acquire();
+                            while (!downloadSemaphore.tryAcquire(200, TimeUnit.MILLISECONDS)) {
+                                if (stopRequestedSupplier.getAsBoolean() || Thread.currentThread().isInterrupted()) {
+                                    downloadLog.debug("⏹ Abort waiting for semaphore (delta) {} [{}]", ticker, tf);
+                                    return;
+                                }
+                            }
+                            if (stopRequestedSupplier.getAsBoolean()) { downloadSemaphore.release(); return; }
                             activeDownloads.incrementAndGet();
 
                             List<Candle> deltaData = downloadTimeframeDelta(ticker, tf, lastTimestamp);

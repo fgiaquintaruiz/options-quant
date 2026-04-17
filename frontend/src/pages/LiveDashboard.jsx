@@ -1,386 +1,418 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Play, Square, Activity, TrendingUp, TrendingDown, DollarSign, Users } from 'lucide-react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { Play, Square } from 'lucide-react'
 import { liveApi } from '../api'
+import LiveTradeGrid from '../components/LiveTradeGrid'
+import TickerSelector from '../components/TickerSelector'
+import { LS } from '../utils/storage'
+
+// Inline ON/OFF pill
+function OnOffToggle({ value, onClick, disabled }) {
+  return (
+    <strong
+      onClick={!disabled ? onClick : undefined}
+      className={`badge ${value ? 'badge-success' : 'badge-error'}`}
+      style={{ cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1, width: 45, textAlign: 'center' }}
+    >
+      {value ? 'ON' : 'OFF'}
+    </strong>
+  )
+}
+
+function Divider() {
+  return <div className="divider-v" />
+}
 
 export default function LiveDashboard({ twsStatus }) {
   const [status, setStatus] = useState(null)
   const [signals, setSignals] = useState([])
-  const [tickers, setTickers] = useState({ allTickers: [], hotTickers: [] })
-  const [logs, setLogs] = useState([])
+  const [injectedSignals, setInjectedSignals] = useState([])
+  const [scanActivity, setScanActivity] = useState([])
+  const [elapsed, setElapsed] = useState(0)
   const [maxConcurrent, setMaxConcurrent] = useState(4)
+  const [errorMsg, setErrorMsg] = useState(null)
 
-  const addLog = useCallback((msg, type = 'info') => {
-    setLogs(prev => [{ time: new Date().toLocaleTimeString(), msg, type }, ...prev].slice(0, 100))
+  // Local storage persisted settings
+  const [tickerFilter, setTickerFilter] = useState(() => LS.get('live_tickerFilter', ''))
+  const [tickerScope, setTickerScope] = useState(() => LS.get('live_tickerScope', 'HOT'))
+  const [riskInput, setRiskInput] = useState(() => LS.get('live_riskPct', '2.0'))
+  
+  // Mock market open state
+  const [mockMarketOpen, setMockMarketOpen] = useState(() => LS.get('live_mockMarketOpen', false))
+  const mockSignalIdx = useRef(0)
+
+  // Fetch initial data
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const s = await liveApi.getStatus()
+        setStatus(s)
+        setMaxConcurrent(s.maxConcurrentScans || 4)
+        setRiskInput(String(s.riskPct || '2.0'))
+      } catch (e) { setErrorMsg('Failed to connect to backend') }
+    }
+    init()
   }, [])
 
-  // Poll status every 500ms
-  const lastLabelRef = useRef('')
-  const lastScanCompleteTimeRef = useRef(0)
+  // Poll activity and status
   useEffect(() => {
+    const fetchActivity = async () => {
+      try {
+        const data = await liveApi.getScanActivity()
+        setScanActivity(data.activity || [])
+      } catch (e) {}
+    }
     const fetchStatus = async () => {
       try {
         const s = await liveApi.getStatus()
         setStatus(s)
-        if (s.maxConcurrentScans !== undefined) {
-          setMaxConcurrent(s.maxConcurrentScans)
-        }
-        // Only log when progress actually changes (avoid spam)
-        const label = s.scannerBatchLabel || ''
-        if (label && label !== lastLabelRef.current) {
-          lastLabelRef.current = label
-          addLog(`📊 ${label} (${s.scannerScanned}/${s.scannerTotal})`, 'info')
-        }
-        if (!s.isScanning && s.lastScanDuration && s.lastScanTime && s.lastScanTime !== lastScanCompleteTimeRef.current) {
-          lastScanCompleteTimeRef.current = s.lastScanTime
-          addLog(`✅ Scan complete in ${(s.lastScanDuration / 1000).toFixed(1)}s`, 'success')
-        }
-      } catch (e) { /* silent */ }
+      } catch (e) {}
     }
-    fetchStatus()
-    const interval = setInterval(fetchStatus, 500)
-    return () => clearInterval(interval)
-  }, [addLog])
-
-  // Poll scan activity every 1s for the feed table
-  const [scanActivity, setScanActivity] = useState([])
-  const feedRef = useRef(null)
-  const followFeedRef = useRef(true)
-  const lastActivityCompleteKeyRef = useRef('')
-
-  // Auto-scroll feed to bottom when activity changes
-  useEffect(() => {
-    if (feedRef.current && followFeedRef.current) {
-      feedRef.current.scrollTop = feedRef.current.scrollHeight
-    }
-  }, [scanActivity])
-
-  useEffect(() => {
-    const fetchActivity = async () => {
-      try {
-        const data = await fetch('/live-ui/scan-activity').then(r => r.json())
-        let activity = data.activity || []
-        // Clean up stale SCANNING entries when no scan is running OR stop was requested
-        // This handles cases where app restarts OR user interrupts the scan
-        const stopRequested = data.stopScanRequested || false
-        if (!data.isScanning || stopRequested) {
-          activity = activity.map(a =>
-            a.status === 'SCANNING'
-              ? { ...a, status: 'STALE', detail: stopRequested ? 'Stopped by user' : 'Interrupted (app restarted)' }
-              : a
-          )
-        }
-        setScanActivity(activity)
-        if (!data.isScanning && data.scanned > 0) {
-          const key = `${data.scanned}-${data.total || ''}-${data.lastScanTime || ''}`
-          if (key !== lastActivityCompleteKeyRef.current) {
-            lastActivityCompleteKeyRef.current = key
-            setScanActivity(prev => [...prev.slice(-50), {
-              time: new Date().toLocaleTimeString(),
-              ticker: '---',
-              status: '✅ Complete',
-              detail: `${data.scanned} tickers analyzed`
-            }])
-          }
-        }
-      } catch (e) { /* silent */ }
-    }
-    fetchActivity()
-    const interval = setInterval(fetchActivity, 1000)
+    const interval = setInterval(() => {
+      fetchActivity()
+      fetchStatus()
+    }, 1000)
     return () => clearInterval(interval)
   }, [])
 
-  // Poll signals every 3s
+  const [closedTrades, setClosedTrades] = useState({})
+  const [pendingActions, setPendingActions] = useState({}) // ticker -> true/false
+
+  // Poll signals
+  const fetchSignals = useCallback(async () => {
+    try {
+      const data = await liveApi.getSignals()
+      setSignals(data.signals || [])
+      setClosedTrades(data.closedTrades || {})
+    } catch (e) {}
+  }, [])
+
   useEffect(() => {
-    const fetchSignals = async () => {
-      try {
-        const data = await liveApi.getSignals()
-        setSignals(data.signals || [])
-      } catch (e) { /* silent */ }
-    }
     fetchSignals()
-    const interval = setInterval(fetchSignals, 3000)
+    const interval = setInterval(fetchSignals, 1500)
+    return () => clearInterval(interval)
+  }, [fetchSignals])
+
+  // Sync settings to backend when they change locally
+  const syncFilter = useCallback(async (filter, scope) => {
+    try {
+      await liveApi.setScanFilter(filter, scope)
+    } catch (e) {}
+  }, [])
+
+  useEffect(() => {
+    LS.set('live_tickerFilter', tickerFilter)
+    LS.set('live_tickerScope', tickerScope)
+    syncFilter(tickerFilter, tickerScope)
+  }, [tickerFilter, tickerScope, syncFilter])
+
+  useEffect(() => {
+    LS.set('live_mockMarketOpen', mockMarketOpen)
+  }, [mockMarketOpen])
+
+  const handleFilterChange = (val) => {
+    setTickerFilter(val)
+  }
+
+  const handleScopeChange = (val) => {
+    setTickerScope(val)
+  }
+
+  // Countdown timer logic
+  const [nextScanSecs, setNextScanSecs] = useState(null)
+  useEffect(() => {
+    const updateCountdown = () => {
+      const now = new Date()
+      const mins = now.getMinutes()
+      const secs = now.getSeconds()
+      const nextMin = 15 - (mins % 15)
+      let remaining = (nextMin * 60) - secs
+      if (remaining <= 0) remaining = 15 * 60
+      setNextScanSecs(remaining)
+    }
+    updateCountdown()
+    const interval = setInterval(updateCountdown, 1000)
     return () => clearInterval(interval)
   }, [])
 
-  // Poll tickers every 5s
+  const formatMinSec = (s) => {
+    if (s == null) return '--:--'
+    const m = Math.floor(s / 60)
+    const rs = s % 60
+    return `${String(m).padStart(2, '0')}:${String(rs).padStart(2, '0')}`
+  }
+
+  const scanning      = status?.isScanning || false
+  const stopRequested = status?.stopScanRequested || false
+  const canScan       = (status?.marketHours || mockMarketOpen) && !scanning && !stopRequested
+  const hotTickersList = status?.hotTickersList || []
+
+  // Elapsed timer
   useEffect(() => {
-    const fetchTickers = async () => {
-      try {
-        const data = await liveApi.getTickers()
-        setTickers(data)
-      } catch (e) { /* silent */ }
-    }
-    fetchTickers()
-    const interval = setInterval(fetchTickers, 5000)
+    if (!scanning) { setElapsed(0); return }
+    const start = Date.now()
+    const interval = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000)
     return () => clearInterval(interval)
-  }, [])
+  }, [scanning])
 
   const handleStartScan = async () => {
-    if (!twsStatus?.connected) {
-      addLog('Please login in TWS with your account before scanning.', 'warn')
-      return
-    }
+    if (!canScan) return
+    setErrorMsg(null)
     try {
-      const res = await liveApi.startScan()
-      addLog(res.success ? 'Scan started' : res.message, res.success ? 'success' : 'error')
-    } catch (e) { addLog(`Error: ${e.message}`, 'error') }
+      await liveApi.startScan()
+    } catch (e) { setErrorMsg(`Scan failed: ${e.message}`) }
   }
 
   const handleStopScan = async () => {
-    try {
-      const res = await liveApi.stopScan()
-      addLog(res.success ? 'Scan stopped' : res.message, res.success ? 'success' : 'warn')
-    } catch (e) { addLog(`Error: ${e.message}`, 'error') }
+    try { await liveApi.stopScan() } catch (e) {}
   }
 
   const handleMaxConcurrentChange = async (newVal) => {
     const val = parseInt(newVal, 10)
     if (isNaN(val) || val < 1 || val > 16) return
     setMaxConcurrent(val)
-    try {
-      const res = await liveApi.setMaxConcurrent(val)
-      addLog(res.success ? `Max concurrent set to ${val}` : res.message, res.success ? 'success' : 'error')
-    } catch (e) { addLog(`Error: ${e.message}`, 'error') }
+    try { await liveApi.setMaxConcurrent(val) } catch (e) {}
+  }
+
+  const handleToggleAutoExecute = async () => {
+    try { await liveApi.toggleAutoExecute() } catch (e) {}
   }
 
   const handleToggleExtendedHours = async () => {
+    try { await liveApi.toggleExtendedHours() } catch (e) {}
+  }
+
+  const handleToggleMockMarket = async () => {
+    const prev = mockMarketOpen
+    setMockMarketOpen(!prev)
     try {
-      const res = await liveApi.toggleExtendedHours()
-      addLog(`Extended hours: ${res.extendedHours ? 'ON' : 'OFF'}`, 'info')
-    } catch (e) { addLog(`Error: ${e.message}`, 'error') }
+      await liveApi.toggleMockMarket()
+    } catch (e) {
+      setMockMarketOpen(prev)
+      setErrorMsg('Failed to toggle Mock Market')
+    }
   }
 
-  const scanning = status?.isScanning || false
-  const stopRequested = status?.stopScanRequested || false
-  const twsConnected = twsStatus?.connected || false
-  const progress = status?.scannerTotal > 0
-    ? (status.scannerScanned / status.scannerTotal * 100) : 0
-  const scannedTickers = new Set(
-    scanActivity
-      .filter(a => a && a.ticker && a.ticker !== '---')
-      .filter(a => ['OK', 'SIGNAL', 'ERROR'].includes(a.status))
-      .map(a => a.ticker)
-  )
-
-  const formatSignalTime = (ts) => {
-    if (!ts) return '-'
-    const d = new Date(ts)
-    if (isNaN(d.getTime())) return String(ts).substring(11, 16) || '-'
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const handleRiskBlur = async () => {
+    const val = parseFloat(riskInput)
+    if (isNaN(val) || val < 0.1 || val > 10) return
+    LS.set('live_riskPct', riskInput)
+    try { await liveApi.setRisk(val) } catch (e) {}
   }
+
+  const handleInjectMockSignal = async () => {
+    setErrorMsg(null)
+    try {
+      const hot = hotTickersList.length > 0 ? hotTickersList : ['SPY', 'QQQ', 'AAPL', 'NVDA', 'TSLA']
+      const ticker = hot[Math.floor(Math.random() * hot.length)]
+      const res = await liveApi.injectMockSignal(ticker)
+      if (!res.autoExecuted && status?.autoExecute) {
+         console.warn('Mock signal injected but not auto-executed')
+      }
+      fetchSignals()
+    } catch (e) { setErrorMsg('Injection failed') }
+  }
+
+  const mapSignal = useCallback((s) => {
+    const timeMatch = s.timestamp ? s.timestamp.match(/T(\d{2}:\d{2}:\d{2})/) : null
+    const startTime = timeMatch ? timeMatch[1] : new Date().toLocaleTimeString()
+    const closed = closedTrades[s.ticker]
+    return {
+      ticker: s.ticker,
+      pattern: s.candlestickPattern || 'signal',
+      strategy: s.strategy,
+      direction: s.direction,
+      ep: s.currentPrice,
+      startTime,
+      endTime: closed ? closed.closeTime : '-',
+      tp: s.tradePlan?.takeProfit,
+      sl: s.tradePlan?.stopLoss,
+      closePrice: closed ? closed.closePrice : null,
+      xp: '-',
+      exitReason: closed ? (closed.exitReason || 'MANUAL_CLOSE') : 'LIVE SIGNAL',
+      netPnl: null,
+      executeTime: s.executeTime,
+      tradeStatus: s.tradeStatus,
+      orderId: s.orderId
+    }
+  }, [closedTrades])
+
+  // Fixed violation: Memoized derived state
+  const trades = useMemo(() => [
+    ...signals.map(mapSignal),
+    ...injectedSignals.map(mapSignal)
+  ], [signals, injectedSignals, mapSignal])
+
+  const handleCloseTrade = async (ticker, price, isOpenPos = false) => {
+    try {
+      setPendingActions(prev => ({ ...prev, [ticker]: true }))
+      if (isOpenPos) {
+        const signal = trades.find(t => t.ticker === ticker && Number(t.ep) === Number(price))
+        if (!signal) {
+          setErrorMsg(`Could not find signal for ${ticker}`)
+          setPendingActions(prev => ({ ...prev, [ticker]: false }))
+          return
+        }
+        const ok = await liveApi.executeSignal(ticker, signal.direction, price, signal.strategy)
+        if (!ok.success) setErrorMsg(`Execution failed: ${ok.message}`)
+        setTimeout(() => {
+          setPendingActions(prev => ({ ...prev, [ticker]: false }))
+          fetchSignals()
+        }, 800)
+        return
+      }
+      const ok = await liveApi.closeTrade(ticker, price)
+      if (ok.success) fetchSignals()
+      setPendingActions(prev => ({ ...prev, [ticker]: false }))
+    } catch (e) {
+      setErrorMsg(`Action failed: ${e.message}`)
+      setPendingActions(prev => ({ ...prev, [ticker]: false }))
+    }
+  }
+
+  const handleCancelTrade = async (ticker, orderId) => {
+    if (!orderId) return
+    try {
+      setPendingActions(prev => ({ ...prev, [ticker]: true }))
+      const ok = await liveApi.cancelTrade(ticker, orderId)
+      if (ok.success) fetchSignals()
+      setPendingActions(prev => ({ ...prev, [ticker]: false }))
+    } catch (e) {
+      setErrorMsg(`Cancel failed: ${e.message}`)
+      setPendingActions(prev => ({ ...prev, [ticker]: false }))
+    }
+  }
+
+  const filteredScanActivity = useMemo(() => scanActivity.filter(
+    a => !(a.detail && /^(Hot tickers:|Total:)\s*\d/.test(a.detail))
+  ), [scanActivity])
 
   return (
-    <div>
-      {/* Status Cards */}
-      <div className="grid">
-        {/* Scanning Status */}
-        <div className="card">
-          <h3>📡 Scanning Status</h3>
-          <div className="stat">
-            <span className="stat-label">Status:</span>
-            <span className="stat-value">
-              {stopRequested ? '⏹ Stopping...' : scanning ? '🔄 Scanning' : '⏸ Idle'}
-            </span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">Progress:</span>
-            <span className="stat-value">
-              {status?.scannerBatchLabel || `${status?.scannerScanned || 0}/${status?.scannerTotal || 0}`}
-            </span>
-          </div>
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${progress}%` }} />
-          </div>
-          <div className="stat">
-            <span className="stat-label">Concurrent Tickers:</span>
-            <input type="number" min="1" max="16" value={maxConcurrent}
-                   onChange={(e) => handleMaxConcurrentChange(e.target.value)}
-                   style={{
-                     width: 60, padding: '4px 8px', background: '#0d1117', border: '1px solid #30363d',
-                     borderRadius: 6, color: '#c9d1d9', fontSize: 14, marginLeft: 8, textAlign: 'center'
-                   }}
-                   title="Number of tickers to analyze concurrently (1-16)" />
-          </div>
-          {status?.lastScanTime && (
-            <div className="stat">
-              <span className="stat-label">Last Scan:</span>
-              <span className="stat-value">
-                {new Date(status.lastScanTime).toLocaleTimeString()}
-                {status.lastScanDuration && ` (${(status.lastScanDuration / 1000).toFixed(1)}s)`}
-              </span>
-            </div>
-          )}
-          <button className="btn btn-primary" onClick={handleStartScan} disabled={scanning || !twsConnected}
-                  style={{ width: '100%', marginTop: 10, display: scanning || stopRequested ? 'none' : 'inline-flex' }}>
-            <Play size={16} /> Start Scan
-          </button>
-          {!scanning && !stopRequested && !twsConnected && (
-            <div style={{ marginTop: 8, color: '#f0883e', fontSize: 12 }}>
-              Please login in TWS with your account
-            </div>
-          )}
-          <button className="btn btn-danger" onClick={handleStopScan} disabled={!scanning}
-                  style={{ width: '100%', marginTop: 10, display: scanning ? 'inline-flex' : 'none' }}>
-            <Square size={16} /> Stop Scan
-          </button>
+    <div className="flex-col">
+      
+      {errorMsg && (
+        <div className="card mb-12" style={{ background: '#f8514922', border: '1px solid #f8514944', padding: '10px 15px', display: 'flex', justifyContent: 'space-between' }}>
+          <span className="color-error font-bold">{errorMsg}</span>
+          <button onClick={() => setErrorMsg(null)} className="color-muted" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>Dismiss</button>
         </div>
+      )}
 
-        {/* Signals Today */}
-        <div className="card">
-          <h3>📊 Signals Today</h3>
-          <div className="stat">
-            <span className="stat-label">Signals:</span>
-            <span className="stat-value" style={{ fontSize: 24 }}>{status?.signalsToday || 0}</span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">Auto-Execute:</span>
-            <div className="toggle-container">
-              <div className={`toggle ${status?.autoExecute ? 'active' : ''}`} />
-              <span style={{ fontSize: 12 }}>{status?.autoExecute ? 'ON' : 'OFF'}</span>
-            </div>
-          </div>
-          <div className="stat">
-            <span className="stat-label">Extended Hours:</span>
-            <div className="toggle-container">
-              <div className={`toggle ${status?.extendedHoursEnabled ? 'active' : ''}`}
-                   onClick={handleToggleExtendedHours} />
-              <span style={{ fontSize: 12 }}>{status?.extendedHoursEnabled ? 'ON' : 'OFF'}</span>
-            </div>
-          </div>
-          <div className="stat">
-            <span className="stat-label">Account:</span>
-            <span className="stat-value">{twsStatus?.accountId || '-'}</span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">Risk/Trade:</span>
-            <span className="stat-value">{twsStatus?.riskPerTrade || '-'}</span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">Balance:</span>
-            <span className="stat-value">
-              {twsStatus?.balance > 0 ? `$${twsStatus.balance.toLocaleString()}` : 'N/A (no TWS)'}
-            </span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">Active Trades:</span>
-            <span className="stat-value">{twsStatus?.activeTrades || 0}</span>
+      {mockMarketOpen && (
+        <div className="card mb-12" style={{ background: '#f0883e18', border: '1px solid #f0883e55', padding: '7px 14px' }}>
+          <div className="flex-align-center gap-8 text-sm">
+            <span style={{ fontSize: 16 }}>⚠️</span>
+            <strong style={{ color: '#f0883e' }}>Mock Market Open</strong>
+            <span className="color-muted">— scanning from existing CSVs, no data download, no TWS required</span>
           </div>
         </div>
+      )}
 
-        {/* Tickers Queue */}
-        <div className="card">
-          <h3>📋 Tickers Queue</h3>
-          <div className="ticker-list">
-            {tickers.hotTickers.map(t => (
-              <div key={t} className="ticker-item">
-                <span>
-                  <span className="badge badge-hot">HOT</span> {t}
-                  {scannedTickers.has(t) && <span style={{ marginLeft: 6, color: '#3fb950' }}>✓</span>}
+      {/* Toolbar */}
+      <div className="card toolbar-card">
+        <div className="toolbar-section">
+          
+          {/* Tickers */}
+          <div style={{ minWidth: 320, flex: 1 }}>
+            <div className="stat-label-sm color-muted mb-6">Tickers to scan</div>
+            <TickerSelector value={tickerFilter} onChange={handleFilterChange} disabled={scanning} />
+          </div>
+
+          <div className="divider-v" />
+
+          {/* Controls */}
+          <div className="toolbar-controls">
+            {scanning || stopRequested ? (
+              <button className="btn btn-danger" onClick={handleStopScan} style={{ padding: '8px 16px' }}>
+                <Square size={16} /> Stop Scan
+              </button>
+            ) : (
+              <button className="btn btn-primary" onClick={handleStartScan}
+                disabled={!canScan} style={{ padding: '8px 16px' }}>
+                <Play size={16} /> Start Scan
+              </button>
+            )}
+
+            {mockMarketOpen && (
+              <button className="btn" onClick={handleInjectMockSignal}
+                style={{ padding: '6px 12px', background: '#f0883e22', border: '1px solid #f0883e66', color: '#f0883e', fontSize: 13 }}>
+                ⚡ Inject Signal
+              </button>
+            )}
+
+            <div className="flex-col gap-4">
+              <label className="flex-align-center gap-4 text-md color-muted" style={{ cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={status?.schedulerEnabled || false}
+                  onChange={() => liveApi.toggleScheduler().catch(() => {})}
+                  style={{ accentColor: '#58a6ff' }}
+                />
+                Auto-start
+              </label>
+              {status?.schedulerEnabled && (
+                <span className="color-info font-bold" style={{ fontSize: 10 }}>
+                  Next: {formatMinSec(nextScanSecs)}
                 </span>
-                {scanning && status?.currentTicker === t && <span>Scanning...</span>}
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="toolbar-settings">
+          <div className="flex-align-center gap-12">
+            <div className="flex-align-center gap-8">
+              <span>Auto-Exec:</span>
+              <OnOffToggle value={status?.autoExecute} onClick={handleToggleAutoExecute} />
+            </div>
+            <div className="flex-align-center gap-8">
+              <span>Ext. Hours:</span>
+              <OnOffToggle value={status?.extendedHoursEnabled} onClick={handleToggleExtendedHours} />
+            </div>
+            <div className="flex-align-center gap-8">
+              <span>Mock:</span>
+              <OnOffToggle value={mockMarketOpen} onClick={handleToggleMockMarket} />
+            </div>
+          </div>
+
+          <div className="divider-v" />
+
+          <div className="flex-align-center gap-15">
+            <div className="stat-box">
+              <span className="stat-label-sm">Account</span>
+              <strong className="stat-value-md">{twsStatus?.accountId || 'OFFLINE'}</strong>
+            </div>
+            <div className="stat-box">
+              <span className="stat-label-sm">Risk</span>
+              <div className="flex-align-center gap-4">
+                <input
+                  type="number" step="0.1" min="0.1" max="10"
+                  value={riskInput}
+                  onChange={e => setRiskInput(e.target.value)}
+                  onBlur={handleRiskBlur}
+                  style={{ width: 45, padding: '2px 4px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 12, textAlign: 'right' }}
+                />
+                <span className="text-xs">%</span>
               </div>
-            ))}
-            {tickers.allTickers
-              .filter(t => !tickers.hotTickers.includes(t))
-              .map(t => (
-                <div key={t} className="ticker-item">
-                  <span>
-                    {t}
-                    {scannedTickers.has(t) && <span style={{ marginLeft: 6, color: '#3fb950' }}>✓</span>}
-                  </span>
-                  {scanning && status?.currentTicker === t && <span>Scanning...</span>}
-                </div>
-              ))}
+            </div>
+            <div className="stat-box">
+              <span className="stat-label-sm">Balance</span>
+              <strong className="stat-value-md color-success">
+                {twsStatus?.balance > 0 ? `$${Number(twsStatus.balance).toLocaleString()}` : '$0'}
+              </strong>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Side-by-Side: Signals Feed & Console Log */}
-      <div className="grid" style={{ gridTemplateColumns: '1.5fr 1fr' }}>
-        {/* Live Signals Feed */}
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '500px' }}>
-          <h3>🎯 Live Signals Feed</h3>
-          <div
-            className="table-wrap"
-            ref={feedRef}
-            style={{ flex: 1 }}
-            onScroll={() => {
-              const el = feedRef.current
-              if (!el) return
-              const nearBottom = (el.scrollHeight - el.scrollTop - el.clientHeight) < 32
-              followFeedRef.current = nearBottom
-            }}
-          >
-            <table>
-              <thead>
-                <tr>
-                  <th>Time</th><th>Ticker</th><th>Strategy</th><th>Dir</th>
-                  <th>Price</th><th>TP</th><th>SL</th><th>Pattern</th><th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {signals.length === 0 && scanActivity.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} style={{ textAlign: 'center', padding: 20, color: '#8b949e' }}>
-                      {scanning ? 'Waiting for scan activity...' : 'No signals today'}
-                    </td>
-                  </tr>
-                ) : (
-                  <>
-                    {/* Show actual signals first (pinned to top) */}
-                    {signals.map((s, i) => (
-                      <tr key={`signal-${i}`} style={{ background: '#23863615' }}>
-                        <td>{formatSignalTime(s.timestamp)}</td>
-                        <td><strong>{s.ticker}</strong></td>
-                        <td>{s.strategy}</td>
-                        <td className={s.direction === 'CALL' ? 'positive' : 'negative'}>{s.direction}</td>
-                        <td>${s.currentPrice}</td>
-                        <td>${s.tradePlan?.takeProfit || '-'}</td>
-                        <td>${s.tradePlan?.stopLoss || '-'}</td>
-                        <td>{s.candlestickPattern || '-'}</td>
-                        <td><span className="badge badge-signal">NEW</span></td>
-                      </tr>
-                    ))}
-                    {/* Show scan activity entries */}
-                    {scanActivity.slice(-50).reverse().map((a, i) => (
-                      <tr key={`activity-${i}`} style={a.status === 'SCANNING' ? { background: '#1f6feb10' } : {}}>
-                        <td>{a.time || '-'}</td>
-                        <td><strong>{a.ticker}</strong></td>
-                        <td colSpan={5} style={{ color: '#8b949e' }}>{a.detail || ''}</td>
-                        <td>-</td>
-                        <td><span className={`badge ${
-                          a.status === 'ERROR' ? 'badge-error' :
-                          a.status === 'SIGNAL' ? 'badge-signal' :
-                          a.status === 'OK' ? 'badge-ok' :
-                          a.status === 'SCANNING' ? 'badge-scanning' :
-                          a.status === 'STALE' ? 'badge-error' :
-                          a.status === 'COMPLETE' || a.status === '✅ Complete' ? 'badge-success' :
-                          'badge-info'
-                        }`}>
-                          {a.status}
-                        </span></td>
-                      </tr>
-                    ))}
-                  </>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Console Log */}
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '500px' }}>
-          <h3>💻 Console Log</h3>
-          <div className="console-log" style={{ flex: 1, maxHeight: 'none' }}>
-            {logs.map((l, i) => (
-              <div key={i} className={`log-entry log-${l.type}`}>
-                [{l.time}] {l.msg}
-              </div>
-            ))}
-            {logs.length === 0 && <div style={{ color: '#8b949e' }}>Waiting for activity...</div>}
-          </div>
-        </div>
-      </div>
+      {/* Main Grid */}
+      <LiveTradeGrid
+        trades={trades}
+        scanActivity={filteredScanActivity}
+        scanning={scanning}
+        hotTickers={hotTickersList}
+        onCloseTrade={handleCloseTrade}
+        onCancelTrade={handleCancelTrade}
+        pendingActions={pendingActions}
+      />
     </div>
   )
 }

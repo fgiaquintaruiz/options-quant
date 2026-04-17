@@ -56,6 +56,8 @@ public class ChartController {
         Resource resource = new FileSystemResource(filePath);
         return ResponseEntity.ok()
                 .contentType(MediaType.TEXT_HTML)
+                .header(HttpHeaders.CACHE_CONTROL, "no-store, no-cache, must-revalidate")
+                .header(HttpHeaders.PRAGMA, "no-cache")
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + decodedFilename + "\"")
                 .body(resource);
     }

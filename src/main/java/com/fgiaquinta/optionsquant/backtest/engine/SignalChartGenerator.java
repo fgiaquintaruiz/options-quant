@@ -5,9 +5,14 @@ import com.fgiaquinta.optionsquant.domain.Candle;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Collectors;
 
 /**
  * Generates interactive HTML candlestick charts for backtest signal analysis.
@@ -45,7 +50,8 @@ public class SignalChartGenerator {
     public static Path generateChart(String ticker, String strategy, java.time.ZonedDateTime signalTime,
                                       double entryPrice, double takeProfit, double stopLoss,
                                       boolean isCall, List<Candle> allCandles, Path chartsDir,
-                                      Double netPnl, String exitReason, Integer candlesHeld) {
+                                      Double netPnl, String exitReason, Integer candlesHeld,
+                                      String pattern) {
         try {
             if (!Files.exists(chartsDir)) {
                 Files.createDirectories(chartsDir);
@@ -63,26 +69,43 @@ public class SignalChartGenerator {
 
             if (signalIdx < 0) return null;
 
-            // Determine candle range based on whether we know the exit
-            int startIdx, endIdx;
-            if (candlesHeld != null && candlesHeld > 0) {
-                // Exit-time chart: show from entry to exit with small context before
-                startIdx = Math.max(0, signalIdx - 10);
-                endIdx = Math.min(allCandles.size(), signalIdx + candlesHeld + 5);
-            } else {
-                // Entry-time chart: show 40 candles before + 20 after
-                startIdx = Math.max(0, signalIdx - 40);
-                endIdx = Math.min(allCandles.size(), signalIdx + 20);
-            }
-            List<Candle> window = allCandles.subList(startIdx, endIdx);
+            // Build a same-session window: only regular US market hours (09:00–17:00 ET) on the same date,
+            // so pre-market / overnight candles with huge gaps don't distort the price axis.
+            ZoneId ET = ZoneId.of("America/New_York");
+            ZonedDateTime entryET = signalTime.withZoneSameInstant(ET);
+            LocalDate sessionDate = entryET.toLocalDate();
+            LocalTime sessionOpen  = LocalTime.of(9, 0);
+            LocalTime sessionClose = LocalTime.of(17, 0);
 
-            // Build chart data with Spain timezone for correct tooltip display
+            List<Candle> window = allCandles.stream()
+                    .filter(c -> {
+                        ZonedDateTime cET = c.timestamp().withZoneSameInstant(ET);
+                        LocalDate cd = cET.toLocalDate();
+                        LocalTime ct = cET.toLocalTime();
+                        return cd.equals(sessionDate)
+                                && !ct.isBefore(sessionOpen)
+                                && !ct.isAfter(sessionClose);
+                    })
+                    .collect(Collectors.toList());
+
+            // If session filter produced nothing (holiday / data gap), fall back to index-based window
+            if (window.isEmpty()) {
+                int contextBefore = 15;
+                int contextAfter  = 10;
+                int tradeLength   = (candlesHeld != null && candlesHeld > 0) ? candlesHeld : 20;
+                int startIdx = Math.max(0, signalIdx - contextBefore);
+                int endIdx   = Math.min(allCandles.size(), signalIdx + tradeLength + contextAfter);
+                window = new java.util.ArrayList<>(allCandles.subList(startIdx, endIdx));
+            }
+
+            // Use Unix epoch seconds — lightweight-charts v4 requires numeric timestamps for intraday data.
+            // String formats like 'YYYY-MM-DD HH:mm' are treated as daily bars and collapse intraday candles.
             StringBuilder candleData = new StringBuilder();
             for (Candle c : window) {
-                String timeStr = c.timestamp().withZoneSameInstant(java.time.ZoneId.of("Europe/Madrid")).format(TIME_FMT);
+                long epochSec = c.timestamp().toEpochSecond();
                 candleData.append(String.format(Locale.US,
-                        "{ time: '%s', open: %.4f, high: %.4f, low: %.4f, close: %.4f },%n",
-                        timeStr, c.open(), c.high(), c.low(), c.close()));
+                        "{ time: %d, open: %.4f, high: %.4f, low: %.4f, close: %.4f },%n",
+                        epochSec, c.open(), c.high(), c.low(), c.close()));
             }
 
             String direction = isCall ? "CALL" : "PUT";
@@ -91,12 +114,21 @@ public class SignalChartGenerator {
             String safeStrategy = strategy.replaceAll("[^a-zA-Z0-9]", "_");
             String signalTimeStr = signalTime.withZoneSameInstant(java.time.ZoneId.of("Europe/Madrid"))
                     .format(TIME_FMT);
+            long entryEpoch = signalTime.toEpochSecond();
+            ZoneId madrid = ZoneId.of("Europe/Madrid");
+            long exitEpoch = (candlesHeld != null && candlesHeld > 0)
+                    ? signalTime.plusMinutes(15L * candlesHeld).toEpochSecond()
+                    : signalTime.plusMinutes(300).toEpochSecond();
+            String exitTimeStr = java.time.Instant.ofEpochSecond(exitEpoch)
+                    .atZone(madrid).format(TIME_FMT);
+            String safePattern = (pattern != null && !pattern.isBlank()) ? pattern : "-";
+
             String filename = String.format("%s_%s_%s_%s.html",
                     safeTicker, safeStrategy, direction, signalTimeStr.replace(" ", "_").replace(":", "-"));
 
-            String html = buildHtml(ticker, strategy, direction, signalTimeStr,
+            String html = buildHtml(ticker, strategy, direction, signalTimeStr, exitTimeStr,
                     entryPrice, takeProfit, stopLoss, color, candleData.toString(), window,
-                    netPnl, exitReason, candlesHeld);
+                    netPnl, exitReason, candlesHeld, entryEpoch, exitEpoch, safePattern);
 
             Path outputPath = chartsDir.resolve(filename);
             Files.writeString(outputPath, html);
@@ -108,9 +140,11 @@ public class SignalChartGenerator {
     }
 
     private static String buildHtml(String ticker, String strategy, String direction,
-                                     String signalTime, double entryPrice, double takeProfit,
+                                     String entryTime, String exitTime,
+                                     double entryPrice, double takeProfit,
                                      double stopLoss, String color, String candleData, List<Candle> candles,
-                                     Double netPnl, String exitReason, Integer candlesHeld) {
+                                     Double netPnl, String exitReason, Integer candlesHeld,
+                                     long entryEpoch, long exitEpoch, String pattern) {
         // Calculate chart boundaries for price axis (used for future chart scaling enhancements)
         double maxPrice = candles.stream().mapToDouble(Candle::high).max().orElse(entryPrice * 1.05);
         double minPrice = candles.stream().mapToDouble(Candle::low).min().orElse(entryPrice * 0.95);
@@ -161,45 +195,27 @@ public class SignalChartGenerator {
                     <title>%s %s %s Signal</title>
                     <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
                     <style>
-                        body { margin: 0; padding: 20px; background: #131722; color: #d1d4dc; font-family: -apple-system, sans-serif; }
-                        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-                        .ticker { font-size: 28px; font-weight: bold; }
-                        .meta { font-size: 14px; color: #787b86; }
-                        .levels { display: flex; gap: 24px; margin: 12px 0; }
-                        .level { padding: 8px 16px; border-radius: 6px; font-size: 14px; }
-                        .entry { background: #2962ff22; border: 1px solid #2962ff; }
-                        .tp { background: #26a69a22; border: 1px solid #26a69a; }
-                        .sl { background: #ef535022; border: 1px solid #ef5350; }
-                        #chart { width: 100%%; height: 500px; }
+                        html, body { margin: 0; padding: 0; background: #131722; color: #d1d4dc; font-family: -apple-system, sans-serif; height: 100%%; overflow: hidden; }
+                        .wrapper { display: flex; flex-direction: column; height: 100%%; padding: 8px; box-sizing: border-box; gap: 6px; }
+                        .result { flex-shrink: 0; padding: 8px 12px; border-radius: 6px; text-align: center; }
+                        #chart { width: 100%%; flex: 1; min-height: 0; }
                     </style>
                 </head>
                 <body>
-                    <div class="header">
-                        <div>
-                            <div class="ticker">%s <span style="color:%s">(%s)</span></div>
-                            <div class="meta">%s | Signal: %s</div>
-                        </div>
-                        <div class="meta">
-                            <div>Generated by Options Quant Backtest</div>
-                        </div>
-                    </div>
-                    <div class="levels">
-                        <div class="level entry">Entry: $%.2f</div>
-                        <div class="level tp">TP: $%.2f (+%.1f%%)</div>
-                        <div class="level sl">SL: $%.2f (-%.1f%%)</div>
-                        <div class="level" style="background:#ffffff11; border:1px solid #555">Risk/Reward: 1:%.2f</div>
-                    </div>
+                    <div class="wrapper">
                     %s
                     <div id="chart"></div>
+                    </div>
                     <script>
-                        const chart = LightweightCharts.createChart(document.getElementById('chart'), {
-                            width: document.getElementById('chart').clientWidth,
-                            height: 500,
+                        const chartEl = document.getElementById('chart');
+                        const chart = LightweightCharts.createChart(chartEl, {
+                            width: chartEl.clientWidth,
+                            height: chartEl.clientHeight,
                             layout: { background: { type: 'solid', color: '#131722' }, textColor: '#d1d4dc' },
                             grid: { vertLines: { color: '#1e222d' }, horzLines: { color: '#1e222d' } },
                             crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-                            timeScale: { timeVisible: true, secondsVisible: false, rightOffset: 5, barSpacing: 10 },
-                            rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.1 } },
+                            timeScale: { timeVisible: true, secondsVisible: false, rightOffset: 8, barSpacing: 12, fixLeftEdge: false, fixRightEdge: false },
+                            rightPriceScale: { scaleMargins: { top: 0.15, bottom: 0.15 } },
                         });
 
                         const candleSeries = chart.addCandlestickSeries({
@@ -225,38 +241,37 @@ public class SignalChartGenerator {
                         });
                         %s
 
-                        chart.timeScale().fitContent();
+                        // Zoom to show the full trade: from a few bars before entry to a few bars after exit
+                        const CANDLE_SECS = 15 * 60;
+                        const viewFrom = %d - CANDLE_SECS * 5;
+                        const viewTo   = %d + CANDLE_SECS * 5;
+                        chart.timeScale().setVisibleRange({ from: viewFrom, to: viewTo });
 
-                        // Auto-resize
+                        // Auto-resize to fill the flex container
                         new ResizeObserver(entries => {
                             if (entries.length === 0) return;
-                            const { width } = entries[0].contentRect;
-                            chart.applyOptions({ width });
-                        }).observe(document.getElementById('chart'));
+                            const { width, height } = entries[0].contentRect;
+                            chart.applyOptions({ width, height });
+                        }).observe(chartEl);
                     </script>
                 </body>
                 </html>
                 """.formatted(
-                // 1-3: title
+                // 1-3: page title
                 ticker, strategy, direction,
-                // 4-6: ticker badge
-                ticker, color, direction,
-                // 7-8: meta info
-                ticker, signalTime,
-                // 9-13: levels (entry, TP, SL, risk/reward)
-                entryPrice, takeProfit, tpPct, stopLoss, slPct,
-                // 14: risk/reward ratio
-                riskReward,
-                // 15: result section (trade outcome HTML or empty)
+                // 4: result section (WIN/LOSS box or empty)
                 resultSection,
-                // 16: candle data
+                // 5: candle data
                 candleData,
-                // 17-19: price lines (entry, TP, SL)
+                // 6-8: price lines (entry, TP, SL)
                 entryPrice, color,
                 takeProfit,
                 stopLoss,
-                // 20: exit marker JS (or empty)
-                exitMarkerJs
+                // 9: exit marker JS
+                exitMarkerJs,
+                // 10-11: visible range epoch bounds
+                entryEpoch,
+                exitEpoch
         );
     }
 }

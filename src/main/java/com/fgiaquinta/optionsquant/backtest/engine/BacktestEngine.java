@@ -1,6 +1,9 @@
 package com.fgiaquinta.optionsquant.backtest.engine;
 
-import com.fgiaquinta.optionsquant.backtest.domain.*;
+import com.fgiaquinta.optionsquant.backtest.domain.BacktestConfig;
+import com.fgiaquinta.optionsquant.backtest.domain.BacktestReport;
+import com.fgiaquinta.optionsquant.backtest.domain.FillResult;
+import com.fgiaquinta.optionsquant.backtest.domain.TradeRecord;
 import com.fgiaquinta.optionsquant.domain.Candle;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.service.CandleCsvService;
@@ -11,6 +14,7 @@ import com.fgiaquinta.optionsquant.strategy.model.TradePlan;
 import com.fgiaquinta.optionsquant.strategy.utils.CandlestickPatternDetector;
 import com.fgiaquinta.optionsquant.strategy.utils.RiskCalculator;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.PrintWriter;
@@ -20,8 +24,25 @@ import java.nio.file.StandardOpenOption;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -43,14 +64,21 @@ public class BacktestEngine {
     private final List<TradingStrategy> strategies;
     private final CandleCsvService csvService;
     private final TickerMemory tickerMemory;
+    private final boolean generateTradeCharts;
 
     // Runtime-configurable max concurrent tickers for backtest processing
-    private final AtomicInteger maxConcurrentScans = new AtomicInteger(
-            Math.min(Runtime.getRuntime().availableProcessors(), 8));
+    private final AtomicInteger maxConcurrentScans;
 
-    public BacktestEngine(CandleCsvService csvService, TickerMemory tickerMemory) {
+    public BacktestEngine(
+            CandleCsvService csvService,
+            TickerMemory tickerMemory,
+            @Value("${backtest.default-max-concurrent-scans:4}") int defaultMaxConcurrentScans,
+            @Value("${backtest.generate-trade-charts:true}") boolean generateTradeCharts) {
         this.csvService = csvService;
         this.tickerMemory = tickerMemory;
+        this.generateTradeCharts = generateTradeCharts;
+        this.maxConcurrentScans = new AtomicInteger(
+                Math.max(1, Math.min(Runtime.getRuntime().availableProcessors(), defaultMaxConcurrentScans)));
         this.strategies = List.of(
                 new com.fgiaquinta.optionsquant.strategy.C1SqueezeCallStrategy(),
                 new com.fgiaquinta.optionsquant.strategy.C2TrendCallStrategy(),
@@ -147,21 +175,17 @@ public class BacktestEngine {
     }
 
     /**
-     * Runs a backtest with the given configuration.
-     * Processes each ticker in parallel for significant speedup.
-     * Supports resume from checkpoint if previously saved.
+     * Interface for tracking backtest progress at the ticker level.
      */
-    public BacktestReport run(BacktestConfig config) {
-        return run(config, false);
+    public interface ProgressCallback {
+        void onProgress(String ticker, String status, String detail);
     }
 
     /**
-     * Runs a backtest with the given configuration.
-     * @param config The backtest configuration
-     * @param resumeFromCheckpoint If true, loads checkpoint and skips already-processed tickers
+     * Entry point: Run a full backtest based on config (with resume support).
      */
-    public BacktestReport run(BacktestConfig config, boolean resumeFromCheckpoint) {
-        return run(config, resumeFromCheckpoint, null);
+    public BacktestReport run(BacktestConfig config) {
+        return run(config, true, null, null);
     }
 
     /**
@@ -171,6 +195,13 @@ public class BacktestEngine {
      * @param stopRequested Optional flag to check for early termination (set to true to stop)
      */
     public BacktestReport run(BacktestConfig config, boolean resumeFromCheckpoint, AtomicBoolean stopRequested) {
+        return run(config, resumeFromCheckpoint, stopRequested, null);
+    }
+
+    /**
+     * Full execution loop with status callbacks.
+     */
+    public BacktestReport run(BacktestConfig config, boolean resumeFromCheckpoint, AtomicBoolean stopRequested, ProgressCallback progressCallback) {
         log.info(">>> Backtest: tickers={}, {} to {}, capital=${}, risk={}%{}",
                 config.tickers().size(), config.fromDate(), config.toDate(),
                 config.initialCapital(), config.riskPerTradePct() * 100,
@@ -225,6 +256,7 @@ public class BacktestEngine {
                             writer.write(formatTradeCsv(t));
                             writer.newLine();
                         }
+                        writer.flush();
                         batch.clear();
                     }
                 }
@@ -255,60 +287,20 @@ public class BacktestEngine {
         }
 
         // ============================================================
-        // STEP 1: Load candle data in parallel
+        // PROCESS TICKERS: Load data, scan strategies, release memory per ticker
+        // Uses a semaphore to limit concurrent tickers in memory
         // ============================================================
-        int numThreads = Math.min(maxConcurrentScans.get(), Math.max(1, remainingTickers.size()));
-        Map<String, Map<TimeFrame, List<Candle>>> allData = new ConcurrentHashMap<>();
-        AtomicInteger loadedCount = new AtomicInteger(0);
-
-        try (ExecutorService loadExecutor = Executors.newFixedThreadPool(numThreads, r -> {
-            Thread t = new Thread(r);
-            t.setName("backtest-loader-" + t.threadId());
-            t.setDaemon(true);
-            return t;
-        })) {
-            List<CompletableFuture<Void>> loadFutures = config.tickers().stream()
-                .map(ticker -> CompletableFuture.runAsync(() -> {
-                    try {
-                        Map<TimeFrame, List<Candle>> tickerData = new EnumMap<>(TimeFrame.class);
-                        for (TimeFrame tf : TimeFrame.values()) {
-                            List<Candle> candles = csvService.loadFromCsv(ticker, tf);
-                            List<Candle> filtered = candles.stream()
-                                    .filter(c -> !c.timestamp().toLocalDate().isBefore(config.fromDate())
-                                            && !c.timestamp().toLocalDate().isAfter(config.toDate()))
-                                    .toList();
-                            tickerData.put(tf, filtered);
-                        }
-                        allData.put(ticker, tickerData);
-                        int count = loadedCount.incrementAndGet();
-                        if (count % 50 == 0 || count == config.tickers().size()) {
-                            log.info("Loaded candle data for {}/{} tickers...", count, config.tickers().size());
-                        }
-                    } catch (Exception e) {
-                        log.error("Failed to load data for {}: {}", ticker, e.getMessage());
-                        allData.put(ticker, new EnumMap<>(TimeFrame.class));
-                    }
-                }, loadExecutor))
-                .toList();
-            CompletableFuture.allOf(loadFutures.toArray(new CompletableFuture<?>[0])).join();
+        if (progressCallback != null) {
+            progressCallback.onProgress("ALL", "TESTING", "Analyzing strategies across " + remainingTickers.size() + " tickers...");
         }
 
         TimeFrame execTf = config.executionTimeframe();
-
-        // Count total execution candles for logging
-        int totalExecCandles = allData.values().stream()
-                .map(td -> td.getOrDefault(execTf, List.of()))
-                .mapToInt(List::size)
-                .sum();
-        log.info("Loaded {} execution candles across {} tickers", totalExecCandles, config.tickers().size());
-
-        // ============================================================
-        // STEP 2: Process each ticker in parallel
-        // ============================================================
         double capitalPerTicker = config.initialCapital() / config.tickers().size();
         Map<String, TickerResult> tickerResults = new ConcurrentHashMap<>();
         AtomicInteger processedCount = new AtomicInteger(0);
         List<String> newlyProcessed = Collections.synchronizedList(new ArrayList<>());
+        int numThreads = Math.min(maxConcurrentScans.get(), Math.max(1, remainingTickers.size()));
+        Semaphore memorySemaphore = new Semaphore(numThreads);
 
         try (ExecutorService processExecutor = Executors.newFixedThreadPool(numThreads, r -> {
             Thread t = new Thread(r);
@@ -318,25 +310,53 @@ public class BacktestEngine {
         })) {
             List<CompletableFuture<Void>> processFutures = remainingTickers.stream()
                 .map(ticker -> CompletableFuture.runAsync(() -> {
-                    // Check stop requested before processing each ticker
                     if (stopRequested != null && stopRequested.get()) {
                         log.info("Backtest stop requested - skipping ticker {}", ticker);
                         return;
                     }
                     try {
-                        int candleCount = allData.getOrDefault(ticker, Map.of())
-                                .getOrDefault(execTf, List.of()).size();
+                        memorySemaphore.acquire();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                    try {
+                        if (progressCallback != null) {
+                            progressCallback.onProgress(ticker, "LOADING", "Loading candles...");
+                        }
+
+                        // Load all timeframe data for this single ticker
+                        Map<TimeFrame, List<Candle>> tickerData = new EnumMap<>(TimeFrame.class);
+                        for (TimeFrame tf : TimeFrame.values()) {
+                            List<Candle> candles = csvService.loadFromCsv(ticker, tf);
+                            List<Candle> filtered = candles.stream()
+                                    .filter(c -> !c.timestamp().toLocalDate().isBefore(config.fromDate())
+                                            && !c.timestamp().toLocalDate().isAfter(config.toDate()))
+                                    .toList();
+                            tickerData.put(tf, filtered);
+                        }
+
+                        int candleCount = tickerData.getOrDefault(execTf, List.of()).size();
                         int idx = processedCount.incrementAndGet();
                         int totalRemaining = remainingTickers.size();
                         log.info("[{}/{}] Processing ticker: {} ({} candles)", idx, totalRemaining, ticker, candleCount);
 
+                        if (progressCallback != null) {
+                            progressCallback.onProgress(ticker, "SCANNING", "Analyzing " + candleCount + " candles...");
+                        }
+
+                        // Process this ticker using its own loaded data
+                        Map<String, Map<TimeFrame, List<Candle>>> singleTickerData = Map.of(ticker, tickerData);
                         TickerResult result = processSingleTicker(
-                                ticker, config, allData, capitalPerTicker, tradeQueue);
+                                ticker, config, singleTickerData, capitalPerTicker, tradeQueue);
 
                         tickerResults.put(ticker, result);
                         newlyProcessed.add(ticker);
 
-                        // Save checkpoint every 50 tickers (not after every single one to avoid O(N^2) copies)
+                        if (progressCallback != null) {
+                            progressCallback.onProgress(ticker, "OK", "Completed with " + result.trades.size() + " trades");
+                        }
+
                         int newlyProcessedCount = newlyProcessed.size();
                         if (newlyProcessedCount % 50 == 0 || newlyProcessedCount == remainingTickers.size()) {
                             Set<String> allProcessedNow = new LinkedHashSet<>(alreadyProcessed);
@@ -350,6 +370,8 @@ public class BacktestEngine {
                     } catch (Exception e) {
                         log.error("Failed to process ticker {}: {}", ticker, e.getMessage(), e);
                         tickerResults.put(ticker, new TickerResult(List.of(), List.of(), 0));
+                    } finally {
+                        memorySemaphore.release();
                     }
                 }, processExecutor))
                 .toList();
@@ -852,7 +874,7 @@ public class BacktestEngine {
             try {
                 if (!strategy.isTriggered(ticker, data, nyTime)) continue;
 
-                boolean isCall = strategy.getName().contains("call");
+                boolean isCall = strategy.getClass().getSimpleName().toLowerCase().contains("call");
                 double entryPrice = candle.close();
 
                 TradePlan plan = RiskCalculator.generatePlan(data, ticker, time, isCall, entryPrice, strategy.getName());
@@ -887,7 +909,7 @@ public class BacktestEngine {
                             ticker, strategy.getName(), candle.timestamp(),
                             entryFill.fillPrice(), plan.takeProfit, plan.stopLoss,
                             isCall, chartCandles, chartsDir,
-                            null, null, null);
+                            null, null, null, combinedPattern);
                     if (chartPath != null) {
                         log.debug("Chart generated: {}", chartPath);
                     }
@@ -951,11 +973,7 @@ public class BacktestEngine {
                 pos.entryHour, pos.marketTrend,
                 Map.of("exitReason", reason, "grossPnl", grossPnl));
 
-        // Fix #13: Chart generation deferred to on-demand only.
-        // Chart data (pos.chartCandles) is preserved in TradeRecord for on-demand generation.
-        // Charts will be generated only when explicitly requested via API after backtest completes.
-        /*
-        if (pos.chartCandles != null && !pos.chartCandles.isEmpty()) {
+        if (generateTradeCharts && pos.chartCandles != null && !pos.chartCandles.isEmpty()) {
             long minutesHeld = java.time.Duration.between(pos.entryTime, exitTime).toMinutes();
             int candlesHeld = Math.max(1, (int) Math.round(minutesHeld / 15.0));
 
@@ -964,9 +982,8 @@ public class BacktestEngine {
                     ticker, pos.strategy, pos.entryTime,
                     pos.entryPrice, pos.tp, pos.sl,
                     pos.isCall, pos.chartCandles, chartsDir,
-                    netPnl, reason, candlesHeld);
+                    netPnl, reason, candlesHeld, pos.pattern);
         }
-        */
 
         return trade;
     }
