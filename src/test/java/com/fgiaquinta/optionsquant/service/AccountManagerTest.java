@@ -49,9 +49,9 @@ class AccountManagerTest {
         accountManager.updateBalance(50000.0);
         // 2% of 50000 = 1000
         // risk per contract = |3.0 - 2.5| * 100 = 50
-        // qty = 1000 / 50 = 20
+        // qty = 1000 / 50 = 20 -> Capped at 10
         int qty = accountManager.calculateQuantity(3.0, 2.5);
-        assertThat(qty).isEqualTo(20);
+        assertThat(qty).isEqualTo(10);
     }
 
     @Test
@@ -66,9 +66,9 @@ class AccountManagerTest {
         highRiskManager.updateBalance(50000.0);
         // 5% of 50000 = 2500
         // risk per contract = |3.0 - 2.5| * 100 = 50
-        // qty = 2500 / 50 = 50
+        // qty = 2500 / 50 = 50 -> Capped at 10
         int qty = highRiskManager.calculateQuantity(3.0, 2.5);
-        assertThat(qty).isEqualTo(50);
+        assertThat(qty).isEqualTo(10);
     }
 
     @Test

@@ -19,7 +19,8 @@ public class ContractFactory {
      */
     public static Contract createOptionContract(String ticker, String expiration, double strike, String right, String tradingClass) {
         Contract contract = new Contract();
-        String sanitizedTicker = ticker.replaceAll("[^a-zA-Z0-9]", "").toUpperCase().trim();
+        // Replace dots with spaces for IBKR (e.g. BRK.B -> BRK B)
+        String sanitizedTicker = ticker.replace(".", " ").replaceAll("[^a-zA-Z0-9 ]", "").toUpperCase().trim();
 
         contract.symbol(sanitizedTicker);
         contract.secType("OPT");
@@ -46,15 +47,16 @@ public class ContractFactory {
         }
 
         Contract contract = new Contract();
-        String cleanTicker = ticker.replaceAll("[^a-zA-Z]", "").toUpperCase().trim();
+        // Replace dots with spaces for IBKR (e.g. BRK.B -> BRK B)
+        String cleanTicker = ticker.replace(".", " ").replaceAll("[^a-zA-Z ]", "").toUpperCase().trim();
 
         contract.symbol(cleanTicker);
         contract.secType("STK");
         contract.currency("USD");
         contract.exchange("SMART");
 
-        // Special cases for NYSE-listed stocks
-        if (cleanTicker.equals("SQ") || cleanTicker.equals("NVO") || cleanTicker.equals("TSM")) {
+        // Special cases for NYSE-listed stocks or Berkshire
+        if (cleanTicker.equals("SQ") || cleanTicker.equals("NVO") || cleanTicker.equals("TSM") || cleanTicker.startsWith("BRK")) {
             contract.primaryExch("NYSE");
         } else {
             contract.primaryExch("ISLAND");
