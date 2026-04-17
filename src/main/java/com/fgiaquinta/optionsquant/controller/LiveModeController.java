@@ -512,7 +512,13 @@ public class LiveModeController {
 
         boolean isCall = direction == null ? strat.startsWith("C") : "CALL".equalsIgnoreCase(direction);
         String dir = isCall ? "CALL" : "PUT";
-        double price = 500.0;
+        
+        // Try to get actual ticker price to avoid TWS Error 200 (strike out of range)
+        double price = scannerService.getLastKnownPrice(ticker);
+        if (price <= 0) {
+            price = ticker.equals("SPY") ? 500.0 : 200.0;
+        }
+        
         double atr = price * 0.012;
         double tp = isCall ? price + atr * 3.0 : price - atr * 3.0;
         double sl = isCall ? price - atr * 2.0 : price + atr * 2.0;
@@ -522,7 +528,7 @@ public class LiveModeController {
         liveSignals.add(mockSignal);
         signalsToday.incrementAndGet();
 
-        log.info("Injected mock signal: {} {} {}", ticker, dir, strat);
+        log.info("Injected mock signal: {} {} {} @ ${}", ticker, dir, strat, price);
 
         // Auto-execute injected signal via TWS when auto-execute is ON and TWS is connected
         boolean autoExec = false;

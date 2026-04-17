@@ -820,6 +820,20 @@ public class StrategyScannerService {
     /** Returns total tickers to scan in current operation */
     public int getTotalToScan() { return totalToScan.get(); }
 
+    /**
+     * Gets the last known price for a ticker from its latest 5m or 15m candle.
+     */
+    public double getLastKnownPrice(String ticker) {
+        List<Candle> candles = csvService.loadFromCsv(ticker, TimeFrame.MIN_5);
+        if (candles.isEmpty()) {
+            candles = csvService.loadFromCsv(ticker, TimeFrame.MIN_15);
+        }
+        if (!candles.isEmpty()) {
+            return candles.get(candles.size() - 1).close();
+        }
+        return 0;
+    }
+
     public record ScanResult(
             int totalSignals,
             int tickersScanned,

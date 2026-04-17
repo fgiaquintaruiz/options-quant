@@ -1235,3 +1235,7 @@
 2026-04-17 16:02:50.706 DEBUG [Ticker-Scanner] StrategyAnalysis : ✅ AMGN analyzed - no signals (23967ms)
 2026-04-17 16:02:50.707 DEBUG [Ticker-Scanner] StrategyAnalysis : 🚫 [Memory] Skipping AMP — blocked due to poor historical performance
 2026-04-17 16:03:03.068 DEBUG [Ticker-Scanner] StrategyAnalysis : ✅ AMT analyzed - no signals (12360ms)
+2026-04-17 16:05:04.876 DEBUG [Ticker-Scanner] StrategyAnalysis : ✅ AAPL analyzed - no signals (120291ms)
+2026-04-17 16:07:05.025 DEBUG [Ticker-Scanner] StrategyAnalysis : ✅ AMD analyzed - no signals (120147ms)
+2026-04-17 16:09:09.209 DEBUG [Ticker-Scanner] StrategyAnalysis : ✅ AMZN analyzed - no signals (124184ms)
+2026-04-17 16:11:09.370 DEBUG [Ticker-Scanner] StrategyAnalysis : ✅ GOOGL analyzed - no signals (120160ms)
