@@ -1,10 +1,11 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { Activity, BarChart3, HeartPulse } from 'lucide-react'
+import { Activity, BarChart3, HeartPulse, Settings } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { liveApi } from './api'
 import LiveDashboard from './pages/LiveDashboard'
 import BacktestDashboard from './pages/BacktestDashboard'
 import HealthPage from './pages/HealthPage'
+import SettingsPage from './pages/SettingsPage'
 
 export default function App() {
   const location = useLocation()
@@ -67,6 +68,7 @@ export default function App() {
   const isLive     = location.pathname === '/' || location.pathname.startsWith('/live')
   const isBacktest = location.pathname.startsWith('/backtest')
   const isHealth   = location.pathname.startsWith('/health')
+  const isSettings = location.pathname.startsWith('/settings')
 
   return (
     <div className="container">
@@ -80,6 +82,9 @@ export default function App() {
             </NavLink>
             <NavLink to="/backtest" className={({ isActive }) => isActive ? 'active' : ''}>
               <BarChart3 size={14} /> Loved Mode
+            </NavLink>
+            <NavLink to="/settings" className={({ isActive }) => isActive ? 'active' : ''}>
+              <Settings size={14} /> Config
             </NavLink>
             <NavLink to="/health" className={({ isActive }) => isActive ? 'active' : ''}>
               <HeartPulse size={14} /> Health
@@ -113,6 +118,9 @@ export default function App() {
       </div>
       <div style={{ display: isBacktest ? 'block' : 'none' }}>
         <BacktestDashboard />
+      </div>
+      <div style={{ display: isSettings ? 'block' : 'none' }}>
+        <SettingsPage />
       </div>
       <div style={{ display: isHealth ? 'block' : 'none' }}>
         <HealthPage />

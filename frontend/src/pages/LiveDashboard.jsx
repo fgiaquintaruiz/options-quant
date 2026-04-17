@@ -205,9 +205,6 @@ export default function LiveDashboard({ twsStatus }) {
       const hot = hotTickersList.length > 0 ? hotTickersList : ['SPY', 'QQQ', 'AAPL', 'NVDA', 'TSLA']
       const ticker = hot[Math.floor(Math.random() * hot.length)]
       const res = await liveApi.injectMockSignal(ticker)
-      if (!res.autoExecuted && status?.autoExecute) {
-         console.warn('Mock signal injected but not auto-executed')
-      }
       fetchSignals()
     } catch (e) { setErrorMsg('Injection failed') }
   }
@@ -236,7 +233,6 @@ export default function LiveDashboard({ twsStatus }) {
     }
   }, [closedTrades])
 
-  // Fixed violation: Memoized derived state
   const trades = useMemo(() => [
     ...signals.map(mapSignal),
     ...injectedSignals.map(mapSignal)
@@ -258,7 +254,7 @@ export default function LiveDashboard({ twsStatus }) {
           setPendingActions(prev => ({ ...prev, [ticker]: false }))
           fetchSignals()
         }, 800)
-        return
+        return;
       }
       const ok = await liveApi.closeTrade(ticker, price)
       if (ok.success) fetchSignals()
@@ -306,57 +302,50 @@ export default function LiveDashboard({ twsStatus }) {
         </div>
       )}
 
-      {/* ── Toolbar ── */}
-      <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, padding: '12px 20px', flexWrap: 'wrap', gap: 20 }}>
-
-        {/* Left: Tickers + Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap', flex: 1 }}>
-          <div style={{ minWidth: 320, flex: 1 }}>
-            <div className="stat-label-sm color-muted mb-6">Tickers to scan</div>
-            <TickerSelector
-              value={tickerFilter}
-              onChange={handleFilterChange}
-              disabled={scanning}
-            />
+      {/* Toolbar */}
+      <div className="card toolbar-card">
+        <div className="toolbar-section">
+          
+          {/* Tickers */}
+          <div style={{ minWidth: 280, flex: 1 }}>
+            <TickerSelector value={tickerFilter} onChange={handleFilterChange} disabled={scanning} />
           </div>
 
           <Divider />
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 15 }}>
+          {/* Controls */}
+          <div className="toolbar-controls">
             {scanning || stopRequested ? (
-              <button className="btn btn-danger" onClick={handleStopScan} style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button className="btn btn-danger" onClick={handleStopScan} style={{ padding: '8px 16px' }}>
                 <Square size={16} /> Stop Scan
               </button>
             ) : (
               <button className="btn btn-primary" onClick={handleStartScan}
-                disabled={!canScan} style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8, opacity: canScan ? 1 : 0.5, cursor: canScan ? 'pointer' : 'not-allowed' }}>
+                disabled={!canScan} style={{ padding: '8px 16px' }}>
                 <Play size={16} /> Start Scan
               </button>
             )}
 
             {mockMarketOpen && (
-              <button
-                className="btn"
-                onClick={handleInjectMockSignal}
-                style={{ padding: '6px 12px', background: '#f0883e22', border: '1px solid #f0883e66', color: '#f0883e', fontSize: 13, borderRadius: 6, cursor: 'pointer' }}
-              >
-                ⚡ Inject Signal
+              <button className="btn" onClick={handleInjectMockSignal}
+                style={{ padding: '6px 12px', background: '#f0883e22', border: '1px solid #f0883e66', color: '#f0883e', fontSize: 13 }}>
+                ⚡ Signal
               </button>
             )}
 
             <div className="flex-col gap-4">
-              <label className="flex-align-center gap-4 text-md color-muted" style={{ cursor: 'pointer' }}>
+              <label className="flex-align-center gap-4 text-sm color-muted" style={{ cursor: 'pointer' }}>
                 <input
                   type="checkbox"
                   checked={status?.schedulerEnabled || false}
                   onChange={() => liveApi.toggleScheduler().catch(() => {})}
                   style={{ accentColor: '#58a6ff' }}
                 />
-                Auto-start
+                Auto
               </label>
               {status?.schedulerEnabled && (
-                <span className="color-info font-bold" style={{ fontSize: 10 }}>
-                  Next: {formatMinSec(nextScanSecs)}
+                <span className="color-info font-bold" style={{ fontSize: 9 }}>
+                  {formatMinSec(nextScanSecs)}
                 </span>
               )}
             </div>
@@ -364,13 +353,12 @@ export default function LiveDashboard({ twsStatus }) {
 
           <Divider />
 
-          {/* Engine Params */}
-          <div className="flex-align-center gap-20">
+          <div className="flex-align-center gap-15">
             <div className="stat-box">
               <span className="stat-label-sm">Concurrent:</span>
               <input type="number" min="1" max="16" value={maxConcurrent}
                 onChange={e => handleMaxConcurrentChange(e.target.value)} disabled={scanning}
-                style={{ width: 50, padding: '4px 6px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 13, textAlign: 'center' }} />
+                style={{ width: 45, padding: '4px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 12, textAlign: 'center' }} />
             </div>
 
             <div className="stat-box">
@@ -380,7 +368,7 @@ export default function LiveDashboard({ twsStatus }) {
                   className="btn"
                   disabled={scanning}
                   onClick={() => handleScopeChange('ALL')}
-                  style={{ padding: '4px 8px', background: tickerScope === 'ALL' ? '#1f6feb' : '#21262d', color: '#fff', fontSize: 11, border: '1px solid #30363d' }}
+                  style={{ padding: '4px 6px', background: tickerScope === 'ALL' ? '#1f6feb' : '#21262d', color: '#fff', fontSize: 10, border: '1px solid #30363d' }}
                 >
                   All
                 </button>
@@ -388,7 +376,7 @@ export default function LiveDashboard({ twsStatus }) {
                   className="btn"
                   disabled={scanning}
                   onClick={() => handleScopeChange('HOT')}
-                  style={{ padding: '4px 8px', background: tickerScope === 'HOT' ? '#9e6a03' : '#21262d', color: '#fff', fontSize: 11, border: '1px solid #30363d' }}
+                  style={{ padding: '4px 6px', background: tickerScope === 'HOT' ? '#9e6a03' : '#21262d', color: '#fff', fontSize: 10, border: '1px solid #30363d' }}
                 >
                   Hot
                 </button>
@@ -397,26 +385,21 @@ export default function LiveDashboard({ twsStatus }) {
           </div>
         </div>
 
-        {/* Right: Settings + Account Info */}
-        <div style={{ display: 'flex', gap: 20, fontSize: 13, color: '#8b949e', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div className="flex-align-center gap-8">
-              <span>Auto-Exec:</span>
+        <div className="toolbar-settings">
+          <div className="flex-align-center gap-10">
+            <div className="flex-align-center gap-4">
+              <span className="text-xs">Exec:</span>
               <OnOffToggle value={status?.autoExecute} onClick={handleToggleAutoExecute} />
             </div>
-            <div className="flex-align-center gap-8">
-              <span>Ext. Hours:</span>
-              <OnOffToggle value={status?.extendedHoursEnabled} onClick={handleToggleExtendedHours} />
-            </div>
-            <div className="flex-align-center gap-8">
-              <span>Mock:</span>
+            <div className="flex-align-center gap-4">
+              <span className="text-xs">Mock:</span>
               <OnOffToggle value={mockMarketOpen} onClick={handleToggleMockMarket} />
             </div>
           </div>
 
           <Divider />
 
-          <div style={{ display: 'flex', gap: 15, alignItems: 'center' }}>
+          <div className="flex-align-center gap-15">
             <div className="stat-box">
               <span className="stat-label-sm">Account:</span>
               <strong className="stat-value-md">{twsStatus?.accountId || 'OFFLINE'}</strong>
@@ -429,7 +412,7 @@ export default function LiveDashboard({ twsStatus }) {
                   value={riskInput}
                   onChange={e => setRiskInput(e.target.value)}
                   onBlur={handleRiskBlur}
-                  style={{ width: 45, padding: '2px 4px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 12, textAlign: 'right' }}
+                  style={{ width: 40, padding: '2px 4px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 12, textAlign: 'right' }}
                 />
                 <span className="text-xs">%</span>
               </div>

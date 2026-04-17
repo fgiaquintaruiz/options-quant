@@ -310,9 +310,6 @@ public class LiveModeController {
             totalTickers.set(allTickers.size());
             scanningTickers.set(allTickers);
 
-            String time = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
-            scanActivity.add(new ScanActivity(time, "---", "STARTING", "Scanning " + allTickers.size() + " tickers against 12 strategies", "-", "-", "-"));
-
             long startTime = System.currentTimeMillis();
             try {
                 // In mock mode: skip data refresh — scan from existing CSVs (simulates 15-min candle close)
@@ -340,18 +337,12 @@ public class LiveModeController {
                         }
                     }
 
-                    String endTime = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
-                    scanActivity.add(new ScanActivity(endTime, "---", "COMPLETE",
-                            String.format("%d tickers scanned, %d signals found in %.1fs",
-                                    result.tickersScanned(), result.totalSignals(), result.elapsedMs() / 1000.0), "-", "-", "-"));
                     log.info("Manual scan complete: {} signals in {}ms", result.totalSignals(), result.elapsedMs());
                 } else {
                     log.info("Manual scan stopped by user after {}ms", System.currentTimeMillis() - startTime);
                 }
             } catch (Exception e) {
                 log.error("Manual scan failed: {}", e.getMessage(), e);
-                String errTime = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
-                scanActivity.add(new ScanActivity(errTime, "---", "ERROR", e.getMessage(), "-", "-", "-"));
             } finally {
                 isScanning.set(false);
                 isAutoScan.set(false);
@@ -724,7 +715,7 @@ public class LiveModeController {
     }
 
     /**
-     * Called by scanner when a ticker starts being analyzed. Adds a row to the feed.
+     * Called by scanner when a ticker starts being analyzed. Adds or updates a row in the feed.
      */
     void addTickerScanActivity(String payload) {
         String ticker = payload;
@@ -735,62 +726,65 @@ public class LiveModeController {
             status = parts[1];
         }
 
+        if (ticker.equals("---")) return; // Skip summary rows
+
         String time = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
         currentTicker.set(ticker);
-        
-        // Track start time for the "Scan Started" column
-        if (!ticker.equals("---")) {
-            tickerScanStartTimes.put(ticker, time);
-        }
+        tickerScanStartTimes.put(ticker, time);
 
-        int scanned = scannerService.getScannedCount();
-        int total = scannerService.getTotalToScan();
         String batchLabel = scannerService.getCurrentBatchLabel();
-        
-        String detail;
-        if (status.equals("LOADING")) {
-            detail = "Downloading fresh candles...";
-        } else if (batchLabel != null && !batchLabel.isEmpty()) {
-            detail = batchLabel;
-        } else {
-            detail = "Analyzing 12 strategies...";
-        }
+        String detail = status.equals("LOADING") ? "Downloading fresh candles..." : 
+                       (batchLabel != null && !batchLabel.isEmpty() ? batchLabel : "Analyzing 12 strategies...");
 
-        scanActivity.add(new ScanActivity(time, ticker, status, detail, tickerScanStartTimes.getOrDefault(ticker, "-"), "-", "-"));
-        // Keep only last 200 entries to prevent memory growth
-        while (scanActivity.size() > 200) {
-            scanActivity.remove(0);
+        ScanActivity newEntry = new ScanActivity(time, ticker, status, detail, time, "-", "-");
+
+        // Update existing row if found, otherwise add
+        synchronized (scanActivity) {
+            boolean updated = false;
+            for (int i = 0; i < scanActivity.size(); i++) {
+                if (scanActivity.get(i).ticker().equals(ticker)) {
+                    scanActivity.set(i, newEntry);
+                    updated = true;
+                    break;
+                }
+            }
+            if (!updated) {
+                scanActivity.add(newEntry);
+            }
+            while (scanActivity.size() > 200) scanActivity.remove(0);
         }
     }
 
     /**
-     * Called by scanner when a ticker scan completes. Updates the SCANNING row to COMPLETE.
-     * @param ticker the ticker that was scanned
-     * @param signalCount number of signals found (0 = no signals, -1 = error)
+     * Called by scanner when a ticker scan completes. Updates the existing row to SIGNAL/OK/ERROR.
      */
     void addTickerScanComplete(String ticker, int signalCount) {
+        if (ticker.equals("---")) return;
+
         String time = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
         String status = signalCount < 0 ? "ERROR" : (signalCount > 0 ? "SIGNAL" : "OK");
         String detail = signalCount < 0 ? "Scan failed" : (signalCount > 0 ? signalCount + " signal(s) found" : "No signals");
         
-        String started = tickerScanStartTimes.getOrDefault(ticker, "-");
+        String started = tickerScanStartTimes.getOrDefault(ticker, time);
         String duration = "-";
-        if (!started.equals("-")) {
-            try {
-                java.time.LocalTime startTime = java.time.LocalTime.parse(started);
-                java.time.LocalTime endTime = java.time.LocalTime.parse(time);
-                java.time.Duration d = java.time.Duration.between(startTime, endTime);
-                duration = String.format("%.1fs", d.toMillis() / 1000.0);
-            } catch (Exception e) {
-                // Ignore parse errors
-            }
-        }
+        try {
+            java.time.LocalTime startTime = java.time.LocalTime.parse(started);
+            java.time.LocalTime endTime = java.time.LocalTime.parse(time);
+            duration = String.format("%.1fs", java.time.Duration.between(startTime, endTime).toMillis() / 1000.0);
+        } catch (Exception e) { /* ignore */ }
+        
         tickerScanEndTimes.put(ticker, time);
+        ScanActivity updatedEntry = new ScanActivity(time, ticker, status, detail, started, time, duration);
 
-        scanActivity.add(new ScanActivity(time, ticker, status, detail, started, time, duration));
-        // Keep only last 200 entries to prevent memory growth
-        while (scanActivity.size() > 200) {
-            scanActivity.remove(0);
+        synchronized (scanActivity) {
+            for (int i = 0; i < scanActivity.size(); i++) {
+                if (scanActivity.get(i).ticker().equals(ticker)) {
+                    scanActivity.set(i, updatedEntry);
+                    return;
+                }
+            }
+            // Fallback: if not found (rare), just add it
+            scanActivity.add(updatedEntry);
         }
     }
 

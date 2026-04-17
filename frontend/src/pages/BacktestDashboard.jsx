@@ -25,7 +25,6 @@ export default function BacktestDashboard() {
 
   // Side effects belonging in mount hook
   useEffect(() => {
-    // Remove stale result keys left from older versions
     ;['bt_activities', 'bt_report', 'bt_equity', 'bt_logs', 'bt_running'].forEach(k => LS.remove(k))
   }, [])
 
@@ -197,7 +196,7 @@ export default function BacktestDashboard() {
           <div className="flex-align-center gap-10">
             {running ? (
               <button className="btn btn-danger" onClick={handleStopScan} style={{ minWidth: 140 }}>
-                <Square size={16} /> Stop Engine
+                <Square size={16} /> Stop
               </button>
             ) : (
               <button className="btn btn-primary" onClick={handleStartScan} style={{ minWidth: 140 }}>
@@ -208,27 +207,26 @@ export default function BacktestDashboard() {
 
           <div className="divider-v" />
 
-          <div className="stat-box" style={{ minWidth: 120 }}>
-            <span className="stat-label-sm">Concurrent</span>
+          <div className="stat-box">
+            <span className="stat-label-sm">Concurrent:</span>
             <input type="number" min="1" max="16" value={maxConcurrent}
               onChange={e => handleMaxConcurrentChange(e.target.value)} disabled={running}
-              style={{ width: 60, padding: '4px 8px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 13 }} />
+              style={{ width: 45, padding: '4px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 13, textAlign: 'center' }} />
           </div>
 
           <div className="stat-box">
-            <span className="stat-label-sm">Scope</span>
-            <div className="flex-align-center gap-8">
+            <span className="stat-label-sm">Scope:</span>
+            <div className="flex-align-center gap-4">
               <button className="btn" disabled={running} onClick={() => setTickerScope('ALL')}
-                style={{ padding: '4px 10px', background: tickerScope === 'ALL' ? '#1f6feb' : '#21262d', color: '#fff', fontSize: 12 }}>All</button>
+                style={{ padding: '4px 6px', background: tickerScope === 'ALL' ? '#1f6feb' : '#21262d', color: '#fff', fontSize: 10, border: '1px solid #30363d' }}>All</button>
               <button className="btn" disabled={running} onClick={() => setTickerScope('HOT')}
-                style={{ padding: '4px 10px', background: tickerScope === 'HOT' ? '#9e6a03' : '#21262d', color: '#fff', fontSize: 12 }}>Hot</button>
+                style={{ padding: '4px 6px', background: tickerScope === 'HOT' ? '#9e6a03' : '#21262d', color: '#fff', fontSize: 10, border: '1px solid #30363d' }}>Hot</button>
             </div>
           </div>
 
           <div className="divider-v" />
 
-          <div className="flex-col gap-6" style={{ flex: 1, minWidth: 300 }}>
-            <span className="stat-label-sm">Filter List:</span>
+          <div className="flex-col gap-6" style={{ flex: 1, minWidth: 280 }}>
             <TickerSelector value={tickerFilter} onChange={setTickerFilter} disabled={running} />
           </div>
           
@@ -243,14 +241,14 @@ export default function BacktestDashboard() {
           {report && (
             <div className="card">
               <div className="flex-between mb-12">
-                <h3>Backtest Report: {report.tickerScope} {tickerFilter ? `(${tickerFilter})` : ''}</h3>
+                <h3 className="m-0">Report: {report.tickerScope} {tickerFilter ? `(${tickerFilter})` : ''}</h3>
                 <span className="badge badge-success" style={{ fontSize: 14 }}>{report.winRatePct}% Win Rate</span>
               </div>
               <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-                <StatCard label="Total Trades" value={report.totalTrades} />
-                <StatCard label="Profit Factor" value={report.profitFactor} color={report.profitFactor > 1 ? '#3fb950' : '#f85149'} />
-                <StatCard label="Net PnL" value={`$${report.netPnl.toLocaleString()}`} color={report.netPnl >= 0 ? '#3fb950' : '#f85149'} />
-                <StatCard label="Max Drawdown" value={`$${report.maxDrawdown.toLocaleString()}`} color="#f85149" />
+                <StatCard label="Trades" value={report.totalTrades} />
+                <StatCard label="PF" value={report.profitFactor} color={report.profitFactor > 1 ? '#3fb950' : '#f85149'} />
+                <StatCard label="PnL" value={`$${report.netPnl.toLocaleString()}`} color={report.netPnl >= 0 ? '#3fb950' : '#f85149'} />
+                <StatCard label="Drawdown" value={`$${report.maxDrawdown.toLocaleString()}`} color="#f85149" />
               </div>
               
               {equityData.length > 0 && (
