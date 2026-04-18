@@ -1,20 +1,29 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Play, Square, Zap } from 'lucide-react'
+import { Play, Square, Zap, ChevronUp, ChevronDown, Monitor, Cpu, ShieldCheck, ShieldAlert, FlaskConical, BarChartHorizontal } from 'lucide-react'
 import { liveApi } from '../api'
 import LiveTradeGrid from '../components/LiveTradeGrid'
 import TickerSelector from '../components/TickerSelector'
 import { LS } from '../utils/storage'
 
-// Inline ON/OFF pill
-function OnOffToggle({ value, onClick, disabled }) {
+// Swappable Button Component
+function SwapButton({ active, onText, offText, onClick, activeColor = '#f0883e', offColor = '#238636', icon: Icon }) {
   return (
-    <strong
-      onClick={!disabled ? onClick : undefined}
-      className={`badge ${value ? 'badge-success' : 'badge-error'}`}
-      style={{ cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1, width: 40, textAlign: 'center', fontSize: '9px', padding: '2px 4px' }}
+    <button
+      onClick={onClick}
+      className="btn"
+      style={{
+        padding: '6px 12px',
+        fontSize: 12,
+        background: active ? `${activeColor}22` : `${offColor}22`,
+        border: `1px solid ${active ? `${activeColor}66` : `${offColor}66`}`,
+        color: active ? activeColor : offColor,
+        minWidth: 110,
+        justifyContent: 'center'
+      }}
     >
-      {value ? 'ON' : 'OFF'}
-    </strong>
+      {Icon && <Icon size={14} />}
+      {active ? onText : offText}
+    </button>
   )
 }
 
@@ -88,11 +97,9 @@ export default function LiveDashboard({ twsStatus }) {
     return () => clearInterval(interval)
   }, [fetchSignals])
 
-  // Sync settings to backend when they change locally
+  // Sync settings to backend
   const syncFilter = useCallback(async (filter, scope) => {
-    try {
-      await liveApi.setScanFilter(filter, scope)
-    } catch (e) {}
+    try { await liveApi.setScanFilter(filter, scope) } catch (e) {}
   }, [])
 
   useEffect(() => {
@@ -105,13 +112,8 @@ export default function LiveDashboard({ twsStatus }) {
     LS.set('live_mockMarketOpen', mockMarketOpen)
   }, [mockMarketOpen])
 
-  const handleFilterChange = (val) => {
-    setTickerFilter(val)
-  }
-
-  const handleScopeChange = (val) => {
-    setTickerScope(val)
-  }
+  const handleFilterChange = (val) => setTickerFilter(val)
+  const handleScopeChange = (val) => setTickerScope(val)
 
   // Countdown timer logic
   const [nextScanSecs, setNextScanSecs] = useState(null)
@@ -153,9 +155,7 @@ export default function LiveDashboard({ twsStatus }) {
   const handleStartScan = async () => {
     if (!canScan) return
     setErrorMsg(null)
-    try {
-      await liveApi.startScan()
-    } catch (e) { setErrorMsg(`Scan failed: ${e.message}`) }
+    try { await liveApi.startScan() } catch (e) { setErrorMsg(`Scan failed: ${e.message}`) }
   }
 
   const handleStopScan = async () => {
@@ -173,26 +173,22 @@ export default function LiveDashboard({ twsStatus }) {
     try { await liveApi.toggleAutoExecute() } catch (e) {}
   }
 
-  const handleToggleExtendedHours = async () => {
-    try { await liveApi.toggleExtendedHours() } catch (e) {}
-  }
-
   const handleToggleMockMarket = async () => {
     const prev = mockMarketOpen
     setMockMarketOpen(!prev)
-    try {
-      await liveApi.toggleMockMarket()
-    } catch (e) {
+    try { await liveApi.toggleMockMarket() } catch (e) {
       setMockMarketOpen(prev)
       setErrorMsg('Failed to toggle Mock Market')
     }
   }
 
-  const handleRiskBlur = async () => {
-    const val = parseFloat(riskInput)
-    if (isNaN(val) || val < 0.1 || val > 10) return
-    LS.set('live_riskPct', riskInput)
-    try { await liveApi.setRisk(val) } catch (e) {}
+  const handleRiskAdjust = async (delta) => {
+    const current = parseFloat(riskInput)
+    const newVal = Math.max(0.1, Math.min(10, current + delta))
+    const formatted = newVal.toFixed(1)
+    setRiskInput(formatted)
+    LS.set('live_riskPct', formatted)
+    try { await liveApi.setRisk(newVal) } catch (e) {}
   }
 
   const handleInjectMockSignal = async () => {
@@ -200,7 +196,7 @@ export default function LiveDashboard({ twsStatus }) {
     try {
       const hot = hotTickersList.length > 0 ? hotTickersList : ['SPY', 'QQQ', 'AAPL', 'NVDA', 'TSLA']
       const ticker = hot[Math.floor(Math.random() * hot.length)]
-      const res = await liveApi.injectMockSignal(ticker)
+      await liveApi.injectMockSignal(ticker)
       fetchSignals()
     } catch (e) { setErrorMsg('Injection failed') }
   }
@@ -288,19 +284,9 @@ export default function LiveDashboard({ twsStatus }) {
         </div>
       )}
 
-      {mockMarketOpen && (
-        <div className="card mb-12" style={{ background: '#f0883e18', border: '1px solid #f0883e55', padding: '6px 12px' }}>
-          <div className="flex-align-center gap-8 text-sm">
-            <span style={{ fontSize: 16 }}>⚠️</span>
-            <strong style={{ color: '#f0883e' }}>Mock Market Open</strong>
-            <span className="color-muted">— scanning from existing CSVs, no data download, no TWS required</span>
-          </div>
-        </div>
-      )}
-
-      {/* Optimized Toolbar */}
-      <div className="card" style={{ padding: '12px 16px', marginBottom: 20 }}>
-        <div className="flex-col gap-12">
+      {/* Toolbar */}
+      <div className="card" style={{ padding: '12px 20px', marginBottom: 20 }}>
+        <div className="flex-col gap-15">
           {/* Row 1: Tickers */}
           <div className="flex-align-center gap-15">
             <div className="stat-label-sm color-muted" style={{ whiteSpace: 'nowrap' }}>Tickers to scan</div>
@@ -315,95 +301,108 @@ export default function LiveDashboard({ twsStatus }) {
             </div>
           </div>
 
-          {/* Row 2: Controls & Status */}
-          <div className="flex-between flex-wrap gap-15">
+          {/* Row 2: Controls & Toggles & Stats */}
+          <div className="flex-between flex-wrap gap-20">
             
-            <div className="flex-align-center gap-12">
+            {/* Left: Engine Controls */}
+            <div className="flex-align-center gap-10">
               {scanning || stopRequested ? (
-                <button className="btn btn-danger" onClick={handleStopScan} style={{ padding: '6px 12px', fontSize: 12 }}>
-                  <Square size={14} /> Stop
+                <button className="btn btn-danger" onClick={handleStopScan} style={{ padding: '6px 14px', fontSize: 13, minWidth: 120 }}>
+                  <Square size={16} /> Stop Scan
                 </button>
               ) : (
                 <button className="btn btn-primary" onClick={handleStartScan}
-                  disabled={!canScan} style={{ padding: '6px 12px', fontSize: 12 }}>
-                  <Play size={14} /> Start Scan
+                  disabled={!canScan} style={{ padding: '6px 14px', fontSize: 13, minWidth: 120 }}>
+                  <Play size={16} /> Start Scan
                 </button>
               )}
 
+              <div className="divider-v" style={{ height: 24 }} />
+
+              <SwapButton 
+                active={status?.schedulerEnabled} 
+                onText="Auto Scan" 
+                offText="Manual Scan" 
+                onClick={() => liveApi.toggleScheduler().catch(() => {})}
+                icon={Monitor}
+              />
+
+              <SwapButton 
+                active={status?.autoExecute} 
+                onText="Auto Open" 
+                offText="Manual Open" 
+                onClick={handleToggleAutoExecute}
+                icon={Cpu}
+              />
+
+              <div className="divider-v" style={{ height: 24 }} />
+
+              <div className="flex-align-center gap-4">
+                <span className="stat-label-sm color-muted">Concurrent:</span>
+                <input type="number" min="1" max="16" value={maxConcurrent}
+                  onChange={e => handleMaxConcurrentChange(e.target.value)} disabled={scanning}
+                  style={{ width: 40, padding: '4px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 12, textAlign: 'center' }} />
+              </div>
+
+              <div className="divider-v" style={{ height: 24 }} />
+
+              <SwapButton 
+                active={mockMarketOpen} 
+                onText="Mock Mkt" 
+                offText="Real Mkt" 
+                onClick={handleToggleMockMarket}
+                activeColor="#f0883e"
+                offColor="#3fb950"
+                icon={mockMarketOpen ? ShieldAlert : ShieldCheck}
+              />
+
               <button className="btn" onClick={handleInjectMockSignal}
-                style={{ padding: '6px 12px', background: '#f0883e22', border: '1px solid #f0883e66', color: '#f0883e', fontSize: 12 }}>
-                <Zap size={14} /> Signal
+                style={{ 
+                  padding: '6px 12px', fontSize: 12, 
+                  background: mockMarketOpen ? '#f0883e22' : '#23863622', 
+                  border: `1px solid ${mockMarketOpen ? '#f0883e66' : '#23863666'}`, 
+                  color: mockMarketOpen ? '#f0883e' : '#3fb950'
+                }}>
+                <Zap size={14} /> {mockMarketOpen ? 'Mock Signal' : 'Real Signal'}
               </button>
 
-              <div className="flex-align-center gap-6">
-                <label className="flex-align-center gap-3 text-sm color-muted" style={{ cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={status?.schedulerEnabled || false}
-                    onChange={() => liveApi.toggleScheduler().catch(() => {})}
-                    style={{ accentColor: '#58a6ff' }}
-                  />
-                  Auto
-                </label>
-                {status?.schedulerEnabled && (
-                  <span className="color-info font-bold" style={{ fontSize: 11, minWidth: 40 }}>
-                    {formatMinSec(nextScanSecs)}
-                  </span>
-                )}
-              </div>
-
-              <div className="divider-v" style={{ height: 20 }} />
-
-              <div className="flex-align-center gap-10">
-                <div className="flex-align-center gap-4">
-                  <span className="stat-label-sm color-muted">Concurrent:</span>
-                  <input type="number" min="1" max="16" value={maxConcurrent}
-                    onChange={e => handleMaxConcurrentChange(e.target.value)} disabled={scanning}
-                    style={{ width: 35, padding: '2px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 11, textAlign: 'center' }} />
+              {status?.schedulerEnabled && (
+                <div className="flex-col" style={{ marginLeft: 5 }}>
+                  <span className="color-info font-bold" style={{ fontSize: 11 }}>{formatMinSec(nextScanSecs)}</span>
                 </div>
-              </div>
+              )}
             </div>
 
-            <div className="flex-align-center gap-15">
-              <div className="flex-align-center gap-8">
-                <div className="flex-align-center gap-3">
-                  <span className="text-xs color-muted">Exec:</span>
-                  <OnOffToggle value={status?.autoExecute} onClick={handleToggleAutoExecute} />
-                </div>
-                <div className="flex-align-center gap-3">
-                  <span className="text-xs color-muted">Mock:</span>
-                  <OnOffToggle value={mockMarketOpen} onClick={handleToggleMockMarket} />
-                </div>
+            {/* Right: Account Stats */}
+            <div className="flex-align-center gap-20">
+              <div className="stat-box">
+                <span className="stat-label-sm color-muted">Account:</span>
+                <strong className="text-md color-text" style={{ fontSize: 14 }}>{twsStatus?.accountId || 'OFFLINE'}</strong>
               </div>
 
-              <div className="divider-v" style={{ height: 20 }} />
+              <div className="divider-v" style={{ height: 24 }} />
 
-              <div className="flex-align-center gap-12">
-                <div className="stat-box">
-                  <span className="stat-label-sm color-muted">Account:</span>
-                  <strong className="text-sm">{twsStatus?.accountId || 'OFFLINE'}</strong>
-                </div>
-                <div className="stat-box">
-                  <span className="stat-label-sm color-muted">Risk:</span>
-                  <div className="flex-align-center gap-2">
-                    <input
-                      type="number" step="0.1" min="0.1" max="10"
-                      value={riskInput}
-                      onChange={e => setRiskInput(e.target.value)}
-                      onBlur={handleRiskBlur}
-                      style={{ width: 35, padding: '2px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 11, textAlign: 'right' }}
-                    />
-                    <span className="text-xs color-muted">%</span>
+              <div className="stat-box">
+                <span className="stat-label-sm color-muted">Balance:</span>
+                <strong className="text-md color-success" style={{ fontSize: 15 }}>
+                  {twsStatus?.balance > 0 ? `$${Number(twsStatus.balance).toLocaleString()}` : '$0'}
+                </strong>
+              </div>
+
+              <div className="divider-v" style={{ height: 24 }} />
+
+              <div className="stat-box">
+                <span className="stat-label-sm color-muted">Risk %:</span>
+                <div className="flex-align-center gap-6">
+                  <strong className="color-text" style={{ fontSize: 14, minWidth: 25 }}>{riskInput}</strong>
+                  <div className="flex-col gap-1">
+                    <ChevronUp size={14} className="color-muted" style={{ cursor: 'pointer' }} onClick={() => handleRiskAdjust(1.0)} />
+                    <ChevronDown size={14} className="color-muted" style={{ cursor: 'pointer' }} onClick={() => handleRiskAdjust(-1.0)} />
                   </div>
                 </div>
-                <div className="stat-box">
-                  <span className="stat-label-sm color-muted">Balance:</span>
-                  <strong className="text-sm color-success">
-                    {twsStatus?.balance > 0 ? `$${Number(twsStatus.balance).toLocaleString()}` : '$0'}
-                  </strong>
-                </div>
               </div>
             </div>
+
           </div>
         </div>
       </div>

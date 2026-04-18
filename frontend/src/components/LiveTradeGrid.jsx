@@ -25,16 +25,6 @@ const getScanColor = (status) => {
   }
 }
 
-// Sub-components to avoid dense inline JSX
-function DirectionBadge({ direction }) {
-  const isCall = String(direction).toUpperCase().includes('CALL')
-  return (
-    <span className={`badge ${isCall ? 'badge-success' : 'badge-error'}`} style={{ minWidth: 50 }}>
-      {direction}
-    </span>
-  )
-}
-
 function StatusBadge({ row }) {
   const cfg = TRADE_STATUS[row.tradeStatus] || TRADE_STATUS.OK
   const label = row.endTime && row.endTime !== '-' ? 'EXITED' : cfg.label
@@ -79,10 +69,7 @@ export default function LiveTradeGrid({ trades = [], scanActivity = [], scanning
   const activeTrades = useMemo(() => {
     const byTicker = {}
     trades.forEach(t => {
-      // Only keep the most recent signal/trade for each ticker
-      if (!byTicker[t.ticker]) {
-        byTicker[t.ticker] = t
-      }
+      if (!byTicker[t.ticker]) byTicker[t.ticker] = t
     })
     return Object.values(byTicker).sort((a, b) => {
       if (a.endTime === '-' && b.endTime !== '-') return -1
@@ -91,12 +78,11 @@ export default function LiveTradeGrid({ trades = [], scanActivity = [], scanning
     })
   }, [trades])
 
-  // Filter scan activity: only show tickers that don't have an active trade row
   const scanRows = useMemo(() => {
     const byTicker = {}
     const activeTickerSet = new Set(activeTrades.map(t => t.ticker))
     scanActivity.forEach(a => {
-      if (activeTickerSet.has(a.ticker)) return // Already in active trades grid
+      if (activeTickerSet.has(a.ticker)) return
       byTicker[a.ticker] = a
     })
     return Object.values(byTicker).sort((a, b) => String(a.ticker).localeCompare(String(b.ticker)))
@@ -126,7 +112,6 @@ export default function LiveTradeGrid({ trades = [], scanActivity = [], scanning
               <tr className="bg-card">
                 <th style={th}>Ticker</th>
                 <th style={th}>Strategy</th>
-                <th style={{ ...th, textAlign: 'center' }}>Dir</th>
                 <th style={th}>Prices</th>
                 <th style={{ ...th, textAlign: 'center' }}>Status</th>
                 <th style={th}>Exit Reason</th>
@@ -138,6 +123,10 @@ export default function LiveTradeGrid({ trades = [], scanActivity = [], scanning
             <tbody>
               {activeTrades.map((row, idx) => {
                 const exited = isExited(row)
+                const isCall = String(row.direction).toUpperCase().includes('CALL')
+                const stratBg = isCall ? '#23863618' : '#da363318'
+                const stratColor = isCall ? '#3fb950' : '#f85149'
+
                 return (
                   <tr
                     key={`${row.ticker}-${row.startTime}-${idx}`}
@@ -159,11 +148,15 @@ export default function LiveTradeGrid({ trades = [], scanActivity = [], scanning
                       )}
                     </td>
 
-                    {/* Strategy */}
-                    <td className="text-sm color-text">{row.strategy}</td>
-
-                    {/* Direction */}
-                    <td style={{ textAlign: 'center' }}><DirectionBadge direction={row.direction} /></td>
+                    {/* Strategy (Colored by Direction) */}
+                    <td style={{ padding: '10px 12px' }}>
+                      <span className="text-sm font-bold" style={{ 
+                        padding: '4px 8px', borderRadius: 4,
+                        background: stratBg, color: stratColor, border: `1px solid ${stratColor}33` 
+                      }}>
+                        {row.strategy}
+                      </span>
+                    </td>
 
                     {/* Prices */}
                     <td><PriceStack ep={row.ep} tp={row.tp} sl={row.sl} /></td>
@@ -228,7 +221,7 @@ export default function LiveTradeGrid({ trades = [], scanActivity = [], scanning
               })}
               {activeTrades.length === 0 && (
                 <tr>
-                  <td colSpan="9" style={{ padding: '40px', textAlign: 'center', color: '#8b949e' }}>
+                  <td colSpan="8" style={{ padding: '40px', textAlign: 'center', color: '#8b949e' }}>
                     No active signals or positions. {scanning ? 'Scanning market...' : 'Start a scan to find opportunities.'}
                   </td>
                 </tr>
@@ -238,7 +231,7 @@ export default function LiveTradeGrid({ trades = [], scanActivity = [], scanning
         </div>
       </div>
 
-      {/* ── Scan activity (tickers without active trades) ── */}
+      {/* ── Scan activity ── */}
       {scanRows.length > 0 && (
         <div className="card">
           <div className="stat-label-sm color-muted mb-8 text-uppercase font-bold" style={{ letterSpacing: 1 }}>

@@ -54,6 +54,17 @@ public class OrderExecutionService {
             }
 
             @Override
+            public void contractDetails(int reqId, ContractDetails contractDetails) {
+                String ticker = requestTracker.get(reqId);
+                if (ticker != null) {
+                    int conId = contractDetails.contract().conid();
+                    tickerToUnderlyingConId.put(ticker, conId);
+                    log.info("🎯 Resolved underlying conId for {}: {}", ticker, conId);
+                    pendingMetadataRequests.remove(reqId);
+                }
+            }
+
+            @Override
             public void securityDefinitionOptionalParameter(int reqId, String exchange, int underlyingConId, String tradingClass, String multiplier, Set<String> expirations, Set<Double> strikes) {
                 String ticker = requestTracker.get(reqId);
                 if (ticker != null) {
@@ -87,7 +98,13 @@ public class OrderExecutionService {
             @Override
             public void error(int id, long timestamp, int errorCode, String errorMsg, String advancedOrderRejectJson) {
                 if (errorCode == 2104 || errorCode == 2106 || errorCode == 2158) return;
-                log.error("❌ OrderExecution IBKR Error: code={}, message={}", errorCode, errorMsg);
+                
+                String context = requestTracker.getOrDefault(id, "Request " + id);
+                log.error("❌ IBKR {} Error: code={}, message={}", context, errorCode, errorMsg);
+                
+                if (pendingMetadataRequests.contains(id)) {
+                    pendingMetadataRequests.remove(id);
+                }
             }
         };
 
@@ -134,16 +151,38 @@ public class OrderExecutionService {
             return new OptionChainResult(existingExpiry, tickerToValidStrikes.getOrDefault(ticker, Set.of()), tickerToTradingClass.get(ticker));
         }
 
+        // Step 1: Resolve underlying conId if missing
+        if (!tickerToUnderlyingConId.containsKey(ticker)) {
+            int reqId = nextOrderId.getAndIncrement();
+            requestTracker.put(reqId, ticker);
+            pendingMetadataRequests.add(reqId);
+            
+            log.info("🔍 Resolving underlying conId for {}...", ticker);
+            client.reqContractDetails(reqId, ContractFactory.createStockContract(ticker));
+            
+            long start = System.currentTimeMillis();
+            while (pendingMetadataRequests.contains(reqId) && (System.currentTimeMillis() - start) < 5000) {
+                try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            }
+        }
+
+        int underlyingId = tickerToUnderlyingConId.getOrDefault(ticker, 0);
+
+        // Step 2: Resolve option parameters
         int reqId = nextOrderId.getAndIncrement();
         requestTracker.put(reqId, ticker);
         pendingMetadataRequests.add(reqId);
 
-        log.info("🔍 Requesting option chain for {} (reqId={})", ticker, reqId);
-        client.reqSecDefOptParams(reqId, ticker, "", "STK", 0);
+        log.info("🔍 Requesting option chain for {} (reqId={}, conId={})", ticker, reqId, underlyingId);
+        client.reqSecDefOptParams(reqId, ticker, "", "STK", underlyingId);
 
         long start = System.currentTimeMillis();
         while (pendingMetadataRequests.contains(reqId) && (System.currentTimeMillis() - start) < 10000) {
             try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }
+
+        if (pendingMetadataRequests.contains(reqId)) {
+            log.warn("Timeout waiting for option chain data for {}", ticker);
         }
 
         String expiry = tickerToBestExpiration.get(ticker);
