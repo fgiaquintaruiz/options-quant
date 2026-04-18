@@ -194,3 +194,6 @@
 2026-04-17 17:00:38.893 INFO  [restartedMain] c.optionsquant.service.MarketScanner : 🔄 Market hours detected - downloading fresh candle delta in background...
 2026-04-17 17:00:38.893 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    This may take a few minutes for 512 tickers...
 2026-04-17 17:00:38.893 INFO  [restartedMain] c.optionsquant.service.MarketScanner :    App is ready; scan will complete in background.
+2026-04-17 17:15:02.004 INFO  [scheduling-1] c.optionsquant.service.MarketScanner : 
+🔍 === MARKET SCAN === 17:15:02.004365400 (Spain) ===
+2026-04-17 19:34:15.737 INFO  [ForkJoinPool.commonPool-worker-10] c.optionsquant.service.MarketScanner : ✅ Startup scan complete: 512 tickers, 1 signals in 9216841ms

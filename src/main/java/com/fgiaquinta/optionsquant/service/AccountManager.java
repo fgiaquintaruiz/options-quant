@@ -21,6 +21,7 @@ public class AccountManager {
 
     private final IbkrProperties ibkrProperties;
     private volatile double currentBalance = 0.0;
+    private volatile String currentAccountId = null;
     private final AtomicInteger activeTrades = new AtomicInteger(0);
 
     // Position size safety cap
@@ -77,6 +78,7 @@ public class AccountManager {
 
             @Override
             public void updateAccountValue(String key, String val, String currency, String accountName) {
+                if (currentAccountId == null) currentAccountId = accountName;
                 // Accept NetLiquidation in any currency (BASE, USD, etc.)
                 if ("NetLiquidation".equals(key) && val != null && !val.isEmpty()) {
                     try {
@@ -200,6 +202,7 @@ public class AccountManager {
     public void removeActiveTrade() { activeTrades.decrementAndGet(); }
     public int getActiveTradeCount() { return activeTrades.get(); }
     public double getCurrentBalance() { return currentBalance; }
+    public String getAccountId() { return currentAccountId; }
 
     @jakarta.annotation.PreDestroy
     public void disconnect() {

@@ -214,20 +214,15 @@ export default function BacktestDashboard() {
               style={{ width: 45, padding: '4px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 13, textAlign: 'center' }} />
           </div>
 
-          <div className="stat-box">
-            <span className="stat-label-sm">Scope:</span>
-            <div className="flex-align-center gap-4">
-              <button className="btn" disabled={running} onClick={() => setTickerScope('ALL')}
-                style={{ padding: '4px 6px', background: tickerScope === 'ALL' ? '#1f6feb' : '#21262d', color: '#fff', fontSize: 10, border: '1px solid #30363d' }}>All</button>
-              <button className="btn" disabled={running} onClick={() => setTickerScope('HOT')}
-                style={{ padding: '4px 6px', background: tickerScope === 'HOT' ? '#9e6a03' : '#21262d', color: '#fff', fontSize: 10, border: '1px solid #30363d' }}>Hot</button>
-            </div>
-          </div>
-
-          <div className="divider-v" />
-
-          <div className="flex-col gap-6" style={{ flex: 1, minWidth: 280 }}>
-            <TickerSelector value={tickerFilter} onChange={setTickerFilter} disabled={running} />
+          <div className="flex-col gap-6" style={{ flex: 1, minWidth: 320 }}>
+            <span className="stat-label-sm color-muted">Filter List:</span>
+            <TickerSelector
+              value={tickerFilter}
+              onChange={setTickerFilter}
+              disabled={running}
+              scope={tickerScope}
+              onScopeChange={setTickerScope}
+            />
           </div>
           
           {running && (

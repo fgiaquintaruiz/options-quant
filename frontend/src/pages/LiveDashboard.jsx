@@ -305,7 +305,13 @@ export default function LiveDashboard({ twsStatus }) {
           <div className="flex-align-center gap-15">
             <div className="stat-label-sm color-muted" style={{ whiteSpace: 'nowrap' }}>Tickers to scan</div>
             <div style={{ flex: 1 }}>
-              <TickerSelector value={tickerFilter} onChange={handleFilterChange} disabled={scanning} />
+              <TickerSelector
+                value={tickerFilter}
+                onChange={handleFilterChange}
+                disabled={scanning}
+                scope={tickerScope}
+                onScopeChange={handleScopeChange}
+              />
             </div>
           </div>
 
@@ -354,28 +360,6 @@ export default function LiveDashboard({ twsStatus }) {
                   <input type="number" min="1" max="16" value={maxConcurrent}
                     onChange={e => handleMaxConcurrentChange(e.target.value)} disabled={scanning}
                     style={{ width: 35, padding: '2px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 11, textAlign: 'center' }} />
-                </div>
-
-                <div className="flex-align-center gap-4">
-                  <span className="stat-label-sm color-muted">Universe:</span>
-                  <div className="flex-align-center gap-2">
-                    <button
-                      className="btn"
-                      disabled={scanning}
-                      onClick={() => handleScopeChange('ALL')}
-                      style={{ padding: '2px 6px', background: tickerScope === 'ALL' ? '#1f6feb' : '#21262d', color: '#fff', fontSize: 10, border: '1px solid #30363d' }}
-                    >
-                      All
-                    </button>
-                    <button
-                      className="btn"
-                      disabled={scanning}
-                      onClick={() => handleScopeChange('HOT')}
-                      style={{ padding: '2px 6px', background: tickerScope === 'HOT' ? '#9e6a03' : '#21262d', color: '#fff', fontSize: 10, border: '1px solid #30363d' }}
-                    >
-                      Hot
-                    </button>
-                  </div>
                 </div>
               </div>
             </div>
