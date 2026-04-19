@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.fgiaquinta.optionsquant.proto.orderstatus";
+option java_outer_classname = "OrderStatusProto";
+
+package orderstatus;
+
+// Order status service definition
+service OrderStatusService {
+  // Get open orders
+  rpc GetOpenOrders (OpenOrdersRequest) returns (stream Order);
+  
+  // Get status of a specific order
+  rpc GetOrderStatus (OrderStatusRequest) returns (OrderStatus);
+  
+  // Subscribe to order status updates
+  rpc SubscribeOrderUpdates (OrderSubscribeRequest) returns (stream OrderStatusUpdate);
+}
+
+// Request for getting open orders
+message OpenOrdersRequest {
+  string account_id = 1;  // Account ID to get orders for (empty for all)
+}
+
+// Request for getting status of a specific order
+message OrderStatusRequest {
+  string order_id = 1;    // Order ID to get status for
+}
+
+// Request for subscribing to order updates
+message OrderSubscribeRequest {
+  string account_id = 1;  // Account ID to subscribe to (empty for all)
+  repeated string symbols = 2;  // Symbols to filter by (empty for all)
+}
+
+// Order message
+message Order {
+  string order_id = 1;
+  string symbol = 2;
+  int32 quantity = 3;         // Positive for buy, negative for sell
+  double price = 4;           // Limit price (0 for market)
+  string status = 5;          // Pending, Filled, Cancelled, etc.
+  int64 timestamp = 6;        // Unix timestamp in milliseconds
+}
+
+// Order status message (more detailed than Order)
+message OrderStatus {
+  string order_id = 1;
+  string symbol = 2;
+  string status = 3;          // Pending, Filled, Cancelled, Rejected, etc.
+  int32 quantity = 4;         // Original quantity
+  int32 filled_quantity = 5;  // Quantity filled so far
+  double avg_price = 6;       // Average fill price
+  int64 timestamp = 7;        // Unix timestamp in milliseconds
+}
+
+// Order status update message
+message OrderStatusUpdate {
+  string order_id = 1;
+  string symbol = 2;
+  string status = 3;          // Pending, Filled, Cancelled, Rejected, etc.
+  int32 quantity = 4;         // Original quantity
+  int32 filled_quantity = 5;  // Quantity filled so far
+  double avg_price = 6;       // Average fill price
+  int64 timestamp = 7;        // Unix timestamp in milliseconds
+}

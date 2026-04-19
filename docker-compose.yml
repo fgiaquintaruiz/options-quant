@@ -1,0 +1,104 @@
+# Docker Compose for Hybrid Java+Python Trading System
+# Orchestrates: Java trading engine, Python analytics, Python UI, Redis
+
+services:
+  # ================== Redis ==================
+  redis:
+    image: redis:7-alpine
+    container_name: optionsquant-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - optionsquant-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ================== Java Trading Engine ==================
+  java-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile.java
+    container_name: options-quant-engine
+    ports:
+      - "8080:8080"     # Spring Boot REST API
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JAVA_OPTS=-Xmx2g -Xms512m -XX:+UseG1GC
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - optionsquant-network
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  # ================== Python Analytics Service ==================
+  python-analytics:
+    build:
+      context: ./python
+      dockerfile: Dockerfile.analytics
+    container_name: optionsquant-python-analytics
+    ports:
+      - "8001:8001"
+    environment:
+      - JAVA_API_HOST=java-engine
+      - JAVA_API_PORT=8080
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - API_HOST=0.0.0.0
+      - PORT=8001
+    depends_on:
+      - redis
+      - java-engine
+    networks:
+      - optionsquant-network
+    restart: unless-stopped
+
+  # ================== Python UI Service ==================
+  python-ui:
+    build:
+      context: ./python
+      dockerfile: Dockerfile.ui
+    container_name: optionsquant-python-ui
+    ports:
+      - "8501:8501"
+    environment:
+      - API_HOST=python-analytics
+      - API_PORT=8001
+    depends_on:
+      - python-analytics
+    networks:
+      - optionsquant-network
+    restart: unless-stopped
+
+networks:
+  optionsquant-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+
+# ================== Profiles ==================
+# Run with specific profiles:
+#   docker compose --profile analytics up
+#   docker compose up --profile analytics
+#
+# Individual services:
+#   docker compose up redis
+#   docker compose up java-engine
+#   docker compose --profile analytics up python-analytics python-ui
+#
+# Health check commands:
+#   curl http://localhost:8080/actuator/health    # Java
+#   curl http://localhost:8001/health        # Analytics
+#   curl http://localhost:8501/_stcore/health  # UI

@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.fgiaquinta.optionsquant.proto.marketdata";
+option java_outer_classname = "MarketDataProto";
+
+package marketdata;
+
+// Market data service definition
+service MarketDataService {
+  // Subscribe to real-time market data updates
+  rpc SubscribeMarketData (MarketDataRequest) returns (stream MarketDataUpdate);
+  
+  // Get historical market data
+  rpc GetHistoricalData (HistoricalDataRequest) returns (stream HistoricalDataBar);
+}
+
+// Request for subscribing to market data
+message MarketDataRequest {
+  repeated string symbols = 1;  // Symbols to subscribe to (empty for all)
+  int32 timeframe = 2;          // Timeframe in minutes (1, 5, 15, 60, etc.)
+}
+
+// Response containing market data update
+message MarketDataUpdate {
+  string symbol = 1;
+  int64 timestamp = 2;          // Unix timestamp in milliseconds
+  double open = 3;
+  double high = 4;
+  double low = 5;
+  double close = 6;
+  int64 volume = 7;
+}
+
+// Request for historical data
+message HistoricalDataRequest {
+  string symbol = 1;
+  int64 start_time = 2;         // Start timestamp in milliseconds
+  int64 end_time = 3;           // End timestamp in milliseconds
+  int32 timeframe = 4;          // Timeframe in minutes
+}
+
+// Historical data bar (candlestick)
+message HistoricalDataBar {
+  string symbol = 1;
+  int64 timestamp = 2;          // Unix timestamp in milliseconds
+  double open = 3;
+  double high = 4;
+  double low = 5;
+  double close = 6;
+  int64 volume = 7;
+}

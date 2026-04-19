@@ -1,0 +1,38 @@
+# Dockerfile for Python UI Service (Streamlit)
+# Build: docker build -f python/Dockerfile.ui -t optionsquant-python-ui .
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+# Note: We only need dependencies used by the UI service
+RUN pip install --no-cache-dir \
+    streamlit==1.37.0 \
+    plotly==5.22.0 \
+    pandas==2.2.0 \
+    numpy==1.26.0 \
+    httpx==0.27.0
+
+# Copy UI service code
+COPY ui_service/ ./ui_service/
+
+# Expose port
+EXPOSE 8501
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+# Streamlit configuration
+ENV STREAMLIT_SERVER_PORT=8501
+ENV STREAMLIT_SERVER_HEADLESS=true
+
+# Run the service
+CMD ["streamlit", "run", "ui_service/main.py", "--server.port=8501", "--server.address=0.0.0.0"]
