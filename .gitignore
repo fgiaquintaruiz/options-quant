@@ -52,3 +52,8 @@ config.yaml
 /.idea/
 /screenshots/
 scanner.log
+
+# Local scratch / crash dumps (do not commit)
+exploration_result.md
+tasks.md
+*.stackdump

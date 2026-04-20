@@ -51,6 +51,13 @@ function formatUsd(v) {
   return Number.isFinite(n) ? n.toLocaleString() : '—'
 }
 
+/** Backtest engine pool size (1–16), persisted under bt_maxConcurrent */
+function normalizeBtMaxConcurrent(v) {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return 4
+  return Math.min(16, Math.max(1, Math.round(n)))
+}
+
 /** POST /backtest-ui/run returns winRate, totalPnl; UI historically used winRatePct, netPnl */
 function normalizeBacktestReportPayload(data) {
   if (!data || data.success === false) return data
@@ -80,7 +87,7 @@ export default function BacktestDashboard() {
   const [logs, setLogs] = useState([])
   const [activities, setActivities] = useState([])
   const [elapsed, setElapsed] = useState(0)
-  const [maxConcurrent, setMaxConcurrent] = useState(4)
+  const [maxConcurrent, setMaxConcurrent] = useState(() => normalizeBtMaxConcurrent(LS.get('bt_maxConcurrent', 4)))
 
   // User settings
   const [tickerFilter, setTickerFilter] = useState(() => LS.get('bt_tickerFilter', ''))
@@ -153,11 +160,16 @@ export default function BacktestDashboard() {
     return () => clearInterval(interval)
   }, [running])
 
+  /** Persist pool size in the browser and align JVM once on load (old GET overwrote LS with server default). */
   useEffect(() => {
-    backtestApi.getMaxConcurrent().then(d => {
-      if (d.maxConcurrentScans) setMaxConcurrent(d.maxConcurrentScans)
-    }).catch(() => {})
+    const n = normalizeBtMaxConcurrent(LS.get('bt_maxConcurrent', 4))
+    setMaxConcurrent(n)
+    backtestApi.setMaxConcurrent(n).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    LS.set('bt_maxConcurrent', maxConcurrent)
+  }, [maxConcurrent])
 
   useEffect(() => { LS.set('bt_params', startParams) }, [startParams])
   useEffect(() => { LS.set('bt_tickerScope', tickerScope) }, [tickerScope])
