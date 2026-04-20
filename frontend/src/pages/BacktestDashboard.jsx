@@ -51,11 +51,20 @@ function formatUsd(v) {
   return Number.isFinite(n) ? n.toLocaleString() : '—'
 }
 
+/** Java sends ratios in 0–1 (e.g. 0.052 = 5.2%); values already in percent stay as-is if |v|>1 */
 function formatSignedPct(v) {
   const n = Number(v)
   if (!Number.isFinite(n)) return '—'
-  const sign = n > 0 ? '+' : ''
-  return `${sign}${n.toFixed(2)}%`
+  const pct = Math.abs(n) <= 1 ? n * 100 : n
+  const sign = pct > 0 ? '+' : ''
+  return `${sign}${pct.toFixed(2)}%`
+}
+
+function formatDrawdownPctPeak(v) {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return '—'
+  const pct = Math.abs(n) <= 1 ? n * 100 : n
+  return `${pct.toFixed(2)}%`
 }
 
 /** Backtest engine pool size (1–16), persisted under bt_maxConcurrent */
@@ -489,10 +498,7 @@ export default function BacktestDashboard() {
             <div className="flex-between flex-wrap gap-8" style={{ alignItems: 'baseline' }}>
               <h3 className="m-0" style={{ fontSize: 16 }}>Backtest results</h3>
             </div>
-            <p className="text-xs color-muted" style={{ marginTop: 6, lineHeight: 1.35, maxWidth: 900 }}>
-              Last simulated run in USD (toolbar capital &amp; risk). Hover a metric for a short definition.
-            </p>
-            <p className="text-xs color-muted" style={{ marginTop: 4, lineHeight: 1.35 }}>
+            <p className="text-xs color-muted" style={{ marginTop: 6, lineHeight: 1.35 }}>
               <strong>{report.tickerScope ?? '—'}</strong>
               {report.tickerCount != null && <> · {report.tickerCount} tickers</>}
               {tickerFilter ? <> · filter {tickerFilter}</> : null}
@@ -553,7 +559,7 @@ export default function BacktestDashboard() {
                 label="Max drawdown"
                 value={
                   report.maxDrawdownPct != null
-                    ? `$${formatUsd(report.maxDrawdown)} (${Number(report.maxDrawdownPct).toFixed(2)}% peak)`
+                    ? `$${formatUsd(report.maxDrawdown)} (${formatDrawdownPctPeak(report.maxDrawdownPct)} vs peak)`
                     : `$${formatUsd(report.maxDrawdown)}`
                 }
                 hint="Largest drop from a running equity high to a later low (worst streak)."

@@ -21,6 +21,7 @@ import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -214,14 +215,12 @@ public class BacktestEngine {
         // ============================================================
         final Set<String> alreadyProcessed = new LinkedHashSet<>();
         List<TradeRecord> resumedTrades = new ArrayList<>();
-        List<BacktestReport.EquityPoint> resumedEquity = new ArrayList<>();
         Map<String, TickerResult> resumedResults = new LinkedHashMap<>();
 
         if (resumeFromCheckpoint && hasCheckpoint()) {
             alreadyProcessed.addAll(loadCheckpoint());
             // Load existing trades from CSV for already-processed tickers
             resumedTrades = loadTradesForTickers(alreadyProcessed);
-            resumedEquity = loadEquityCurve();
             log.info("📊 Resume mode: {} tickers already processed, {} trades loaded from CSV",
                     alreadyProcessed.size(), resumedTrades.size());
         }
@@ -233,7 +232,7 @@ public class BacktestEngine {
 
         if (remainingTickers.isEmpty() && !alreadyProcessed.isEmpty()) {
             log.info("✅ All tickers already processed! Loading full results from checkpoint...");
-            return buildReportFromResumedData(config, resumedTrades, resumedEquity, startTime);
+            return buildReportFromResumedData(config, resumedTrades, startTime);
         }
 
         log.info("🔄 Processing {} new tickers ({} already done)", remainingTickers.size(), alreadyProcessed.size());
@@ -403,16 +402,8 @@ public class BacktestEngine {
                 .sorted(Comparator.comparing(TradeRecord::entryTime))
                 .toList();
 
-        // Merge equity curves
-        List<BacktestReport.EquityPoint> newEquity = tickerResults.values().stream()
-                .flatMap(r -> r.equityCurve.stream())
-                .toList();
-        List<BacktestReport.EquityPoint> combinedEquity = new ArrayList<>();
-        combinedEquity.addAll(resumedEquity);
-        combinedEquity.addAll(newEquity);
-        combinedEquity = combinedEquity.stream()
-                .sorted(Comparator.comparing(p -> p.timestamp()))
-                .toList();
+        // Portfolio equity curve: cumulative PnL by trade exit time (per-ticker curves are not additive)
+        List<BacktestReport.EquityPoint> portfolioEquity = buildPortfolioEquityCurve(config, allTrades);
 
         // Single-pass statistics computation
         double totalPnl = 0, totalProfit = 0, totalLoss = 0, sharpeSum = 0, sharpeSqSum = 0;
@@ -465,10 +456,10 @@ public class BacktestEngine {
         double n = allTrades.size();
         double sharpe = n < 2 ? 0 : (sharpeSum / n) / Math.sqrt((sharpeSqSum / n) - (sharpeSum / n) * (sharpeSum / n) + 1e-10) * Math.sqrt(252);
 
-        // Max drawdown from equity curve
+        // Max drawdown from portfolio equity curve
         double maxDrawdown = 0, maxDrawdownPct = 0;
         double peak = config.initialCapital();
-        for (BacktestReport.EquityPoint p : combinedEquity) {
+        for (BacktestReport.EquityPoint p : portfolioEquity) {
             if (p.equity() > peak) peak = p.equity();
             double dd = peak - p.equity();
             if (dd > maxDrawdown) { maxDrawdown = dd; maxDrawdownPct = dd / peak; }
@@ -501,11 +492,11 @@ public class BacktestEngine {
                 totalPnl / config.initialCapital(),
                 allTrades.size(), wins, losses, winRate, profitFactor,
                 maxDrawdown, maxDrawdownPct, sharpe, avgWin, avgLoss, avgDuration,
-                byStrategy, byTicker, combinedEquity, allTrades, elapsed);
+                byStrategy, byTicker, portfolioEquity, allTrades, elapsed);
 
         // Write summary and equity CSV
         writeSummaryReport(report);
-        writeEquityCsv(combinedEquity);
+        writeEquityCsv(portfolioEquity);
 
         // Clear checkpoint on successful completion
         clearCheckpoint();
@@ -726,11 +717,45 @@ public class BacktestEngine {
     }
 
     /**
+     * Single portfolio equity series: start at initial capital, add each trade's net PnL at exit time (chronological by exit).
+     * Matches {@code initialCapital + sum(netPnl)} at the last point so KPIs and chart align.
+     */
+    private List<BacktestReport.EquityPoint> buildPortfolioEquityCurve(BacktestConfig config, List<TradeRecord> allTrades) {
+        LocalDate from = config.fromDate();
+        LocalDate to = config.toDate();
+        ZonedDateTime startTs = from.atStartOfDay(NY);
+        double initial = config.initialCapital();
+        List<BacktestReport.EquityPoint> curve = new ArrayList<>();
+
+        if (allTrades.isEmpty()) {
+            curve.add(new BacktestReport.EquityPoint(startTs, initial));
+            ZonedDateTime endTs = to.atStartOfDay(NY);
+            if (!startTs.equals(endTs)) {
+                curve.add(new BacktestReport.EquityPoint(endTs, initial));
+            }
+            return curve;
+        }
+
+        List<TradeRecord> byExit = allTrades.stream()
+                .sorted(Comparator.comparing(TradeRecord::exitTime))
+                .toList();
+
+        curve.add(new BacktestReport.EquityPoint(startTs, initial));
+        double eq = initial;
+        for (TradeRecord t : byExit) {
+            eq += t.netPnl();
+            curve.add(new BacktestReport.EquityPoint(t.exitTime(), eq));
+        }
+        return curve;
+    }
+
+    /**
      * Builds a BacktestReport entirely from resumed data (when all tickers already processed).
      */
     private BacktestReport buildReportFromResumedData(BacktestConfig config,
-            List<TradeRecord> allTrades, List<BacktestReport.EquityPoint> equityCurve, long startTime) {
+            List<TradeRecord> allTrades, long startTime) {
         long elapsed = System.currentTimeMillis() - startTime;
+        List<BacktestReport.EquityPoint> equityCurve = buildPortfolioEquityCurve(config, allTrades);
 
         // Single-pass statistics computation
         double localTotalPnl = 0, localTotalProfit = 0, localTotalLoss = 0, localSharpeSum = 0, localSharpeSqSum = 0;

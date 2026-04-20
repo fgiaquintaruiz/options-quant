@@ -133,10 +133,18 @@ export default function UnifiedDataGrid({ data = [] }) {
 
   return (
     <div className="flex-col w-full">
-      <div className="table-wrap" style={{ border: '1px solid #30363d', borderRadius: 8, overflow: 'hidden' }}>
-        <table className="w-full">
-          <thead>
-            <tr className="bg-card">
+      <div
+        className="table-wrap"
+        style={{
+          border: '1px solid #30363d',
+          borderRadius: 8,
+          overflow: 'auto',
+          maxHeight: 'min(52vh, 480px)',
+        }}
+      >
+        <table className="w-full" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+          <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#161b22' }}>
+            <tr style={{ boxShadow: '0 1px 0 #21262d' }}>
               <th style={th}>Ticker</th>
               <th style={th}>Strategy</th>
               <th style={th}>Entry</th>
