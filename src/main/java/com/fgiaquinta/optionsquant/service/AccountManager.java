@@ -59,7 +59,8 @@ public class AccountManager {
             disconnect();
         }
 
-        log.info("Connecting AccountManager to IBKR at {}:{}", ibkrProperties.host(), ibkrProperties.port());
+        int clientId = ibkrProperties.accountManagerClientId();
+        log.info("Connecting AccountManager to IBKR at {}:{} (clientId={})", ibkrProperties.host(), ibkrProperties.port(), clientId);
         this.signal = new EJavaSignal();
 
         EWrapper wrapper = new DefaultEWrapper() {
@@ -103,7 +104,7 @@ public class AccountManager {
 
         EClientSocket newClient = new EClientSocket(wrapper, signal);
         clientRef.set(newClient);
-        newClient.eConnect(ibkrProperties.host(), ibkrProperties.port(), 999);
+        newClient.eConnect(ibkrProperties.host(), ibkrProperties.port(), clientId);
 
         if (!newClient.isConnected()) {
             log.warn("Failed to connect AccountManager to TWS (TWS may not be running)");

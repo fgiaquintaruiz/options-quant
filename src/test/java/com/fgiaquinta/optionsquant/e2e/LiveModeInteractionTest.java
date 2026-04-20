@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Tests for Live Mode user interactions - scanning, stopping, toggles.
  */
+@Tag("e2e")
 @DisplayName("Live Mode Interaction Tests")
 class LiveModeInteractionTest extends BasePlaywrightTest {
 

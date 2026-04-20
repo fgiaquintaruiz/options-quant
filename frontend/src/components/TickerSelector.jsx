@@ -16,6 +16,7 @@ const DEFAULT_GROUPS = [
 export default function TickerSelector({ value, onChange, disabled, scope, onScopeChange }) {
   const [isOpen, setIsOpen] = useState(false)
   const [inputValue, setInputValue] = useState('')
+  const [highlightedIdx, setHighlightedIdx] = useState(-1)
   const [groups, setGroups] = useState(() => LS.get('ticker_groups', DEFAULT_GROUPS))
   const dropdownRef = useRef(null)
 
@@ -54,13 +55,31 @@ export default function TickerSelector({ value, onChange, disabled, scope, onSco
   }
 
   const handleAddTicker = (e) => {
-    if (e.key === 'Enter' || e.key === ',') {
+    if (e.key === 'Enter') {
+      if (isOpen && highlightedIdx >= 0 && highlightedIdx < groups.length) {
+        e.preventDefault()
+        handleGroupSelect(groups[highlightedIdx].tickers)
+        return
+      }
       e.preventDefault()
       const newTicker = inputValue.trim().toUpperCase().replace(/[^A-Z0-9 .]/g, '')
       if (newTicker && !tickers.includes(newTicker)) {
         onChange(value ? `${value},${newTicker}` : newTicker)
       }
       setInputValue('')
+    } else if (e.key === ',') {
+      e.preventDefault()
+      const newTicker = inputValue.trim().toUpperCase().replace(/[^A-Z0-9 .]/g, '')
+      if (newTicker && !tickers.includes(newTicker)) {
+        onChange(value ? `${value},${newTicker}` : newTicker)
+      }
+      setInputValue('')
+    } else if (e.key === 'ArrowDown' && isOpen) {
+      e.preventDefault()
+      setHighlightedIdx(prev => (prev < groups.length - 1 ? prev + 1 : 0))
+    } else if (e.key === 'ArrowUp' && isOpen) {
+      e.preventDefault()
+      setHighlightedIdx(prev => (prev > 0 ? prev - 1 : groups.length - 1))
     }
   }
 

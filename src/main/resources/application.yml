@@ -48,6 +48,10 @@ logging:
 ibkr:
   host: 127.0.0.1
   port: 7497 #live is 7496
+  # Each value MUST be unique in TWS → Configure → API → Settings (see "Trusted IPs" and client id collisions).
+  data-client-id: 1      # IbkrService (historical / market data requests)
+  orders-client-id: 3   # OrderExecutionService (orders + option chain) — was 2; change if another app uses 3
+  account-client-id: 999 # AccountManager (balance / portfolio)
   sync-timeout: 30
   auto-execute: true
   account-id: "DUN598126"
@@ -90,9 +94,23 @@ ollama:
   url: http://localhost:11434
   model: qwen2.5:7b
 
+# Live strategy scan: AUTO leaves CPU headroom for IDE/OS; HYBRID orders non-hot tickers by fundamentals + ticker memory
+scanner:
+  concurrent-mode: AUTO
+  fixed-max-concurrent: 4
+  auto-reserve-logical-cpus: 4
+  auto-min-concurrent: 1
+  auto-max-concurrent-cap: 6
+  prioritization-mode: HYBRID
+  hybrid-fundamental-weight: 0.65
+  hybrid-memory-weight: 0.35
+
 backtest:
   default-max-concurrent-scans: 4
   generate-trade-charts: true
+  # Delay after each scheduled backtest completes (ms). Only applies when auto-run is enabled in the UI.
+  scheduler:
+    fixed-delay-ms: 3600000
 
 # Backtest CLI Configuration
 backtest-cli:

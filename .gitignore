@@ -38,6 +38,10 @@ bin/
 ### Mac OS ###
 .DS_Store
 
+# Python
+__pycache__/
+*.py[cod]
+
 # Trading Data & Logs
 data/*
 logs/*
@@ -46,3 +50,5 @@ backtest/*
 # Sensitive Config
 config.yaml
 /.idea/
+/screenshots/
+scanner.log

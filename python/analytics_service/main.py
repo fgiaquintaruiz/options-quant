@@ -35,7 +35,8 @@ logger = logging.getLogger(__name__)
 # ================== Configuration ==================
 
 JAVA_API_HOST = os.getenv('JAVA_API_HOST', 'localhost')
-JAVA_API_PORT = os.getenv('JAVA_API_PORT', '8080')
+# Default 9090 = local Spring Boot (application.yml). Docker-compose sets JAVA_API_PORT=8080.
+JAVA_API_PORT = os.getenv('JAVA_API_PORT', '9090')
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
 REDIS_PORT = os.getenv('REDIS_PORT', '6379')
 
@@ -83,7 +84,7 @@ class HealthResponse(BaseModel):
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup/shutdown."""
     logger.info("Starting Analytics Service...")
-    logger.info(f"GRPC Host: {GRPC_HOST}:{GRPC_PORT}")
+    logger.info(f"Java REST API: {JAVA_API_HOST}:{JAVA_API_PORT}")
     logger.info(f"Redis: {REDIS_HOST}:{REDIS_PORT}")
     logger.info("Analytics Service started")
     yield

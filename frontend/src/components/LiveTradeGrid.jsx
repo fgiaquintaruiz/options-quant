@@ -94,10 +94,10 @@ export default function LiveTradeGrid({ trades = [], scanActivity = [], scanning
   const thSm = { ...th, padding: '8px 12px' }
 
   return (
-    <div className="flex-col gap-20">
+    <div className="flex-col gap-20" data-testid="live-trade-grid-root">
       
       {/* ── Active Trades Grid ── */}
-      <div className="card">
+      <div className="card" data-testid="live-signals-grid">
         <div className="flex-between mb-12">
           <h3 className="m-0 flex-align-center gap-8">
             <Activity size={18} className="color-info" /> 
@@ -192,7 +192,7 @@ export default function LiveTradeGrid({ trades = [], scanActivity = [], scanning
                           ) : (
                             <div className="flex-row gap-4">
                               <button
-                                onClick={() => onCloseTrade && onCloseTrade(row.ticker, row.ep)}
+                                onClick={() => onCloseTrade && onCloseTrade(row.ticker, row.ep, false, row.tpOrderId, row.slOrderId)}
                                 className="btn text-xs"
                                 style={{ padding: '3px 10px', background: '#f8514922', border: '1px solid #f8514966', color: '#f85149' }}
                               >

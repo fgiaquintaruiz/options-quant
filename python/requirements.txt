@@ -1,5 +1,7 @@
 # Python Analytics Service Dependencies
 # Python 3.11+ required
+#
+# Windows: si "pip" o "python" no se reconocen, usá el launcher:  py -m pip install -r requirements.txt --pre
 
 # Web Framework
 fastapi>=0.115.0
@@ -10,8 +12,8 @@ pandas>=2.2.0
 numpy>=1.26.0
 scipy>=1.13.0
 
-# Technical Analysis
-ta-lib-python>=0.4.28  # Or pandas-ta if TA-Lib not available
+# Technical Analysis (optional; PyPI publishes pre-release builds — pin what pip can resolve)
+pandas-ta>=0.4.67b0
 
 # Visualization
 streamlit>=1.37.0
@@ -20,8 +22,8 @@ plotly>=5.22.0
 # Redis
 redis>=5.0.0
 
-# HTTP Client
-httpx>=0.27.0
+# HTTP Client (upper bound: evita resolver a httpx 1.x pre-release y conflictos con openai/anthropic)
+httpx>=0.27.0,<1
 
 # Machine Learning (optional)
 scikit-learn>=1.5.0

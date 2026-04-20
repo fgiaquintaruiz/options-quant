@@ -3,10 +3,14 @@ plugins {
     jacoco
     alias(libs.plugins.spring.boot)
     alias(libs.plugins.owasp.dependency.check)
+    id("com.google.protobuf") version "0.9.4" apply false
 }
 
 group = "com.fgiaquinta.optionsquant"
 version = "2.0.0-SNAPSHOT"
+
+// Note: Protobuf code generation is handled separately via protoc command line
+// The proto files are in src/main/proto/ and can be compiled manually if needed
 
 java {
     toolchain {
@@ -32,6 +36,12 @@ dependencies {
     implementation(files("libs/TwsApi.jar"))
     // TwsApi depends on protobuf
     implementation("com.google.protobuf:protobuf-java:4.34.1")
+    // gRPC dependencies
+    implementation("io.grpc:grpc-netty-shaded:1.59.0")
+    implementation("io.grpc:grpc-protobuf:1.59.0")
+    implementation("io.grpc:grpc-stub:1.59.0")
+    // Protobuf code generation
+    implementation("com.google.protobuf:protobuf-java-util:4.34.1")
 
     // Guava (for RateLimiter)
     implementation("com.google.guava:guava:33.4.8-jre")
@@ -58,8 +68,42 @@ dependencies {
     testImplementation(libs.playwright)
 }
 
-tasks.withType<Test> {
-    useJUnitPlatform()
+tasks.test {
+    useJUnitPlatform {
+        // slow: full backtest HTTP; e2e: Playwright + Spring (update UI assertions in e2eTest)
+        excludeTags("slow", "e2e")
+    }
+    testLogging {
+        events("passed", "skipped", "failed")
+        showStandardStreams = true
+    }
+}
+
+/** Full backtest / heavy HTTP tests tagged with @Tag("slow"). Run: ./gradlew slowTest */
+tasks.register<Test>("slowTest") {
+    group = "verification"
+    description = "Runs JUnit tests tagged @Tag(\"slow\") (e.g. full parallel backtest)"
+    testClassesDirs = tasks.test.get().testClassesDirs
+    classpath = tasks.test.get().classpath
+    useJUnitPlatform {
+        includeTags("slow")
+    }
+    testLogging {
+        events("passed", "skipped", "failed")
+        showStandardStreams = true
+    }
+}
+
+/** Playwright + Spring boot tests (excludes @Tag(\"slow\") full backtest). Run: ./gradlew buildFrontend e2eTest */
+tasks.register<Test>("e2eTest") {
+    group = "verification"
+    description = "JUnit @Tag(\"e2e\") only; excludes @Tag(\"slow\"). For HTTP backtest stress use: ./gradlew slowTest"
+    testClassesDirs = tasks.test.get().testClassesDirs
+    classpath = tasks.test.get().classpath
+    useJUnitPlatform {
+        includeTags("e2e")
+        excludeTags("slow")
+    }
     testLogging {
         events("passed", "skipped", "failed")
         showStandardStreams = true
@@ -111,6 +155,47 @@ tasks.bootJar {
 // NOTE: To run separately during development:
 // 1. Backend: ./gradlew bootRun
 // 2. Frontend: cd frontend && npm run dev
+//
+// Full stack (Spring + React estático + FastAPI analytics + Streamlit, Windows):
+//   ./gradlew startFullStack
+// o: start-full-stack.bat  |  .\scripts\start-full-stack.ps1
+
+tasks.register("startFullStack") {
+    group = "application"
+    description =
+        "Builds frontend, then opens 3 terminals: Spring Boot :9090, Python analytics :8001, Streamlit :8501 (Windows PowerShell)."
+    dependsOn(buildFrontend)
+    doLast {
+        val script = file("scripts/start-full-stack.ps1")
+        if (!System.getProperty("os.name").lowercase().contains("win")) {
+            throw GradleException(
+                "startFullStack solo abre ventanas en Windows. En Linux/macOS ejecutá manualmente: " +
+                    "./gradlew bootRun; luego en python/ uvicorn y streamlit (ver comentarios en scripts/start-full-stack.ps1)."
+            )
+        }
+        if (!script.isFile) {
+            throw GradleException("No se encontró ${script.absolutePath}")
+        }
+        val exit = ProcessBuilder(
+            listOf(
+                "powershell",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                script.absolutePath,
+                "-SkipFrontendBuild"
+            )
+        )
+            .directory(project.rootDir)
+            .inheritIO()
+            .start()
+            .waitFor()
+        if (exit != 0) {
+            throw GradleException("start-full-stack.ps1 terminó con código $exit")
+        }
+    }
+}
 
 dependencyCheck {
     failBuildOnCVSS = 7.0f

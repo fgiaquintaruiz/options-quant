@@ -92,4 +92,21 @@ public class OrderFactory {
 
         return o;
     }
+
+    /**
+     * Creates a simple market order.
+     *
+     * @param orderId The order ID
+     * @param action "BUY" or "SELL"
+     * @param qty Number of contracts
+     * @return A market order
+     */
+    public static Order createMarketOrder(int orderId, String action, int qty) {
+        Order o = new Order();
+        o.orderId(orderId);
+        o.action(action);
+        o.orderType("MKT");
+        o.totalQuantity(Decimal.get(qty));
+        return o;
+    }
 }

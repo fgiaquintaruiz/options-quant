@@ -75,13 +75,13 @@ class RiskCalculatorTest {
     }
 
     @Test
-    @DisplayName("generatePlan should cap TP distance at 0.9% of entry")
+    @DisplayName("generatePlan should cap TP distance at MAX_TARGET_PCT of entry")
     void tpCap() {
-        // Use very volatile data to trigger the cap
+        // Deterministic extreme swings → high ATR so raw TP would exceed cap
         List<Candle> volatileHour = new ArrayList<>();
         ZonedDateTime base = ZonedDateTime.of(2026, 4, 9, 9, 30, 0, 0, NY);
         for (int i = 0; i < 30; i++) {
-            double swing = 10.0 + Math.random() * 5; // huge swings
+            double swing = 10.0 + (i % 5) * 2.0;
             double open = 500.0 + swing;
             double close = 500.0 - swing;
             volatileHour.add(new Candle(base.plusHours(i), open, open + 2, close - 2, close, 1000000));
@@ -97,7 +97,8 @@ class RiskCalculatorTest {
         StrategyData sd = new StrategyData(data);
         TradePlan plan = RiskCalculator.generatePlan(sd, "SPY", base, true, 500.0);
 
-        // TP should be capped at 0.9% = 4.5
-        assertThat(plan.takeProfit - plan.entryPrice).isLessThanOrEqualTo(4.55);
+        // Must match RiskCalculator.MAX_TARGET_PCT (currently 1.5% → $7.50 on $500 entry)
+        double maxTpDist = 500.0 * 0.015;
+        assertThat(plan.takeProfit - plan.entryPrice).isLessThanOrEqualTo(maxTpDist + 0.05);
     }
 }

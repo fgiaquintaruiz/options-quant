@@ -490,6 +490,36 @@ ibkr:
   tickers: []                  # Legacy - ver data/tickers.csv
 ```
 
+### Escaneo en vivo (`scanner`)
+
+Controla cuántos tickers se analizan en paralelo durante el escaneo de estrategias en vivo y en qué orden se recorren los símbolos que no son “hot”. Los valores viven bajo el prefijo `scanner` en `application.yml`.
+
+```yaml
+scanner:
+  concurrent-mode: AUTO              # AUTO | FIXED
+  fixed-max-concurrent: 4            # Usado solo si concurrent-mode: FIXED
+  auto-reserve-logical-cpus: 4       # CPUs lógicos a dejar libres (IDE, SO, etc.)
+  auto-min-concurrent: 1             # Piso de paralelismo en AUTO
+  auto-max-concurrent-cap: 6         # Techo de paralelismo en AUTO
+  prioritization-mode: HYBRID        # HYBRID | NATURAL
+  hybrid-fundamental-weight: 0.65    # Peso relativo (se normaliza con memory)
+  hybrid-memory-weight: 0.35
+```
+
+**Paralelismo**
+
+- **FIXED:** usa siempre `fixed-max-concurrent` workers concurrentes.
+- **AUTO:** calcula un máximo según `Runtime.getRuntime().availableProcessors()`:  
+  `effective = min(auto-max-concurrent-cap, max(auto-min-concurrent, availableProcessors - auto-reserve-logical-cpus))`.  
+  Así se limita la carga en portátiles y se reserva capacidad para el entorno.
+
+**Orden de tickers (después de la lista hot y `ibkr.hot-tickers`)**
+
+- **NATURAL:** se respeta el orden en que vienen del CSV / configuración.
+- **HYBRID:** primero el tier de prioridad (top fundamentos del `NewsFilterService`, típicamente hasta ~10 símbolos), luego el resto. Dentro de cada grupo se ordena por una puntuación híbrida: pesos normalizados de `hybrid-fundamental-weight` × score de fundamentos (CSV) más `hybrid-memory-weight` × score aprendido en `TickerMemory`. Si ambos pesos son ≤ 0 en configuración, el código aplica valores por defecto (0.65 / 0.35).
+
+**Observabilidad:** la respuesta de `GET /live-ui/status` incluye `scannerConcurrentMode`, `scannerPrioritizationMode`, `scannerHybridFundamentalWeight`, `scannerHybridMemoryWeight`, además de `maxConcurrentScans` y contadores de progreso del escaneo.
+
 ### Gestión de Riesgo Automática
 
 **Fórmula de Posición:**

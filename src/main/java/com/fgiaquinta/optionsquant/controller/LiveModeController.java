@@ -1,6 +1,7 @@
 package com.fgiaquinta.optionsquant.controller;
 
 import com.fgiaquinta.optionsquant.config.IbkrProperties;
+import com.fgiaquinta.optionsquant.config.ScannerProperties;
 import com.fgiaquinta.optionsquant.service.*;
 import com.fgiaquinta.optionsquant.service.StrategyScannerService.ScanResult;
 import com.fgiaquinta.optionsquant.service.StrategyScannerService.Signal;
@@ -35,6 +36,7 @@ public class LiveModeController {
     private final OrderExecutionService orderExecutionService;
     private final MarketCalendarService marketCalendarService;
     private final com.fgiaquinta.optionsquant.service.MarketScanner marketScanner;
+    private final ScannerProperties scannerProperties;
 
     // Live scanning state
     private final AtomicBoolean isScanning = new AtomicBoolean(false);
@@ -70,7 +72,7 @@ public class LiveModeController {
 
     public record ScanActivity(String time, String ticker, String status, String detail, String scanStarted, String scanEnded, String duration) {}
     public record ClosedTradeInfo(String ticker, double closePrice, String closeTime, String exitReason) {}
-    public record ExecutedTradeInfo(String ticker, String executeTime, boolean success, String message, Integer orderId) {}
+    public record ExecutedTradeInfo(String ticker, String executeTime, boolean success, String message, Integer orderId, Integer tpOrderId, Integer slOrderId) {}
 
     public LiveModeController(StrategyScannerService scannerService,
                               IbkrProperties ibkrProperties,
@@ -80,7 +82,8 @@ public class LiveModeController {
                               IbkrService ibkrService,
                               OrderExecutionService orderExecutionService,
                               MarketCalendarService marketCalendarService,
-                              @Lazy com.fgiaquinta.optionsquant.service.MarketScanner marketScanner) {
+                              @Lazy com.fgiaquinta.optionsquant.service.MarketScanner marketScanner,
+                              ScannerProperties scannerProperties) {
         this.scannerService = scannerService;
         this.ibkrProperties = ibkrProperties;
         this.tradingService = tradingService;
@@ -90,6 +93,7 @@ public class LiveModeController {
         this.orderExecutionService = orderExecutionService;
         this.marketCalendarService = marketCalendarService;
         this.marketScanner = marketScanner;
+        this.scannerProperties = scannerProperties;
         
         // Initialize runtime-overridable settings from config
         this.runtimeAutoExecute = ibkrProperties.autoExecute();
@@ -174,6 +178,10 @@ public class LiveModeController {
 
         // Add max concurrent scans setting
         status.put("maxConcurrentScans", scannerService.getMaxConcurrentScans());
+        status.put("scannerConcurrentMode", scannerProperties.concurrentMode().name());
+        status.put("scannerPrioritizationMode", scannerProperties.prioritizationMode().name());
+        status.put("scannerHybridFundamentalWeight", scannerProperties.hybridFundamentalWeight());
+        status.put("scannerHybridMemoryWeight", scannerProperties.hybridMemoryWeight());
 
         // Add scanner progress info
         status.put("scannerScanned", scannerService.getScannedCount());
@@ -332,7 +340,7 @@ public class LiveModeController {
                                 OrderExecutionService.OrderResult orderResult = tradingService.executeManualTrade(signal.ticker(), signal.strategy(), signal.direction(), signal.currentPrice());
                                 boolean ok = orderResult != null;
                                 String exTime = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
-                                executedTrades.put(signal.ticker(), new ExecutedTradeInfo(signal.ticker(), exTime, ok, ok ? "Auto-executed" : "Failed", ok ? orderResult.parentId() : null));
+                                executedTrades.put(signal.ticker(), new ExecutedTradeInfo(signal.ticker(), exTime, ok, ok ? "Auto-executed" : "Failed", ok ? orderResult.parentId() : null, ok ? orderResult.tpOrderId() : null, ok ? orderResult.slOrderId() : null));
                                 log.info("Auto-executed mock signal {} {}: {}", signal.ticker(), signal.direction(), ok ? "OK (orderId=" + orderResult.parentId() + ")" : "FAILED");
                             } catch (Exception ex) {
                                 log.error("Auto-execute failed for {}: {}", signal.ticker(), ex.getMessage());
@@ -531,7 +539,7 @@ public class LiveModeController {
                 OrderExecutionService.OrderResult orderResult = tradingService.executeManualTrade(ticker, strat, dir, price);
                 boolean ok = orderResult != null;
                 String exTime = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
-                executedTrades.put(ticker, new ExecutedTradeInfo(ticker, exTime, ok, ok ? "Auto-executed" : "Failed", ok ? orderResult.parentId() : null));
+                executedTrades.put(ticker, new ExecutedTradeInfo(ticker, exTime, ok, ok ? "Auto-executed" : "Failed", ok ? orderResult.parentId() : null, ok ? orderResult.tpOrderId() : null, ok ? orderResult.slOrderId() : null));
                 autoExec = ok;
                 log.info("Auto-executed injected signal {} {}: {}", ticker, dir, ok ? "OK (orderId=" + orderResult.parentId() + ")" : "FAILED");
             } catch (Exception e) {
@@ -599,10 +607,10 @@ public class LiveModeController {
             String exTime = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
             
             if (ok) {
-                executedTrades.put(ticker, new ExecutedTradeInfo(ticker, exTime, true, "Executed", orderResult.parentId()));
+                executedTrades.put(ticker, new ExecutedTradeInfo(ticker, exTime, true, "Executed", orderResult.parentId(), orderResult.tpOrderId(), orderResult.slOrderId()));
                 log.info("✅ Manual trade sent to TWS: {} {} @ ${} | orderId={}", ticker, direction, price, orderResult.parentId());
             } else {
-                executedTrades.put(ticker, new ExecutedTradeInfo(ticker, exTime, false, "Failed", null));
+                executedTrades.put(ticker, new ExecutedTradeInfo(ticker, exTime, false, "Failed", null, null, null));
                 log.error("❌ Manual trade failed: No order ID returned from execution service.");
             }
             
@@ -624,7 +632,46 @@ public class LiveModeController {
     @PostMapping("/close-trade")
     public ResponseEntity<Map<String, Object>> closeTrade(
             @RequestParam String ticker,
-            @RequestParam double price) {
+            @RequestParam double price,
+            @RequestParam(required = false) Integer tpOrderId,
+            @RequestParam(required = false) Integer slOrderId) {
+        
+        log.info("Close trade requested for {} @ {} | tpId={}, slId={}", ticker, price, tpOrderId, slOrderId);
+        
+        // If we have TP/SL order IDs, cancel them to trigger OCA group cancellation
+        // This effectively closes the position since both conditional orders are cancelled
+        if (tpOrderId != null || slOrderId != null) {
+            try {
+                orderExecutionService.connect(); // Ensure connected
+                
+                if (tpOrderId != null) {
+                    orderExecutionService.cancelOrder(tpOrderId);
+                    log.info("Cancelled TP order: {}", tpOrderId);
+                }
+                if (slOrderId != null) {
+                    orderExecutionService.cancelOrder(slOrderId);
+                    log.info("Cancelled SL order: {}", slOrderId);
+                }
+                
+                // Mark as closed in our local state
+                String closeTime = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+                closedTrades.put(ticker, new ClosedTradeInfo(ticker, price, closeTime, "CONDITIONAL_CANCEL"));
+                
+                Map<String, Object> result = new LinkedHashMap<>();
+                result.put("success", true);
+                result.put("ticker", ticker);
+                result.put("closePrice", price);
+                result.put("closeTime", closeTime);
+                result.put("message", "TP/SL orders cancelled - position closed");
+                return ResponseEntity.ok(result);
+                
+            } catch (Exception e) {
+                log.error("Failed to cancel TP/SL orders for {}: {}", ticker, e.getMessage());
+                // Fall through to simple close
+            }
+        }
+        
+        // Fallback: simple local close (original behavior)
         String closeTime = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
         closedTrades.put(ticker, new ClosedTradeInfo(ticker, price, closeTime, "MANUAL_CLOSE"));
         log.info("Manual close requested for {} at price {}", ticker, price);
@@ -671,8 +718,8 @@ public class LiveModeController {
                         dataConnected, accountConnected, execConnected);
                 
                 if (!accountConnected) tradingService.connectAccountManager();
-                if (!dataConnected) try { ibkrService.connect(); } catch (Exception e) {}
-                if (!execConnected) orderExecutionService.connect();
+                if (!dataConnected) try { ibkrService.connect(); } catch (Exception e) { /* TWS may be offline */ }
+                if (!execConnected) try { orderExecutionService.connect(); } catch (Exception e) { /* TWS may be offline */ }
             }
         }
 

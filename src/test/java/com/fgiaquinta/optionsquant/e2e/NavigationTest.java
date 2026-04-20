@@ -5,146 +5,113 @@ import com.microsoft.playwright.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests for navigation between pages and cross-page links.
+ * SPA navigation uses React Router paths {@code /live}, {@code /backtest}, {@code /health} (see App.jsx).
  */
+@Tag("e2e")
 @DisplayName("Navigation Tests")
 class NavigationTest extends BasePlaywrightTest {
 
     @Test
-    @DisplayName("Can navigate from Live UI to Backtest UI via link")
+    @DisplayName("Can navigate from Live to Backtest via link")
     void navigateLiveToBacktest() {
-        page.navigate(BASE_URL + "/live-ui");
+        page.navigate(BASE_URL + "/live");
         page.waitForLoadState();
 
-        // Find and click the Backtest nav link
-        Locator backtestLink = page.locator("a[href='/backtest-ui']").first();
+        Locator backtestLink = page.locator("a[href='/backtest']").first();
         assertTrue(backtestLink.isVisible(), "Backtest link should be visible");
         backtestLink.click();
         page.waitForLoadState();
 
-        String content = page.content();
-        assertTrue(content.contains("BACKTEST DASHBOARD"), "Should be on backtest page");
+        assertTrue(page.content().contains("Run Backtest"), "Should be on backtest page");
     }
 
     @Test
-    @DisplayName("Can navigate from Backtest UI to Live UI via link")
+    @DisplayName("Can navigate from Backtest to Live via link")
     void navigateBacktestToLive() {
-        page.navigate(BASE_URL + "/backtest-ui");
+        page.navigate(BASE_URL + "/backtest");
         page.waitForLoadState();
 
-        // Find and click the Live Trading nav link
-        Locator liveLink = page.locator("a[href='/live-ui']").first();
-        assertTrue(liveLink.isVisible(), "Live UI link should be visible");
+        Locator liveLink = page.locator("a[href='/live']").first();
+        assertTrue(liveLink.isVisible(), "Live link should be visible");
         liveLink.click();
         page.waitForLoadState();
 
-        String content = page.content();
-        assertTrue(content.contains("Live Trading Dashboard"), "Should be on live page");
+        assertTrue(page.locator("[data-testid=live-dashboard]").isVisible(), "Should be on live page");
     }
 
     @Test
-    @DisplayName("Can navigate from Live UI to Health via link")
+    @DisplayName("Can navigate from Live to Health via link")
     void navigateLiveToHealth() {
-        page.navigate(BASE_URL + "/live-ui");
+        page.navigate(BASE_URL + "/live");
         page.waitForLoadState();
 
-        Locator healthLink = page.locator("a[href='/actuator/health']").first();
+        Locator healthLink = page.locator("a[href='/health']").first();
         assertTrue(healthLink.isVisible(), "Health link should be visible");
         healthLink.click();
         page.waitForLoadState();
 
         String content = page.content();
-        assertTrue(content.contains("UP") || content.contains("status"),
-            "Should show health status");
+        assertTrue(content.contains("health") || content.contains("Health") || content.contains("UP"),
+            "Should show health-related content");
     }
 
     @Test
-    @DisplayName("Can navigate from Backtest UI to Health via link")
+    @DisplayName("Can navigate from Backtest to Health via link")
     void navigateBacktestToHealth() {
-        page.navigate(BASE_URL + "/backtest-ui");
+        page.navigate(BASE_URL + "/backtest");
         page.waitForLoadState();
 
-        Locator healthLink = page.locator("a[href='/actuator/health']").first();
-        if (!healthLink.isVisible()) {
-            // Health link might not be in backtest UI nav, check content
-            String content = page.content();
-            assertTrue(content.contains("actuator/health") || content.contains("Health"),
-                "Should have health reference");
-        } else {
-            healthLink.click();
-            page.waitForLoadState();
-            String content = page.content();
-            assertTrue(content.contains("UP") || content.contains("status"),
-                "Should show health status");
-        }
+        Locator healthLink = page.locator("a[href='/health']").first();
+        assertTrue(healthLink.isVisible());
+        healthLink.click();
+        page.waitForLoadState();
+        assertTrue(page.content().toLowerCase().contains("health"));
     }
 
     @Test
-    @DisplayName("Can navigate from Live UI to Backtest UI and back")
+    @DisplayName("Can navigate Live → Backtest → Live")
     void navigateRoundTrip() {
-        page.navigate(BASE_URL + "/live-ui");
+        page.navigate(BASE_URL + "/live");
         page.waitForLoadState();
 
-        // Go to backtest
-        page.locator("a[href='/backtest-ui']").first().click();
+        page.locator("a[href='/backtest']").first().click();
         page.waitForLoadState();
-        String content1 = page.content();
-        assertTrue(content1.contains("BACKTEST DASHBOARD"));
+        assertTrue(page.content().contains("Run Backtest"));
 
-        // Go back to live
-        page.locator("a[href='/live-ui']").first().click();
+        page.locator("a[href='/live']").first().click();
         page.waitForLoadState();
-        String content2 = page.content();
-        assertTrue(content2.contains("Live Trading Dashboard"));
+        assertTrue(page.locator("[data-testid=live-dashboard]").isVisible());
     }
 
     @Test
-    @DisplayName("Direct URL access works for all pages")
+    @DisplayName("Direct URL access returns 200 for SPA and actuator")
     void directUrlAccess() {
-        // Live UI
-        Response r1 = page.navigate(BASE_URL + "/live-ui");
-        assertEquals(200, r1.status());
-
-        // Backtest UI
-        Response r2 = page.navigate(BASE_URL + "/backtest-ui");
-        assertEquals(200, r2.status());
-
-        // Health
-        Response r3 = page.navigate(BASE_URL + "/actuator/health");
-        assertEquals(200, r3.status());
+        assertEquals(200, page.navigate(BASE_URL + "/live").status());
+        assertEquals(200, page.navigate(BASE_URL + "/backtest").status());
+        assertEquals(200, page.navigate(BASE_URL + "/actuator/health").status());
     }
 
     @Test
-    @DisplayName("Page title is correct on all pages")
+    @DisplayName("Page title is Options Quant on main routes")
     void pageTitleCorrect() {
-        page.navigate(BASE_URL + "/live-ui");
+        page.navigate(BASE_URL + "/live");
         page.waitForLoadState();
-        String liveTitle = page.title();
-        assertTrue(liveTitle.contains("Live") || liveTitle.contains("Trading"),
-            "Live UI title should mention Live/Trading: " + liveTitle);
+        assertEquals("Options Quant", page.title());
 
-        page.navigate(BASE_URL + "/backtest-ui");
+        page.navigate(BASE_URL + "/backtest");
         page.waitForLoadState();
-        String backtestTitle = page.title();
-        assertTrue(backtestTitle.contains("Backtest") || backtestTitle.contains("OPTIONSQUANT"),
-            "Backtest title should mention Backtest: " + backtestTitle);
+        assertEquals("Options Quant", page.title());
     }
 
     @Test
-    @DisplayName("All pages have proper HTML structure")
+    @DisplayName("Main routes serve HTML shell")
     void pagesHaveHtmlStructure() {
-        String[] urls = {"/live-ui", "/backtest-ui"};
-        for (String url : urls) {
-            page.navigate(BASE_URL + url);
+        for (String path : new String[] { "/live", "/backtest" }) {
+            page.navigate(BASE_URL + path);
             page.waitForLoadState();
-
             String content = page.content();
-            assertTrue(content.contains("<!DOCTYPE html>") || content.contains("<html"),
-                url + " should have HTML doctype");
-            assertTrue(content.contains("<head>"), url + " should have head");
-            assertTrue(content.contains("<body>"), url + " should have body");
-            assertTrue(content.contains("</html>"), url + " should close html");
-            assertTrue(content.contains("<script>"), url + " should have scripts");
+            assertTrue(content.contains("<html"), path + " should have html");
+            assertTrue(content.contains("root") || content.contains("root\""), path + " should mount React");
         }
     }
 }

@@ -292,6 +292,21 @@ public class TickerMemory {
     }
 
     /**
+     * 0–100 score from historical paper/live outcomes for hybrid scan ordering (higher = scan earlier).
+     * Returns 0 when there is no meaningful history.
+     */
+    public double getLearningPriorityScore(String ticker) {
+        String key = ticker != null ? ticker.toUpperCase() : "";
+        TickerStats s = memory.get(key);
+        if (s == null || s.totalTrades < 1) {
+            return 0;
+        }
+        double wr = s.getWinRate();
+        double pf = Math.min(3.0, Math.max(0, s.getProfitFactor()));
+        return Math.min(100.0, wr * 60.0 + pf * 15.0);
+    }
+
+    /**
      * Gets all ticker stats.
      */
     public Map<String, TickerStats> getAllStats() {

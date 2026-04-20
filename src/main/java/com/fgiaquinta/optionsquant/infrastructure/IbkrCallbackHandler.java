@@ -38,21 +38,22 @@ public final class IbkrCallbackHandler extends DefaultEWrapper {
     private final Consumer<BarEvent> onBar;
     private final Consumer<RequestCompleteEvent> onComplete;
     private final Consumer<ErrorEvent> onError;
-    private final Runnable onReady;
+    /** Receives TWS {@code nextValidId} (first usable order id) — not the API client id. */
+    private final Consumer<Integer> onNextValidId;
     private final Consumer<ExecutionEvent> onExecution;  // NEW: callback for trade fills
 
     public IbkrCallbackHandler(Consumer<BarEvent> onBar, Consumer<RequestCompleteEvent> onComplete,
-                               Consumer<ErrorEvent> onError, Runnable onReady) {
-        this(onBar, onComplete, onError, onReady, null);
+                               Consumer<ErrorEvent> onError, Consumer<Integer> onNextValidId) {
+        this(onBar, onComplete, onError, onNextValidId, null);
     }
 
     public IbkrCallbackHandler(Consumer<BarEvent> onBar, Consumer<RequestCompleteEvent> onComplete,
-                               Consumer<ErrorEvent> onError, Runnable onReady,
+                               Consumer<ErrorEvent> onError, Consumer<Integer> onNextValidId,
                                Consumer<ExecutionEvent> onExecution) {
         this.onBar = onBar;
         this.onComplete = onComplete;
         this.onError = onError;
-        this.onReady = onReady;
+        this.onNextValidId = onNextValidId;
         this.onExecution = onExecution;
     }
 
@@ -111,7 +112,7 @@ public final class IbkrCallbackHandler extends DefaultEWrapper {
     @Override
     public void nextValidId(int orderId) {
         log.info("IBKR ready. Next valid order ID: {}", orderId);
-        onReady.run();
+        onNextValidId.accept(orderId);
     }
 
     @Override

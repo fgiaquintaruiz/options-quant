@@ -148,7 +148,44 @@ tr:hover { background: #161b22; }
 
 .spinner-sm { width: 14px; height: 14px; border: 2px solid #8b949e33; border-top: 2px solid #58a6ff; border-radius: 50%; animation: spin 0.8s linear infinite; }
 
+.pill {
+  border-radius: 20px;
+  background: #21262d;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #30363d;
+}
+.pill-success {
+  background: #1a3a1e;
+  color: #3fb950;
+  border-color: #238636;
+}
+.pill-info {
+  background: #1a2a3a;
+  color: #58a6ff;
+  border-color: #388bfd;
+}
+
 .divider-v { width: 1px; height: 36px; background: #30363d; }
+
+.stat-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stat-label-sm {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.stat-value-md { font-size: 16px; font-weight: 700; }
 
 .ticker-input {
   width: 100%;

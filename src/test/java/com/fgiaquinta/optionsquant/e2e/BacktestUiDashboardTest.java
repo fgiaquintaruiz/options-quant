@@ -2,21 +2,35 @@ package com.fgiaquinta.optionsquant.e2e;
 
 import org.junit.jupiter.api.*;
 import com.microsoft.playwright.*;
+import com.microsoft.playwright.options.AriaRole;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests for the Backtest UI Dashboard (/backtest-ui).
- * Tests page rendering, run API, stop API, running check, checkpoint, and resume endpoints.
+ * E2E checks for the React backtest page ({@code /backtest}) and {@code /backtest-ui} REST APIs.
+ * The legacy HTML dashboard at {@code /backtest-ui} redirects to {@code /}; the SPA route is {@code /backtest}.
  */
+@Tag("e2e")
 @DisplayName("Backtest UI Dashboard Tests")
 class BacktestUiDashboardTest extends BasePlaywrightTest {
+
+    private static final String BT_PAGE = "/backtest";
+
+    /** Live and backtest pages share labels like "Tickers to scan"; scope DOM queries to the backtest panel. */
+    private Locator backtestRoot() {
+        return page.locator("[data-testid=backtest-dashboard]");
+    }
+
+    @BeforeEach
+    void clearCheckpointForDeterministicApiTests() throws Exception {
+        postJson("/backtest-ui/checkpoint/clear");
+    }
 
     // ========== PAGE RENDERING ==========
 
     @Test
-    @DisplayName("Backtest UI dashboard page loads with 200 status")
+    @DisplayName("Backtest SPA loads with 200 status")
     void dashboardPageLoads() {
-        Response response = page.navigate(BASE_URL + "/backtest-ui");
+        Response response = page.navigate(BASE_URL + BT_PAGE);
         assertNotNull(response);
         assertEquals(200, response.status());
     }
@@ -24,74 +38,51 @@ class BacktestUiDashboardTest extends BasePlaywrightTest {
     @Test
     @DisplayName("Dashboard contains main sections")
     void dashboardContainsMainSections() {
-        page.navigate(BASE_URL + "/backtest-ui");
+        page.navigate(BASE_URL + BT_PAGE);
         page.waitForLoadState();
+        backtestRoot().waitFor();
 
-        String content = page.content();
-        assertTrue(content.contains("OPTIONSQUANT TRADING BACKTEST DASHBOARD"), "Should have title");
-        assertTrue(content.contains("RUN BACKTEST"), "Should have run backtest section");
-        assertTrue(content.contains("TRADES EN VIVO"), "Should have live trades section");
-        assertTrue(content.contains("RESULTADOS"), "Should have results section");
-        assertTrue(content.contains("CURVA DE EQUITY"), "Should have equity curve section");
-        assertTrue(content.contains("PERFORMANCE POR ESTRATEGIA"), "Should have strategy performance");
-        assertTrue(content.contains("PERFORMANCE POR TICKER"), "Should have ticker performance");
-        assertTrue(content.contains("IMPROVE STRATEGY"), "Should have improve strategy section");
+        assertTrue(backtestRoot().getByText("Tickers to scan").isVisible());
+        assertTrue(backtestRoot().getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Run Backtest")).isVisible());
+        assertTrue(backtestRoot().getByText("Trade Log").isVisible());
+        assertTrue(backtestRoot().getByText("Backend Logs").isVisible());
     }
 
     @Test
     @DisplayName("Dashboard has Run Backtest button")
     void dashboardHasRunButton() {
-        page.navigate(BASE_URL + "/backtest-ui");
+        page.navigate(BASE_URL + BT_PAGE);
         page.waitForLoadState();
-
-        String content = page.content();
-        assertTrue(content.contains("runBacktest") || content.contains("Run Backtest"),
-            "Should have run backtest button");
+        backtestRoot().waitFor();
+        assertTrue(backtestRoot().getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Run Backtest")).isVisible());
     }
 
     @Test
-    @DisplayName("Dashboard has navigation links")
+    @DisplayName("Dashboard has SPA navigation links")
     void dashboardHasNavigationLinks() {
-        page.navigate(BASE_URL + "/backtest-ui");
+        page.navigate(BASE_URL + BT_PAGE);
         page.waitForLoadState();
-
-        String content = page.content();
-        assertTrue(content.contains("href=\"/backtest-ui\""), "Should link to backtest-ui");
-        assertTrue(content.contains("href=\"/live-ui\""), "Should link to live-ui");
+        assertTrue(page.getByRole(AriaRole.LINK, new Page.GetByRoleOptions().setName("Loving Mode")).isVisible());
+        assertTrue(page.getByRole(AriaRole.LINK, new Page.GetByRoleOptions().setName("Loved Mode")).isVisible());
     }
 
     @Test
-    @DisplayName("Dashboard has Chart.js integration")
-    void dashboardHasChartJs() {
-        page.navigate(BASE_URL + "/backtest-ui");
+    @DisplayName("Dashboard loads Vite bundle (Recharts lives in JS chunk)")
+    void dashboardLoadsReactBundle() {
+        page.navigate(BASE_URL + BT_PAGE);
         page.waitForLoadState();
-
-        String content = page.content();
-        assertTrue(content.contains("Chart") || content.contains("chart"), "Should reference Chart.js");
-        assertTrue(content.contains("equity-chart") || content.contains("equityChart"), "Should have equity chart element");
+        Locator script = page.locator("script[src*='assets/index-']").first();
+        assertTrue(script.count() > 0, "Should load hashed main bundle from /static/assets/");
     }
 
     @Test
-    @DisplayName("Dashboard has improve strategy modal")
-    void dashboardHasImproveModal() {
-        page.navigate(BASE_URL + "/backtest-ui");
+    @DisplayName("Dashboard exposes concurrent scan control")
+    void dashboardHasConcurrentControl() {
+        page.navigate(BASE_URL + BT_PAGE);
         page.waitForLoadState();
-
-        String content = page.content();
-        assertTrue(content.contains("improve-modal") || content.contains("improveModal"),
-            "Should have improve strategy modal");
-        assertTrue(content.contains("improveStrategy"), "Should have improveStrategy function");
-    }
-
-    @Test
-    @DisplayName("Dashboard has retest functionality")
-    void dashboardHasRetestFunctionality() {
-        page.navigate(BASE_URL + "/backtest-ui");
-        page.waitForLoadState();
-
-        String content = page.content();
-        assertTrue(content.contains("retestStrategy") || content.contains("retest"),
-            "Should have retest functionality");
+        backtestRoot().waitFor();
+        assertTrue(backtestRoot().getByText("Concurrent:").isVisible());
+        assertTrue(backtestRoot().locator("input[type='number']").isVisible());
     }
 
     // ========== RUNNING CHECK API ==========
@@ -118,7 +109,6 @@ class BacktestUiDashboardTest extends BasePlaywrightTest {
     void stopApiReturnsWhenNotRunning() throws Exception {
         String json = postJson("/backtest-ui/stop");
         assertNotNull(json);
-        // Returns success=false when nothing is running, or success=true if stop was requested
         assertTrue(json.contains("\"success\""));
     }
 
@@ -147,75 +137,17 @@ class BacktestUiDashboardTest extends BasePlaywrightTest {
         assertTrue(json.contains("\"success\":true"));
     }
 
-    // ========== JAVASCRIPT FUNCTIONS ==========
+    // ========== NO LEGACY GLOBAL FUNCTIONS (React SPA) ==========
 
     @Test
-    @DisplayName("Page has runBacktest JavaScript function")
-    void pageHasRunBacktestFunction() {
-        page.navigate(BASE_URL + "/backtest-ui");
+    @DisplayName("Page does not expose legacy window.runBacktest (React handlers instead)")
+    void pageDoesNotExposeLegacyGlobals() {
+        page.navigate(BASE_URL + BT_PAGE);
         page.waitForLoadState();
 
-        Object result = page.evaluate("typeof runBacktest");
-        assertEquals("function", result, "runBacktest should be a function");
-    }
-
-    @Test
-    @DisplayName("Page has improveStrategy JavaScript function")
-    void pageHasImproveStrategyFunction() {
-        page.navigate(BASE_URL + "/backtest-ui");
-        page.waitForLoadState();
-
-        Object result = page.evaluate("typeof improveStrategy");
-        assertEquals("function", result, "improveStrategy should be a function");
-    }
-
-    @Test
-    @DisplayName("Page has displayResults JavaScript function")
-    void pageHasDisplayResultsFunction() {
-        page.navigate(BASE_URL + "/backtest-ui");
-        page.waitForLoadState();
-
-        Object result = page.evaluate("typeof displayResults");
-        assertEquals("function", result, "displayResults should be a function");
-    }
-
-    @Test
-    @DisplayName("Page has drawEquityChart JavaScript function")
-    void pageHasDrawEquityChartFunction() {
-        page.navigate(BASE_URL + "/backtest-ui");
-        page.waitForLoadState();
-
-        Object result = page.evaluate("typeof drawEquityChart");
-        assertEquals("function", result, "drawEquityChart should be a function");
-    }
-
-    @Test
-    @DisplayName("Page has drawStrategyTable JavaScript function")
-    void pageHasDrawStrategyTableFunction() {
-        page.navigate(BASE_URL + "/backtest-ui");
-        page.waitForLoadState();
-
-        Object result = page.evaluate("typeof drawStrategyTable");
-        assertEquals("function", result, "drawStrategyTable should be a function");
-    }
-
-    @Test
-    @DisplayName("Page has drawTickerTable JavaScript function")
-    void pageHasDrawTickerTableFunction() {
-        page.navigate(BASE_URL + "/backtest-ui");
-        page.waitForLoadState();
-
-        Object result = page.evaluate("typeof drawTickerTable");
-        assertEquals("function", result, "drawTickerTable should be a function");
-    }
-
-    @Test
-    @DisplayName("Page has closeModal JavaScript function")
-    void pageHasCloseModalFunction() {
-        page.navigate(BASE_URL + "/backtest-ui");
-        page.waitForLoadState();
-
-        Object result = page.evaluate("typeof closeModal");
-        assertEquals("function", result, "closeModal should be a function");
+        Object runBacktest = page.evaluate("typeof window.runBacktest");
+        Object improveStrategy = page.evaluate("typeof window.improveStrategy");
+        assertEquals("undefined", runBacktest);
+        assertEquals("undefined", improveStrategy);
     }
 }

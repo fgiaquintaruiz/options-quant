@@ -32,7 +32,12 @@ export const liveApi = {
   setMaxConcurrent: (count) => fetch(`${API}/live-ui/set-max-concurrent?count=${count}`, { method: 'POST' }).then(handleResponse),
   toggleMockMarket: () => fetch(`${API}/live-ui/toggle-mock-market`, { method: 'POST' }).then(handleResponse),
   injectMockSignal: (ticker = 'SPY') => fetch(`${API}/live-ui/inject-mock-signal?ticker=${ticker}`, { method: 'POST' }).then(handleResponse),
-  closeTrade: (ticker, price) => fetch(`${API}/live-ui/close-trade?ticker=${encodeURIComponent(ticker)}&price=${price}`, { method: 'POST' }).then(handleResponse),
+  closeTrade: (ticker, price, tpOrderId = null, slOrderId = null) => {
+    const params = new URLSearchParams({ ticker, price: String(price) });
+    if (tpOrderId) params.append('tpOrderId', tpOrderId);
+    if (slOrderId) params.append('slOrderId', slOrderId);
+    return fetch(`${API}/live-ui/close-trade?${params}`, { method: 'POST' }).then(handleResponse);
+  },
   executeSignal: (ticker, direction, price, strategy) => fetch(`${API}/live-ui/execute-signal?ticker=${encodeURIComponent(ticker)}&direction=${direction}&price=${price}&strategy=${encodeURIComponent(strategy)}`, { method: 'POST' }).then(handleResponse),
   executeTrade: (ticker, direction, price, strategy) => fetch(`${API}/live-ui/execute-trade?ticker=${encodeURIComponent(ticker)}&direction=${direction}&price=${price}&strategy=${encodeURIComponent(strategy)}`, { method: 'POST' }).then(handleResponse),
   cancelTrade: (ticker, orderId) => fetch(`${API}/live-ui/cancel-trade?ticker=${encodeURIComponent(ticker)}&orderId=${orderId}`, { method: 'POST' }).then(handleResponse),
@@ -52,6 +57,13 @@ export const backtestApi = {
   clearCheckpoint: () => fetch(`${API}/backtest-ui/checkpoint/clear`, { method: 'POST' }).then(handleResponse),
   getMaxConcurrent: () => fetch(`${API}/backtest-ui/max-concurrent`).then(handleResponse),
   setMaxConcurrent: (count) => fetch(`${API}/backtest-ui/set-max-concurrent?count=${count}`, { method: 'POST' }).then(handleResponse),
+  getScheduler: () => fetch(`${API}/backtest-ui/scheduler`).then(handleResponse),
+  postScheduler: (body) =>
+    fetch(`${API}/backtest-ui/scheduler`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body ?? {}),
+    }).then(handleResponse),
   improveStrategy: (name) => fetch(`${API}/backtest-ui/improve/${name}`, { method: 'POST' }).then(handleResponse),
   retestStrategy: (name) => fetch(`${API}/backtest-ui/retest/${name}`, { method: 'POST' }).then(handleResponse),
 };

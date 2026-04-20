@@ -5,6 +5,9 @@ spring:
 ibkr:
   host: 127.0.0.1
   port: 7497
+  data-client-id: 1
+  orders-client-id: 3
+  account-client-id: 999
   accountId: DUN598126
   sync-timeout: 5
   auto-execute: false
@@ -12,6 +15,16 @@ ibkr:
     - SPY
   tws:
     api-version: "1.0"
+
+scanner:
+  concurrent-mode: FIXED
+  fixed-max-concurrent: 2
+  auto-reserve-logical-cpus: 4
+  auto-min-concurrent: 1
+  auto-max-concurrent-cap: 4
+  prioritization-mode: NATURAL
+  hybrid-fundamental-weight: 0.65
+  hybrid-memory-weight: 0.35
 
 logging:
   level:

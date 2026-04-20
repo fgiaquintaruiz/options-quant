@@ -53,10 +53,24 @@ public class NewsFilterService {
         return priorityTickers;
     }
 
-    private List<String> calculatePriorityTickers() {
-        List<TickerInfo> allTickers = tickerService.getAllTickers();
+    /**
+     * Fundamental scores for all loaded tickers (same rules as priority list). Used for hybrid scan ordering.
+     */
+    public Map<String, Double> getFundamentalScoresMap() {
+        return Map.copyOf(computeFundamentalScores());
+    }
 
-        // Score each ticker based on multiple criteria
+    private List<String> calculatePriorityTickers() {
+        Map<String, Double> scores = computeFundamentalScores();
+        return scores.entrySet().stream()
+                .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
+                .limit(10)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+    }
+
+    private Map<String, Double> computeFundamentalScores() {
+        List<TickerInfo> allTickers = tickerService.getAllTickers();
         Map<String, Double> scores = new HashMap<>();
 
         for (TickerInfo ticker : allTickers) {
@@ -98,15 +112,9 @@ public class NewsFilterService {
                 else score += 3;
             }
 
-            scores.put(ticker.ticker(), score);
+            scores.put(ticker.ticker().toUpperCase(), score);
         }
-
-        // Sort by score descending and take top 10
-        return scores.entrySet().stream()
-                .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
-                .limit(10)
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
+        return scores;
     }
 
     /**

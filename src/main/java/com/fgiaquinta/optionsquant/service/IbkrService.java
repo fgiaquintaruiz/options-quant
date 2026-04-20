@@ -34,7 +34,8 @@ public class IbkrService {
     private final EClientSocket client;
     private final EJavaSignal signal;
     private final AtomicInteger nextOrderId = new AtomicInteger();
-    private final CountDownLatch connectionLatch = new CountDownLatch(1);
+    /** Recreated on each connect so await() works after a prior successful connection. */
+    private volatile CountDownLatch connectionLatch = new CountDownLatch(1);
 
     // Request tracking
     private final Map<Integer, String> requestTickerMap = new ConcurrentHashMap<>();
@@ -51,7 +52,7 @@ public class IbkrService {
                 this::onBarReceived,
                 this::onRequestComplete,
                 this::onErrorReceived,
-                this::onConnectionReady
+                this::onNextValidIdReceived
         );
         this.client = new EClientSocket(callbackHandler, signal);
     }
@@ -60,10 +61,16 @@ public class IbkrService {
      * Connect to TWS or IB Gateway.
      */
     public void connect() {
-        log.info(">>> connect() - Connecting to IBKR at {}:{} (clientId={})", properties.host(), properties.port(), nextOrderId.get());
+        if (client.isConnected()) {
+            return;
+        }
+        connectionLatch = new CountDownLatch(1);
+
+        int clientId = properties.historicalDataClientId();
+        log.info(">>> connect() - Connecting to IBKR at {}:{} (clientId={})", properties.host(), properties.port(), clientId);
         long startTime = System.currentTimeMillis();
 
-        client.eConnect(properties.host(), properties.port(), nextOrderId.get() + 1);
+        client.eConnect(properties.host(), properties.port(), clientId);
 
         if (!client.isConnected()) {
             log.error("<<< connect() - FAILED to connect to TWS at {}:{}", properties.host(), properties.port());
@@ -373,9 +380,9 @@ public class IbkrService {
         }
     }
 
-    private void onConnectionReady() {
-        log.info("    Connection ready, nextOrderId set to {}", nextOrderId.get());
-        nextOrderId.set(Math.max(nextOrderId.get(), 1));
+    private void onNextValidIdReceived(int firstOrderIdFromTws) {
+        log.info("    Connection ready, nextOrderId set to {}", firstOrderIdFromTws);
+        nextOrderId.set(Math.max(firstOrderIdFromTws, 1));
         connectionLatch.countDown();
     }
 

@@ -3,29 +3,9 @@ import { Play, Square, Zap, ChevronUp, ChevronDown, Monitor, Cpu, ShieldCheck, S
 import { liveApi } from '../api'
 import LiveTradeGrid from '../components/LiveTradeGrid'
 import TickerSelector from '../components/TickerSelector'
+import SwapButton from '../components/SwapButton'
 import { LS } from '../utils/storage'
 
-// Swappable Button Component
-function SwapButton({ active, onText, offText, onClick, activeColor = '#f0883e', offColor = '#238636', icon: Icon }) {
-  return (
-    <button
-      onClick={onClick}
-      className="btn"
-      style={{
-        padding: '6px 12px',
-        fontSize: 12,
-        background: active ? `${activeColor}22` : `${offColor}22`,
-        border: `1px solid ${active ? `${activeColor}66` : `${offColor}66`}`,
-        color: active ? activeColor : offColor,
-        minWidth: 110,
-        justifyContent: 'center'
-      }}
-    >
-      {Icon && <Icon size={14} />}
-      {active ? onText : offText}
-    </button>
-  )
-}
 
 export default function LiveDashboard({ twsStatus }) {
   const [status, setStatus] = useState(null)
@@ -221,7 +201,9 @@ export default function LiveDashboard({ twsStatus }) {
       netPnl: null,
       executeTime: s.executeTime,
       tradeStatus: s.tradeStatus,
-      orderId: s.orderId
+      orderId: s.orderId,
+      tpOrderId: s.tpOrderId,
+      slOrderId: s.slOrderId
     }
   }, [closedTrades])
 
@@ -230,7 +212,7 @@ export default function LiveDashboard({ twsStatus }) {
     ...injectedSignals.map(mapSignal)
   ], [signals, injectedSignals, mapSignal])
 
-  const handleCloseTrade = async (ticker, price, isOpenPos = false) => {
+  const handleCloseTrade = async (ticker, price, isOpenPos = false, tpOrderId = null, slOrderId = null) => {
     try {
       setPendingActions(prev => ({ ...prev, [ticker]: true }))
       if (isOpenPos) {
@@ -248,7 +230,8 @@ export default function LiveDashboard({ twsStatus }) {
         }, 800)
         return;
       }
-      const ok = await liveApi.closeTrade(ticker, price)
+      // Close position: send market order to trigger TP/SL conditions
+      const ok = await liveApi.closeTrade(ticker, price, tpOrderId, slOrderId)
       if (ok.success) fetchSignals()
       setPendingActions(prev => ({ ...prev, [ticker]: false }))
     } catch (e) {
@@ -275,7 +258,7 @@ export default function LiveDashboard({ twsStatus }) {
   ), [scanActivity])
 
   return (
-    <div className="flex-col">
+    <div className="flex-col" data-testid="live-dashboard">
       
       {errorMsg && (
         <div className="card mb-12" style={{ background: '#f8514922', border: '1px solid #f8514944', padding: '10px 15px', display: 'flex', justifyContent: 'space-between' }}>
@@ -285,7 +268,7 @@ export default function LiveDashboard({ twsStatus }) {
       )}
 
       {/* Toolbar */}
-      <div className="card" style={{ padding: '12px 20px', marginBottom: 20 }}>
+      <div className="card" style={{ padding: '12px 20px', marginBottom: 20 }} data-testid="live-toolbar">
         <div className="flex-col gap-15">
           {/* Row 1: Tickers */}
           <div className="flex-align-center gap-15">
@@ -307,11 +290,11 @@ export default function LiveDashboard({ twsStatus }) {
             {/* Left: Engine Controls */}
             <div className="flex-align-center gap-10">
               {scanning || stopRequested ? (
-                <button className="btn btn-danger" onClick={handleStopScan} style={{ padding: '6px 14px', fontSize: 13, minWidth: 120 }}>
+                <button type="button" data-testid="live-stop-scan" className="btn btn-danger" onClick={handleStopScan} style={{ padding: '6px 14px', fontSize: 13, minWidth: 120 }}>
                   <Square size={16} /> Stop Scan
                 </button>
               ) : (
-                <button className="btn btn-primary" onClick={handleStartScan}
+                <button type="button" data-testid="live-start-scan" className="btn btn-primary" onClick={handleStartScan}
                   disabled={!canScan} style={{ padding: '6px 14px', fontSize: 13, minWidth: 120 }}>
                   <Play size={16} /> Start Scan
                 </button>
@@ -325,6 +308,7 @@ export default function LiveDashboard({ twsStatus }) {
                 offText="Manual Scan" 
                 onClick={() => liveApi.toggleScheduler().catch(() => {})}
                 icon={Monitor}
+                testId="live-toggle-scheduler"
               />
 
               <SwapButton 
@@ -333,6 +317,7 @@ export default function LiveDashboard({ twsStatus }) {
                 offText="Manual Open" 
                 onClick={handleToggleAutoExecute}
                 icon={Cpu}
+                testId="live-toggle-auto-execute"
               />
 
               <div className="divider-v" style={{ height: 24 }} />
@@ -354,17 +339,20 @@ export default function LiveDashboard({ twsStatus }) {
                 activeColor="#f0883e"
                 offColor="#3fb950"
                 icon={mockMarketOpen ? ShieldAlert : ShieldCheck}
+                testId="live-toggle-mock-market"
               />
 
-              <button className="btn" onClick={handleInjectMockSignal}
-                style={{ 
-                  padding: '6px 12px', fontSize: 12, 
-                  background: mockMarketOpen ? '#f0883e22' : '#23863622', 
-                  border: `1px solid ${mockMarketOpen ? '#f0883e66' : '#23863666'}`, 
-                  color: mockMarketOpen ? '#f0883e' : '#3fb950'
-                }}>
-                <Zap size={14} /> {mockMarketOpen ? 'Mock Signal' : 'Real Signal'}
-              </button>
+               {mockMarketOpen && (
+                 <button className="btn" onClick={handleInjectMockSignal}
+                   style={{ 
+                     padding: '6px 12px', fontSize: 12, 
+                     background: '#f0883e22', 
+                     border: `1px solid #f0883e66`, 
+                     color: '#f0883e'
+                   }}>
+                   <Zap size={14} /> Mock Signal
+                 </button>
+               )}
 
               {status?.schedulerEnabled && (
                 <div className="flex-col" style={{ marginLeft: 5 }}>
@@ -375,19 +363,19 @@ export default function LiveDashboard({ twsStatus }) {
 
             {/* Right: Account Stats */}
             <div className="flex-align-center gap-20">
-              <div className="stat-box">
-                <span className="stat-label-sm color-muted">Account:</span>
-                <strong className="text-md color-text" style={{ fontSize: 14 }}>{twsStatus?.accountId || 'OFFLINE'}</strong>
-              </div>
-
-              <div className="divider-v" style={{ height: 24 }} />
-
-              <div className="stat-box">
-                <span className="stat-label-sm color-muted">Balance:</span>
-                <strong className="text-md color-success" style={{ fontSize: 15 }}>
-                  {twsStatus?.balance > 0 ? `$${Number(twsStatus.balance).toLocaleString()}` : '$0'}
-                </strong>
-              </div>
+               <div className="stat-box">
+                 <span className="stat-label-sm color-muted">Account:</span>
+                 <strong className="pill pill-info" style={{ fontSize: 14 }}>{twsStatus?.accountId || 'OFFLINE'}</strong>
+               </div>
+               
+               <div className="divider-v" style={{ height: 24 }} />
+               
+               <div className="stat-box">
+                 <span className="stat-label-sm color-muted">Balance:</span>
+                 <strong className="pill pill-success" style={{ fontSize: 15 }}>
+                   {twsStatus?.balance > 0 ? `$${Number(twsStatus.balance).toLocaleString()}` : '$0'}
+                 </strong>
+               </div>
 
               <div className="divider-v" style={{ height: 24 }} />
 

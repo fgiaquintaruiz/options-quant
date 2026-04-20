@@ -1,10 +1,76 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Play, Square, Activity, Settings, RefreshCw } from 'lucide-react'
+import { Play, Square, Activity, Settings, RefreshCw, Zap, ChevronUp, ChevronDown, Monitor } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { backtestApi } from '../api'
 import UnifiedDataGrid from '../components/UnifiedDataGrid'
 import TickerSelector from '../components/TickerSelector'
+import SwapButton from '../components/SwapButton'
 import { LS } from '../utils/storage'
+
+/** @param {string} start @param {string} end HH:mm:ss same day */
+function computeScanDurationHms(start, end) {
+  if (!start || !end || end === '-') return '—'
+  try {
+    const parse = (t) => {
+      const p = String(t).split(':').map(Number)
+      return (p[0] || 0) * 3600 + (p[1] || 0) * 60 + (p[2] || 0)
+    }
+    let sec = parse(end) - parse(start)
+    if (sec < 0) sec += 86400
+    return `${sec.toFixed(1)}s`
+  } catch {
+    return '—'
+  }
+}
+
+function computeTradeDuration(entry, exit) {
+  if (!entry || !exit || exit === '-') return '—'
+  const d1 = Date.parse(String(entry).replace(/_/g, ' '))
+  const d2 = Date.parse(String(exit).replace(/_/g, ' '))
+  if (Number.isNaN(d1) || Number.isNaN(d2)) return '—'
+  const sec = Math.round((d2 - d1) / 1000)
+  if (sec < 0) return '—'
+  if (sec < 60) return `${sec.toFixed(1)}s`
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  if (m < 60) return `${m}m ${s}s`
+  const h = Math.floor(m / 60)
+  return `${h}h ${m % 60}m`
+}
+
+function formatTradeTimeDisplay(t) {
+  if (!t || t === '-') return '—'
+  const s = String(t).trim()
+  if (s.length >= 16 && s.includes(' ')) return s.length > 19 ? s.slice(0, 19) : s
+  return s
+}
+
+/** Safe for API fields that may be null/undefined */
+function formatUsd(v) {
+  const n = Number(v)
+  return Number.isFinite(n) ? n.toLocaleString() : '—'
+}
+
+/** POST /backtest-ui/run returns winRate, totalPnl; UI historically used winRatePct, netPnl */
+function normalizeBacktestReportPayload(data) {
+  if (!data || data.success === false) return data
+  return {
+    ...data,
+    winRatePct: data.winRate ?? data.winRatePct,
+    netPnl: data.totalPnl ?? data.netPnl,
+  }
+}
+
+/** Equity points: API uses { time, equity }; ensure numeric equity for Recharts */
+function normalizeEquityCurve(curve) {
+  if (!curve || !Array.isArray(curve)) return []
+  return curve
+    .map((p, i) => ({
+      time: p.time != null ? String(p.time) : (p.trade != null ? String(p.trade) : `T${i + 1}`),
+      equity: Number(p.equity),
+    }))
+    .filter((p) => Number.isFinite(p.equity))
+}
 
 export default function BacktestDashboard() {
   // Transient scan state
@@ -20,6 +86,8 @@ export default function BacktestDashboard() {
   const [tickerFilter, setTickerFilter] = useState(() => LS.get('bt_tickerFilter', ''))
   const [tickerScope, setTickerScope] = useState(() => LS.get('bt_tickerScope', 'HOT'))
   const [startParams, setStartParams] = useState(() => LS.get('bt_params', { capital: 50000, risk: 0.02 }))
+  const [schedulerEnabled, setSchedulerEnabled] = useState(() => LS.get('bt_schedulerEnabled', false))
+  const [schedulerFixedDelayMs, setSchedulerFixedDelayMs] = useState(null)
   
   const eventSourceRef = useRef(null)
 
@@ -33,6 +101,30 @@ export default function BacktestDashboard() {
   }, [])
 
   useEffect(() => {
+    const loadScheduler = async () => {
+      try {
+        const d = await backtestApi.getScheduler()
+        if (typeof d.schedulerEnabled === 'boolean') {
+          setSchedulerEnabled(d.schedulerEnabled)
+          LS.set('bt_schedulerEnabled', d.schedulerEnabled)
+        }
+        if (d.fixedDelayMs != null) setSchedulerFixedDelayMs(d.fixedDelayMs)
+        if (d.schedulerEnabled) {
+          if (d.initialCapital != null) {
+            setStartParams(p => ({ ...p, capital: Number(d.initialCapital) }))
+          }
+          if (d.riskPct != null) {
+            setStartParams(p => ({ ...p, risk: Number(d.riskPct) }))
+          }
+          if (d.tickerScope != null) setTickerScope(String(d.tickerScope))
+          if (d.tickerFilter != null) setTickerFilter(String(d.tickerFilter))
+        }
+      } catch (e) { /* silent */ }
+    }
+    loadScheduler()
+  }, [])
+
+  useEffect(() => {
     const checkRunning = async () => {
       if (eventSourceRef.current) return
       try {
@@ -42,6 +134,11 @@ export default function BacktestDashboard() {
           if (!data.running && prev) return false
           return prev
         })
+        if (typeof data.schedulerEnabled === 'boolean') {
+          setSchedulerEnabled(data.schedulerEnabled)
+          LS.set('bt_schedulerEnabled', data.schedulerEnabled)
+        }
+        if (data.fixedDelayMs != null) setSchedulerFixedDelayMs(data.fixedDelayMs)
       } catch (e) { /* silent */ }
     }
     checkRunning()
@@ -67,23 +164,42 @@ export default function BacktestDashboard() {
   useEffect(() => { LS.set('bt_tickerFilter', tickerFilter) }, [tickerFilter])
 
   const mapTradesToActivities = useCallback((trades = []) => {
-    return trades.map(t => ({
-      ticker: t.ticker,
-      pattern: t.pattern,
-      strategy: t.strategy,
-      direction: t.direction,
-      startTime: t.entryTime || new Date().toLocaleTimeString(),
-      endTime: t.exitTime || '-',
-      status: 'Complete',
-      ep: t.ep || t.entryPrice || '0.00',
-      xp: t.xp || t.exitPrice || '0.00',
-      exitReason: t.exitReason,
-      netPnl: t.netPnl,
-      chartPath: t.chartPath || null
-    }))
+    return trades.map(t => {
+      const entry = t.entryTime || ''
+      const exit = t.exitTime || '-'
+      return {
+        ticker: t.ticker,
+        pattern: t.pattern,
+        strategy: t.strategy,
+        startTime: entry || new Date().toLocaleTimeString(),
+        endTime: exit,
+        scanStarted: formatTradeTimeDisplay(entry),
+        scanEnded: exit !== '-' ? formatTradeTimeDisplay(exit) : '—',
+        scanDuration: computeTradeDuration(entry, exit),
+        status: 'Complete',
+        ep: t.ep || t.entryPrice || '0.00',
+        xp: t.xp || t.exitPrice || '0.00',
+        exitReason: t.exitReason,
+        netPnl: t.netPnl,
+        chartPath: t.chartPath || null
+      }
+    })
   }, [])
 
+  const syncSchedulerToServer = useCallback(async () => {
+    try {
+      await backtestApi.postScheduler({
+        enabled: schedulerEnabled,
+        initialCapital: startParams.capital,
+        riskPct: startParams.risk,
+        tickerFilter: tickerFilter || '',
+        tickerScope: tickerScope || 'HOT',
+      })
+    } catch (e) { /* silent */ }
+  }, [schedulerEnabled, startParams, tickerFilter, tickerScope])
+
   const handleStartScan = async () => {
+    await syncSchedulerToServer()
     setRunning(true)
     setElapsed(0)
     setReport(null)
@@ -116,8 +232,8 @@ export default function BacktestDashboard() {
           addLog(`❌ Error: ${data.error}`, 'error')
           return
         }
-        setReport(data)
-        setEquityData(data.equityCurve || [])
+        setReport(normalizeBacktestReportPayload(data))
+        setEquityData(normalizeEquityCurve(data.equityCurve))
         if (data.trades && data.trades.length > 0) {
           setActivities(mapTradesToActivities(data.trades))
         }
@@ -135,19 +251,34 @@ export default function BacktestDashboard() {
           setActivities(prev => {
             const existing = prev.find(a => a.ticker === d.ticker && a.status !== 'Complete')
             if (existing) {
+              const terminal = d.status === 'OK' || String(d.status).toUpperCase() === 'ERROR'
+              const started = existing.scanStarted || existing.startTime
+              const ended = terminal ? (d.time || started) : '-'
+              const duration = terminal ? computeScanDurationHms(started, d.time) : '—'
               return prev.map(a =>
                 a.ticker === d.ticker && a.status !== 'Complete'
-                  ? { ...a, status: d.status, detail: d.detail }
+                  ? {
+                      ...a,
+                      status: d.status,
+                      detail: d.detail,
+                      scanStarted: started,
+                      startTime: started,
+                      scanEnded: ended,
+                      scanDuration: duration
+                    }
                   : a
               )
             }
+            const t0 = d.time || new Date().toLocaleTimeString()
             return [...prev, {
               ticker: d.ticker,
               pattern: '-',
               strategy: 'N/A',
-              direction: '-',
-              startTime: d.time || new Date().toLocaleTimeString(),
+              startTime: t0,
               endTime: '-',
+              scanStarted: t0,
+              scanEnded: '-',
+              scanDuration: '—',
               status: d.status,
               detail: d.detail
             }].slice(-500)
@@ -186,48 +317,130 @@ export default function BacktestDashboard() {
     try { await backtestApi.setMaxConcurrent(n) } catch (e) {}
   }
 
+  const handleCapitalAdjust = (delta) => {
+    const current = Number(startParams.capital) || 0
+    const newVal = Math.max(1000, current + delta)
+    setStartParams(p => ({ ...p, capital: newVal }))
+  }
+
+  const handleRiskAdjust = (delta) => {
+    const current = Number(startParams.risk) * 100 || 0
+    const newVal = Math.max(0.1, Math.min(10, current + delta))
+    setStartParams(p => ({ ...p, risk: Number((newVal / 100).toFixed(4)) }))
+  }
+
   return (
-    <div className="flex-col gap-20">
+    <div className="flex-col" data-testid="backtest-dashboard">
       
-      {/* Configuration Toolbar */}
-      <div className="card toolbar-card">
-        <div className="toolbar-section">
-          
-          <div className="flex-align-center gap-10">
-            {running ? (
-              <button className="btn btn-danger" onClick={handleStopScan} style={{ minWidth: 140 }}>
-                <Square size={16} /> Stop
-              </button>
-            ) : (
-              <button className="btn btn-primary" onClick={handleStartScan} style={{ minWidth: 140 }}>
-                <Play size={16} /> Run Backtest
-              </button>
-            )}
+      {/* Toolbar — single-row Live-style */}
+      <div className="card" style={{ padding: '12px 20px', marginBottom: 20 }}>
+        <div className="flex-col gap-15">
+          {/* Row 1: Tickers */}
+          <div className="flex-align-center gap-15">
+            <div className="stat-label-sm color-muted" style={{ whiteSpace: 'nowrap' }}>Tickers to scan</div>
+            <div style={{ flex: 1 }}>
+              <TickerSelector
+                value={tickerFilter}
+                onChange={setTickerFilter}
+                disabled={running}
+                scope={tickerScope}
+                onScopeChange={setTickerScope}
+              />
+            </div>
           </div>
 
-          <div className="divider-v" />
+          {/* Row 2: Engine controls + Stats */}
+          <div className="flex-between flex-wrap gap-20">
+            
+            {/* Left: Engine controls */}
+            <div className="flex-align-center gap-10">
+              {running ? (
+                <button type="button" className="btn btn-danger" onClick={handleStopScan} style={{ padding: '6px 14px', fontSize: 13, minWidth: 120 }}>
+                  <Square size={16} /> Stop Backtest
+                </button>
+              ) : (
+                <button type="button" className="btn btn-primary" onClick={handleStartScan} style={{ padding: '6px 14px', fontSize: 13, minWidth: 120 }}>
+                  <Play size={16} /> Run Backtest
+                </button>
+              )}
 
-          <div className="stat-box">
-            <span className="stat-label-sm">Concurrent:</span>
-            <input type="number" min="1" max="16" value={maxConcurrent}
-              onChange={e => handleMaxConcurrentChange(e.target.value)} disabled={running}
-              style={{ width: 45, padding: '4px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 13, textAlign: 'center' }} />
-          </div>
+              <div className="divider-v" style={{ height: 24 }} />
 
-          <div className="flex-col gap-6" style={{ flex: 1, minWidth: 320 }}>
-            <span className="stat-label-sm color-muted">Filter List:</span>
-            <TickerSelector
-              value={tickerFilter}
-              onChange={setTickerFilter}
-              disabled={running}
-              scope={tickerScope}
-              onScopeChange={setTickerScope}
-            />
+              <SwapButton
+                active={schedulerEnabled}
+                onText="Auto Run"
+                offText="Manual Run"
+                testId="backtest-auto-run-toggle"
+                onClick={async () => {
+                  const next = !schedulerEnabled
+                  try {
+                    await backtestApi.postScheduler({
+                      enabled: next,
+                      initialCapital: startParams.capital,
+                      riskPct: startParams.risk,
+                      tickerFilter: tickerFilter || '',
+                      tickerScope: tickerScope || 'HOT',
+                    })
+                    setSchedulerEnabled(next)
+                    LS.set('bt_schedulerEnabled', next)
+                  } catch (e) {
+                    addLog(`Scheduler update failed: ${e.message}`, 'error')
+                  }
+                }}
+                icon={Monitor}
+              />
+
+              {schedulerEnabled && schedulerFixedDelayMs != null && (
+                <span className="stat-label-sm color-muted" style={{ whiteSpace: 'nowrap' }} title="Spring scheduled task; delay after each run completes">
+                  ~{(schedulerFixedDelayMs / 3600000).toFixed(1)}h between runs
+                </span>
+              )}
+
+              <div className="divider-v" style={{ height: 24 }} />
+
+              <div className="flex-align-center gap-4">
+                <span className="stat-label-sm color-muted">Concurrent:</span>
+                <input type="number" min="1" max="16" value={maxConcurrent}
+                  onChange={e => handleMaxConcurrentChange(e.target.value)} disabled={running}
+                  style={{ width: 40, padding: '4px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 12, textAlign: 'center' }} />
+              </div>
+
+              {running && (
+                <>
+                  <div className="divider-v" style={{ height: 24 }} />
+                  <span className="color-info font-bold" style={{ fontSize: 12 }}>Running… {elapsed}s</span>
+                </>
+              )}
+            </div>
+
+            {/* Right: Backtest Params */}
+            <div className="flex-align-center gap-20">
+              <div className="stat-box">
+                <span className="stat-label-sm color-muted">Capital:</span>
+                <strong className="pill pill-info" style={{ fontSize: 14 }}>${formatUsd(startParams?.capital ?? 0)}</strong>
+                <div className="flex-col gap-1">
+                  <ChevronUp size={14} className="color-muted" style={{ cursor: 'pointer' }} onClick={() => handleCapitalAdjust(5000)} />
+                  <ChevronDown size={14} className="color-muted" style={{ cursor: 'pointer' }} onClick={() => handleCapitalAdjust(-5000)} />
+                </div>
+              </div>
+
+              <div className="divider-v" style={{ height: 24 }} />
+
+              <div className="stat-box">
+                <span className="stat-label-sm color-muted">Risk %:</span>
+                <div className="flex-align-center gap-6">
+                  <strong className="color-text" style={{ fontSize: 14, minWidth: 35 }}>
+                    {(Number(startParams.risk) * 100).toFixed(1)}%
+                  </strong>
+                  <div className="flex-col gap-1">
+                    <ChevronUp size={14} className="color-muted" style={{ cursor: 'pointer' }} onClick={() => handleRiskAdjust(0.5)} />
+                    <ChevronDown size={14} className="color-muted" style={{ cursor: 'pointer' }} onClick={() => handleRiskAdjust(-0.5)} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
-          
-          {running && (
-            <span className="color-info font-bold text-md">Running... {elapsed}s</span>
-          )}
         </div>
       </div>
 
@@ -236,28 +449,61 @@ export default function BacktestDashboard() {
           {report && (
             <div className="card">
               <div className="flex-between mb-12">
-                <h3 className="m-0">Report: {report.tickerScope} {tickerFilter ? `(${tickerFilter})` : ''}</h3>
-                <span className="badge badge-success" style={{ fontSize: 14 }}>{report.winRatePct}% Win Rate</span>
+                <h3 className="m-0">Report: {report.tickerScope ?? '—'} {tickerFilter ? `(${tickerFilter})` : ''}</h3>
+                <span className="badge badge-success" style={{ fontSize: 14 }}>
+                  {report.winRatePct != null ? `${report.winRatePct}%` : '—'} Win Rate
+                </span>
               </div>
               <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-                <StatCard label="Trades" value={report.totalTrades} />
-                <StatCard label="PF" value={report.profitFactor} color={report.profitFactor > 1 ? '#3fb950' : '#f85149'} />
-                <StatCard label="PnL" value={`$${report.netPnl.toLocaleString()}`} color={report.netPnl >= 0 ? '#3fb950' : '#f85149'} />
-                <StatCard label="Drawdown" value={`$${report.maxDrawdown.toLocaleString()}`} color="#f85149" />
+                <StatCard label="Trades" value={report.totalTrades ?? '—'} />
+                <StatCard
+                  label="PF"
+                  value={report.profitFactor != null ? Number(report.profitFactor).toFixed(2) : '—'}
+                  color={(Number(report.profitFactor) || 0) > 1 ? '#3fb950' : '#f85149'}
+                />
+                <StatCard
+                  label="PnL"
+                  value={`$${formatUsd(report.netPnl)}`}
+                  color={(Number(report.netPnl) || 0) >= 0 ? '#3fb950' : '#f85149'}
+                />
+                <StatCard label="Drawdown" value={`$${formatUsd(report.maxDrawdown)}`} color="#f85149" />
               </div>
               
-              {equityData.length > 0 && (
-                <div className="chart-container" style={{ marginTop: 20 }}>
-                  <ResponsiveContainer>
-                    <LineChart data={equityData}>
+              {equityData.length > 0 ? (
+                <div className="chart-container" style={{ marginTop: 20, width: '100%' }}>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={equityData} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
-                      <XAxis dataKey="trade" stroke="#8b949e" fontSize={10} />
-                      <YAxis stroke="#8b949e" fontSize={10} />
-                      <Tooltip contentStyle={{ background: '#161b22', border: '1px solid #30363d', fontSize: 12 }} />
-                      <Line type="monotone" dataKey="equity" stroke="#58a6ff" strokeWidth={2} dot={false} />
+                      <XAxis
+                        dataKey="time"
+                        stroke="#8b949e"
+                        fontSize={9}
+                        interval="preserveStartEnd"
+                        minTickGap={32}
+                        tick={{ fill: '#8b949e' }}
+                      />
+                      <YAxis
+                        stroke="#8b949e"
+                        fontSize={10}
+                        tick={{ fill: '#8b949e' }}
+                        tickFormatter={(v) =>
+                          new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(v)
+                        }
+                        domain={['auto', 'auto']}
+                      />
+                      <Tooltip
+                        contentStyle={{ background: '#161b22', border: '1px solid #30363d', fontSize: 12 }}
+                        formatter={(value) => [`$${Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`, 'Equity']}
+                        labelFormatter={(label) => label}
+                      />
+                      <Line type="monotone" dataKey="equity" stroke="#58a6ff" strokeWidth={2} dot={false} isAnimationActive={false} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
+              ) : (
+                <p className="text-sm color-muted" style={{ marginTop: 16 }}>
+                  No equity curve points in this run (empty backtest or no downsampling output).
+                </p>
               )}
             </div>
           )}
@@ -271,7 +517,7 @@ export default function BacktestDashboard() {
         <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
           <div className="flex-between mb-12">
             <h3>Backend Logs</h3>
-            <button className="btn" onClick={() => setLogs([])} style={{ padding: '2px 8px', fontSize: 11 }}>Clear</button>
+            <button type="button" className="btn" onClick={() => setLogs([])} style={{ padding: '2px 8px', fontSize: 11 }}>Clear</button>
           </div>
           <div className="console-log" style={{ flex: 1, minHeight: 600 }}>
             {logs.map((log, i) => (

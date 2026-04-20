@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Tests for /actuator/health and basic app readiness.
  */
+@Tag("e2e")
 @DisplayName("Health Endpoint Tests")
 class HealthEndpointTest extends BasePlaywrightTest {
 

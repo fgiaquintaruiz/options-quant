@@ -2,6 +2,8 @@ package com.fgiaquinta.optionsquant.service;
 
 import com.google.common.util.concurrent.RateLimiter;
 import com.fgiaquinta.optionsquant.config.IbkrProperties;
+import com.fgiaquinta.optionsquant.config.ScannerConcurrency;
+import com.fgiaquinta.optionsquant.config.ScannerProperties;
 import com.fgiaquinta.optionsquant.domain.Candle;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.*;
@@ -10,6 +12,7 @@ import com.fgiaquinta.optionsquant.strategy.model.TradePlan;
 import com.fgiaquinta.optionsquant.strategy.utils.CandlestickPatternDetector;
 import com.fgiaquinta.optionsquant.strategy.utils.RiskCalculator;
 import com.fgiaquinta.optionsquant.strategy.utils.SignalQualityFilter;
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -54,6 +57,8 @@ public class StrategyScannerService {
     private final TickerMemory tickerMemory;
     private final EarningsDateService earningsService;
     private final MarketCalendarService marketCalendar;
+    private final ScannerProperties scannerProperties;
+    private final ScanPrioritizationService scanPrioritizationService;
 
     private final List<TradingStrategy> callStrategies;
     private final List<TradingStrategy> putStrategies;
@@ -113,7 +118,9 @@ public class StrategyScannerService {
     public StrategyScannerService(CandleCsvService csvService, IbkrService ibkrService,
                                    IbkrProperties ibkrProperties, TickerService tickerService,
                                    TickerMemory tickerMemory, EarningsDateService earningsService,
-                                   MarketCalendarService marketCalendar) {
+                                   MarketCalendarService marketCalendar,
+                                   ScannerProperties scannerProperties,
+                                   ScanPrioritizationService scanPrioritizationService) {
         this.csvService = csvService;
         this.ibkrService = ibkrService;
         this.ibkrProperties = ibkrProperties;
@@ -121,6 +128,8 @@ public class StrategyScannerService {
         this.tickerMemory = tickerMemory;
         this.earningsService = earningsService;
         this.marketCalendar = marketCalendar;
+        this.scannerProperties = scannerProperties;
+        this.scanPrioritizationService = scanPrioritizationService;
 
         this.callStrategies = List.of(
                 new C1SqueezeCallStrategy(),
@@ -138,6 +147,25 @@ public class StrategyScannerService {
                 new P5ContinuationPutStrategy(),
                 new P6ReversalPutStrategy()
         );
+    }
+
+    @PostConstruct
+    void applyConfiguredConcurrency() {
+        if (scannerProperties.concurrentMode() == ScannerProperties.ConcurrentMode.AUTO) {
+            int ap = Runtime.getRuntime().availableProcessors();
+            int v = ScannerConcurrency.computeAutoMaxConcurrent(
+                    ap,
+                    scannerProperties.autoReserveLogicalCpus(),
+                    scannerProperties.autoMinConcurrent(),
+                    scannerProperties.autoMaxConcurrentCap());
+            setMaxConcurrentScans(v);
+            log.info("Scanner concurrency AUTO → {} parallel tickers (availableProcessors={}, reserveLogical={}, cap=[{},{}])",
+                    v, ap, scannerProperties.autoReserveLogicalCpus(),
+                    scannerProperties.autoMinConcurrent(), scannerProperties.autoMaxConcurrentCap());
+        } else {
+            setMaxConcurrentScans(scannerProperties.fixedMaxConcurrent());
+            log.info("Scanner concurrency FIXED → {} parallel tickers", scannerProperties.fixedMaxConcurrent());
+        }
     }
 
     public void setStopRequestedSupplier(BooleanSupplier supplier) {
@@ -269,8 +297,15 @@ public class StrategyScannerService {
                 .filter(t -> !hotTickers.contains(t))
                 .toList();
 
+        List<String> orderedRemaining = scanPrioritizationService.orderRemainingTickers(remainingTickers);
+        if (scannerProperties.prioritizationMode() == ScannerProperties.PrioritizationMode.HYBRID
+                && !orderedRemaining.isEmpty()) {
+            log.info(">>> Hybrid prioritization: first remaining tickers (sample): {}",
+                    orderedRemaining.stream().limit(Math.min(8, orderedRemaining.size())).toList());
+        }
+
         log.info(">>> Scanning {} tickers ({} hot first, {} remaining) against 12 strategies (autoRefresh={})",
-                allTickers.size(), hotTickersToScan.size(), remainingTickers.size(), autoRefreshData);
+                allTickers.size(), hotTickersToScan.size(), orderedRemaining.size(), autoRefreshData);
 
         long startTime = System.currentTimeMillis();
         List<Signal> allSignals = Collections.synchronizedList(new ArrayList<>());
@@ -354,17 +389,17 @@ public class StrategyScannerService {
         }
 
         // SCAN REMAINING TICKERS (parallel with stop support)
-        if (!remainingTickers.isEmpty()) {
+        if (!orderedRemaining.isEmpty()) {
             int hotDone = scannedCount.get();
-            currentBatchLabel.set("Remaining: 0/" + remainingTickers.size() + " (" + hotDone + "/" + allTickers.size() + " total)");
-            currentBatchSize.set(remainingTickers.size());
+            currentBatchLabel.set("Remaining: 0/" + orderedRemaining.size() + " (" + hotDone + "/" + allTickers.size() + " total)");
+            currentBatchSize.set(orderedRemaining.size());
             if (deterministicMode) {
-                log.info("📊 [Deterministic] Scanning {} remaining tickers from cached data (parallel)...", remainingTickers.size());
+                log.info("📊 [Deterministic] Scanning {} remaining tickers from cached data (parallel)...", orderedRemaining.size());
             } else {
-                log.info("📊 Scanning {} remaining tickers (parallel, {} threads)...", remainingTickers.size(), maxConcurrentTickerScans.get());
+                log.info("📊 Scanning {} remaining tickers (parallel, {} threads)...", orderedRemaining.size(), maxConcurrentTickerScans.get());
             }
             List<Future<List<Signal>>> remainingFutures = new ArrayList<>();
-            for (String ticker : remainingTickers) {
+            for (String ticker : orderedRemaining) {
                 if (stopRequestedSupplier.getAsBoolean()) {
                     log.info("⏹ Scan stopped by user during remaining tickers scan");
                     currentBatchLabel.set("Stopped");

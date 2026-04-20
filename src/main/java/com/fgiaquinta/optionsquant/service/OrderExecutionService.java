@@ -2,9 +2,11 @@ package com.fgiaquinta.optionsquant.service;
 
 import com.ib.client.*;
 import com.fgiaquinta.optionsquant.config.IbkrProperties;
+import com.fgiaquinta.optionsquant.infrastructure.IbkrCallbackHandler;
 import com.fgiaquinta.optionsquant.strategy.model.TradePlan;
 import com.fgiaquinta.optionsquant.trading.ContractFactory;
 import com.fgiaquinta.optionsquant.trading.OrderFactory;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -25,11 +27,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Service
 public class OrderExecutionService {
 
+    /** Overridden by {@link OrderExecutionServiceTest} to avoid multi-second sleeps. */
+    static volatile long connectLatchWaitMs = 5000;
+    static volatile long resolveContractWaitMs = 5000;
+    static volatile long resolveChainWaitMs = 10000;
+
     private final IbkrProperties ibkrProperties;
     private final EClientSocket client;
     private final EJavaSignal signal;
     private final AtomicInteger nextOrderId = new AtomicInteger(1);
-    private final CountDownLatch connectionLatch = new CountDownLatch(1);
+    /** New latch for every connect attempt — {@link CountDownLatch} is single-use. */
+    private volatile CountDownLatch connectionLatch = new CountDownLatch(1);
 
     // Option chain data
     private final Map<String, Integer> tickerToUnderlyingConId = new ConcurrentHashMap<>();
@@ -38,37 +46,58 @@ public class OrderExecutionService {
     private final Map<String, Set<Double>> tickerToValidStrikes = new ConcurrentHashMap<>();
     private final Map<Integer, String> requestTracker = new ConcurrentHashMap<>();
 
+    // Bracket state for position closure
+    private final ConcurrentHashMap<Integer, BracketTradeInfo> bracketStateMap = new ConcurrentHashMap<>();
+
     // Callback tracking
     private final Set<Integer> pendingMetadataRequests = ConcurrentHashMap.newKeySet();
 
+    @org.springframework.beans.factory.annotation.Autowired
     public OrderExecutionService(IbkrProperties ibkrProperties) {
         this.ibkrProperties = ibkrProperties;
         this.signal = new EJavaSignal();
+        this.client = new EClientSocket(createWrapper(this), this.signal);
+    }
 
-        EWrapper wrapper = new DefaultEWrapper() {
+    protected OrderExecutionService(IbkrProperties ibkrProperties, EClientSocket client) {
+        this.ibkrProperties = ibkrProperties;
+        this.client = client;
+        this.signal = new EJavaSignal();
+    }
+
+    private static EWrapper createWrapper(OrderExecutionService service) {
+        return new DefaultEWrapper() {
             @Override
             public void nextValidId(int orderId) {
-                log.info("OrderExecutionService connected. Next ID: {}", orderId);
-                nextOrderId.set(orderId);
-                connectionLatch.countDown();
+                service.log.info("OrderExecutionService connected. Next ID: {}", orderId);
+                service.nextOrderId.set(orderId);
+                service.connectionLatch.countDown();
             }
 
             @Override
             public void contractDetails(int reqId, ContractDetails contractDetails) {
-                String ticker = requestTracker.get(reqId);
+                String ticker = service.requestTracker.get(reqId);
                 if (ticker != null) {
                     int conId = contractDetails.contract().conid();
-                    tickerToUnderlyingConId.put(ticker, conId);
-                    log.info("🎯 Resolved underlying conId for {}: {}", ticker, conId);
-                    pendingMetadataRequests.remove(reqId);
+                    if (conId > 0) {
+                        service.tickerToUnderlyingConId.put(ticker, conId);
+                        service.log.info("🎯 Resolved underlying conId for {}: {}", ticker, conId);
+                    } else {
+                        service.log.warn("Contract details for {} returned conId=0 (reqId={})", ticker, reqId);
+                    }
                 }
             }
 
             @Override
+            public void contractDetailsEnd(int reqId) {
+                service.pendingMetadataRequests.remove(reqId);
+            }
+
+            @Override
             public void securityDefinitionOptionalParameter(int reqId, String exchange, int underlyingConId, String tradingClass, String multiplier, Set<String> expirations, Set<Double> strikes) {
-                String ticker = requestTracker.get(reqId);
+                String ticker = service.requestTracker.get(reqId);
                 if (ticker != null) {
-                    tickerToUnderlyingConId.put(ticker, underlyingConId);
+                    service.tickerToUnderlyingConId.put(ticker, underlyingConId);
                     
                     DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyyMMdd");
                     String minAllowedDate = LocalDate.now().plusDays(2).format(fmt);
@@ -80,18 +109,18 @@ public class OrderExecutionService {
 
                     if (!validExps.isEmpty()) {
                         String bestExpiration = validExps.get(0);
-                        tickerToBestExpiration.put(ticker, bestExpiration);
-                        tickerToValidStrikes.put(ticker, strikes);
+                        service.tickerToBestExpiration.put(ticker, bestExpiration);
+                        service.tickerToValidStrikes.put(ticker, strikes);
                         
-                        String currentTradingClass = tickerToTradingClass.get(ticker);
+                        String currentTradingClass = service.tickerToTradingClass.get(ticker);
                         if (currentTradingClass == null || tradingClass.equals(ticker)) {
-                            tickerToTradingClass.put(ticker, tradingClass);
+                            service.tickerToTradingClass.put(ticker, tradingClass);
                         }
 
-                        log.info("📅 Option chain loaded for {}: expiry={}, strikes={}, tradingClass={}",
-                                ticker, bestExpiration, strikes.size(), tradingClass);
+                        service.log.info("📅 Option chain loaded for {}: expiry={}, strikes={}, tradingClass={}",
+                                 ticker, bestExpiration, strikes.size(), tradingClass);
                     }
-                    pendingMetadataRequests.remove(reqId);
+                    service.pendingMetadataRequests.remove(reqId);
                 }
             }
 
@@ -99,27 +128,36 @@ public class OrderExecutionService {
             public void error(int id, long timestamp, int errorCode, String errorMsg, String advancedOrderRejectJson) {
                 if (errorCode == 2104 || errorCode == 2106 || errorCode == 2158) return;
                 
-                String context = requestTracker.getOrDefault(id, "Request " + id);
-                log.error("❌ IBKR {} Error: code={}, message={}", context, errorCode, errorMsg);
+                String context = service.requestTracker.getOrDefault(id, "Request " + id);
+                service.log.error("❌ IBKR {} Error: code={}, message={}", context, errorCode, errorMsg);
                 
-                if (pendingMetadataRequests.contains(id)) {
-                    pendingMetadataRequests.remove(id);
+                if (service.pendingMetadataRequests.contains(id)) {
+                    service.pendingMetadataRequests.remove(id);
                 }
             }
         };
-
-        this.client = new EClientSocket(wrapper, signal);
     }
+
 
     public boolean isConnected() {
         return client != null && client.isConnected();
     }
 
-    public void connect() {
-        if (client.isConnected()) return;
+    public synchronized void connect() {
+        if (client.isConnected()) {
+            return;
+        }
+        try {
+            client.eDisconnect();
+        } catch (Exception ignored) {
+            // Free client id on TWS after devtools restart or half-open socket
+        }
 
-        log.info("Connecting to IBKR for order execution at {}:{}", ibkrProperties.host(), ibkrProperties.port());
-        client.eConnect(ibkrProperties.host(), ibkrProperties.port(), 2);
+        connectionLatch = new CountDownLatch(1);
+
+        int clientId = ibkrProperties.orderExecutionClientId();
+        log.info("Connecting to IBKR for order execution at {}:{} (clientId={})", ibkrProperties.host(), ibkrProperties.port(), clientId);
+        client.eConnect(ibkrProperties.host(), ibkrProperties.port(), clientId);
 
         if (!client.isConnected()) {
             throw new IllegalStateException("Failed to connect to TWS at " + ibkrProperties.host() + ":" + ibkrProperties.port());
@@ -135,11 +173,22 @@ public class OrderExecutionService {
         }, "order-execution-ereader").start();
 
         try {
-            if (!connectionLatch.await(5, TimeUnit.SECONDS)) {
+            if (!connectionLatch.await(connectLatchWaitMs, TimeUnit.MILLISECONDS)) {
                 log.warn("Timed out waiting for nextValidId from IBKR");
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+    }
+
+    @PreDestroy
+    public void disconnect() {
+        try {
+            if (client != null && client.isConnected()) {
+                client.eDisconnect();
+            }
+        } catch (Exception e) {
+            log.debug("OrderExecutionService disconnect: {}", e.getMessage());
         }
     }
 
@@ -158,15 +207,22 @@ public class OrderExecutionService {
             pendingMetadataRequests.add(reqId);
             
             log.info("🔍 Resolving underlying conId for {}...", ticker);
-            client.reqContractDetails(reqId, ContractFactory.createStockContract(ticker));
+            client.reqContractDetails(reqId, IbkrCallbackHandler.createStockContract(ticker));
             
             long start = System.currentTimeMillis();
-            while (pendingMetadataRequests.contains(reqId) && (System.currentTimeMillis() - start) < 5000) {
+            while (pendingMetadataRequests.contains(reqId) && (System.currentTimeMillis() - start) < resolveContractWaitMs) {
                 try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
             }
         }
 
         int underlyingId = tickerToUnderlyingConId.getOrDefault(ticker, 0);
+        if (underlyingId <= 0) {
+            // conId resolution via reqContractDetails can be flaky for some tickers.
+            // Fall back to calling reqSecDefOptParams with conId=0 — IBKR still returns
+            // the option chain via securityDefinitionOptionalParameter, which populates
+            // the conId as a side effect. This is the behavior that worked historically.
+            log.warn("⚠️ conId not resolved for {} via reqContractDetails, falling back to reqSecDefOptParams with conId=0", ticker);
+        }
 
         // Step 2: Resolve option parameters
         int reqId = nextOrderId.getAndIncrement();
@@ -177,7 +233,7 @@ public class OrderExecutionService {
         client.reqSecDefOptParams(reqId, ticker, "", "STK", underlyingId);
 
         long start = System.currentTimeMillis();
-        while (pendingMetadataRequests.contains(reqId) && (System.currentTimeMillis() - start) < 10000) {
+        while (pendingMetadataRequests.contains(reqId) && (System.currentTimeMillis() - start) < resolveChainWaitMs) {
             try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         }
 
@@ -245,6 +301,9 @@ public class OrderExecutionService {
             client.placeOrder(order.orderId(), optionContract, order);
         }
 
+        // Persist bracket state for later position closure
+        bracketStateMap.put(pId, new BracketTradeInfo(optionContract, qty, tradePlan.entryPrice, ZonedDateTime.now()));
+
         log.info("✅ Bracket sent! Parent={} TP={} SL={}", pId, tpId, slId);
         return new OrderResult(pId, tpId, slId, bestStrike, expiration, right);
     }
@@ -255,7 +314,52 @@ public class OrderExecutionService {
         client.cancelOrder(orderId, new OrderCancel());
     }
 
+    /**
+     * Closes a position by cancelling TP/SL conditional orders and placing a market sell.
+     * Uses stored bracket state to retrieve contract and quantity.
+     *
+     * @param parentOrderId The parent order ID (entry order)
+     * @param tpOrderId The take-profit order ID
+     * @param slOrderId The stop-loss order ID
+     */
+    public void closePositionViaConditions(int parentOrderId, int tpOrderId, int slOrderId) {
+        connect();
+
+        log.info("🎯 Closing position: parentId={}, tpId={}, slId={}", parentOrderId, tpOrderId, slOrderId);
+
+        // Cancel both conditional orders first
+        log.info("Cancelling conditional orders: TP={}, SL={}", tpOrderId, slOrderId);
+        client.cancelOrder(tpOrderId, new OrderCancel());
+        client.cancelOrder(slOrderId, new OrderCancel());
+
+        // Retrieve stored bracket state
+        BracketTradeInfo info = bracketStateMap.remove(parentOrderId);
+        if (info == null) {
+            log.error("No bracket state found for parentId={} - cannot close position", parentOrderId);
+            return;
+        }
+
+        // Place market sell order
+        int sellOrderId = nextOrderId.getAndIncrement();
+        Order marketSell = OrderFactory.createMarketOrder(sellOrderId, "SELL", info.quantity());
+
+        log.info("📤 Placing market sell: orderId={}, contract={}, qty={}",
+                sellOrderId, info.contract().symbol(), info.quantity());
+
+        try {
+            client.placeOrder(sellOrderId, info.contract(), marketSell);
+            log.info("✅ Market sell order placed successfully: orderId={}", sellOrderId);
+        } catch (Exception e) {
+            log.error("❌ Failed to place market sell order: {}", e.getMessage(), e);
+        }
+    }
+
     public record OptionChainResult(String expiration, Set<Double> validStrikes, String tradingClass) {}
 
     public record OrderResult(int parentId, int tpOrderId, int slOrderId, double strike, String expiration, String right) {}
+
+    /**
+     * Stores bracket trade info for later position closure.
+     */
+    public record BracketTradeInfo(Contract contract, int quantity, double entryPrice, ZonedDateTime entryTime) {}
 }

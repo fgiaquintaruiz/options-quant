@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation, Routes, Route, Navigate } from 'react-router-dom'
 import { Activity, BarChart3, HeartPulse, Settings } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { liveApi } from './api'
@@ -65,10 +65,7 @@ export default function App() {
     return `${s}s`
   }
 
-  const isLive     = location.pathname === '/' || location.pathname.startsWith('/live')
-  const isBacktest = location.pathname.startsWith('/backtest')
-  const isHealth   = location.pathname.startsWith('/health')
-  const isSettings = location.pathname.startsWith('/settings')
+  const isLive = location.pathname === '/' || location.pathname.startsWith('/live')
 
   return (
     <div className="container">
@@ -112,19 +109,15 @@ export default function App() {
         </div>
       </div>
 
-      {/* Page Content */}
-      <div style={{ display: isLive ? 'block' : 'none' }}>
-        <LiveDashboard twsStatus={twsStatus} />
-      </div>
-      <div style={{ display: isBacktest ? 'block' : 'none' }}>
-        <BacktestDashboard />
-      </div>
-      <div style={{ display: isSettings ? 'block' : 'none' }}>
-        <SettingsPage />
-      </div>
-      <div style={{ display: isHealth ? 'block' : 'none' }}>
-        <HealthPage />
-      </div>
+      {/* One route = one mounted page (avoids hidden dashboards running effects / timers) */}
+      <Routes>
+        <Route path="/" element={<Navigate to="/live" replace />} />
+        <Route path="/live" element={<LiveDashboard twsStatus={twsStatus} />} />
+        <Route path="/backtest" element={<BacktestDashboard />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/health" element={<HealthPage />} />
+        <Route path="*" element={<Navigate to="/live" replace />} />
+      </Routes>
     </div>
   )
 }

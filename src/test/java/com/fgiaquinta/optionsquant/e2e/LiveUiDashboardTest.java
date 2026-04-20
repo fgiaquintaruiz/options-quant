@@ -5,112 +5,99 @@ import com.microsoft.playwright.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests for the Live UI Dashboard (/live-ui).
- * Tests page rendering, status API, scan API, signals, tickers, and TWS status.
+ * Tests for the Live dashboard (React). Prefer {@code /live} so {@code isLive} is true in App.jsx
+ * ({@code /live-ui} is API-only; the SPA hides the dashboard there).
  */
+@Tag("e2e")
 @DisplayName("Live UI Dashboard Tests")
 class LiveUiDashboardTest extends BasePlaywrightTest {
+
+    private static final String LIVE_PATH = "/live";
 
     // ========== PAGE RENDERING ==========
 
     @Test
-    @DisplayName("Live UI dashboard page loads with 200 status")
+    @DisplayName("Live dashboard page loads with 200 status")
     void dashboardPageLoads() {
-        Response response = page.navigate(BASE_URL + "/live-ui");
+        Response response = page.navigate(BASE_URL + LIVE_PATH);
         assertNotNull(response);
         assertEquals(200, response.status());
     }
 
     @Test
-    @DisplayName("Dashboard contains main sections")
+    @DisplayName("Dashboard contains toolbar and signals grid")
     void dashboardContainsMainSections() {
-        page.navigate(BASE_URL + "/live-ui");
+        page.navigate(BASE_URL + LIVE_PATH);
         page.waitForLoadState();
 
-        String content = page.content();
-        assertTrue(content.contains("Live Trading Dashboard"), "Should have title");
-        assertTrue(content.contains("Scanning Status"), "Should have scanning status card");
-        assertTrue(content.contains("Signals Today"), "Should have signals card");
-        assertTrue(content.contains("Account:"), "Account info shown with Signals Today");
-        assertTrue(content.contains("Tickers Queue"), "Should have tickers queue");
-        assertTrue(content.contains("Live Signals Feed"), "Should have signals feed");
-        assertTrue(content.contains("Console Log"), "Should have console log");
+        assertTrue(page.locator("[data-testid=live-dashboard]").isVisible());
+        assertTrue(page.locator("[data-testid=live-toolbar]").isVisible());
+        assertTrue(page.locator("[data-testid=live-signals-grid]").isVisible());
+        assertTrue(page.getByText("Tickers to scan").first().isVisible());
+        assertTrue(page.getByText("Account:").first().isVisible());
     }
 
     @Test
-    @DisplayName("Dashboard has navigation links")
+    @DisplayName("Dashboard has SPA navigation links")
     void dashboardHasNavigationLinks() {
-        page.navigate(BASE_URL + "/live-ui");
+        page.navigate(BASE_URL + LIVE_PATH);
         page.waitForLoadState();
 
-        String content = page.content();
-        assertTrue(content.contains("href=\"/live-ui\""), "Should link to live-ui");
-        assertTrue(content.contains("href=\"/backtest-ui\""), "Should link to backtest-ui");
-        assertTrue(content.contains("href=\"/actuator/health\""), "Should link to health");
+        assertTrue(page.locator("a[href='/live']").first().isVisible());
+        assertTrue(page.locator("a[href='/backtest']").first().isVisible());
+        assertTrue(page.locator("a[href='/health']").first().isVisible());
     }
 
     @Test
-    @DisplayName("Dashboard has Start Scan and Stop Scan buttons")
+    @DisplayName("Dashboard has Start Scan or Stop Scan control")
     void dashboardHasScanButtons() {
-        page.navigate(BASE_URL + "/live-ui");
+        page.navigate(BASE_URL + LIVE_PATH);
         page.waitForLoadState();
 
-        String content = page.content();
-        assertTrue(content.contains("startScanBtn"), "Should have start scan button");
-        assertTrue(content.contains("stopScanBtn"), "Should have stop scan button");
-        assertTrue(content.contains("▶ Start Scan"), "Should have start button text");
-        assertTrue(content.contains("⏹ Stop Scan"), "Should have stop button text");
+        Locator start = page.locator("[data-testid=live-start-scan]");
+        Locator stop = page.locator("[data-testid=live-stop-scan]");
+        assertTrue(start.count() > 0 || stop.count() > 0);
     }
 
     @Test
-    @DisplayName("Dashboard has toggle switches for auto-execute and extended hours")
+    @DisplayName("Dashboard has scheduler and execution toggles")
     void dashboardHasToggles() {
-        page.navigate(BASE_URL + "/live-ui");
+        page.navigate(BASE_URL + LIVE_PATH);
         page.waitForLoadState();
 
-        String content = page.content();
-        assertTrue(content.contains("autoExecToggle"), "Should have auto-execute toggle");
-        assertTrue(content.contains("extHoursToggle"), "Should have extended hours toggle");
+        assertTrue(page.locator("[data-testid=live-toggle-scheduler]").isVisible());
+        assertTrue(page.locator("[data-testid=live-toggle-auto-execute]").isVisible());
+        assertTrue(page.locator("[data-testid=live-toggle-mock-market]").isVisible());
     }
 
     @Test
-    @DisplayName("Dashboard has signals table with correct columns")
+    @DisplayName("Signals grid has expected column headers")
     void dashboardHasSignalsTable() {
-        page.navigate(BASE_URL + "/live-ui");
+        page.navigate(BASE_URL + LIVE_PATH);
         page.waitForLoadState();
 
-        String content = page.content();
-        assertTrue(content.contains("<th>Time</th>"), "Should have Time column");
-        assertTrue(content.contains("<th>Ticker</th>"), "Should have Ticker column");
-        assertTrue(content.contains("<th>Strategy</th>"), "Should have Strategy column");
-        assertTrue(content.contains("<th>Dir</th>"), "Should have Direction column");
-        assertTrue(content.contains("<th>Price</th>"), "Should have Price column");
-        assertTrue(content.contains("<th>TP</th>"), "Should have TP column");
-        assertTrue(content.contains("<th>SL</th>"), "Should have SL column");
-        assertTrue(content.contains("<th>Pattern</th>"), "Should have Pattern column");
-        assertTrue(content.contains("<th>Status</th>"), "Should have Status column");
+        assertTrue(page.getByText("Live Signals & Positions").isVisible());
+        String html = page.content();
+        assertTrue(html.contains("Ticker") && html.contains("Strategy") && html.contains("Status"));
     }
 
     @Test
-    @DisplayName("Dashboard shows placeholder when no signals")
-    void dashboardShowsPlaceholderWhenNoSignals() {
-        page.navigate(BASE_URL + "/live-ui");
+    @DisplayName("Signals grid shows record count")
+    void dashboardShowsRecordCount() {
+        page.navigate(BASE_URL + LIVE_PATH);
         page.waitForLoadState();
 
-        String content = page.content();
-        assertTrue(content.contains("Waiting for scan") || content.contains("No signals"),
-            "Should show placeholder message");
+        assertTrue(page.content().contains("records"));
     }
 
     @Test
-    @DisplayName("Dashboard has progress bar element")
-    void dashboardHasProgressBar() {
-        page.navigate(BASE_URL + "/live-ui");
+    @DisplayName("React root exposes stable data-testid for automation")
+    void dashboardHasStableTestIds() {
+        page.navigate(BASE_URL + LIVE_PATH);
         page.waitForLoadState();
 
-        String content = page.content();
-        assertTrue(content.contains("progressBar"), "Should have progress bar element");
-        assertTrue(content.contains("progress-fill"), "Should have progress fill element");
+        assertTrue(page.locator("[data-testid=live-dashboard]").isVisible());
+        assertTrue(page.locator("[data-testid=live-trade-grid-root]").isVisible());
     }
 
     // ========== STATUS API ==========
@@ -205,11 +192,9 @@ class LiveUiDashboardTest extends BasePlaywrightTest {
     @Test
     @DisplayName("Stop scan returns success when no scan running")
     void stopScanWhenNotRunning() throws Exception {
-        // Wait a bit for any scan to complete
         Thread.sleep(2000);
         String json = postJson("/live-ui/stop-scan");
         assertNotNull(json);
-        // May return success=false if no scan in progress
     }
 
     // ========== EXTENDED HOURS TOGGLE ==========
@@ -221,77 +206,5 @@ class LiveUiDashboardTest extends BasePlaywrightTest {
         assertNotNull(json);
         assertTrue(json.contains("\"success\":true"));
         assertTrue(json.contains("\"extendedHours\""));
-    }
-
-    // ========== JAVASCRIPT FUNCTIONS ==========
-
-    @Test
-    @DisplayName("Page has loadStatus JavaScript function")
-    void pageHasLoadStatusFunction() {
-        page.navigate(BASE_URL + "/live-ui");
-        page.waitForLoadState();
-
-        Object result = page.evaluate("typeof loadStatus");
-        assertEquals("function", result, "loadStatus should be a function");
-    }
-
-    @Test
-    @DisplayName("Page has loadSignals JavaScript function")
-    void pageHasLoadSignalsFunction() {
-        page.navigate(BASE_URL + "/live-ui");
-        page.waitForLoadState();
-
-        Object result = page.evaluate("typeof loadSignals");
-        assertEquals("function", result, "loadSignals should be a function");
-    }
-
-    @Test
-    @DisplayName("Page has startScan JavaScript function")
-    void pageHasStartScanFunction() {
-        page.navigate(BASE_URL + "/live-ui");
-        page.waitForLoadState();
-
-        Object result = page.evaluate("typeof startScan");
-        assertEquals("function", result, "startScan should be a function");
-    }
-
-    @Test
-    @DisplayName("Page has stopScan JavaScript function")
-    void pageHasStopScanFunction() {
-        page.navigate(BASE_URL + "/live-ui");
-        page.waitForLoadState();
-
-        Object result = page.evaluate("typeof stopScan");
-        assertEquals("function", result, "stopScan should be a function");
-    }
-
-    @Test
-    @DisplayName("Page has updateUI JavaScript function")
-    void pageHasUpdateUiFunction() {
-        page.navigate(BASE_URL + "/live-ui");
-        page.waitForLoadState();
-
-        Object result = page.evaluate("typeof updateUI");
-        assertEquals("function", result, "updateUI should be a function");
-    }
-
-    @Test
-    @DisplayName("Page has renderSignals JavaScript function")
-    void pageHasRenderSignalsFunction() {
-        page.navigate(BASE_URL + "/live-ui");
-        page.waitForLoadState();
-
-        Object result = page.evaluate("typeof renderSignals");
-        assertEquals("function", result, "renderSignals should be a function");
-    }
-
-    @Test
-    @DisplayName("Page has renderTickers JavaScript function")
-    void pageHasRenderTickersFunction() {
-        page.navigate(BASE_URL + "/live-ui");
-        page.waitForLoadState();
-
-        Object result = page.evaluate("typeof renderTickers");
-        assertEquals("function", result, "renderTickers should be a function");
     }
 }

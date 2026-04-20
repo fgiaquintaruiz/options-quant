@@ -2,6 +2,8 @@
 
 ## Overview
 
+For **YAML tuning** of live scan throughput and ticker order (AUTO vs FIXED concurrency, HYBRID vs NATURAL prioritization, hybrid weights), see **README → Configuración → Escaneo en vivo (`scanner`)**.
+
 The live market scanning system now has **TWO major improvements**:
 
 1. ✅ **Real Candlestick Pattern Detection** - Detects and filters patterns in live trading

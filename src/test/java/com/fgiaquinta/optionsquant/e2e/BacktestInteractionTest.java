@@ -6,7 +6,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Tests for Backtest mode interactions - run backtest, improve strategy.
+ * Tagged slow: POST /backtest-ui/run triggers a full parallel backtest (~all tickers).
  */
+@Tag("e2e")
+@Tag("slow")
 @DisplayName("Backtest Interaction Tests")
 class BacktestInteractionTest extends BasePlaywrightTest {
 

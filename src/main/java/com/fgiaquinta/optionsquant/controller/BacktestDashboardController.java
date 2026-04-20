@@ -10,6 +10,7 @@ import com.fgiaquinta.optionsquant.service.TickerService;
 import com.fgiaquinta.optionsquant.service.TickerMemory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -65,6 +66,17 @@ public class BacktestDashboardController {
     // Event-driven progress tracker: replaces CSV polling for SSE progress updates.
     // The backtest thread updates this map directly; the SSE monitoring loop reads from it.
     private final ConcurrentHashMap<String, BacktestProgress> activeBacktests = new ConcurrentHashMap<>();
+
+    /** When true, {@link com.fgiaquinta.optionsquant.service.BacktestUiScheduler} runs {@link #runScheduledBacktestTick()} on a fixed delay. */
+    private final AtomicBoolean schedulerEnabled = new AtomicBoolean(false);
+    private volatile double schedInitialCapital = 50_000;
+    private volatile double schedRiskPct = 0.02;
+    private volatile String schedTickerFilter = "";
+    private volatile String schedTickerScope = "HOT";
+    private volatile long lastScheduledRunEpochMs = 0L;
+
+    @Value("${backtest.scheduler.fixed-delay-ms:3600000}")
+    private long schedulerFixedDelayMs;
 
     /**
      * Mutable progress state shared between the backtest thread and SSE monitor.
@@ -465,26 +477,10 @@ public class BacktestDashboardController {
     }
 
     /**
-     * API: Run a backtest with default parameters (hot tickers focus).
-     * POST /backtest-ui/run
+     * Core UI backtest run (blocking). Caller must own {@code backtestRunning} and clear it in {@code finally}.
      */
-    @PostMapping("/run")
-    public ResponseEntity<Map<String, Object>> runBacktest(
-            @RequestParam(defaultValue = "50000") double initialCapital,
-            @RequestParam(defaultValue = "0.02") double riskPct,
-            @RequestParam(required = false) String tickerFilter,
-            @RequestParam(defaultValue = "ALL") String tickerScope
-    ) {
-        if (!backtestRunning.compareAndSet(false, true)) {
-            Map<String, Object> error = new LinkedHashMap<>();
-            error.put("success", false);
-            error.put("error", "A backtest is already running. Stop it first.");
-            return ResponseEntity.ok(error);
-        }
-
-        stopRequested.set(false);
+    private Map<String, Object> executeBacktestUiRun(double initialCapital, double riskPct, String tickerFilter, String tickerScope) {
         try {
-            // Build ordered ticker universe
             List<String> hotTickers = tickerService.getHotTickers();
             List<String> allTickers = tickerService.getTickerSymbols();
             List<String> orderedAllTickers = new ArrayList<>(hotTickers);
@@ -496,7 +492,6 @@ public class BacktestDashboardController {
                     ? new ArrayList<>(hotTickers)
                     : orderedAllTickers;
 
-            // Apply optional ticker filter inside the selected universe
             if (tickerFilter != null && !tickerFilter.isBlank()) {
                 Set<String> filterSet = Arrays.stream(tickerFilter.split(","))
                         .map(String::trim)
@@ -513,7 +508,7 @@ public class BacktestDashboardController {
                 Map<String, Object> error = new LinkedHashMap<>();
                 error.put("success", false);
                 error.put("error", "No tickers matched the selected universe/filter.");
-                return ResponseEntity.ok(error);
+                return error;
             }
 
             LocalDate toDate = LocalDate.now();
@@ -528,7 +523,6 @@ public class BacktestDashboardController {
                     3, com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15, true, false
             );
 
-            // Run in a separate thread so stop can interrupt
             final BacktestReport[] reportHolder = new BacktestReport[1];
             final Exception[] errorHolder = new Exception[1];
             Path tradesCsv = Path.of("backtest/trades.csv");
@@ -550,7 +544,6 @@ public class BacktestDashboardController {
             });
             currentBacktestThread.start();
 
-            // Poll CSV for new trades while the backtest runs, streaming them to the UI
             long tradesByteOffset = 0;
             int totalTradesSent = 0;
             while (currentBacktestThread.isAlive()) {
@@ -573,7 +566,6 @@ public class BacktestDashboardController {
                     log.debug("Error polling trades CSV: {}", e.getMessage());
                 }
             }
-            // Final flush of any remaining trades
             try {
                 long currentSize = Files.exists(tradesCsv) ? Files.size(tradesCsv) : 0;
                 if (currentSize > tradesByteOffset) {
@@ -598,15 +590,13 @@ public class BacktestDashboardController {
 
             BacktestReport report = reportHolder[0];
             if (report == null) {
-                // Backtest was stopped
-                Map<String, Object> result = new LinkedHashMap<>();
-                result.put("success", false);
-                result.put("stopped", true);
-                result.put("error", "Backtest was stopped by user");
-                return ResponseEntity.ok(result);
+                Map<String, Object> stopped = new LinkedHashMap<>();
+                stopped.put("success", false);
+                stopped.put("stopped", true);
+                stopped.put("error", "Backtest was stopped by user");
+                return stopped;
             }
 
-            // Build equity curve data
             List<Map<String, Object>> equityData = new ArrayList<>();
             for (EquityPoint point : report.equityCurve()) {
                 Map<String, Object> entry = new LinkedHashMap<>();
@@ -615,7 +605,6 @@ public class BacktestDashboardController {
                 equityData.add(entry);
             }
 
-            // Build strategy data
             Map<String, Object> byStrategy = new LinkedHashMap<>();
             for (Map.Entry<String, StrategyStats> entry : report.byStrategy().entrySet()) {
                 Map<String, Object> stats = new LinkedHashMap<>();
@@ -627,7 +616,6 @@ public class BacktestDashboardController {
                 byStrategy.put(entry.getKey(), stats);
             }
 
-            // Build ticker data
             Map<String, Object> byTicker = new LinkedHashMap<>();
             for (Map.Entry<String, StrategyStats> entry : report.byTicker().entrySet()) {
                 Map<String, Object> stats = new LinkedHashMap<>();
@@ -643,12 +631,15 @@ public class BacktestDashboardController {
                 trades.add(toTradePayload(trade));
             }
 
-            // Build response
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("success", true);
             result.put("totalTrades", report.totalTrades());
-            result.put("winRate", report.winRate() * 100);
-            result.put("totalPnl", report.finalCapital() - report.initialCapital());
+            double winRatePct = report.winRate() * 100;
+            result.put("winRate", winRatePct);
+            result.put("winRatePct", winRatePct);
+            double netPnl = report.finalCapital() - report.initialCapital();
+            result.put("totalPnl", netPnl);
+            result.put("netPnl", netPnl);
             result.put("profitFactor", report.profitFactor());
             result.put("maxDrawdown", report.maxDrawdown());
             result.put("equityCurve", equityData);
@@ -662,13 +653,122 @@ public class BacktestDashboardController {
             log.info("Backtest complete via UI: {} trades, {}% WR, ${} PnL",
                     report.totalTrades(), String.format("%.1f", report.winRate() * 100), String.format("%.2f", report.finalCapital() - report.initialCapital()));
 
-            return ResponseEntity.ok(result);
+            return result;
         } catch (Exception e) {
             log.error("Backtest failed via UI: {}", e.getMessage(), e);
             Map<String, Object> error = new LinkedHashMap<>();
             error.put("success", false);
-            error.put("error", e.getMessage());
+            error.put("error", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+            return error;
+        }
+    }
+
+    /**
+     * Invoked by {@link com.fgiaquinta.optionsquant.service.BacktestUiScheduler} when auto-run is enabled.
+     */
+    public void runScheduledBacktestTick() {
+        if (!schedulerEnabled.get()) {
+            return;
+        }
+        if (!backtestRunning.compareAndSet(false, true)) {
+            log.debug("Scheduled backtest skipped: a run is already in progress");
+            return;
+        }
+        stopRequested.set(false);
+        try {
+            log.info("Scheduled backtest starting (capital={}, riskPct={}, scope={}, filter={})",
+                    schedInitialCapital, schedRiskPct, schedTickerScope, schedTickerFilter);
+            Map<String, Object> outcome = executeBacktestUiRun(schedInitialCapital, schedRiskPct, schedTickerFilter, schedTickerScope);
+            lastScheduledRunEpochMs = System.currentTimeMillis();
+            log.info("Scheduled backtest finished: success={} totalTrades={}",
+                    outcome.get("success"), outcome.get("totalTrades"));
+        } finally {
+            backtestRunning.set(false);
+            currentBacktestThread = null;
+        }
+    }
+
+    private void applySchedulerBody(Map<String, Object> body) {
+        if (body == null) {
+            return;
+        }
+        Object en = body.get("enabled");
+        if (en instanceof Boolean) {
+            schedulerEnabled.set((Boolean) en);
+        }
+        Object ic = body.get("initialCapital");
+        if (ic instanceof Number) {
+            schedInitialCapital = ((Number) ic).doubleValue();
+        }
+        Object rp = body.get("riskPct");
+        if (rp instanceof Number) {
+            schedRiskPct = ((Number) rp).doubleValue();
+        }
+        Object tf = body.get("tickerFilter");
+        if (tf instanceof String) {
+            schedTickerFilter = (String) tf;
+        } else if (tf != null) {
+            schedTickerFilter = String.valueOf(tf);
+        }
+        Object ts = body.get("tickerScope");
+        if (ts instanceof String) {
+            schedTickerScope = (String) ts;
+        } else if (ts != null) {
+            schedTickerScope = String.valueOf(ts);
+        }
+    }
+
+    private Map<String, Object> schedulerStatusMap() {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("schedulerEnabled", schedulerEnabled.get());
+        m.put("initialCapital", schedInitialCapital);
+        m.put("riskPct", schedRiskPct);
+        m.put("tickerFilter", schedTickerFilter != null ? schedTickerFilter : "");
+        m.put("tickerScope", schedTickerScope != null ? schedTickerScope : "HOT");
+        m.put("fixedDelayMs", schedulerFixedDelayMs);
+        m.put("lastScheduledRunEpochMs", lastScheduledRunEpochMs);
+        return m;
+    }
+
+    /**
+     * GET /backtest-ui/scheduler — current auto-run flag and parameters used for scheduled runs.
+     */
+    @GetMapping("/scheduler")
+    public ResponseEntity<Map<String, Object>> getScheduler() {
+        return ResponseEntity.ok(schedulerStatusMap());
+    }
+
+    /**
+     * POST /backtest-ui/scheduler — enable/disable auto-run and/or update parameters (JSON body).
+     */
+    @PostMapping("/scheduler")
+    public ResponseEntity<Map<String, Object>> postScheduler(@RequestBody(required = false) Map<String, Object> body) {
+        applySchedulerBody(body);
+        return ResponseEntity.ok(schedulerStatusMap());
+    }
+
+    /**
+     * API: Run a backtest with default parameters (hot tickers focus).
+     * POST /backtest-ui/run
+     */
+    @PostMapping("/run")
+    public ResponseEntity<Map<String, Object>> runBacktest(
+            @RequestParam(defaultValue = "50000") double initialCapital,
+            @RequestParam(defaultValue = "0.02") double riskPct,
+            @RequestParam(required = false) String tickerFilter,
+            @RequestParam(defaultValue = "ALL") String tickerScope
+    ) {
+        if (!backtestRunning.compareAndSet(false, true)) {
+            Map<String, Object> error = new LinkedHashMap<>();
+            error.put("success", false);
+            error.put("error", "A backtest is already running. Stop it first.");
             return ResponseEntity.ok(error);
+        }
+
+        stopRequested.set(false);
+        try {
+            Map<String, Object> map = executeBacktestUiRun(initialCapital, riskPct, tickerFilter, tickerScope);
+            return ResponseEntity.ok(map);
         } finally {
             backtestRunning.set(false);
             currentBacktestThread = null;
@@ -682,6 +782,8 @@ public class BacktestDashboardController {
     public ResponseEntity<Map<String, Object>> isRunning() {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("running", backtestRunning.get());
+        result.put("schedulerEnabled", schedulerEnabled.get());
+        result.put("fixedDelayMs", schedulerFixedDelayMs);
         return ResponseEntity.ok(result);
     }
 

@@ -679,28 +679,24 @@ class StrategyUnitTest {
         void shouldTriggerC1WithCompressedSMAsAndBreakout() {
             ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 14, 0, 0, 0, NY);
 
-            // Build 201 hourly candles where all SMAs (20, 40, 100, 200) are tightly compressed
-            // Use nearly constant close price around 100
-            int totalBars = 201;
+            // ChannelAnalyzer.isSmaLateralChannel needs prevIdx >= 200 + 70 - 1 → >= 269 bars before breakout window
+            int totalBars = 280;
             double[] hourlyCloses = new double[totalBars];
             double[] hourlyHighs = new double[totalBars];
             double[] hourlyOpens = new double[totalBars];
 
-            // First 200 bars: very tight range around 100 (SMAs will be compressed within 4%)
-            for (int i = 0; i < 200; i++) {
-                double base = 100.0 + (i % 3) * 0.2 - 0.2; // oscillates 99.8 to 100.2
+            for (int i = 0; i < totalBars - 1; i++) {
+                double base = 100.0 + (i % 3) * 0.2 - 0.2;
                 hourlyCloses[i] = base;
                 hourlyHighs[i] = base + 0.5;
                 hourlyOpens[i] = base;
             }
 
-            // The max price in last 70 bars (indices 131..200) is around 100.2
-            // Bar 200 (current): breaks out above the ceiling
-            hourlyCloses[200] = 105.0; // breakout!
-            hourlyHighs[200] = 105.5;
-            hourlyOpens[200] = 100.0;
+            int last = totalBars - 1;
+            hourlyCloses[last] = 105.0;
+            hourlyHighs[last] = 105.5;
+            hourlyOpens[last] = 100.0;
 
-            // 15m current candle: riding upper Bollinger Band
             double[] current15m = {104, 105, 103, 104.5, 3000000L};
 
             StrategyData data = buildC1Data(testTime, hourlyCloses, hourlyHighs, hourlyOpens, current15m);
