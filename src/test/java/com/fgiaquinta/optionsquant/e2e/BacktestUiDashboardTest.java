@@ -44,8 +44,7 @@ class BacktestUiDashboardTest extends BasePlaywrightTest {
 
         assertTrue(backtestRoot().getByText("Tickers to scan").isVisible());
         assertTrue(backtestRoot().getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Run Backtest")).isVisible());
-        assertTrue(backtestRoot().getByText("Trade Log").isVisible());
-        assertTrue(backtestRoot().getByText("Backend Logs").isVisible());
+        assertTrue(backtestRoot().getByText("Trade log").isVisible());
     }
 
     @Test

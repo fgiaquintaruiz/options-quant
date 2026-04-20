@@ -642,6 +642,12 @@ public class BacktestDashboardController {
             result.put("netPnl", netPnl);
             result.put("profitFactor", report.profitFactor());
             result.put("maxDrawdown", report.maxDrawdown());
+            result.put("maxDrawdownPct", report.maxDrawdownPct());
+            result.put("initialCapital", report.initialCapital());
+            result.put("finalCapital", report.finalCapital());
+            result.put("totalReturnPct", report.totalReturnPct());
+            result.put("winningTrades", report.winningTrades());
+            result.put("losingTrades", report.losingTrades());
             result.put("equityCurve", equityData);
             result.put("trades", trades);
             result.put("byStrategy", byStrategy);

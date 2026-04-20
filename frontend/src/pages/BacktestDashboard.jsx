@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Play, Square, Activity, Settings, RefreshCw, Zap, ChevronUp, ChevronDown, Monitor } from 'lucide-react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { Play, Square, ChevronUp, ChevronDown, Monitor } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { backtestApi } from '../api'
 import UnifiedDataGrid from '../components/UnifiedDataGrid'
@@ -51,6 +51,13 @@ function formatUsd(v) {
   return Number.isFinite(n) ? n.toLocaleString() : '—'
 }
 
+function formatSignedPct(v) {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return '—'
+  const sign = n > 0 ? '+' : ''
+  return `${sign}${n.toFixed(2)}%`
+}
+
 /** Backtest engine pool size (1–16), persisted under bt_maxConcurrent */
 function normalizeBtMaxConcurrent(v) {
   const n = Number(v)
@@ -84,7 +91,7 @@ export default function BacktestDashboard() {
   const [running, setRunning] = useState(false)
   const [report, setReport] = useState(null)
   const [equityData, setEquityData] = useState([])
-  const [logs, setLogs] = useState([])
+  const [lastRunError, setLastRunError] = useState(null)
   const [activities, setActivities] = useState([])
   const [elapsed, setElapsed] = useState(0)
   const [maxConcurrent, setMaxConcurrent] = useState(() => normalizeBtMaxConcurrent(LS.get('bt_maxConcurrent', 4)))
@@ -100,11 +107,7 @@ export default function BacktestDashboard() {
 
   // Side effects belonging in mount hook
   useEffect(() => {
-    ;['bt_activities', 'bt_report', 'bt_equity', 'bt_logs', 'bt_running'].forEach(k => LS.remove(k))
-  }, [])
-
-  const addLog = useCallback((msg, type = 'info') => {
-    setLogs(prev => [{ time: new Date().toLocaleTimeString(), msg, type }, ...prev].slice(0, 100))
+    ;['bt_activities', 'bt_report', 'bt_equity', 'bt_running'].forEach(k => LS.remove(k))
   }, [])
 
   useEffect(() => {
@@ -213,35 +216,32 @@ export default function BacktestDashboard() {
   const handleStartScan = async () => {
     await syncSchedulerToServer()
     setRunning(true)
+    setLastRunError(null)
     setElapsed(0)
     setReport(null)
     setEquityData([])
     setActivities([])
-    addLog('Connecting to progress stream...', 'info')
-    
+
     if (eventSourceRef.current) {
       eventSourceRef.current.close()
     }
-    
+
     const source = new EventSource('/backtest-ui/stream')
     eventSourceRef.current = source
-    
+
     source.onopen = () => {
-      addLog('🚀 Stream connected! Starting engines...', 'success')
-      
       backtestApi.runBacktest(startParams.capital, startParams.risk, tickerFilter, tickerScope).then(data => {
         setRunning(false)
-        addLog('🏁 Backend scan loop finished', 'info')
         if (eventSourceRef.current) {
           eventSourceRef.current.close()
           eventSourceRef.current = null
         }
         if (data.stopped) {
-          addLog('⏹ Backtest stopped', 'warn')
+          setLastRunError('Backtest was stopped.')
           return
         }
         if (data.success === false) {
-          addLog(`❌ Error: ${data.error}`, 'error')
+          setLastRunError(data.error || 'Backtest failed.')
           return
         }
         setReport(normalizeBacktestReportPayload(data))
@@ -249,10 +249,10 @@ export default function BacktestDashboard() {
         if (data.trades && data.trades.length > 0) {
           setActivities(mapTradesToActivities(data.trades))
         }
-        addLog(`✅ Report generated: ${data.totalTrades} trades`, 'success')
       }).catch(e => {
         setRunning(false)
-        addLog(`❌ Fatal: ${e.message}`, 'error')
+        setLastRunError(e.message || 'Request failed')
+        console.error(e)
       })
     }
     
@@ -304,22 +304,20 @@ export default function BacktestDashboard() {
         const d = JSON.parse(e.data)
         if (d.trades) {
            const mapped = mapTradesToActivities(d.trades)
-           setActivities(prev => [...prev, ...mapped].slice(-500)) 
-           addLog(`📥 Received ${mapped.length} historical trades`, 'info')
+           setActivities(prev => [...prev, ...mapped].slice(-500))
         }
       } catch (err) {}
     })
 
-    source.onerror = () => {
-      addLog('⚠️ Stream connection issue (waiting for engine...)', 'warn')
-    }
+    source.onerror = () => { /* SSE reconnects; run is independent */ }
   }
 
   const handleStopScan = async () => {
     try {
       await backtestApi.stopBacktest()
-      addLog('⏹ Stop signal sent to backend', 'warn')
-    } catch (e) { addLog(`❌ Stop failed: ${e.message}`, 'error') }
+    } catch (e) {
+      setLastRunError(e.message || 'Stop failed')
+    }
   }
 
   const handleMaxConcurrentChange = async (val) => {
@@ -396,7 +394,7 @@ export default function BacktestDashboard() {
                     setSchedulerEnabled(next)
                     LS.set('bt_schedulerEnabled', next)
                   } catch (e) {
-                    addLog(`Scheduler update failed: ${e.message}`, 'error')
+                    setLastRunError(`Scheduler: ${e.message}`)
                   }
                 }}
                 icon={Monitor}
@@ -456,33 +454,84 @@ export default function BacktestDashboard() {
         </div>
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: '1fr 350px' }}>
-        <div className="flex-col gap-20">
-          {report && (
-            <div className="card">
-              <div className="flex-between mb-12">
-                <h3 className="m-0">Report: {report.tickerScope ?? '—'} {tickerFilter ? `(${tickerFilter})` : ''}</h3>
-                <span className="badge badge-success" style={{ fontSize: 14 }}>
-                  {report.winRatePct != null ? `${report.winRatePct}%` : '—'} Win Rate
-                </span>
-              </div>
-              <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-                <StatCard label="Trades" value={report.totalTrades ?? '—'} />
-                <StatCard
-                  label="PF"
-                  value={report.profitFactor != null ? Number(report.profitFactor).toFixed(2) : '—'}
-                  color={(Number(report.profitFactor) || 0) > 1 ? '#3fb950' : '#f85149'}
-                />
-                <StatCard
-                  label="PnL"
-                  value={`$${formatUsd(report.netPnl)}`}
-                  color={(Number(report.netPnl) || 0) >= 0 ? '#3fb950' : '#f85149'}
-                />
-                <StatCard label="Drawdown" value={`$${formatUsd(report.maxDrawdown)}`} color="#f85149" />
-              </div>
-              
-              {equityData.length > 0 ? (
-                <div className="chart-container" style={{ marginTop: 20, width: '100%' }}>
+      {lastRunError && (
+        <div
+          className="card"
+          style={{ padding: '10px 16px', marginBottom: 16, borderColor: '#f8514966', background: '#f8514914' }}
+          role="alert"
+        >
+          <span className="text-sm" style={{ color: '#f85149' }}>{lastRunError}</span>
+        </div>
+      )}
+
+      <div className="flex-col gap-20">
+        {report && (
+          <div className="card" data-testid="backtest-report-panel">
+            <h3 className="m-0">Backtest results</h3>
+            <p className="text-sm color-muted" style={{ marginTop: 10, maxWidth: 880, lineHeight: 1.55 }}>
+              Summary of the last finished run: simulated closed trades on the ticker universe below, using the capital and risk
+              from the toolbar. Dollar amounts are in account currency (USD). Win rate is the percentage of trades that closed with
+              a gain; profit factor is gross profits divided by gross losses (above 1.0 means winners outweigh losers in dollars).
+            </p>
+            <p className="text-xs color-muted" style={{ marginTop: 8 }}>
+              <strong>{report.tickerScope ?? '—'}</strong>
+              {tickerFilter ? ` · filter (${tickerFilter})` : ''}
+              {report.tickerCount != null && <> · {report.tickerCount} tickers</>}
+              {report.initialCapital != null && report.finalCapital != null && (
+                <> · start ${formatUsd(report.initialCapital)} → end ${formatUsd(report.finalCapital)}</>
+              )}
+            </p>
+
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 16 }}>
+              <ReportMetric
+                label="Win rate"
+                value={report.winRatePct != null ? `${Number(report.winRatePct).toFixed(1)}%` : '—'}
+                sub="Share of trades that closed green"
+                color={(Number(report.winRatePct) || 0) >= 50 ? '#3fb950' : '#f85149'}
+              />
+              <ReportMetric
+                label="Closed trades"
+                value={report.totalTrades ?? '—'}
+                extra={
+                  report.winningTrades != null && report.losingTrades != null
+                    ? `${report.winningTrades} wins / ${report.losingTrades} losses`
+                    : null
+                }
+                sub="Round-trip fills counted in this backtest"
+              />
+              <ReportMetric
+                label="Net P&amp;L"
+                value={`$${formatUsd(report.netPnl)}`}
+                sub="End equity minus start (all trades)"
+                color={(Number(report.netPnl) || 0) >= 0 ? '#3fb950' : '#f85149'}
+              />
+              <ReportMetric
+                label="Total return"
+                value={report.totalReturnPct != null ? formatSignedPct(report.totalReturnPct) : '—'}
+                sub="On starting capital"
+                color={(Number(report.totalReturnPct) || 0) >= 0 ? '#3fb950' : '#f85149'}
+              />
+              <ReportMetric
+                label="Profit factor"
+                value={report.profitFactor != null ? Number(report.profitFactor).toFixed(2) : '—'}
+                sub={'Gross profit ÷ gross loss; >1 is good'}
+                color={(Number(report.profitFactor) || 0) > 1 ? '#3fb950' : '#f85149'}
+              />
+              <ReportMetric
+                label="Max drawdown"
+                value={`$${formatUsd(report.maxDrawdown)}`}
+                extra={report.maxDrawdownPct != null ? `${Number(report.maxDrawdownPct).toFixed(2)}% vs peak equity` : null}
+                sub="Largest drop from a running high"
+                color="#f85149"
+              />
+            </div>
+
+            {equityData.length > 0 ? (
+              <div style={{ marginTop: 22 }}>
+                <div className="stat-label-sm color-muted" style={{ marginBottom: 10 }}>
+                  Equity curve — account value over the simulated window (sampled timestamps)
+                </div>
+                <div className="chart-container" style={{ width: '100%' }}>
                   <ResponsiveContainer width="100%" height={300}>
                     <LineChart data={equityData} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
@@ -512,45 +561,31 @@ export default function BacktestDashboard() {
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-              ) : (
-                <p className="text-sm color-muted" style={{ marginTop: 16 }}>
-                  No equity curve points in this run (empty backtest or no downsampling output).
-                </p>
-              )}
-            </div>
-          )}
-
-          <div className="card">
-            <h3>Trade Log</h3>
-            <UnifiedDataGrid data={activities} />
-          </div>
-        </div>
-
-        <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
-          <div className="flex-between mb-12">
-            <h3>Backend Logs</h3>
-            <button type="button" className="btn" onClick={() => setLogs([])} style={{ padding: '2px 8px', fontSize: 11 }}>Clear</button>
-          </div>
-          <div className="console-log" style={{ flex: 1, minHeight: 600 }}>
-            {logs.map((log, i) => (
-              <div key={i} className={`log-entry log-${log.type}`}>
-                <span className="color-muted" style={{ marginRight: 8 }}>[{log.time}]</span>
-                {log.msg}
               </div>
-            ))}
-            {logs.length === 0 && <div className="color-muted" style={{ textAlign: 'center', marginTop: 100 }}>No logs yet.</div>}
+            ) : (
+              <p className="text-sm color-muted" style={{ marginTop: 16 }}>
+                No equity curve points for this run (no trades or engine did not emit curve samples).
+              </p>
+            )}
           </div>
+        )}
+
+        <div className="card">
+          <h3 className="m-0 mb-12">Trade log</h3>
+          <UnifiedDataGrid data={activities} />
         </div>
       </div>
     </div>
   )
 }
 
-function StatCard({ label, value, color }) {
+function ReportMetric({ label, value, sub, extra, color }) {
   return (
-    <div className="bg-card border-main rounded-md p-10-15 flex-col flex-center">
+    <div className="bg-card border-main rounded-md p-10-15 flex-col" style={{ minHeight: 102 }}>
       <div className="stat-label-sm color-muted">{label}</div>
-      <div className="stat-value-md" style={{ color: color || '#c9d1d9', fontSize: 18 }}>{value}</div>
+      <div className="stat-value-md" style={{ color: color || '#c9d1d9', fontSize: 18, marginTop: 4 }}>{value}</div>
+      {extra && <div className="text-xs color-muted" style={{ marginTop: 4 }}>{extra}</div>}
+      {sub && <div className="text-xs color-muted" style={{ marginTop: 6, lineHeight: 1.35 }}>{sub}</div>}
     </div>
   )
 }
