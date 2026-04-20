@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Play, Square, ChevronUp, ChevronDown, Monitor } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { backtestApi } from '../api'
@@ -86,6 +86,22 @@ function normalizeEquityCurve(curve) {
     .filter((p) => Number.isFinite(p.equity))
 }
 
+/**
+ * Fewer points for rendering: keeps shape, avoids thousands of X ticks (which drew vertical grid clutter).
+ * Always keeps first and last sample.
+ */
+function downsampleEquityForChart(points, maxPoints = 160) {
+  if (!points.length || points.length <= maxPoints) return points
+  const n = points.length
+  const out = []
+  const step = (n - 1) / (maxPoints - 1)
+  for (let i = 0; i < maxPoints; i++) {
+    const idx = Math.min(n - 1, Math.round(i * step))
+    out.push(points[idx])
+  }
+  return out
+}
+
 export default function BacktestDashboard() {
   // Transient scan state
   const [running, setRunning] = useState(false)
@@ -102,8 +118,11 @@ export default function BacktestDashboard() {
   const [startParams, setStartParams] = useState(() => LS.get('bt_params', { capital: 50000, risk: 0.02 }))
   const [schedulerEnabled, setSchedulerEnabled] = useState(() => LS.get('bt_schedulerEnabled', false))
   const [schedulerFixedDelayMs, setSchedulerFixedDelayMs] = useState(null)
-  
+
   const eventSourceRef = useRef(null)
+
+  /** Downsampled series so the line stays smooth and the X axis does not paint hundreds of vertical grid/tick lines */
+  const equityChartData = useMemo(() => downsampleEquityForChart(equityData, 160), [equityData])
 
   // Side effects belonging in mount hook
   useEffect(() => {
@@ -464,89 +483,110 @@ export default function BacktestDashboard() {
         </div>
       )}
 
-      <div className="flex-col gap-20">
+      <div className="flex-col gap-14">
         {report && (
-          <div className="card" data-testid="backtest-report-panel">
-            <h3 className="m-0">Backtest results</h3>
-            <p className="text-sm color-muted" style={{ marginTop: 10, maxWidth: 880, lineHeight: 1.55 }}>
-              Summary of the last finished run: simulated closed trades on the ticker universe below, using the capital and risk
-              from the toolbar. Dollar amounts are in account currency (USD). Win rate is the percentage of trades that closed with
-              a gain; profit factor is gross profits divided by gross losses (above 1.0 means winners outweigh losers in dollars).
+          <div className="card" data-testid="backtest-report-panel" style={{ padding: '12px 16px' }}>
+            <div className="flex-between flex-wrap gap-8" style={{ alignItems: 'baseline' }}>
+              <h3 className="m-0" style={{ fontSize: 16 }}>Backtest results</h3>
+            </div>
+            <p className="text-xs color-muted" style={{ marginTop: 6, lineHeight: 1.35, maxWidth: 900 }}>
+              Last simulated run in USD (toolbar capital &amp; risk). Hover a metric for a short definition.
             </p>
-            <p className="text-xs color-muted" style={{ marginTop: 8 }}>
+            <p className="text-xs color-muted" style={{ marginTop: 4, lineHeight: 1.35 }}>
               <strong>{report.tickerScope ?? '—'}</strong>
-              {tickerFilter ? ` · filter (${tickerFilter})` : ''}
               {report.tickerCount != null && <> · {report.tickerCount} tickers</>}
+              {tickerFilter ? <> · filter {tickerFilter}</> : null}
               {report.initialCapital != null && report.finalCapital != null && (
-                <> · start ${formatUsd(report.initialCapital)} → end ${formatUsd(report.finalCapital)}</>
+                <> · ${formatUsd(report.initialCapital)} → ${formatUsd(report.finalCapital)}</>
               )}
             </p>
 
-            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 16 }}>
-              <ReportMetric
-                label="Win rate"
-                value={report.winRatePct != null ? `${Number(report.winRatePct).toFixed(1)}%` : '—'}
-                sub="Share of trades that closed green"
-                color={(Number(report.winRatePct) || 0) >= 50 ? '#3fb950' : '#f85149'}
-              />
-              <ReportMetric
-                label="Closed trades"
-                value={report.totalTrades ?? '—'}
-                extra={
-                  report.winningTrades != null && report.losingTrades != null
-                    ? `${report.winningTrades} wins / ${report.losingTrades} losses`
-                    : null
-                }
-                sub="Round-trip fills counted in this backtest"
-              />
-              <ReportMetric
+            {/* Order: outcome → activity → risk; single dense row, wrap on small screens */}
+            <div
+              className="flex-wrap"
+              style={{
+                marginTop: 10,
+                display: 'flex',
+                gap: '14px 22px',
+                rowGap: 10,
+                alignItems: 'flex-end',
+                borderTop: '1px solid #21262d',
+                paddingTop: 10,
+              }}
+            >
+              <ReportKpi
                 label="Net P&amp;L"
                 value={`$${formatUsd(report.netPnl)}`}
-                sub="End equity minus start (all trades)"
+                hint="End equity minus start. All trades combined, in USD."
                 color={(Number(report.netPnl) || 0) >= 0 ? '#3fb950' : '#f85149'}
               />
-              <ReportMetric
-                label="Total return"
+              <ReportKpi
+                label="Return"
                 value={report.totalReturnPct != null ? formatSignedPct(report.totalReturnPct) : '—'}
-                sub="On starting capital"
+                hint="Total return on starting capital for this run."
                 color={(Number(report.totalReturnPct) || 0) >= 0 ? '#3fb950' : '#f85149'}
               />
-              <ReportMetric
+              <ReportKpi
+                label="Win rate"
+                value={report.winRatePct != null ? `${Number(report.winRatePct).toFixed(1)}%` : '—'}
+                hint="Percentage of closed trades with positive P&amp;L."
+                color={(Number(report.winRatePct) || 0) >= 50 ? '#3fb950' : '#f85149'}
+              />
+              <ReportKpi
+                label="Trades"
+                value={
+                  report.totalTrades != null
+                    ? `${report.totalTrades}${report.winningTrades != null && report.losingTrades != null
+                      ? ` (${report.winningTrades}W/${report.losingTrades}L)`
+                      : ''}`
+                    : '—'
+                }
+                hint="Closed round-trips in this backtest; W/L = wins vs losses."
+              />
+              <ReportKpi
                 label="Profit factor"
                 value={report.profitFactor != null ? Number(report.profitFactor).toFixed(2) : '—'}
-                sub={'Gross profit ÷ gross loss; >1 is good'}
+                hint="Gross profit ÷ gross loss. Above 1.0 means winners beat losers in dollars."
                 color={(Number(report.profitFactor) || 0) > 1 ? '#3fb950' : '#f85149'}
               />
-              <ReportMetric
+              <ReportKpi
                 label="Max drawdown"
-                value={`$${formatUsd(report.maxDrawdown)}`}
-                extra={report.maxDrawdownPct != null ? `${Number(report.maxDrawdownPct).toFixed(2)}% vs peak equity` : null}
-                sub="Largest drop from a running high"
+                value={
+                  report.maxDrawdownPct != null
+                    ? `$${formatUsd(report.maxDrawdown)} (${Number(report.maxDrawdownPct).toFixed(2)}% peak)`
+                    : `$${formatUsd(report.maxDrawdown)}`
+                }
+                hint="Largest drop from a running equity high to a later low (worst streak)."
                 color="#f85149"
               />
             </div>
 
-            {equityData.length > 0 ? (
-              <div style={{ marginTop: 22 }}>
-                <div className="stat-label-sm color-muted" style={{ marginBottom: 10 }}>
-                  Equity curve — account value over the simulated window (sampled timestamps)
+            {equityChartData.length > 0 ? (
+              <div style={{ marginTop: 12 }}>
+                <div className="text-xs color-muted" style={{ marginBottom: 6 }}>
+                  Equity — account balance over the simulated period (line downsampled for display)
                 </div>
                 <div className="chart-container" style={{ width: '100%' }}>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={equityData} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={equityChartData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#21262d" vertical={false} />
                       <XAxis
                         dataKey="time"
                         stroke="#8b949e"
-                        fontSize={9}
-                        interval="preserveStartEnd"
-                        minTickGap={32}
+                        fontSize={10}
                         tick={{ fill: '#8b949e' }}
+                        tickLine={false}
+                        axisLine={{ stroke: '#30363d' }}
+                        interval={equityChartData.length > 10 ? Math.floor(equityChartData.length / 5) : 0}
+                        height={28}
                       />
                       <YAxis
                         stroke="#8b949e"
                         fontSize={10}
                         tick={{ fill: '#8b949e' }}
+                        tickLine={false}
+                        axisLine={false}
+                        width={48}
                         tickFormatter={(v) =>
                           new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(v)
                         }
@@ -557,21 +597,29 @@ export default function BacktestDashboard() {
                         formatter={(value) => [`$${Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`, 'Equity']}
                         labelFormatter={(label) => label}
                       />
-                      <Line type="monotone" dataKey="equity" stroke="#58a6ff" strokeWidth={2} dot={false} isAnimationActive={false} />
+                      <Line
+                        type="monotone"
+                        dataKey="equity"
+                        stroke="#58a6ff"
+                        strokeWidth={2}
+                        dot={false}
+                        isAnimationActive={false}
+                        connectNulls
+                      />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
               </div>
             ) : (
-              <p className="text-sm color-muted" style={{ marginTop: 16 }}>
-                No equity curve points for this run (no trades or engine did not emit curve samples).
+              <p className="text-xs color-muted" style={{ marginTop: 10 }}>
+                No equity samples for this run.
               </p>
             )}
           </div>
         )}
 
         <div className="card">
-          <h3 className="m-0 mb-12">Trade log</h3>
+          <h3 className="m-0 mb-10">Trade log</h3>
           <UnifiedDataGrid data={activities} />
         </div>
       </div>
@@ -579,13 +627,13 @@ export default function BacktestDashboard() {
   )
 }
 
-function ReportMetric({ label, value, sub, extra, color }) {
+function ReportKpi({ label, value, hint, color }) {
   return (
-    <div className="bg-card border-main rounded-md p-10-15 flex-col" style={{ minHeight: 102 }}>
-      <div className="stat-label-sm color-muted">{label}</div>
-      <div className="stat-value-md" style={{ color: color || '#c9d1d9', fontSize: 18, marginTop: 4 }}>{value}</div>
-      {extra && <div className="text-xs color-muted" style={{ marginTop: 4 }}>{extra}</div>}
-      {sub && <div className="text-xs color-muted" style={{ marginTop: 6, lineHeight: 1.35 }}>{sub}</div>}
+    <div title={hint} style={{ minWidth: 72, maxWidth: 200 }}>
+      <div className="color-muted" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+      <div style={{ fontSize: 15, fontWeight: 600, color: color || '#c9d1d9', marginTop: 2, lineHeight: 1.2, maxWidth: 200 }}>
+        {value}
+      </div>
     </div>
   )
 }
