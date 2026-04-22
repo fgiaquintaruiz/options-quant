@@ -416,6 +416,7 @@ tr:hover { background: #161b22; }
 .bt-chevron            { cursor: pointer; }
 .bt-error-banner       { padding: 10px 16px; margin-bottom: 16px; border-color: #f8514966; background: #f8514914; }
 .bt-tradelog-desc      { margin-bottom: 10px; line-height: 1.4; }
+.bt-tradelog-card--with-report { margin-top: 24px; }
 .bt-strategy-breakdown { margin-top: 12px; padding: 8px 12px; font-size: 11px; line-height: 1.45; }
 .bt-strategy-name      { font-family: ui-monospace, monospace; font-size: 10px; }
 
