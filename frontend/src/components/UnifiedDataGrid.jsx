@@ -1,89 +1,79 @@
 import React, { useMemo, useState } from 'react'
-import { Activity } from 'lucide-react'
+import { Activity, Wrench } from 'lucide-react'
+
+// Maps normalized status string to CSS modifier class (defined in index.css)
+const STATUS_CLASS = {
+  COMPLETE: 'badge-status-complete',
+  OK:       'badge-status-complete',
+  SCANNING: 'badge-status-running',
+  RUNNING:  'badge-status-running',
+  LOADING:  'badge-status-running',
+  SIGNAL:   'badge-status-signal',
+  ERROR:    'badge-status-error',
+}
+
+const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 const formatLabel = (value) => {
   if (!value) return '-'
-  return String(value)
-    .replace(/_/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
+  return String(value).replace(/_/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-/** @returns {boolean|null} true = call side, false = put, null = unknown / neutral */
+/** @returns {boolean|null} true = call side, false = put, null = unknown */
 function isCallStrategy(strategy) {
   if (!strategy || strategy === 'N/A' || strategy === '-') return null
   const s = String(strategy).toLowerCase().replace(/\s+/g, '')
-  if (/^c\d/.test(s)) return true
-  if (/^p\d/.test(s)) return false
-  if (s.includes('call')) return true
-  if (s.includes('put')) return false
+  if (/^c\d/.test(s) || s.includes('call')) return true
+  if (/^p\d/.test(s) || s.includes('put'))  return false
   return null
 }
 
+// ── Sub-components ─────────────────────────────────────────────────────────
+
+/** Renders a colored pill for strategy name; green for CALL side, red for PUT, neutral otherwise. */
 function StrategyPill({ value }) {
   const label = formatLabel(value)
-  const isNa = label === 'N/A' || label === '-'
-  if (isNa) {
-    return (
-      <div className="flex-col gap-4">
-        <span className="font-bold color-muted" style={{ fontSize: 13 }}>{label}</span>
-      </div>
-    )
+  if (label === 'N/A' || label === '-') {
+    return <div><span className="font-bold color-muted text-sm">{label}</span></div>
   }
   const side = isCallStrategy(value)
-  const stratBg = side === true ? '#23863618' : side === false ? '#da363318' : '#21262d'
-  const stratColor = side === true ? '#3fb950' : side === false ? '#f85149' : '#8b949e'
-  const border = `1px solid ${stratColor}33`
+  const pillClass = side === true ? 'ugrid-pill-call' : side === false ? 'ugrid-pill-put' : 'ugrid-pill-neu'
   return (
-    <div className="flex-col gap-4">
-      <span
-        className="text-sm font-bold"
-        style={{
-          display: 'inline-block',
-          padding: '4px 8px',
-          borderRadius: 6,
-          background: stratBg,
-          color: stratColor,
-          border,
-          maxWidth: 220,
-          wordBreak: 'break-word'
-        }}
-      >
-        {label}
-      </span>
+    <div>
+      <span className={`ugrid-pill text-sm font-bold ${pillClass}`}>{label}</span>
     </div>
   )
 }
 
-function PriceCell({ value, color }) {
-  if (value == null || value === '-' || value === 0) return <span className="color-muted">—</span>
+/** Formats a price as $X.XX; colorClass sets the color variant (e.g. ugrid-price-pos). */
+function PriceCell({ value, colorClass }) {
+  if (value == null || value === '-') return <span className="color-muted">—</span>
+  const num = Number(value)
+  if (!Number.isFinite(num)) return <span className="color-muted">—</span>
   return (
-    <span className="font-bold" style={{ color: color || '#c9d1d9', fontSize: 14 }}>
-      ${Number(value).toFixed(2)}
+    <span className={`ugrid-price font-bold ${colorClass || ''}`}>
+      {USD.format(num)}
     </span>
   )
 }
 
-/** Trade `netPnl` from backtest API is USD (same as legacy dashboard), not a percent. */
+/** netPnl from backtest API is in USD. */
 function PnlCell({ value }) {
   if (value == null) return <span className="color-muted">—</span>
   const num = Number(value)
   if (!Number.isFinite(num)) return <span className="color-muted">—</span>
-  const color = num > 0 ? '#3fb950' : num < 0 ? '#f85149' : '#8b949e'
-  const formatted = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(num)
-  return (
-    <span className="font-bold" style={{ color, fontSize: 14 }}>
-      {formatted}
-    </span>
-  )
+  const colorClass = num > 0 ? 'ugrid-price-pos' : num < 0 ? 'ugrid-price-neg' : 'ugrid-price-neu'
+  return <span className={`ugrid-price font-bold ${colorClass}`}>{USD.format(num)}</span>
 }
 
-/** Backtest charts are HTML served by GET /charts/{file}.html — not valid as <img src>. */
+/** Maps normalized status to its CSS badge class; falls back to default variant. */
+function StatusBadge({ row }) {
+  const key = String(row.status || 'Active').toUpperCase()
+  const cls = STATUS_CLASS[key] || 'badge-status-default'
+  return <span className={`badge ${cls}`}>{key}</span>
+}
+
+/** HTML backtest charts are served as full pages — not valid as img src. */
 function resolveBacktestChartUrl(chartPath) {
   if (!chartPath || typeof chartPath !== 'string') return ''
   const t = chartPath.trim()
@@ -92,105 +82,156 @@ function resolveBacktestChartUrl(chartPath) {
   return `/charts/${encodeURIComponent(t)}`
 }
 
-const th = { padding: '10px 12px', borderBottom: '2px solid #21262d', color: '#8b949e', fontSize: 11, fontWeight: 600, textTransform: 'uppercase' }
+/** Full-screen modal to display a backtest chart iframe. */
+function ChartModal({ row, onClose }) {
+  return (
+    <div className="ugrid-modal-overlay" onClick={onClose}>
+      <div className="card ugrid-modal-inner" onClick={(e) => e.stopPropagation()}>
+        <div className="flex-between mb-12">
+          <h3 className="m-0">{row.ticker} — {row.strategy}</h3>
+          <button type="button" className="btn ugrid-close-btn" onClick={onClose}>Close</button>
+        </div>
+        {row.chartPath ? (
+          <>
+            <div className="flex-between flex-wrap gap-8 ugrid-modal-chart-meta">
+              <a href={resolveBacktestChartUrl(row.chartPath)} target="_blank" rel="noreferrer" className="text-sm color-info">
+                Open chart in new tab
+              </a>
+              <span className="text-xs color-muted">HTML chart (TradingView lightweight) from backtest/charts</span>
+            </div>
+            <div className="ugrid-modal-iframe-wrap">
+              <iframe
+                title={`Chart ${row.ticker}`}
+                src={resolveBacktestChartUrl(row.chartPath)}
+                className="ugrid-modal-iframe"
+                sandbox="allow-scripts allow-same-origin"
+              />
+            </div>
+          </>
+        ) : (
+          <div className="ugrid-modal-no-chart">
+            <Activity size={48} className="ugrid-no-chart-icon" />
+            <div>No chart path for this row.</div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
-export default function UnifiedDataGrid({ data = [] }) {
+// ── Main component ──────────────────────────────────────────────────────────
+
+/**
+ * Shared trade result grid for backtest and live dashboards.
+ * Accepts an array of trade row objects (ticker, strategy, startTime required).
+ * Optional onAnalyzeStrategy callback — when provided, renders an Info button per row for drill-down.
+ */
+export default function UnifiedDataGrid({ data = [], onAnalyzeStrategy }) {
   const [selectedRow, setSelectedTrade] = useState(null)
+  const showInfo = typeof onAnalyzeStrategy === 'function'
 
   const sortedData = useMemo(() => {
     return [...data].sort((a, b) => {
-      if (a.status !== 'Complete' && b.status === 'Complete') return -1
-      if (a.status === 'Complete' && b.status !== 'Complete') return 1
+      const aDone = String(a.status || '').toUpperCase() === 'COMPLETE'
+      const bDone = String(b.status || '').toUpperCase() === 'COMPLETE'
+      if (!aDone && bDone) return -1
+      if (aDone && !bDone) return 1
+      if (aDone && bDone) {
+        const pa = Number(a.netPnl), pb = Number(b.netPnl)
+        if (Number.isFinite(pa) && Number.isFinite(pb) && pa !== pb) return pa - pb
+      }
       return String(b.startTime).localeCompare(String(a.startTime))
     })
   }, [data])
 
-  const renderStatus = (row) => {
-    const status = String(row.status || 'Active').toUpperCase()
-    let color = '#8b949e'
-    let bg = '#21262d'
-
-    if (status === 'COMPLETE' || status === 'OK') { color = '#3fb950'; bg = '#23863626' }
-    if (status === 'SCANNING' || status === 'RUNNING' || status === 'LOADING') { color = '#58a6ff'; bg = '#388bfd26' }
-    if (status === 'SIGNAL') { color = '#f0883e'; bg = '#f0883e26' }
-    if (status === 'ERROR') { color = '#f85149'; bg = '#f8514926' }
-
-    return (
-      <span className="badge" style={{ background: bg, color, border: `1px solid ${color}44` }}>
-        {status}
-      </span>
-    )
-  }
-
-  const scanStartedDisplay = (row) => row.scanStarted || row.startTime || '—'
-  const scanEndedDisplay = (row) => {
-    const se = row.scanEnded
-    if (se != null && se !== '' && se !== '-') return se
-    if (row.status === 'Complete' && row.endTime && row.endTime !== '-') return row.endTime
-    return '—'
-  }
-  const scanDurationDisplay = (row) => row.scanDuration || '—'
+  // Ticker, Strategy, Entry, Exit, PnL, ExitReason, Status, ScanStarted, ScanEnded, ScanDuration, Chart
+  const BASE_COLS = 11
+  const colSpanEmpty = BASE_COLS + (showInfo ? 1 : 0)
 
   return (
-    <div className="flex-col w-full">
-      <div
-        className="table-wrap"
-        style={{
-          border: '1px solid #30363d',
-          borderRadius: 8,
-          overflow: 'auto',
-          maxHeight: 'min(52vh, 480px)',
-        }}
-      >
-        <table className="w-full" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
-          <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#161b22' }}>
-            <tr style={{ boxShadow: '0 1px 0 #21262d' }}>
-              <th style={th}>Ticker</th>
-              <th style={th}>Strategy</th>
-              <th style={th}>Entry</th>
-              <th style={th}>Exit</th>
-              <th style={th}>PnL</th>
-              <th style={{ ...th, textAlign: 'center' }}>Status</th>
-              <th style={th}>Scan Started</th>
-              <th style={th}>Scan Ended</th>
-              <th style={th}>Scan Duration</th>
-              <th style={{ ...th, textAlign: 'center' }}>Chart</th>
+    <div className="ugrid-root">
+      <div className="ugrid-wrap table-wrap">
+        <table className="w-full ugrid-table">
+          <thead className="ugrid-thead">
+            <tr>
+              <th className="ugrid-th">Ticker</th>
+              <th className="ugrid-th">Strategy</th>
+              <th className="ugrid-th">Entry</th>
+              <th className="ugrid-th">Exit</th>
+              <th className="ugrid-th">PnL</th>
+              <th className="ugrid-th">Exit Reason</th>
+              <th className="ugrid-th ugrid-th--center">Status</th>
+              <th className="ugrid-th">Scan Started</th>
+              <th className="ugrid-th">Scan Ended</th>
+              <th className="ugrid-th">Scan Duration</th>
+              <th className="ugrid-th ugrid-th--center">Chart</th>
+              {showInfo && <th className="ugrid-th ugrid-th--center ugrid-th--nowrap">Info</th>}
             </tr>
           </thead>
           <tbody>
-            {sortedData.map((row, idx) => (
-              <tr key={`${row.ticker}-${idx}`} style={{ opacity: row.status === 'Complete' ? 0.8 : 1 }}>
-                <td style={{ padding: '10px 12px' }}>
-                  <div className="flex-col">
+            {sortedData.map((row) => {
+              const pnl = Number(row.netPnl)
+              const neg = Number.isFinite(pnl) && pnl < 0
+              const reason = row.exitReason != null && row.exitReason !== '' ? String(row.exitReason) : '—'
+              const rowKey = `${row.ticker}-${row.strategy}-${row.startTime}`
+              const done = String(row.status || '').toUpperCase() === 'COMPLETE'
+              const scanEnded = row.scanEnded && row.scanEnded !== '-' ? row.scanEnded
+                : (done && row.endTime && row.endTime !== '-' ? row.endTime : '—')
+              const exitPriceColorClass = Number(row.xp) > Number(row.ep) ? 'ugrid-price-pos' : 'ugrid-price-neg'
+
+              return (
+                <tr key={rowKey} className={done ? 'ugrid-row-complete' : ''}>
+                  <td className="ugrid-td">
                     <strong className="text-md color-text">{row.ticker}</strong>
-                    <span className="text-xs color-muted">{row.pattern || '-'}</span>
-                  </div>
-                </td>
-                <td style={{ padding: '10px 12px' }}><StrategyPill value={row.strategy} /></td>
-                <td style={{ padding: '10px 12px' }}><PriceCell value={row.ep} /></td>
-                <td style={{ padding: '10px 12px' }}><PriceCell value={row.xp} color={Number(row.xp) > Number(row.ep) ? '#3fb950' : '#f85149'} /></td>
-                <td style={{ padding: '10px 12px' }}><PnlCell value={row.netPnl} /></td>
-                <td style={{ textAlign: 'center', padding: '10px 12px' }}>{renderStatus(row)}</td>
-                <td className="text-xs color-muted" style={{ padding: '10px 12px' }}>{scanStartedDisplay(row)}</td>
-                <td className="text-xs color-muted" style={{ padding: '10px 12px' }}>{scanEndedDisplay(row)}</td>
-                <td className="text-xs color-muted font-bold" style={{ padding: '10px 12px' }}>{scanDurationDisplay(row)}</td>
-                <td style={{ textAlign: 'center', padding: '10px 12px' }}>
-                  {row.chartPath ? (
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => setSelectedTrade(row)}
-                      style={{ padding: '4px', background: 'none', color: '#58a6ff' }}
-                    >
-                      <Activity size={16} />
-                    </button>
-                  ) : <span className="color-muted">—</span>}
-                </td>
-              </tr>
-            ))}
+                    <div className="text-xs color-muted">{row.pattern || '-'}</div>
+                  </td>
+                  <td className="ugrid-td"><StrategyPill value={row.strategy} /></td>
+                  <td className="ugrid-td"><PriceCell value={row.ep} /></td>
+                  <td className="ugrid-td"><PriceCell value={row.xp} colorClass={exitPriceColorClass} /></td>
+                  <td className="ugrid-td">
+                    <PnlCell value={row.netPnl} />
+                    {row.lastGridNote && (
+                      <div className="text-xs color-muted ugrid-grid-note">{row.lastGridNote}</div>
+                    )}
+                  </td>
+                  <td className="ugrid-td ugrid-exit-reason">
+                    <span className={`text-xs ${neg ? 'color-error font-bold' : 'color-muted'}`} title={reason}>
+                      {reason}
+                    </span>
+                  </td>
+                  <td className="ugrid-td--center"><StatusBadge row={row} /></td>
+                  <td className="ugrid-td text-xs color-muted">{row.scanStarted || row.startTime || '—'}</td>
+                  <td className="ugrid-td text-xs color-muted">{scanEnded}</td>
+                  <td className="ugrid-td text-xs color-muted font-bold">{row.scanDuration || '—'}</td>
+                  <td className="ugrid-td--center">
+                    {row.chartPath ? (
+                      <button type="button" className="btn ugrid-chart-btn" onClick={() => setSelectedTrade(row)}>
+                        <Activity size={16} />
+                      </button>
+                    ) : <span className="color-muted">—</span>}
+                  </td>
+                  {showInfo && (
+                    <td className="ugrid-td--info">
+                      {row.strategy && (
+                        <button
+                          type="button"
+                          className="btn btn-secondary ugrid-analyze-btn"
+                          data-testid="bt-trade-row-info"
+                          title="Análisis y grid (mismo ticker y estrategia)"
+                          onClick={() => onAnalyzeStrategy(row)}
+                        >
+                          <Wrench size={12} className="ugrid-analyze-icon" />
+                          Info
+                        </button>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              )
+            })}
             {sortedData.length === 0 && (
               <tr>
-                <td colSpan={10} style={{ padding: '40px', textAlign: 'center', color: '#8b949e' }}>
+                <td colSpan={colSpanEmpty} className="ugrid-empty">
                   No data available. Run a scan or backtest to see results.
                 </td>
               </tr>
@@ -199,49 +240,7 @@ export default function UnifiedDataGrid({ data = [] }) {
         </table>
       </div>
 
-      {selectedRow && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1000, padding: 40
-        }} onClick={() => setSelectedTrade(null)}>
-          <div className="card" style={{ maxWidth: 1100, width: '100%', position: 'relative' }} onClick={e => e.stopPropagation()}>
-            <div className="flex-between mb-12">
-              <h3 className="m-0">{selectedRow.ticker} — {selectedRow.strategy}</h3>
-              <button type="button" className="btn" onClick={() => setSelectedTrade(null)} style={{ background: '#21262d' }}>Close</button>
-            </div>
-            {selectedRow.chartPath ? (
-              <>
-                <div className="flex-between flex-wrap gap-8" style={{ marginBottom: 10 }}>
-                  <a
-                    href={resolveBacktestChartUrl(selectedRow.chartPath)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-sm"
-                    style={{ color: '#58a6ff' }}
-                  >
-                    Open chart in new tab
-                  </a>
-                  <span className="text-xs color-muted">HTML chart (TradingView lightweight) from backtest/charts</span>
-                </div>
-                <div style={{ background: '#0d1117', borderRadius: 8, overflow: 'hidden', border: '1px solid #30363d' }}>
-                  <iframe
-                    title={`Chart ${selectedRow.ticker}`}
-                    src={resolveBacktestChartUrl(selectedRow.chartPath)}
-                    style={{ width: '100%', height: 520, border: 'none', display: 'block', background: '#0d1117' }}
-                    sandbox="allow-scripts allow-same-origin"
-                  />
-                </div>
-              </>
-            ) : (
-              <div style={{ minHeight: 200, alignItems: 'center', justifyContent: 'center', color: '#8b949e', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <Activity size={48} style={{ opacity: 0.3 }} />
-                <div>No chart path for this row.</div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {selectedRow && <ChartModal row={selectedRow} onClose={() => setSelectedTrade(null)} />}
     </div>
   )
 }

@@ -238,6 +238,49 @@ tr:hover { background: #161b22; }
 .fund-form-hint { line-height: 1.45; margin: 0; }
 .textarea-resizable { resize: vertical; }
 
+/* UnifiedDataGrid — all layout, color, and state rules live here, not in the component */
+.ugrid-root { display: flex; flex-direction: column; width: 100%; }
+.ugrid-row-complete { opacity: 0.8; }
+.ugrid-wrap { border: 1px solid #30363d; border-radius: 8px; overflow: auto; max-height: min(52vh, 480px); }
+.ugrid-table { border-collapse: separate; border-spacing: 0; }
+.ugrid-thead { position: sticky; top: 0; z-index: 2; background: #161b22; box-shadow: 0 1px 0 #21262d; }
+.ugrid-th { padding: 8px 10px; border-bottom: 2px solid #21262d; color: #8b949e; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+.ugrid-th--center { text-align: center; }
+.ugrid-td { padding: 8px 10px; }
+.ugrid-td--center { padding: 8px 10px; text-align: center; }
+.ugrid-td--info { padding: 6px 8px; text-align: center; white-space: nowrap; }
+.ugrid-pill { display: inline-block; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; max-width: 220px; word-break: break-word; }
+.ugrid-price { font-size: 14px; font-weight: 700; }
+.ugrid-exit-reason { max-width: 100px; }
+.ugrid-grid-note { margin-top: 4px; max-width: 200px; line-height: 1.25; }
+.ugrid-empty { padding: 40px; text-align: center; color: #8b949e; }
+.ugrid-chart-btn { padding: 4px; background: none; color: #58a6ff; }
+.ugrid-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 40px; }
+.ugrid-modal-inner { max-width: 1100px; width: 100%; position: relative; }
+.ugrid-modal-chart-meta { margin-bottom: 10px; }
+.ugrid-modal-iframe-wrap { background: #0d1117; border-radius: 8px; overflow: hidden; border: 1px solid #30363d; }
+.ugrid-modal-iframe { width: 100%; height: 520px; border: none; display: block; background: #0d1117; }
+.ugrid-modal-no-chart { min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: #8b949e; }
+.ugrid-no-chart-icon { opacity: 0.3; }
+.ugrid-close-btn { background: #21262d; }
+.ugrid-th--nowrap { white-space: nowrap; }
+.ugrid-analyze-btn { padding: 4px 8px; font-size: 11px; }
+.ugrid-analyze-icon { vertical-align: middle; margin-right: 4px; }
+/* Status badge variants — applied via .badge + modifier class */
+.badge-status-complete { color: #3fb950; background: #23863626; border-color: #3fb95044; }
+.badge-status-running  { color: #58a6ff; background: #388bfd26; border-color: #58a6ff44; }
+.badge-status-signal   { color: #f0883e; background: #f0883e26; border-color: #f0883e44; }
+.badge-status-error    { color: #f85149; background: #f8514926; border-color: #f8514944; }
+.badge-status-default  { color: #8b949e; background: #21262d;   border-color: #8b949e44; }
+/* Strategy pill direction variants */
+.ugrid-pill-call { color: #3fb950; background: #23863618; border-color: #3fb95033; }
+.ugrid-pill-put  { color: #f85149; background: #da363318; border-color: #f8514933; }
+.ugrid-pill-neu  { color: #8b949e; background: #21262d;   border-color: #8b949e33; }
+/* PriceCell / PnlCell coloring */
+.ugrid-price-pos { color: #3fb950; }
+.ugrid-price-neg { color: #f85149; }
+.ugrid-price-neu { color: #8b949e; }
+
 .ticker-group-btn {
   padding: 2px 8px;
   font-size: 11px;
