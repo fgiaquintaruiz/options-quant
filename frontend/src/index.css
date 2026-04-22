@@ -429,6 +429,7 @@ tr:hover { background: #161b22; }
 .bt-kpi-label          { text-transform: uppercase; letter-spacing: 0.04em; }
 .bt-kpi-value          { font-size: 15px; margin-top: 2px; line-height: 1.2; max-width: 200px; }
 .bt-equity-section     { margin-top: 12px; }
+.bt-chart-tooltip .recharts-default-tooltip { background: #161b22 !important; border: 1px solid #30363d !important; font-size: 12px !important; border-radius: 4px; }
 .bt-equity-label       { margin-bottom: 6px; }
 .bt-equity-empty       { margin-top: 10px; }
 
