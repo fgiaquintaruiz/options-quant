@@ -238,6 +238,29 @@ tr:hover { background: #161b22; }
 .fund-form-hint { line-height: 1.45; margin: 0; }
 .textarea-resizable { resize: vertical; }
 
+/* LiveTradeGrid */
+.ltg-th       { padding: 12px;    border-bottom: 2px solid #21262d; color: #8b949e; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+.ltg-th-sm    { padding: 8px 12px; border-bottom: 2px solid #21262d; color: #8b949e; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+.ltg-th-check { width: 36px; }
+.ltg-th--center { text-align: center; }
+.ltg-td       { padding: 10px 12px; }
+.ltg-td--center { text-align: center; }
+.ltg-td-sm    { padding: 6px 12px; }
+.ltg-row-stale  { background: #bb800908; box-shadow: inset 4px 0 0 #d29922; }
+.ltg-row-exited { background: #ffffff04; opacity: 0.65; }
+.ltg-row-normal { background: #ffffff08; }
+.ltg-stale-banner { padding: 8px 14px; background: #bb800912; border-bottom: 1px solid #d2992244; }
+.ltg-stale-label { color: #d29922; }
+.ltg-ticker-label { font-size: 14px; }
+.ltg-stale-warn   { font-size: 11px; color: #d29922; font-weight: 600; }
+.ltg-price-stack  { min-width: 100px; }
+.ltg-open-btn     { padding: 3px 10px; }
+.ltg-action-btn   { padding: 3px 10px; }
+.ltg-delete-btn   { padding: 4px 6px; background: transparent; border: 1px solid #30363d; color: #8b949e; }
+.ltg-scan-badge   { font-size: 10px; }
+.ltg-empty        { padding: 40px; text-align: center; color: #8b949e; }
+.ltg-section-label { letter-spacing: 1px; }
+
 /* UnifiedDataGrid — all layout, color, and state rules live here, not in the component */
 .ugrid-root { display: flex; flex-direction: column; width: 100%; }
 .ugrid-row-complete { opacity: 0.8; }
