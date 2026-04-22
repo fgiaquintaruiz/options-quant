@@ -402,3 +402,131 @@ tr:hover { background: #161b22; }
 
 .chart-container { width: 100%; height: 300px; }
 .table-wrap { overflow-x: auto; max-height: 500px; overflow-y: auto; }
+
+/* BacktestDashboard — toolbar */
+.bt-toolbar            { padding: 12px 20px; margin-bottom: 20px; }
+.bt-toolbar-label      { white-space: nowrap; }
+.bt-ticker-selector-wrap { flex: 1; }
+.bt-run-btn            { padding: 6px 14px; font-size: 13px; min-width: 120px; }
+.bt-scheduler-delay    { white-space: nowrap; }
+.bt-concurrent-input   { width: 40px; padding: 4px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; text-align: center; }
+.bt-elapsed            { font-size: 12px; }
+.bt-capital-pill       { font-size: 14px; }
+.bt-risk-value         { font-size: 14px; min-width: 35px; }
+.bt-chevron            { cursor: pointer; }
+.bt-error-banner       { padding: 10px 16px; margin-bottom: 16px; border-color: #f8514966; background: #f8514914; }
+.bt-tradelog-desc      { margin-bottom: 10px; line-height: 1.4; }
+.bt-strategy-breakdown { margin-top: 12px; padding: 8px 12px; font-size: 11px; line-height: 1.45; }
+.bt-strategy-name      { font-family: ui-monospace, monospace; font-size: 10px; }
+
+/* BacktestReportPanel */
+.bt-report-panel       { padding: 12px 16px; }
+.bt-report-header      { align-items: baseline; }
+.bt-report-title       { font-size: 16px; }
+.bt-report-meta        { margin-top: 6px; line-height: 1.35; }
+.bt-kpi-row            { display: flex; gap: 14px 22px; row-gap: 10px; align-items: flex-end; margin-top: 10px; border-top: 1px solid #21262d; padding-top: 10px; }
+.bt-kpi                { min-width: 72px; max-width: 200px; }
+.bt-kpi-label          { text-transform: uppercase; letter-spacing: 0.04em; }
+.bt-kpi-value          { font-size: 15px; margin-top: 2px; line-height: 1.2; max-width: 200px; }
+.bt-equity-section     { margin-top: 12px; }
+.bt-equity-label       { margin-bottom: 6px; }
+.bt-equity-empty       { margin-top: 10px; }
+
+/* MemoryPanel */
+.bt-memory-panel       { padding: 12px 16px; margin-bottom: 16px; }
+.bt-memory-summary     { cursor: pointer; user-select: none; }
+.bt-memory-desc        { margin-top: 10px; line-height: 1.45; max-width: 900px; }
+.bt-memory-state       { margin-top: 8px; }
+.bt-memory-table-wrap  { overflow-x: auto; margin-top: 10px; }
+.bt-memory-table       { width: 100%; border-collapse: collapse; font-size: 12px; }
+.bt-memory-thead-row   { text-align: left; color: #8b949e; border-bottom: 1px solid #30363d; }
+.bt-memory-th          { padding: 6px 8px; }
+.bt-memory-row         { border-bottom: 1px solid #21262d; }
+.bt-memory-td          { padding: 8px; }
+.bt-memory-td-mono     { font-family: ui-monospace, monospace; font-size: 11px; }
+.bt-memory-td-action   { padding: 6px 8px; }
+.bt-memory-del-btn     { padding: 4px 8px; font-size: 11px; }
+
+/* ImproveModal */
+.bt-modal-backdrop     { position: fixed; inset: 0; z-index: 1200; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.bt-modal-card         { max-width: 720px; width: 100%; max-height: 90vh; overflow: auto; padding: 18px 20px; position: relative; }
+.bt-modal-close        { position: absolute; top: 12px; right: 12px; padding: 6px; }
+.bt-modal-title        { font-size: 16px; padding-right: 40px; }
+.bt-modal-subtitle     { font-weight: 400; font-size: 13px; display: block; margin-top: 4px; }
+.bt-modal-code         { font-size: 12px; }
+.bt-modal-loading      { margin-top: 16px; }
+.bt-modal-scope        { margin-top: 12px; line-height: 1.45; }
+.bt-modal-warn         { margin-top: 8px; color: #d29922; line-height: 1.45; }
+.bt-improve-kpi-row    { display: flex; gap: 12px 20px; margin-top: 14px; border-top: 1px solid #21262d; padding-top: 12px; }
+.bt-improve-section    { margin-top: 14px; }
+.bt-improve-section-label { margin-bottom: 6px; }
+.bt-improve-list       { padding-left: 18px; font-size: 12px; }
+.bt-improve-list-item  { margin-bottom: 4px; }
+.bt-grid-section       { margin-top: 16px; padding-top: 12px; border-top: 1px solid #21262d; }
+.bt-grid-section-title { margin-bottom: 8px; }
+.bt-grid-desc          { margin-bottom: 10px; line-height: 1.4; }
+.bt-grid-row           { margin-bottom: 10px; }
+.bt-grid-axis-label    { min-width: 140px; }
+.bt-grid-constraint-label { min-width: 120px; }
+.bt-select             { padding: 6px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; }
+.bt-date-input         { padding: 4px 6px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; }
+.bt-text-input         { padding: 6px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; }
+.bt-wf-box             { margin-bottom: 12px; padding: 10px 12px; background: #161b22; border-radius: 6px; border: 1px solid #30363d; display: flex; flex-direction: column; gap: 8px; }
+.bt-wf-checkbox-label  { cursor: pointer; }
+.bt-wf-inputs          { margin-top: 0; }
+.bt-wf-day-label       { min-width: 72px; }
+.bt-wf-hint            { max-width: 280px; line-height: 1.35; }
+.bt-grid-error         { margin-top: 8px; }
+.bt-grid-result        { margin-top: 12px; }
+.bt-grid-result-status { margin-bottom: 6px; }
+.bt-grid-result-msg    { margin-left: 8px; }
+.bt-wf-summary         { margin-top: 10px; padding: 10px 12px; background: #21262d; border-radius: 6px; }
+.bt-wf-summary-title   { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+.bt-wf-summary-body    { font-size: 12px; line-height: 1.45; }
+.bt-wf-summary-detail  { font-size: 12px; margin-top: 6px; margin-bottom: 0; }
+.bt-wf-folds-wrap      { margin-top: 10px; overflow-x: auto; }
+.bt-wf-folds-table     { width: 100%; border-collapse: collapse; }
+.bt-wf-th              { text-align: left; padding: 4px 6px; }
+.bt-wf-th-right        { text-align: right; }
+.bt-wf-fold-row        { border-top: 1px solid #30363d; }
+.bt-wf-td              { padding: 4px 6px; font-size: 12px; }
+.bt-wf-td-nowrap       { white-space: nowrap; }
+.bt-wf-td-right        { text-align: right; }
+.bt-wf-td-note         { max-width: 220px; }
+.bt-grid-no-winner     { margin-top: 6px; }
+.bt-grid-winner-actions { margin-top: 8px; }
+.bt-grid-action-btn    { padding: 6px 12px; font-size: 12px; }
+.bt-retest-result      { margin-top: 10px; padding: 10px 12px; background: #21262d; border-radius: 6px; line-height: 1.5; font-size: 12px; }
+.bt-retest-title       { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+.bt-retest-row         { margin-top: 6px; font-size: 12px; }
+.bt-grid-rows-wrap     { overflow-x: auto; max-height: 200px; margin-top: 8px; }
+.bt-grid-rows-table    { width: 100%; border-collapse: collapse; font-size: 11px; }
+.bt-grid-rows-thead-row { text-align: left; color: #8b949e; border-bottom: 1px solid #30363d; }
+.bt-grid-rows-th       { padding: 4px; }
+.bt-grid-rows-row      { border-bottom: 1px solid #21262d; }
+.bt-grid-rows-td       { padding: 4px; }
+.bt-grid-footer        { margin-top: 10px; margin-bottom: 0; }
+
+/* SettingsPage */
+.sp-container          { max-width: 960px; margin: 0 auto; }
+.sp-runtime-desc       { line-height: 1.5; margin-bottom: 14px; }
+.sp-alert-block        { width: 100%; padding: 10px; }
+.sp-save-status        { text-align: center; }
+.sp-textarea           { width: 100%; font-family: ui-monospace, monospace; font-size: 12px; }
+.sp-add-ticker-input   { max-width: 200px; }
+.sp-fund-table-wrap    { overflow-x: auto; max-height: 320px; border: 1px solid #30363d; border-radius: 8px; }
+.sp-fund-table         { width: 100%; border-collapse: collapse; font-size: 12px; }
+.sp-fund-thead-row     { text-align: left; color: #8b949e; border-bottom: 1px solid #30363d; }
+.sp-fund-th            { padding: 8px; }
+.sp-fund-row           { border-bottom: 1px solid #21262d; }
+.sp-fund-td            { padding: 8px; }
+.sp-fund-td-bold       { padding: 8px; font-weight: 700; }
+.sp-fund-td-actions    { padding: 6px; }
+.sp-fund-edit-btn      { padding: 4px 8px; font-size: 11px; }
+.sp-fund-del-btn       { padding: 4px 8px; font-size: 11px; background: none; }
+.sp-fund-edit-card     { margin-top: 16px; padding: 16px; background: #0d1117; }
+.sp-group-info         { flex: 1; }
+.sp-group-tickers      { word-break: break-all; }
+.sp-group-del-btn      { background: none; padding: 8px; }
+.sp-divider            { width: 100%; height: 1px; margin: 25px 0; }
+.sp-add-group-grid     { grid-template-columns: 1fr 2fr auto; }
