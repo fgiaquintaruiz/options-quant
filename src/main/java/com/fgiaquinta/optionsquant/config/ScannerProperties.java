@@ -7,6 +7,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <p>
  * {@code concurrent-mode=AUTO} leaves logical CPUs for the OS/IDE; {@code FIXED} uses {@code fixed-max-concurrent}.
  * {@code prioritization-mode=HYBRID} orders non-hot tickers by fundamentals + learned memory; {@code NATURAL} keeps CSV order.
+ * <p>
+ * {@code exclusive-scan-scheduler-lock-wait-ms}: scheduled/startup scan tryLock timeout; {@code live-preempt-wait-ms}: Live manual scan wait for lock after preempt.
  */
 @ConfigurationProperties(prefix = "scanner")
 public record ScannerProperties(
@@ -17,7 +19,9 @@ public record ScannerProperties(
         int autoMaxConcurrentCap,
         PrioritizationMode prioritizationMode,
         double hybridFundamentalWeight,
-        double hybridMemoryWeight
+        double hybridMemoryWeight,
+        long exclusiveScanSchedulerLockWaitMs,
+        long livePreemptWaitMs
 ) {
     public ScannerProperties {
         if (concurrentMode == null) {
@@ -43,6 +47,12 @@ public record ScannerProperties(
         }
         if (hybridMemoryWeight <= 0) {
             hybridMemoryWeight = 0.35;
+        }
+        if (exclusiveScanSchedulerLockWaitMs <= 0) {
+            exclusiveScanSchedulerLockWaitMs = 5000L;
+        }
+        if (livePreemptWaitMs <= 0) {
+            livePreemptWaitMs = 60_000L;
         }
     }
 

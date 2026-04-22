@@ -10,6 +10,7 @@ class IbkrPropertiesTest {
     void shouldHaveDescriptiveClientIdAccessors() {
         IbkrProperties props = new IbkrProperties(
             "localhost", 7497, 10, List.of("SPY"), true, "DU123", 1, 0.02, false, List.of("SPY"), 20,
+            List.of(),
             1, 2, 999
         );
 

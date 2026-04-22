@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.ZonedDateTime;
 import java.time.ZoneId;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.*;
@@ -26,6 +27,9 @@ import java.util.concurrent.atomic.*;
 @RestController
 @RequestMapping("/live-ui")
 public class LiveModeController {
+
+    /** Live signal timestamp must not be older than this vs server clock to allow manual execute */
+    private static final Duration LIVE_SIGNAL_MAX_AGE = Duration.ofMinutes(15);
 
     private final StrategyScannerService scannerService;
     private final IbkrProperties ibkrProperties;
@@ -50,6 +54,8 @@ public class LiveModeController {
     /** Throttle AccountManager reconnect attempts from UI polling */
     private final AtomicLong lastTwsReconnectAttemptMs = new AtomicLong(0);
     private final CopyOnWriteArrayList<Signal> liveSignals = new CopyOnWriteArrayList<>();
+    /** Wall-clock instant when each ticker row was last added/replaced in {@link #liveSignals} (for UI "signal found"). */
+    private final java.util.concurrent.ConcurrentHashMap<String, Instant> signalFoundAt = new java.util.concurrent.ConcurrentHashMap<>();
     // Manual close requests: ticker → ClosedTradeInfo
     private final java.util.concurrent.ConcurrentHashMap<String, ClosedTradeInfo> closedTrades = new java.util.concurrent.ConcurrentHashMap<>();
     // Manual executions: ticker → ExecutedTradeInfo
@@ -168,10 +174,12 @@ public class LiveModeController {
         status.put("liveTickerScope", liveTickerScope.get());
         status.put("twsConnected", accountManager.isConnected());
 
-        // Include hot tickers list for UI badge display
-        List<String> hotTickers = ibkrProperties.hotTickers() != null
-                ? ibkrProperties.hotTickers()
-                : List.of("SPY", "QQQ", "AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "META", "GOOGL", "AMD");
+        // Include hot tickers list for UI badge display (same order as scan)
+        List<String> hotTickers = ibkrProperties.useCsvTickers()
+                ? tickerService.getHotTickers()
+                : (ibkrProperties.hotTickers() != null
+                        ? ibkrProperties.hotTickers()
+                        : List.of("SPY", "QQQ", "AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "META", "GOOGL", "AMD"));
         status.put("hotTickersList", hotTickers);
         status.put("schedulerEnabled", marketScanner.isSchedulerEnabled());
         status.put("mockMarketOpen", mockMarketOpen.get());
@@ -182,11 +190,15 @@ public class LiveModeController {
         status.put("scannerPrioritizationMode", scannerProperties.prioritizationMode().name());
         status.put("scannerHybridFundamentalWeight", scannerProperties.hybridFundamentalWeight());
         status.put("scannerHybridMemoryWeight", scannerProperties.hybridMemoryWeight());
+        status.put("scannerExclusiveSchedulerLockWaitMs", scannerProperties.exclusiveScanSchedulerLockWaitMs());
+        status.put("scannerLivePreemptWaitMs", scannerProperties.livePreemptWaitMs());
 
         // Add scanner progress info
         status.put("scannerScanned", scannerService.getScannedCount());
         status.put("scannerBatchLabel", scannerService.getCurrentBatchLabel());
         status.put("scannerTotal", scannerService.getTotalToScan());
+        status.put("exclusiveScanLockHeld", scannerService.isScanAllLockHeld());
+        status.put("exclusiveScanOwnerThread", scannerService.getScanOwnerThreadLabel());
 
         ZonedDateTime nowSpain = ZonedDateTime.now(ZoneId.of("Europe/Madrid"));
         int currentHour = nowSpain.getHour();
@@ -207,6 +219,8 @@ public class LiveModeController {
             map.put("direction", s.direction());
             map.put("currentPrice", s.currentPrice());
             map.put("timestamp", s.timestamp());
+            Instant found = signalFoundAt.get(s.ticker().toUpperCase(Locale.ROOT));
+            map.put("signalFoundAt", found != null ? found.toString() : null);
             map.put("tradePlan", s.tradePlan());
             map.put("candlestickPattern", s.candlestickPattern());
             
@@ -231,7 +245,8 @@ public class LiveModeController {
     @GetMapping("/scan-activity")
     public ResponseEntity<Map<String, Object>> getScanActivity() {
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("activity", scanActivity);
+        // Parallel scans finish out of order; sort by HOT list priority then ticker for a stable UI
+        result.put("activity", scanActivitySortedByHotPriority());
         result.put("isScanning", isScanning.get());
         result.put("batchLabel", scannerService.getCurrentBatchLabel());
         result.put("scanned", scannerService.getScannedCount());
@@ -247,9 +262,11 @@ public class LiveModeController {
         List<String> allTickers = ibkrProperties.useCsvTickers()
                 ? tickerService.getTickerSymbols()
                 : ibkrProperties.tickers();
-        List<String> hotTickers = ibkrProperties.hotTickers() != null
-                ? ibkrProperties.hotTickers()
-                : List.of("SPY", "QQQ", "AAPL", "MSFT", "NVDA");
+        List<String> hotTickers = ibkrProperties.useCsvTickers()
+                ? tickerService.getHotTickers()
+                : (ibkrProperties.hotTickers() != null
+                        ? ibkrProperties.hotTickers()
+                        : List.of("SPY", "QQQ", "AAPL", "MSFT", "NVDA"));
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("allTickers", allTickers);
@@ -260,9 +277,21 @@ public class LiveModeController {
         return ResponseEntity.ok(result);
     }
 
+    @GetMapping("/news-tickers")
+    public ResponseEntity<java.util.List<Map<String, Object>>> getNewsTickers() {
+        // Stub: returns empty list until TWS reqNewsBulletins integration is wired
+        return ResponseEntity.ok(java.util.List.of());
+    }
+
     @PostMapping("/scan-now")
     public ResponseEntity<Map<String, Object>> triggerScan() {
         boolean mock = mockMarketOpen.get();
+        if (!mock && !isMarketHours()) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("success", false);
+            result.put("message", "Scan blocked: outside market hours (10:00–22:00 Spain, Mon–Fri).");
+            return ResponseEntity.ok(result);
+        }
         if (!mock) {
             if (!ibkrService.isConnected() && !accountManager.isConnected()) {
                 tradingService.connectAccountManager();
@@ -275,47 +304,45 @@ public class LiveModeController {
             }
         }
         
-        if (isScanning.get()) {
+        // Only block a second *manual* scan thread; scheduled scans may run concurrently until preempt below.
+        if (scanThread != null && scanThread.isAlive()) {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("success", false);
-            result.put("message", "Scan already in progress");
+            result.put("message", "Manual scan already in progress");
             return ResponseEntity.ok(result);
         }
 
         stopScanRequested.set(false);
         isAutoScan.set(false);
-        scanActivity.clear();
+        // Preserve scan-activity history across manual starts (same as scheduled scans).
         final boolean isMockScan = mock;
         scanThread = new Thread(() -> {
+            preemptExclusiveScanForLive();
             isScanning.set(true);
+            // Keep open positions visible: do not clear executedTrades / closedTrades.
+            // Preserve Signal rows for tickers that still have a successful execution and are not closed.
+            java.util.Set<String> openPositionTickers = new java.util.HashSet<>();
+            for (java.util.Map.Entry<String, ExecutedTradeInfo> e : executedTrades.entrySet()) {
+                if (e.getValue().success() && !closedTrades.containsKey(e.getKey())) {
+                    openPositionTickers.add(e.getKey());
+                }
+            }
+            java.util.List<Signal> preservedSignals = liveSignals.stream()
+                    .filter(s -> openPositionTickers.contains(s.ticker()))
+                    .toList();
             liveSignals.clear();
-            closedTrades.clear();
-            executedTrades.clear();
+            liveSignals.addAll(preservedSignals);
+            java.util.Set<String> preservedKeys = preservedSignals.stream()
+                    .map(s -> s.ticker().toUpperCase(Locale.ROOT))
+                    .collect(java.util.stream.Collectors.toSet());
+            signalFoundAt.keySet().retainAll(preservedKeys);
+
             tickerScanStartTimes.clear();
             tickerScanEndTimes.clear();
             currentTickerIndex.set(0);
             signalsToday.set(0);
 
-            // Build ticker list respecting scope and filter
-            List<String> allTickers = ibkrProperties.useCsvTickers()
-                    ? tickerService.getTickerSymbols()
-                    : ibkrProperties.tickers();
-            List<String> hotList = ibkrProperties.hotTickers() != null
-                    ? ibkrProperties.hotTickers()
-                    : List.of("SPY", "QQQ", "AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "META", "GOOGL", "AMD");
-            java.util.Set<String> hotSet = new java.util.HashSet<>(hotList);
-
-            String scope = liveTickerScope.get();
-            if ("HOT".equals(scope)) {
-                allTickers = allTickers.stream().filter(hotSet::contains).toList();
-            }
-            String filter = liveTickerFilter.get();
-            if (filter != null && !filter.isBlank()) {
-                java.util.Set<String> filterSet = java.util.Arrays.stream(filter.split("[,\\s]+"))
-                        .map(String::trim).map(String::toUpperCase)
-                        .filter(s -> !s.isEmpty()).collect(java.util.stream.Collectors.toSet());
-                if (!filterSet.isEmpty()) allTickers = allTickers.stream().filter(filterSet::contains).toList();
-            }
+            List<String> allTickers = resolveTickersForLiveScan();
             scannerService.setTickerOverride(allTickers);
 
             totalTickers.set(allTickers.size());
@@ -328,9 +355,24 @@ public class LiveModeController {
 
                 // Only update signals if stop wasn't requested
                 if (!stopScanRequested.get()) {
-                    liveSignals.addAll(result.signals());
+                    for (Signal sig : result.signals()) {
+                        liveSignals.removeIf(s -> s.ticker().equals(sig.ticker()));
+                        liveSignals.add(sig);
+                        signalFoundAt.put(sig.ticker().toUpperCase(Locale.ROOT), Instant.now());
+                    }
                     signalsToday.addAndGet(result.totalSignals());
                     lastScanDuration.set(System.currentTimeMillis() - startTime);
+
+                    // Real scan: same Telegram + bracket path as scheduled MarketScanner (yml + Live UI toggle)
+                    if (!isMockScan && !result.signals().isEmpty()) {
+                        ZonedDateTime nowSpain = ZonedDateTime.now(ZoneId.of("Europe/Madrid"));
+                        for (Signal sig : result.signals()) {
+                            if (stopScanRequested.get()) {
+                                break;
+                            }
+                            marketScanner.processLiveSignalAfterScan(sig, nowSpain);
+                        }
+                    }
 
                     // Auto-execute mock signals via TWS when auto-execute is ON
                     if (isMockScan && runtimeAutoExecute && (ibkrService.isConnected() || accountManager.isConnected())) {
@@ -410,7 +452,9 @@ public class LiveModeController {
             scanThread.interrupt();
             log.info("Force-stopped scan thread (was scanning: {})", wasScanning);
         }
-        
+        // Same as /stop-scan: interrupt in-flight IBKR download threads so scanAll can exit and release the exclusive lock
+        scannerService.stopDownloads();
+
         // Reset all scanning state
         isScanning.set(false);
         stopScanRequested.set(false);
@@ -527,10 +571,11 @@ public class LiveModeController {
 
         TradePlan plan = new TradePlan(price, tp, sl, isCall, java.time.LocalTime.of(21, 55), atr);
         Signal mockSignal = new Signal(ticker, strat, dir, price, ZonedDateTime.now(), plan, "mock_signal + hammer");
-        liveSignals.add(mockSignal);
-        signalsToday.incrementAndGet();
+        addLiveSignal(mockSignal);
 
         log.info("Injected mock signal: {} {} {} @ ${}", ticker, dir, strat, price);
+
+        boolean telegramViaScanLogic = marketScanner.sendTelegramForScanSignal(mockSignal);
 
         // Auto-execute injected signal via TWS when auto-execute is ON and TWS is connected
         boolean autoExec = false;
@@ -556,6 +601,7 @@ public class LiveModeController {
         result.put("takeProfit", tp);
         result.put("stopLoss", sl);
         result.put("autoExecuted", autoExec);
+        result.put("telegramScanLogicApplied", telegramViaScanLogic);
         return ResponseEntity.ok(result);
     }
 
@@ -588,7 +634,18 @@ public class LiveModeController {
             @RequestParam double price,
             @RequestParam(defaultValue = "manual") String strategy) {
         log.info("🎯 Manual execute request received for {} {} @ ${} (strategy: {})", ticker, direction, price, strategy);
-        
+
+        Signal liveForExecute = findLiveSignalForExecute(ticker, strategy);
+        if (liveForExecute != null && isLiveSignalOlderThanMaxAge(liveForExecute)) {
+            log.warn("Rejecting execute for {}: signal timestamp {} is older than {} minutes",
+                    ticker, liveForExecute.timestamp(), LIVE_SIGNAL_MAX_AGE.toMinutes());
+            Map<String, Object> stale = new LinkedHashMap<>();
+            stale.put("success", false);
+            stale.put("message", "Signal is older than 15 minutes — execution blocked.");
+            stale.put("stale", true);
+            return ResponseEntity.ok(stale);
+        }
+
         if (!ibkrService.isConnected() && !accountManager.isConnected()) {
             tradingService.connectAccountManager();
         }
@@ -740,15 +797,108 @@ public class LiveModeController {
 
     // ===== Public Methods for Internal State Updates =====
 
+    /**
+     * Same universe + HOT/ALL scope + comma filter as manual "Scan now" — used by scheduled {@link com.fgiaquinta.optionsquant.service.MarketScanner} too.
+     */
+    public List<String> resolveTickersForLiveScan() {
+        List<String> allTickers = ibkrProperties.useCsvTickers()
+                ? tickerService.getTickerSymbols()
+                : ibkrProperties.tickers();
+        List<String> hotList = ibkrProperties.useCsvTickers()
+                ? tickerService.getHotTickers()
+                : (ibkrProperties.hotTickers() != null
+                        ? ibkrProperties.hotTickers()
+                        : List.of("SPY", "QQQ", "AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "META", "GOOGL", "AMD"));
+        java.util.Set<String> hotSet = new java.util.HashSet<>(hotList);
+
+        String scope = liveTickerScope.get();
+        if ("HOT".equals(scope)) {
+            allTickers = allTickers.stream().filter(hotSet::contains).toList();
+        }
+        String filter = liveTickerFilter.get();
+        if (filter != null && !filter.isBlank()) {
+            java.util.Set<String> filterSet = java.util.Arrays.stream(filter.split("[,\\s]+"))
+                    .map(String::trim).map(String::toUpperCase)
+                    .filter(s -> !s.isEmpty()).collect(java.util.stream.Collectors.toSet());
+            if (!filterSet.isEmpty()) {
+                allTickers = allTickers.stream().filter(filterSet::contains).toList();
+            }
+        }
+        return allTickers;
+    }
+
+    /** Current live UI scope (HOT / ALL), for logging and diagnostics. */
+    public String getLiveTickerScope() {
+        return liveTickerScope.get();
+    }
+
+    /** Runtime toggle (Live UI) for auto-execute — must be true together with {@code application.yml} auto-execute. */
+    public boolean isRuntimeAutoExecute() {
+        return runtimeAutoExecute;
+    }
+
+    /**
+     * If another scan (scheduler, REST, etc.) holds the exclusive IBKR pipeline, stop its downloads and wait
+     * for the lock so HOT/live data is not stuck behind a long "remaining" batch.
+     */
+    private void preemptExclusiveScanForLive() {
+        if (!scannerService.isScanAllLockHeld()) {
+            return;
+        }
+        long waitMs = scannerProperties.livePreemptWaitMs();
+        log.info("🔴 Live manual scan: freeing IBKR pipeline (stop downloads + stop flag) — waiting up to {}ms for exclusive scan lock",
+                waitMs);
+        stopScanRequested.set(true);
+        scannerService.stopDownloads();
+        long deadline = System.currentTimeMillis() + waitMs;
+        while (scannerService.isScanAllLockHeld() && System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(150);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        stopScanRequested.set(false);
+        if (scannerService.isScanAllLockHeld()) {
+            log.warn("⚠️ Exclusive scan lock still held after {}ms — this scan may block until it is released", waitMs);
+        }
+    }
+
+    /** Public for {@link com.fgiaquinta.optionsquant.service.MarketScanner} auto-exec guard. */
+    public boolean isLiveSignalOlderThanMaxAge(Signal s) {
+        if (s == null || s.timestamp() == null) {
+            return false;
+        }
+        return s.timestamp().toInstant().isBefore(Instant.now().minus(LIVE_SIGNAL_MAX_AGE));
+    }
+
+    /**
+     * Matches the row the UI sends on Open: same ticker; strategy "manual" matches any live row for that ticker.
+     */
+    Signal findLiveSignalForExecute(String ticker, String strategyParam) {
+        for (Signal s : liveSignals) {
+            if (!s.ticker().equalsIgnoreCase(ticker)) {
+                continue;
+            }
+            if (strategyParam == null || "manual".equalsIgnoreCase(strategyParam)) {
+                return s;
+            }
+            if (s.strategy().equalsIgnoreCase(strategyParam)) {
+                return s;
+            }
+        }
+        return null;
+    }
+
     public void setAutoScan(boolean auto) {
         isAutoScan.set(auto);
     }
 
     public void updateScanningState(boolean scanning, String ticker, int index, int total) {
-        // Reset scan-activity feed when a new scan starts (manual or scheduled)
-        if (scanning && !isScanning.get()) {
-            scanActivity.clear();
-        }
+        // Do not clear scanActivity here: a new scan cycle (scheduler or manual) should keep
+        // per-ticker rows so the UI still shows "already scanned" hot tickers when you look back later.
+        // Rows are updated in place per ticker; size is capped in addTickerScanActivity.
         isScanning.set(scanning);
         currentTicker.set(ticker);
         currentTickerIndex.set(index);
@@ -757,7 +907,92 @@ public class LiveModeController {
 
     public void addLiveSignal(Signal signal) {
         liveSignals.add(signal);
+        signalFoundAt.put(signal.ticker().toUpperCase(Locale.ROOT), Instant.now());
         signalsToday.incrementAndGet();
+    }
+
+    /**
+     * Removes one live signal row (does not close IBKR positions).
+     */
+    @DeleteMapping("/signal")
+    public ResponseEntity<Map<String, Object>> deleteLiveSignal(@RequestParam String ticker) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (hasOpenExecutedPosition(ticker)) {
+            result.put("success", false);
+            result.put("message", "Hay una posición abierta para este ticker. Cierra antes de borrar la fila.");
+            return ResponseEntity.ok(result);
+        }
+        boolean removed = liveSignals.removeIf(s -> s.ticker().equalsIgnoreCase(ticker));
+        if (removed) {
+            signalFoundAt.remove(ticker.toUpperCase(Locale.ROOT));
+        }
+        result.put("success", removed);
+        result.put("ticker", ticker);
+        result.put("message", removed ? "Signal removed." : "No matching live signal.");
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Deletes all stale signals (&gt;15m candle age) that are not open positions.
+     */
+    @PostMapping("/signals/clear-stale")
+    public ResponseEntity<Map<String, Object>> clearStaleLiveSignals() {
+        List<Signal> toRemove = liveSignals.stream()
+                .filter(s -> isLiveSignalOlderThanMaxAge(s))
+                .filter(s -> !hasOpenExecutedPosition(s.ticker()))
+                .toList();
+        for (Signal s : toRemove) {
+            liveSignals.remove(s);
+            signalFoundAt.remove(s.ticker().toUpperCase(Locale.ROOT));
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("removed", toRemove.size());
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Deletes multiple signals by ticker (POST JSON body: ["AAPL","MSFT"]).
+     */
+    @PostMapping("/signals/batch-delete")
+    public ResponseEntity<Map<String, Object>> batchDeleteLiveSignals(@RequestBody List<String> tickers) {
+        int removed = 0;
+        int skipped = 0;
+        if (tickers != null) {
+            for (String ticker : tickers) {
+                if (ticker == null || ticker.isBlank()) continue;
+                if (hasOpenExecutedPosition(ticker)) {
+                    skipped++;
+                    continue;
+                }
+                boolean r = liveSignals.removeIf(s -> s.ticker().equalsIgnoreCase(ticker.trim()));
+                if (r) {
+                    signalFoundAt.remove(ticker.trim().toUpperCase(Locale.ROOT));
+                    removed++;
+                }
+            }
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("removed", removed);
+        result.put("skippedOpenPosition", skipped);
+        return ResponseEntity.ok(result);
+    }
+
+    private boolean hasOpenExecutedPosition(String ticker) {
+        for (Map.Entry<String, ExecutedTradeInfo> e : executedTrades.entrySet()) {
+            if (!e.getKey().equalsIgnoreCase(ticker)) continue;
+            if (!e.getValue().success()) continue;
+            boolean closed = false;
+            for (String c : closedTrades.keySet()) {
+                if (c.equalsIgnoreCase(ticker)) {
+                    closed = true;
+                    break;
+                }
+            }
+            return !closed;
+        }
+        return false;
     }
 
     public void updateScanComplete(long durationMs) {
@@ -778,6 +1013,26 @@ public class LiveModeController {
 
     public void clearStopRequest() {
         stopScanRequested.set(false);
+    }
+
+    /**
+     * Copy of {@link #scanActivity} ordered by HOT config (then ticker), so the feed matches priority even when parallel scans finish out of order.
+     */
+    private List<ScanActivity> scanActivitySortedByHotPriority() {
+        List<String> hotOrder = ibkrProperties.useCsvTickers()
+                ? tickerService.getHotTickers()
+                : (ibkrProperties.hotTickers() != null
+                        ? ibkrProperties.hotTickers()
+                        : List.of("SPY", "QQQ", "AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "META", "GOOGL", "AMD"));
+        Map<String, Integer> hotIndex = new HashMap<>();
+        for (int i = 0; i < hotOrder.size(); i++) {
+            hotIndex.put(hotOrder.get(i).toUpperCase(Locale.ROOT), i);
+        }
+        List<ScanActivity> copy = new ArrayList<>(scanActivity);
+        copy.sort(Comparator
+                .comparingInt((ScanActivity a) -> hotIndex.getOrDefault(a.ticker().toUpperCase(Locale.ROOT), 10_000))
+                .thenComparing(ScanActivity::ticker));
+        return copy;
     }
 
     /**

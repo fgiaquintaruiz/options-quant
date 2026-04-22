@@ -1,5 +1,7 @@
 package com.fgiaquinta.optionsquant.service;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import java.time.LocalTime;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -21,7 +23,8 @@ import java.util.Set;
  *   AMZN + c1squeezecall:
  *     - enabledPatterns: ["squeeze_breakout"] (NOT "engulfing")
  *     - rsiEntryThreshold: 25.0 (instead of 30)
- *     - atrStopMultiplier: 2.8 (wider stops needed)
+ *     - slAtrMultOverride / tpAtrMultOverride: optional absolute ATR multipliers (override global RiskCalculator maps for this ticker+strategy)
+ *     - atrStopMultiplier: 2.8 (legacy learning field — not used by RiskCalculator unless we wire it; prefer overrides)
  *     - earliestEntryTime: 10:00
  *     - maxVixForEntry: 22.0
  *     - confidenceScore: 0.22 (low, but not blocked)
@@ -37,8 +40,15 @@ public class TickerStrategyProfile {
     
     // Strategy parameter adjustments
     public double rsiEntryThreshold = 30.0;        // Default RSI oversold threshold
-    public double atrStopMultiplier = 2.0;         // ATR multiplier for stop loss
-    public double atrTakeProfitMultiplier = 2.5;   // ATR multiplier for take profit
+    public double atrStopMultiplier = 2.0;         // Legacy / learning — see slAtrMultOverride for engine
+    public double atrTakeProfitMultiplier = 2.5;   // Legacy / learning
+
+    /** When set, replaces global SL ATR multiplier from RiskCalculator maps for this ticker+strategy. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public Double slAtrMultOverride;
+    /** When set, replaces global TP ATR multiplier from RiskCalculator maps for this ticker+strategy. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public Double tpAtrMultOverride;
     
     // Time filters
     public LocalTime earliestEntryTime = LocalTime.MIN;  // No trades before this time
@@ -159,6 +169,14 @@ public class TickerStrategyProfile {
      */
     public double getWinRate() {
         return totalTrades > 0 ? (double) wins / totalTrades : 0;
+    }
+
+    public Double getSlAtrMultOverride() {
+        return slAtrMultOverride;
+    }
+
+    public Double getTpAtrMultOverride() {
+        return tpAtrMultOverride;
     }
 
     /**

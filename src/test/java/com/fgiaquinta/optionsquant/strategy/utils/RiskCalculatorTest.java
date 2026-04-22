@@ -1,6 +1,7 @@
 package com.fgiaquinta.optionsquant.strategy.utils;
 
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
+import com.fgiaquinta.optionsquant.service.TickerStrategyProfile;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.model.TradePlan;
 import org.junit.jupiter.api.BeforeEach;
@@ -91,5 +92,57 @@ class RiskCalculatorTest {
         
         assertThat(plan.takeProfit).isEqualTo(1007.0);
         assertThat(plan.stopLoss).isEqualTo(995.0);
+    }
+
+    @Test
+    @DisplayName("resolveMultiplierMapKey maps spaced getName() to suffixed static map keys")
+    void resolveMultiplierMapKeyMapsSpacedNames() {
+        assertThat(RiskCalculator.resolveMultiplierMapKey("p5 continuation", false)).isEqualTo("p5continuationput");
+        assertThat(RiskCalculator.resolveMultiplierMapKey("c1 squeeze", true)).isEqualTo("c1squeezecall");
+    }
+
+    @Test
+    @DisplayName("Spaced strategy name matches same multipliers as compact map key")
+    void spacedNameMatchesCompactKey() {
+        TradePlan spaced = RiskCalculator.generatePlan(mockData, "AAPL", now, false, 1000.0, "p5 continuation");
+        TradePlan compact = RiskCalculator.generatePlan(mockData, "AAPL", now, false, 1000.0, "p5continuationput");
+        assertThat(spaced.takeProfit).isEqualTo(compact.takeProfit);
+        assertThat(spaced.stopLoss).isEqualTo(compact.stopLoss);
+    }
+
+    @Test
+    @DisplayName("Per-ticker profile overrides replace global map multipliers")
+    void profileOverridesBeatGlobalMaps() {
+        TradePlan fromMap = RiskCalculator.generatePlan(mockData, "AAPL", now, true, 1000.0, "c1squeezecall", null);
+
+        TickerStrategyProfile profile = new TickerStrategyProfile("AAPL", "c1 squeeze call");
+        profile.tpAtrMultOverride = 9.0;
+        profile.slAtrMultOverride = 8.0;
+
+        TradePlan overridden = RiskCalculator.generatePlan(mockData, "AAPL", now, true, 1000.0, "c1squeezecall", profile);
+        assertThat(overridden.takeProfit).isNotEqualTo(fromMap.takeProfit);
+        assertThat(overridden.stopLoss).isNotEqualTo(fromMap.stopLoss);
+    }
+
+    @Test
+    @DisplayName("Null profile matches explicit null — same as global maps only")
+    void nullProfileMatchesOmittedProfile() {
+        TradePlan a = RiskCalculator.generatePlan(mockData, "AAPL", now, true, 1000.0, "c1squeezecall", null);
+        TradePlan b = RiskCalculator.generatePlan(mockData, "AAPL", now, true, 1000.0, "c1squeezecall");
+        assertThat(a.takeProfit).isEqualTo(b.takeProfit);
+        assertThat(a.stopLoss).isEqualTo(b.stopLoss);
+    }
+
+    @Test
+    @DisplayName("Retest SL delta widens stop for calls")
+    void retestSlDeltaWidensCallStop() {
+        TradePlan baseline = RiskCalculator.generatePlan(mockData, "AAPL", now, true, 1000.0, null);
+        RiskCalculator.setRetestMultiplierDeltas(0, 0.5);
+        try {
+            TradePlan trial = RiskCalculator.generatePlan(mockData, "AAPL", now, true, 1000.0, null);
+            assertThat(trial.stopLoss).isLessThan(baseline.stopLoss);
+        } finally {
+            RiskCalculator.clearRetestMultiplierDeltas();
+        }
     }
 }

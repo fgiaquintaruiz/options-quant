@@ -26,6 +26,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
@@ -49,6 +50,13 @@ public class StrategyScannerService {
 
     /** When set, scanAll uses this list instead of loading from config/CSV */
     private final AtomicReference<List<String>> tickerOverride = new AtomicReference<>(null);
+
+    /**
+     * Only one {@link #scanAll} at a time — avoids overlapping IBKR download pools (e.g. scheduler + REST + live)
+     * so HOT batches are not starved by another scan's "remaining" tickers.
+     */
+    private final ReentrantLock scanAllExclusiveLock = new ReentrantLock(true);
+    private final AtomicReference<String> scanOwnerThreadLabel = new AtomicReference<>("");
 
     private final CandleCsvService csvService;
     private final IbkrService ibkrService;
@@ -256,45 +264,82 @@ public class StrategyScannerService {
         log.info("Max concurrent ticker scans set to {}", newValue);
     }
 
+    /** Override which tickers the next scanAll will use (null = use config default). */
+    public void setTickerOverride(List<String> tickers) { tickerOverride.set(tickers); }
+    public void clearTickerOverride() { tickerOverride.set(null); }
+
     /**
      * Scans all tickers against all strategies with hot tickers first.
-     * Hot tickers (SPY, QQQ, AAPL, NVDA, TSLA, etc.) are scanned immediately,
-     * then the remaining tickers are scanned.
-     *
-     * @param deterministicMode if true, skips delta downloads and uses only cached CSV data
      */
     public ScanResult scanAll(boolean includeTradePlans, boolean autoRefreshData) {
         return scanAll(includeTradePlans, autoRefreshData, false);
     }
 
     /**
-     * Scans all tickers against all strategies with hot tickers first.
-     *
-     * @param deterministicMode if true, skips delta downloads and uses only cached CSV data for reproducible results
+     * @param lockWaitMs {@code -1} block until the lock is acquired; {@code 0} try once; {@code >0} try up to this many ms
      */
-    // Override which tickers the next scanAll will use (null = use config default).
-    public void setTickerOverride(List<String> tickers) { tickerOverride.set(tickers); }
-    public void clearTickerOverride() { tickerOverride.set(null); }
+    public ScanResult scanAll(boolean includeTradePlans, boolean autoRefreshData, boolean deterministicMode, long lockWaitMs) {
+        boolean locked = acquireScanAllLock(lockWaitMs);
+        if (!locked) {
+            log.warn("scanAll skipped — exclusive scan lock not acquired within {}ms (another scan owns IBKR downloads)",
+                    lockWaitMs >= 0 ? lockWaitMs : 0);
+            return new ScanResult(0, 0, Collections.emptyList(), 0, true);
+        }
+        scanOwnerThreadLabel.set(Thread.currentThread().getName());
+        try {
+            return scanAllBody(includeTradePlans, autoRefreshData, deterministicMode);
+        } finally {
+            scanOwnerThreadLabel.set("");
+            scanAllExclusiveLock.unlock();
+        }
+    }
+
+    private boolean acquireScanAllLock(long lockWaitMs) {
+        try {
+            if (lockWaitMs < 0) {
+                scanAllExclusiveLock.lockInterruptibly();
+                return true;
+            }
+            if (lockWaitMs == 0) {
+                return scanAllExclusiveLock.tryLock();
+            }
+            return scanAllExclusiveLock.tryLock(lockWaitMs, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    /** True if any thread is inside {@link #scanAll} (holding the exclusive lock). */
+    public boolean isScanAllLockHeld() {
+        return scanAllExclusiveLock.isLocked();
+    }
+
+    public String getScanOwnerThreadLabel() {
+        return scanOwnerThreadLabel.get();
+    }
 
     public ScanResult scanAll(boolean includeTradePlans, boolean autoRefreshData, boolean deterministicMode) {
+        return scanAll(includeTradePlans, autoRefreshData, deterministicMode, -1L);
+    }
+
+    private ScanResult scanAllBody(boolean includeTradePlans, boolean autoRefreshData, boolean deterministicMode) {
         // Get all tickers from CSV or YAML (or from override set by the caller)
         List<String> override = tickerOverride.get();
         List<String> allTickers = (override != null && !override.isEmpty())
                 ? override
                 : (ibkrProperties.useCsvTickers() ? tickerService.getTickerSymbols() : ibkrProperties.tickers());
 
-        // Get hot tickers (priority list)
-        List<String> hotTickers = ibkrProperties.hotTickers() != null
-                ? ibkrProperties.hotTickers()
-                : List.of("SPY", "QQQ", "AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "META", "GOOGL", "AMD");
-
-        // Separate hot tickers from the rest
-        List<String> hotTickersToScan = allTickers.stream()
-                .filter(hotTickers::contains)
-                .toList();
+        // HOT first, order = ticker config (runtime → YAML → cap fallback)
+        List<String> hotOrder = ibkrProperties.useCsvTickers()
+                ? tickerService.getHotTickers()
+                : (ibkrProperties.hotTickers() != null ? ibkrProperties.hotTickers()
+                        : List.of("SPY", "QQQ", "AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "META", "GOOGL", "AMD"));
+        List<String> hotTickersToScan = tickerService.orderHotForScan(allTickers, hotOrder);
+        java.util.Set<String> hotSet = new java.util.LinkedHashSet<>(hotTickersToScan);
 
         List<String> remainingTickers = allTickers.stream()
-                .filter(t -> !hotTickers.contains(t))
+                .filter(t -> !hotSet.contains(t))
                 .toList();
 
         List<String> orderedRemaining = scanPrioritizationService.orderRemainingTickers(remainingTickers);
@@ -461,7 +506,7 @@ public class StrategyScannerService {
         log.info("<<< Scan complete: {} signals found across {} tickers in {}ms",
                 allSignals.size(), allTickers.size(), elapsed);
 
-        return new ScanResult(allSignals.size(), allTickers.size(), allSignals, elapsed);
+        return new ScanResult(allSignals.size(), allTickers.size(), allSignals, elapsed, false);
     }
 
     /**
@@ -686,7 +731,8 @@ public class StrategyScannerService {
 
                 TradePlan tradePlan = null;
                 if (includeTradePlans) {
-                    tradePlan = RiskCalculator.generatePlan(data, ticker, currentTime, isCall, currentPrice, strategy.getName());
+                    TickerStrategyProfile profile = tickerMemory.getStrategyProfile(ticker, strategy.getName());
+                    tradePlan = RiskCalculator.generatePlan(data, ticker, currentTime, isCall, currentPrice, strategy.getName(), profile);
                 }
 
                 Signal signal = new Signal(
@@ -869,12 +915,20 @@ public class StrategyScannerService {
         return 0;
     }
 
+    /**
+     * @param lockSkipped {@code true} if {@link #scanAll} could not take the exclusive lock (e.g. scheduler timeout)
+     */
     public record ScanResult(
             int totalSignals,
             int tickersScanned,
             List<Signal> signals,
-            long elapsedMs
-    ) {}
+            long elapsedMs,
+            boolean lockSkipped
+    ) {
+        public ScanResult(int totalSignals, int tickersScanned, List<Signal> signals, long elapsedMs) {
+            this(totalSignals, tickersScanned, signals, elapsedMs, false);
+        }
+    }
 
     public record Signal(
             String ticker,

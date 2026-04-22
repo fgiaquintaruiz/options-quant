@@ -1,6 +1,7 @@
 package com.fgiaquinta.optionsquant.strategy.utils;
 
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
+import com.fgiaquinta.optionsquant.service.TickerStrategyProfile;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.model.TradePlan;
 import org.ta4j.core.BarSeries;
@@ -9,7 +10,9 @@ import org.ta4j.core.indicators.ATRIndicator;
 import java.time.LocalTime;
 import java.time.ZonedDateTime;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Calculates risk parameters (TP/SL) based on ATR from the 1H timeframe.
@@ -70,22 +73,96 @@ public class RiskCalculator {
         STRATEGY_TP_MULTIPLIERS.put("p6reversalput", 3.2);  // Was 1.4x
     }
 
+    /**
+     * Optional TP/SL multiplier deltas for a single backtest run (e.g. /retest trial).
+     * Uses {@link AtomicReference} so parallel ticker workers in {@link com.fgiaquinta.optionsquant.backtest.engine.BacktestEngine}
+     * see the same trial values (not {@link ThreadLocal}).
+     */
+    private static final AtomicReference<double[]> RETEST_MULTIPLIER_DELTAS = new AtomicReference<>();
+
+    /**
+     * Adds to TP and SL ATR multipliers for the duration of one backtest (all worker threads).
+     *
+     * @param tpDelta added to TP multiplier (e.g. 0.2)
+     * @param slDelta added to SL multiplier (e.g. 0.3 to widen stop)
+     */
+    public static void setRetestMultiplierDeltas(double tpDelta, double slDelta) {
+        RETEST_MULTIPLIER_DELTAS.set(new double[] {tpDelta, slDelta});
+    }
+
+    public static void clearRetestMultiplierDeltas() {
+        RETEST_MULTIPLIER_DELTAS.set(null);
+    }
+
+    /**
+     * Maps {@link com.fgiaquinta.optionsquant.strategy.TradingStrategy#getName()} style strings ("p5 continuation")
+     * to static map keys ("p5continuationput").
+     */
+    public static String resolveMultiplierMapKey(String strategyName, boolean isCall) {
+        if (strategyName == null || strategyName.isBlank()) {
+            return "";
+        }
+        String compact = strategyName.toLowerCase(Locale.ROOT).replaceAll("\\s+", "");
+        String suffixed = compact + (isCall ? "call" : "put");
+        if (STRATEGY_SL_MULTIPLIERS.containsKey(suffixed)) {
+            return suffixed;
+        }
+        if (STRATEGY_TP_MULTIPLIERS.containsKey(suffixed)) {
+            return suffixed;
+        }
+        if (STRATEGY_SL_MULTIPLIERS.containsKey(compact)) {
+            return compact;
+        }
+        if (STRATEGY_TP_MULTIPLIERS.containsKey(compact)) {
+            return compact;
+        }
+        return suffixed;
+    }
+
+    public static double baseTpMultiplier(String mapKey) {
+        return STRATEGY_TP_MULTIPLIERS.getOrDefault(mapKey, DEFAULT_TP_MULTIPLIER);
+    }
+
+    public static double baseSlMultiplier(String mapKey) {
+        return STRATEGY_SL_MULTIPLIERS.getOrDefault(mapKey, DEFAULT_SL_MULTIPLIER);
+    }
+
+    /**
+     * TP/SL multipliers after applying global maps and optional per-ticker+strategy overrides from memory.
+     */
+    static double[] resolveMultipliers(String strategyName, boolean isCall, TickerStrategyProfile profile) {
+        String mapKey = strategyName != null ? resolveMultiplierMapKey(strategyName, isCall) : "";
+        double tp = baseTpMultiplier(mapKey);
+        double sl = baseSlMultiplier(mapKey);
+        if (profile != null) {
+            if (profile.getTpAtrMultOverride() != null) {
+                tp = profile.getTpAtrMultOverride();
+            }
+            if (profile.getSlAtrMultOverride() != null) {
+                sl = profile.getSlAtrMultOverride();
+            }
+        }
+        return new double[] {tp, sl};
+    }
+
     public static TradePlan generatePlan(StrategyData data, String ticker, ZonedDateTime entryTime, boolean isCall, double entryPrice) {
-        return generatePlan(data, ticker, entryTime, isCall, entryPrice, null);
+        return generatePlan(data, ticker, entryTime, isCall, entryPrice, null, null);
+    }
+
+    /**
+     * Same as {@link #generatePlan(StrategyData, String, ZonedDateTime, boolean, double, String, TickerStrategyProfile)} without ticker memory overrides.
+     */
+    public static TradePlan generatePlan(StrategyData data, String ticker, ZonedDateTime entryTime, boolean isCall, double entryPrice, String strategy) {
+        return generatePlan(data, ticker, entryTime, isCall, entryPrice, strategy, null);
     }
 
     /**
      * Generates a TradePlan with strategy-specific ATR multipliers.
-     * 
-     * @param data Strategy data with multi-timeframe series
-     * @param ticker Ticker symbol
-     * @param entryTime Entry time
-     * @param isCall Whether it's a CALL or PUT
-     * @param entryPrice Entry price
-     * @param strategy Strategy name (for per-strategy tuning)
-     * @return TradePlan with optimized TP/SL distances
+     *
+     * @param profile optional per-ticker+strategy overrides from {@link com.fgiaquinta.optionsquant.service.TickerMemory}
      */
-    public static TradePlan generatePlan(StrategyData data, String ticker, ZonedDateTime entryTime, boolean isCall, double entryPrice, String strategy) {
+    public static TradePlan generatePlan(StrategyData data, String ticker, ZonedDateTime entryTime, boolean isCall, double entryPrice,
+            String strategy, TickerStrategyProfile profile) {
         BarSeries series1h = data.getSeries(TimeFrame.HOUR_1);
         if (series1h == null || series1h.isEmpty()) {
             return new TradePlan(entryPrice, entryPrice, entryPrice, isCall, LocalTime.of(15, 55));
@@ -96,10 +173,17 @@ public class RiskCalculator {
 
         double atr = new ATRIndicator(series1h, 14).getValue(index1h).doubleValue();
 
-        // Use strategy-specific multipliers if available, otherwise use defaults
-        String strategyKey = strategy != null ? strategy.toLowerCase() : "";
-        double tpMultiplier = STRATEGY_TP_MULTIPLIERS.getOrDefault(strategyKey, DEFAULT_TP_MULTIPLIER);
-        double slMultiplier = STRATEGY_SL_MULTIPLIERS.getOrDefault(strategyKey, DEFAULT_SL_MULTIPLIER);
+        double[] resolved = resolveMultipliers(strategy, isCall, profile);
+        double tpMultiplier = resolved[0];
+        double slMultiplier = resolved[1];
+
+        double[] trial = RETEST_MULTIPLIER_DELTAS.get();
+        if (trial != null && trial.length >= 2) {
+            tpMultiplier += trial[0];
+            slMultiplier += trial[1];
+        }
+        tpMultiplier = Math.max(0.25, tpMultiplier);
+        slMultiplier = Math.max(0.25, slMultiplier);
 
         double tpDist = atr * tpMultiplier;
         double slDist = atr * slMultiplier;

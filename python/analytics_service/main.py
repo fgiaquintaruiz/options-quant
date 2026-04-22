@@ -10,6 +10,7 @@ This service provides REST endpoints for:
 Communication with Java trading engine via REST HTTP.
 """
 
+import json
 import os
 import logging
 from typing import List, Dict, Optional
@@ -22,7 +23,7 @@ from pydantic import BaseModel, Field
 import pandas as pd
 import numpy as np
 
-from engine import AnalyticsEngine
+from .engine import AnalyticsEngine
 
 # Configure logging
 logging.basicConfig(
@@ -162,10 +163,10 @@ class JavaApiClient:
 
 # Initialize REST client
 java_client = JavaApiClient()
-# Try to connect on startup (non-blocking)
-try:
+# Try to connect on startup (non-blocking; environment-dependent — not asserted in unit tests)
+try:  # pragma: no cover
     java_client.connect()
-except Exception as e:
+except Exception as e:  # pragma: no cover
     logger.warning(f"Could not connect to Java REST API: {e}")
 
 
@@ -218,10 +219,11 @@ async def calculate_indicators(request: IndicatorRequest):
             params=request.params
         )
 
-        # Convert back to list of dicts
+        # JSON-safe rows (NaN/Inf → null via pandas → json)
+        data_clean = json.loads(result.to_json(orient="records", date_format="iso"))
         return {
             "status": "success",
-            "data": result.to_dict(orient='records'),
+            "data": data_clean,
             "indicators_calculated": request.indicators
         }
 
@@ -343,13 +345,13 @@ async def get_account_status():
 
 # ================== Main Entry Point ==================
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     import uvicorn
 
     port = int(os.getenv('PORT', '8001'))
     uvicorn.run(
-        "main:app",
+        "analytics_service.main:app",
         host="0.0.0.0",
         port=port,
-        reload=os.getenv('DEBUG', 'false').lower() == 'true'
+        reload=os.getenv('DEBUG', 'false').lower() == 'true',
     )

@@ -117,4 +117,21 @@ public abstract class BasePlaywrightTest {
         assertEquals(200, resp.statusCode(), "Expected 200 for POST " + path);
         return resp.body();
     }
+
+    /**
+     * POST JSON body to the running app (full stack — not mocked).
+     */
+    protected HttpResponse<String> postJsonBody(String path, String jsonBody, int expectedStatus) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpResponse<String> resp = client.send(
+                HttpRequest.newBuilder(URI.create(BASE_URL + path))
+                        .timeout(Duration.ofSeconds(60))
+                        .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                        .header("Content-Type", "application/json")
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(expectedStatus, resp.statusCode(),
+                () -> "POST " + path + " expected " + expectedStatus + " got " + resp.statusCode() + ": " + resp.body());
+        return resp;
+    }
 }

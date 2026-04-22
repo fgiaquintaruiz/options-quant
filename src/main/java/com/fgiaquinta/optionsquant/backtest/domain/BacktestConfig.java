@@ -19,7 +19,10 @@ public record BacktestConfig(
         int maxConcurrentTrades,
         TimeFrame executionTimeframe,
         boolean includeTradePlans,
-        boolean deterministicMode
+        boolean deterministicMode,
+        /** Added to TP/SL ATR multipliers for this run only (e.g. retest trial); applied in RiskCalculator across all workers. */
+        double tpMultiplierDelta,
+        double slMultiplierDelta
 ) {
     public BacktestConfig {
         if (initialCapital <= 0) throw new IllegalArgumentException("Initial capital must be positive");
@@ -27,6 +30,8 @@ public record BacktestConfig(
         if (slippagePct < 0) throw new IllegalArgumentException("Slippage cannot be negative");
         if (commissionPerContract < 0) throw new IllegalArgumentException("Commission cannot be negative");
         if (maxConcurrentTrades < 0) throw new IllegalArgumentException("Max concurrent trades cannot be negative");
+        if (tpMultiplierDelta < -10 || tpMultiplierDelta > 10) throw new IllegalArgumentException("tpMultiplierDelta out of range");
+        if (slMultiplierDelta < -10 || slMultiplierDelta > 10) throw new IllegalArgumentException("slMultiplierDelta out of range");
     }
 
     /**
@@ -42,7 +47,9 @@ public record BacktestConfig(
                 3,          // max 3 concurrent trades
                 TimeFrame.MIN_15, // evaluate strategies every 15m candle
                 true,       // include trade plans
-                false       // deterministic mode off by default
+                false,      // deterministic mode off by default
+                0.0,
+                0.0
         );
     }
 }

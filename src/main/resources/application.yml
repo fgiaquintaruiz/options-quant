@@ -59,26 +59,25 @@ ibkr:
   risk-per-trade-pct: 0.02
   use-csv-tickers: true  # Use tickers.csv instead of YAML list
   tickers: []  # Legacy list - kept for backwards compatibility. See data/tickers.csv
-  hot-ticker-count: 20  # Number of top CSV tickers to scan first (by market cap)
+  hot-ticker-count: 20  # Used when hot-tickers is empty: top N CSV names by market cap (see TickerService)
 
-  # Hot Tickers: Scanned FIRST on every cycle (high-priority, high-volume)
-  # These are analyzed before the remaining 500+ tickers for faster signal detection
+  # Full universe for "ALL" scope / TickerService — empty = use every symbol from data/tickers.csv
+  universe-tickers: []
+
+  # Hot Tickers: processed FIRST in this order (must be a subset of the active universe)
   hot-tickers:
-    - SPY     # S&P 500 ETF (market benchmark)
-    - QQQ     # Nasdaq 100 ETF (tech-heavy)
+    - NVDA    # NVIDIA
     - AAPL    # Apple
     - MSFT    # Microsoft
-    - NVDA    # NVIDIA (AI boom)
-    - TSLA    # Tesla
+    - GOOGL   # Alphabet
     - AMZN    # Amazon
-    - META    # Meta/Facebook
-    - GOOGL   # Google/Alphabet
-    - AMD     # AMD (semiconductors)
-    - JPM     # JPMorgan (financials)
-    - V       # Visa (payments)
-    - BRK.B   # Berkshire Hathaway
-    - XOM     # Exxon (energy)
-    - JNJ     # Johnson & Johnson (healthcare)
+    - META    # Meta
+    - TSLA    # Tesla
+    - AMD     # AMD
+    - JPM     # JPMorgan
+    - V       # Visa
+    - XOM     # Exxon
+    - JNJ     # Johnson & Johnson
 
 # Telegram Bot Configuration
 telegram:
@@ -104,6 +103,9 @@ scanner:
   prioritization-mode: HYBRID
   hybrid-fundamental-weight: 0.65
   hybrid-memory-weight: 0.35
+  # Exclusive IBKR scan lock: only one scanAll at a time (see StrategyScannerService)
+  exclusive-scan-scheduler-lock-wait-ms: 5000   # Startup/cron tryLock; skip scan if busy after this
+  live-preempt-wait-ms: 60000                 # Live manual scan: max wait for other scan to release lock after stopDownloads
 
 backtest:
   default-max-concurrent-scans: 4
@@ -111,6 +113,18 @@ backtest:
   # Delay after each scheduled backtest completes (ms). Only applies when auto-run is enabled in the UI.
   scheduler:
     fixed-delay-ms: 3600000
+
+# Grid search (POST /backtest-ui/grid-search): max Cartesian product size for EXHAUSTIVE mode;
+# RANDOM mode also requires randomSampleCount <= max-cells.
+# timeout-ms: wall-clock cap for the whole request (single grid or full walk-forward). Partial rows + CSV still returned. 0 = no cap.
+grid-search:
+  max-cells: 500
+  timeout-ms: 3600000
+
+# Ticker learning / risk overrides JSON (atomic save on write)
+ticker:
+  memory:
+    file: data/ticker-memory.json
 
 # Backtest CLI Configuration
 backtest-cli:

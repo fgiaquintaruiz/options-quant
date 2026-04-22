@@ -219,17 +219,19 @@ class AnalyticsEngine:
         # Profit Factor
         profit_factor = abs(sum(winning_trades) / sum(losing_trades)) if losing_trades else float('inf')
 
+        pf_out = round(float(profit_factor), 4) if profit_factor != float('inf') else None
+
         metrics = {
-            'total_trades': len(trades),
-            'winning_trades': len(winning_trades),
-            'losing_trades': len(losing_trades),
-            'win_rate': round(win_rate, 4),
-            'total_pnl': round(total_pnl, 2),
-            'avg_pnl': round(avg_pnl, 2),
-            'sharpe_ratio': round(sharpe_ratio, 4),
-            'sortino_ratio': round(sortino_ratio, 4),
-            'max_drawdown': round(max_drawdown, 2),
-            'profit_factor': round(profit_factor, 4) if profit_factor != float('inf') else float('inf')
+            'total_trades': int(len(trades)),
+            'winning_trades': int(len(winning_trades)),
+            'losing_trades': int(len(losing_trades)),
+            'win_rate': float(round(float(win_rate), 4)),
+            'total_pnl': float(round(float(total_pnl), 2)),
+            'avg_pnl': float(round(float(avg_pnl), 2)),
+            'sharpe_ratio': float(round(float(sharpe_ratio), 4)),
+            'sortino_ratio': float(round(float(sortino_ratio), 4)),
+            'max_drawdown': float(round(float(max_drawdown), 2)),
+            'profit_factor': pf_out,
         }
 
         logger.info(f"Calculated performance metrics for {len(trades)} trades")

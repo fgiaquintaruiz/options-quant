@@ -1,6 +1,7 @@
 package com.fgiaquinta.optionsquant.service;
 
 import com.fgiaquinta.optionsquant.config.IbkrProperties;
+import com.fgiaquinta.optionsquant.config.ScannerProperties;
 import com.fgiaquinta.optionsquant.service.StrategyScannerService.ScanResult;
 import com.fgiaquinta.optionsquant.service.StrategyScannerService.Signal;
 import com.fgiaquinta.optionsquant.strategy.model.TradePlan;
@@ -44,8 +45,8 @@ public class MarketScanner {
     private final TelegramService telegramService;
     private final TrailingStopMonitor trailingStopMonitor;
     private final com.fgiaquinta.optionsquant.controller.LiveModeController liveModeController;
-    private final TickerService tickerService;
     private final MarketCalendarService marketCalendar;
+    private final ScannerProperties scannerProperties;
 
     /** When false, scheduled scans are skipped (user can toggle from UI). */
     private final AtomicBoolean schedulerEnabled = new AtomicBoolean(true);
@@ -60,8 +61,8 @@ public class MarketScanner {
                          TelegramService telegramService,
                          TrailingStopMonitor trailingStopMonitor,
                          com.fgiaquinta.optionsquant.controller.LiveModeController liveModeController,
-                         TickerService tickerService,
-                         MarketCalendarService marketCalendar) {
+                         MarketCalendarService marketCalendar,
+                         ScannerProperties scannerProperties) {
         this.scannerService = scannerService;
         this.ibkrProperties = ibkrProperties;
         this.orderExecutionService = orderExecutionService;
@@ -69,13 +70,15 @@ public class MarketScanner {
         this.telegramService = telegramService;
         this.trailingStopMonitor = trailingStopMonitor;
         this.liveModeController = liveModeController;
-        this.tickerService = tickerService;
         this.marketCalendar = marketCalendar;
+        this.scannerProperties = scannerProperties;
         log.info("🤖 MarketScanner initialized - Spain timezone, 15-min synchronized");
         log.info("   Auto-execute: {}", ibkrProperties.autoExecute());
         log.info("   Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)");
         log.info("   Trailing stop monitor: ENABLED ({} min max hold, SMA20 trailing)", 90);
         log.info("   Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)");
+        log.info("   Exclusive scan lock: scheduler try {}ms, live preempt {}ms",
+                scannerProperties.exclusiveScanSchedulerLockWaitMs(), scannerProperties.livePreemptWaitMs());
     }
 
     /**
@@ -90,7 +93,7 @@ public class MarketScanner {
         int currentHour = nowSpain.getHour();
         if (currentHour >= 10 && currentHour < 22 && nowSpain.getDayOfWeek().getValue() <= 5) {
             log.info("🔄 Market hours detected - downloading fresh candle delta in background...");
-            log.info("   This may take a few minutes for 512 tickers...");
+            log.info("   Duration depends on live scope (HOT vs ALL) and ticker count...");
             log.info("   App is ready; scan will complete in background.");
             
             // Run on background thread so the app reaches "ready" state immediately
@@ -99,15 +102,21 @@ public class MarketScanner {
                     log.info("⏸️ Scheduler disabled — skipping startup scan");
                     return;
                 }
-                List<String> allTickers = ibkrProperties.useCsvTickers()
-                        ? tickerService.getTickerSymbols()
-                        : ibkrProperties.tickers();
+                List<String> tickers = liveModeController.resolveTickersForLiveScan();
+                log.info("🔄 Startup scan: scope={} → {} tickers (same list as Live manual scan)",
+                        liveModeController.getLiveTickerScope(), tickers.size());
 
                 liveModeController.setAutoScan(true);
-                liveModeController.updateScanningState(true, "Startup scan...", 0, allTickers.size());
+                liveModeController.updateScanningState(true, "Startup scan...", 0, tickers.size());
                 long startTime = System.currentTimeMillis();
+                scannerService.setTickerOverride(tickers);
                 try {
-                    ScanResult result = scannerService.scanAll(true, true);
+                    long schedWait = scannerProperties.exclusiveScanSchedulerLockWaitMs();
+                    ScanResult result = scannerService.scanAll(true, true, false, schedWait);
+                    if (result.lockSkipped()) {
+                        log.warn("⏸️ Startup scan skipped — exclusive IBKR scan lock busy after {}ms (another scan running)", schedWait);
+                        return;
+                    }
                     long elapsed = System.currentTimeMillis() - startTime;
                     for (Signal signal : result.signals()) {
                         liveModeController.addLiveSignal(signal);
@@ -117,6 +126,7 @@ public class MarketScanner {
                 } catch (Exception e) {
                     log.warn("⚠️ Startup scan failed: {}", e.getMessage());
                 } finally {
+                    scannerService.clearTickerOverride();
                     // Always reset scanning state so Stop Scan can clear it
                     liveModeController.updateScanComplete(System.currentTimeMillis() - startTime);
                     liveModeController.setAutoScan(false);
@@ -170,14 +180,20 @@ public class MarketScanner {
         long scanStartTime = System.currentTimeMillis();
 
         try {
-            List<String> allTickers = ibkrProperties.useCsvTickers()
-                    ? tickerService.getTickerSymbols()
-                    : ibkrProperties.tickers();
+            List<String> tickers = liveModeController.resolveTickersForLiveScan();
+            log.info("Scheduled scan: scope={} → {} tickers: {}",
+                    liveModeController.getLiveTickerScope(), tickers.size(), tickers);
 
             liveModeController.setAutoScan(true);
-            liveModeController.updateScanningState(true, "Starting...", 0, allTickers.size());
+            liveModeController.updateScanningState(true, "Starting...", 0, tickers.size());
 
-            ScanResult result = scannerService.scanAll(true, true);
+            scannerService.setTickerOverride(tickers);
+            long schedWait = scannerProperties.exclusiveScanSchedulerLockWaitMs();
+            ScanResult result = scannerService.scanAll(true, true, false, schedWait);
+            if (result.lockSkipped()) {
+                log.warn("⏸️ Scheduled scan skipped — exclusive IBKR scan lock busy after {}ms (e.g. live manual scan or /api/strategies/scan)", schedWait);
+                return;
+            }
 
             for (Signal signal : result.signals()) {
                 liveModeController.addLiveSignal(signal);
@@ -193,108 +209,7 @@ public class MarketScanner {
             if (!result.signals().isEmpty()) {
                 log.info("\n🎯 SIGNALS DETECTED:");
                 for (Signal signal : result.signals()) {
-                    log.info("  {} {} @ ${} - {} at {}",
-                            signal.ticker(), signal.direction(),
-                            signal.currentPrice(), signal.strategy(),
-                            signal.timestamp());
-
-                    // Send Telegram notification
-                    if (signal.tradePlan() != null) {
-                        TradePlan plan = signal.tradePlan();
-                        log.info("    TP: ${} | SL: ${} | Entry: ${}",
-                                plan.takeProfit, plan.stopLoss, plan.entryPrice);
-
-                        // Send signal to Telegram
-                        // If auto-execute is ON: send info-only notification
-                        // If auto-execute is OFF: send signal with "Execute" button
-                        if (telegramService != null) {
-                            if (ibkrProperties.autoExecute()) {
-                                // Auto-execute enabled: send info-only message
-                                telegramService.sendAutoExecuteSignal(
-                                        signal.ticker(),
-                                        signal.strategy(),
-                                        signal.direction(),
-                                        signal.currentPrice(),
-                                        plan.takeProfit,
-                                        plan.stopLoss
-                                );
-                            } else {
-                                // Auto-execute disabled: send signal with confirmation button
-                                String secureOrderId = telegramService.generateSecureOrderId(
-                                        signal.ticker(),
-                                        signal.strategy(),
-                                        signal.direction(),
-                                        signal.currentPrice()
-                                );
-                                telegramService.sendSignal(
-                                        signal.ticker(),
-                                        signal.strategy(),
-                                        signal.direction(),
-                                        signal.currentPrice(),
-                                        plan.takeProfit,
-                                        plan.stopLoss,
-                                        secureOrderId
-                                );
-                            }
-                        }
-                    } else {
-                        log.warn("    ⚠️ No TradePlan available - cannot execute order");
-                    }
-
-                    // Auto-execute if enabled and TradePlan is available
-                    if (ibkrProperties.autoExecute()) {
-                        if (signal.tradePlan() != null) {
-                            // Check macro environment before executing
-                            boolean isCall = signal.direction().equals("CALL");
-                            if (!macroFilter.isMacroFavorable(isCall)) {
-                                log.warn("⏭️ Skipping {} {} - macro unfavorable", signal.ticker(), signal.direction());
-                                continue;
-                            }
-
-                            // Only execute during regular market hours (9:30 AM - 4:00 PM ET)
-                            // Pre-market orders get rejected by IBKR due to thin liquidity
-                            if (!marketCalendar.isRegularMarketHours(nowSpain)) {
-                                log.info("    ⏸️ Skipping execution - outside regular market hours (9:30 AM - 4:00 PM ET)");
-                                log.info("       Signal queued for execution at market open");
-                                continue;
-                            }
-
-                            try {
-                                log.info("    🚀 AUTO-EXECUTING bracket order...");
-                                
-                                OrderExecutionService.OrderResult orderResult = 
-                                        orderExecutionService.placeOptionBracket(
-                                                signal.ticker(),
-                                                isCall,
-                                                ibkrProperties.defaultQty(),
-                                                signal.tradePlan(),
-                                                signal.strategy()
-                                        );
-                                
-                                if (orderResult != null) {
-                                    log.info("    ✅ ORDER PLACED: Parent ID={}, Strike={}, Expiration={}, Right={}",
-                                            orderResult.parentId(), orderResult.strike(),
-                                            orderResult.expiration(), orderResult.right());
-
-                                    // Register for trailing stop monitoring
-                                    trailingStopMonitor.registerPosition(
-                                            signal.ticker(),
-                                            isCall,
-                                            signal.currentPrice(),
-                                            orderResult.slOrderId()
-                                    );
-                                } else {
-                                    log.error("    ❌ ORDER FAILED: Check logs for IBKR errors");
-                                }
-                            } catch (Exception e) {
-                                log.error("    ❌ EXECUTION ERROR: {} - {}", signal.ticker(), e.getMessage());
-                            }
-                        } else {
-                            log.warn("    ⚠️ Auto-execute skipped: No TradePlan available");
-                        }
-                    } else {
-                        log.info("    ℹ️ Auto-execute disabled in application.yml");
-                    }
+                    processLiveSignalAfterScan(signal, nowSpain);
                 }
             } else {
                 log.info("  No signals detected this scan");
@@ -305,9 +220,144 @@ public class MarketScanner {
         } catch (Exception e) {
             log.error("❌ MarketScanner error: {}", e.getMessage(), e);
         } finally {
+            scannerService.clearTickerOverride();
             // Always reset scanning state so Stop Scan works
             liveModeController.updateScanComplete(System.currentTimeMillis() - scanStartTime);
             liveModeController.setAutoScan(false);
         }
+    }
+
+    /**
+     * Logs one signal, sends Telegram, then optionally places a bracket order when both
+     * {@link IbkrProperties#autoExecute()} and {@link com.fgiaquinta.optionsquant.controller.LiveModeController#isRuntimeAutoExecute()} are true
+     * (same guards as the historical inline scheduled-scan path). Used by scheduled scans and manual "Scan now".
+     */
+    public void processLiveSignalAfterScan(Signal signal, ZonedDateTime nowSpain) {
+        log.info("  {} {} @ ${} - {} at {}",
+                signal.ticker(), signal.direction(),
+                signal.currentPrice(), signal.strategy(),
+                signal.timestamp());
+
+        sendTelegramForScanSignal(signal);
+
+        if (!ibkrProperties.autoExecute()) {
+            log.info("    ℹ️ Auto-execute disabled in application.yml");
+            return;
+        }
+        if (!liveModeController.isRuntimeAutoExecute()) {
+            log.info("    ℹ️ Auto-execute toggled OFF in Live UI — use Execute on the signal or enable the toggle");
+            return;
+        }
+
+        if (signal.tradePlan() == null) {
+            log.warn("    ⚠️ Auto-execute skipped: No TradePlan available");
+            return;
+        }
+        boolean isCall = signal.direction().equals("CALL");
+        if (!macroFilter.isMacroFavorable(isCall)) {
+            log.warn("⏭️ Skipping {} {} - macro unfavorable", signal.ticker(), signal.direction());
+            return;
+        }
+
+        if (liveModeController.isLiveSignalOlderThanMaxAge(signal)) {
+            log.warn("⏭️ Skipping {} {} — signal candle timestamp older than 15 minutes (stale data)",
+                    signal.ticker(), signal.direction());
+            return;
+        }
+
+        if (!marketCalendar.isRegularMarketHours(nowSpain)) {
+            log.info("    ⏸️ Skipping execution - outside regular market hours (9:30 AM - 4:00 PM ET)");
+            log.info("       Signal remains in the grid for manual execution when the market opens");
+            return;
+        }
+
+        try {
+            log.info("    🚀 AUTO-EXECUTING bracket order...");
+
+            OrderExecutionService.OrderResult orderResult =
+                    orderExecutionService.placeOptionBracket(
+                            signal.ticker(),
+                            isCall,
+                            ibkrProperties.defaultQty(),
+                            signal.tradePlan(),
+                            signal.strategy()
+                    );
+
+            if (orderResult != null) {
+                log.info("    ✅ ORDER PLACED: Parent ID={}, Strike={}, Expiration={}, Right={}",
+                        orderResult.parentId(), orderResult.strike(),
+                        orderResult.expiration(), orderResult.right());
+
+                trailingStopMonitor.registerPosition(
+                        signal.ticker(),
+                        isCall,
+                        signal.currentPrice(),
+                        orderResult.slOrderId()
+                );
+            } else {
+                log.error("    ❌ ORDER FAILED: Check logs for IBKR errors");
+            }
+        } catch (Exception e) {
+            log.error("    ❌ EXECUTION ERROR: {} - {}", signal.ticker(), e.getMessage());
+        }
+    }
+
+    /** Same notion as manual execute for freshness: valid plan, candle time, not stale (mock signals still notify for smoke tests). */
+    private boolean shouldNotifyTelegram(Signal signal) {
+        if (signal.tradePlan() == null || signal.timestamp() == null) {
+            return false;
+        }
+        return !liveModeController.isLiveSignalOlderThanMaxAge(signal);
+    }
+
+    /**
+     * Sends Telegram using the exact same rules as {@link #scanAndExecute()} (fresh candle, TradePlan).
+     * Public so {@link com.fgiaquinta.optionsquant.controller.LiveModeController#injectMockSignal} can smoke-test the bot.
+     *
+     * @return {@code true} if notification path was applied ({@link TelegramService} may still no-op when disabled)
+     */
+    public boolean sendTelegramForScanSignal(Signal signal) {
+        if (signal.tradePlan() == null) {
+            log.warn("    ⚠️ No TradePlan available - cannot execute order");
+            return false;
+        }
+        TradePlan plan = signal.tradePlan();
+        log.info("    TP: ${} | SL: ${} | Entry: ${}",
+                plan.takeProfit, plan.stopLoss, plan.entryPrice);
+
+        if (!shouldNotifyTelegram(signal)) {
+            log.info("    ℹ️ Telegram skipped (stale candle >15m or missing timestamp)");
+            return false;
+        }
+        if (telegramService == null) {
+            return false;
+        }
+        if (ibkrProperties.autoExecute()) {
+            telegramService.sendAutoExecuteSignal(
+                    signal.ticker(),
+                    signal.strategy(),
+                    signal.direction(),
+                    signal.currentPrice(),
+                    plan.takeProfit,
+                    plan.stopLoss
+            );
+        } else {
+            String secureOrderId = telegramService.generateSecureOrderId(
+                    signal.ticker(),
+                    signal.strategy(),
+                    signal.direction(),
+                    signal.currentPrice()
+            );
+            telegramService.sendSignal(
+                    signal.ticker(),
+                    signal.strategy(),
+                    signal.direction(),
+                    signal.currentPrice(),
+                    plan.takeProfit,
+                    plan.stopLoss,
+                    secureOrderId
+            );
+        }
+        return true;
     }
 }

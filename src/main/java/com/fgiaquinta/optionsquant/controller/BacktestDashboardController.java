@@ -2,12 +2,19 @@ package com.fgiaquinta.optionsquant.controller;
 
 import com.fgiaquinta.optionsquant.backtest.domain.BacktestConfig;
 import com.fgiaquinta.optionsquant.backtest.domain.BacktestReport;
+import com.fgiaquinta.optionsquant.backtest.grid.GridSearchRequest;
+import com.fgiaquinta.optionsquant.backtest.grid.GridSearchResult;
+import com.fgiaquinta.optionsquant.backtest.grid.GridSearchService;
+import com.fgiaquinta.optionsquant.backtest.grid.PromoteRiskRequest;
+import com.fgiaquinta.optionsquant.backtest.grid.PromoteResult;
+import com.fgiaquinta.optionsquant.backtest.grid.PromoteRiskService;
 import com.fgiaquinta.optionsquant.backtest.domain.BacktestReport.EquityPoint;
 import com.fgiaquinta.optionsquant.backtest.domain.BacktestReport.StrategyStats;
 import com.fgiaquinta.optionsquant.backtest.domain.TradeRecord;
 import com.fgiaquinta.optionsquant.backtest.engine.BacktestEngine;
 import com.fgiaquinta.optionsquant.service.TickerService;
 import com.fgiaquinta.optionsquant.service.TickerMemory;
+import com.fgiaquinta.optionsquant.service.TickerStrategyProfile;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -49,6 +56,8 @@ public class BacktestDashboardController {
     private final BacktestEngine backtestEngine;
     private final TickerService tickerService;
     private final TickerMemory tickerMemory;
+    private final GridSearchService gridSearchService;
+    private final PromoteRiskService promoteRiskService;
 
     // Shared backtest running flag (for stop functionality)
     private static final AtomicBoolean backtestRunning = new AtomicBoolean(false);
@@ -74,6 +83,18 @@ public class BacktestDashboardController {
     private volatile String schedTickerFilter = "";
     private volatile String schedTickerScope = "HOT";
     private volatile long lastScheduledRunEpochMs = 0L;
+
+    /**
+     * Trades from the last successful UI or scheduled backtest. {@link #improveStrategy} and {@link #retestStrategy}
+     * use this first so analysis matches on-screen {@code byStrategy} even when {@code trades.csv} is stale, partially
+     * written, or when strategy name matching against the file fails (encoding, spaces).
+     */
+    private volatile List<TradeRecord> lastCompletedBacktestTrades = List.of();
+
+    /** Resolved ticker list and range from the last successful {@link #executeBacktestUiRun} — used to make /retest fast and comparable. */
+    private volatile List<String> lastUiBacktestTickers = List.of();
+    private volatile LocalDate lastUiBacktestFrom;
+    private volatile LocalDate lastUiBacktestTo;
 
     @Value("${backtest.scheduler.fixed-delay-ms:3600000}")
     private long schedulerFixedDelayMs;
@@ -171,7 +192,8 @@ public class BacktestDashboardController {
                 BacktestConfig config = new BacktestConfig(
                         tickers, fromDate, toDate,
                         initialCapital, riskPct, 0.005, 0.65,
-                        3, com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15, true, false
+                        3, com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15, true, false,
+                        0.0, 0.0
                 );
 
                 final BacktestReport[] finalReport = new BacktestReport[1];
@@ -520,7 +542,8 @@ public class BacktestDashboardController {
             BacktestConfig config = new BacktestConfig(
                     tickers, fromDate, toDate,
                     initialCapital, riskPct, 0.005, 0.65,
-                    3, com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15, true, false
+                    3, com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15, true, false,
+                    0.0, 0.0
             );
 
             final BacktestReport[] reportHolder = new BacktestReport[1];
@@ -596,6 +619,11 @@ public class BacktestDashboardController {
                 stopped.put("error", "Backtest was stopped by user");
                 return stopped;
             }
+
+            lastCompletedBacktestTrades = report.trades() == null ? List.of() : List.copyOf(report.trades());
+            lastUiBacktestTickers = List.copyOf(tickers);
+            lastUiBacktestFrom = fromDate;
+            lastUiBacktestTo = toDate;
 
             List<Map<String, Object>> equityData = new ArrayList<>();
             for (EquityPoint point : report.equityCurve()) {
@@ -969,7 +997,8 @@ public class BacktestDashboardController {
                 BacktestConfig config = new BacktestConfig(
                         remainingTickers, fromDate, toDate,
                         initialCapital, riskPct, 0.005, 0.65,
-                        3, com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15, true, false
+                        3, com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15, true, false,
+                        0.0, 0.0
                 );
 
                 final BacktestReport[] reportHolder = new BacktestReport[1];
@@ -1038,20 +1067,35 @@ public class BacktestDashboardController {
     /**
      * API: Analyze a specific underperforming strategy and suggest improvements.
      * POST /backtest-ui/improve/{strategyName}
+     * Optional {@code ticker} scopes stats to that symbol (same strategy); omit for all tickers in the last run / CSV.
      */
     @PostMapping("/improve/{strategyName}")
     public ResponseEntity<Map<String, Object>> improveStrategy(
-            @PathVariable String strategyName
+            @PathVariable String strategyName,
+            @RequestParam(required = false) String ticker
     ) {
         try {
             Map<String, Object> analysis = new LinkedHashMap<>();
 
-            // Read trades and find all trades for this strategy
-            List<Map<String, Object>> strategyTrades = readStrategyTrades(strategyName);
+            // Prefer in-memory trades from the last completed run (same source as byStrategy in the UI)
+            List<Map<String, Object>> strategyTrades = resolveStrategyTradesForAnalysis(strategyName);
+            String filterTicker = ticker != null ? ticker.trim() : "";
+            boolean scopedToTicker = !filterTicker.isEmpty();
+            if (scopedToTicker) {
+                strategyTrades = filterTradesByTicker(strategyTrades, filterTicker);
+            }
 
             if (strategyTrades.isEmpty()) {
                 analysis.put("success", false);
-                analysis.put("message", "No trades found for strategy: " + strategyName);
+                analysis.put("message", scopedToTicker
+                        ? ("No trades found for " + strategyName + " on ticker " + filterTicker.toUpperCase(Locale.ROOT)
+                        + " (run a backtest that includes this pair, or check backtest/trades.csv)")
+                        : ("No trades found for strategy: " + strategyName
+                        + " (run a backtest first, or check backtest/trades.csv)"));
+                analysis.put("analysisScope", scopedToTicker ? "TICKER_STRATEGY" : "STRATEGY_ALL_TICKERS");
+                if (scopedToTicker) {
+                    analysis.put("filterTicker", filterTicker.toUpperCase(Locale.ROOT));
+                }
                 return ResponseEntity.ok(analysis);
             }
 
@@ -1105,8 +1149,17 @@ public class BacktestDashboardController {
                 suggestedParams.add("SL ATR: widen by 0.2-0.5");
             }
 
+            if (scopedToTicker && strategyTrades.size() < 3) {
+                recommendations.add("Low sample size for this ticker+strategy — interpret metrics with caution; compare strategy-wide stats.");
+            }
+
             analysis.put("success", true);
             analysis.put("strategy", strategyName);
+            analysis.put("analysisScope", scopedToTicker ? "TICKER_STRATEGY" : "STRATEGY_ALL_TICKERS");
+            if (scopedToTicker) {
+                analysis.put("filterTicker", filterTicker.toUpperCase(Locale.ROOT));
+            }
+            analysis.put("lowSampleWarning", scopedToTicker && strategyTrades.size() < 3);
             analysis.put("totalTrades", strategyTrades.size());
             analysis.put("wins", wins);
             analysis.put("losses", losses);
@@ -1129,48 +1182,175 @@ public class BacktestDashboardController {
     }
 
     /**
+     * Exhaustive grid search over {@code tpMultiplierDelta} / {@code slMultiplierDelta} (same engine as a normal backtest).
+     * POST /backtest-ui/grid-search — synchronous v1: the HTTP request blocks until all cells finish or
+     * {@code grid-search.timeout-ms} stops the run early (partial rows + CSV still returned). Rejects grids larger than
+     * {@code grid-search.max-cells} with HTTP 400.
+     */
+    @PostMapping("/grid-search")
+    public ResponseEntity<?> runGridSearch(@RequestBody GridSearchRequest request) {
+        try {
+            return ResponseEntity.ok(gridSearchService.run(request));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Promote grid-search deltas to persisted per-ticker+strategy ATR overrides ({@code dryRun=true} previews only).
+     * POST /backtest-ui/promote-risk-params
+     */
+    @PostMapping("/promote-risk-params")
+    public ResponseEntity<?> promoteRiskParams(@RequestBody PromoteRiskRequest request) {
+        try {
+            PromoteResult result = promoteRiskService.promote(request);
+            return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * List strategy profiles that have TP/SL ATR overrides (and metadata) for UI management.
+     * GET /backtest-ui/ticker-memory-profiles
+     */
+    @GetMapping("/ticker-memory-profiles")
+    public ResponseEntity<List<Map<String, Object>>> listTickerMemoryRiskProfiles() {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (TickerStrategyProfile p : tickerMemory.getAllProfiles().values()) {
+            if (p.getSlAtrMultOverride() == null && p.getTpAtrMultOverride() == null) {
+                continue;
+            }
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("ticker", p.ticker);
+            m.put("strategy", p.strategy);
+            m.put("slAtrMultOverride", p.getSlAtrMultOverride());
+            m.put("tpAtrMultOverride", p.getTpAtrMultOverride());
+            m.put("lastUpdated", p.lastUpdated);
+            m.put("updateCount", p.updateCount);
+            out.add(m);
+        }
+        out.sort(Comparator
+                .comparing((Map<String, Object> a) -> String.valueOf(a.getOrDefault("ticker", "")))
+                .thenComparing(a -> String.valueOf(a.getOrDefault("strategy", ""))));
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * Remove TP/SL overrides for one ticker+strategy (same key resolution as {@link TickerMemory}).
+     * DELETE /backtest-ui/ticker-memory-profile?ticker=SPY&strategy=p5%20continuation
+     */
+    @DeleteMapping("/ticker-memory-profile")
+    public ResponseEntity<?> deleteTickerMemoryRiskProfile(
+            @RequestParam String ticker,
+            @RequestParam String strategy) {
+        boolean ok = tickerMemory.removeStrategyProfile(ticker, strategy);
+        if (!ok) {
+            return ResponseEntity.status(404).body(Map.of("error", "profile not found"));
+        }
+        return ResponseEntity.ok(Map.of("removed", true));
+    }
+
+    /**
      * API: Retest with improved parameters (simulated).
      * POST /backtest-ui/retest/{strategyName}
      * 
      * This runs a new backtest and compares the results with the previous one.
-     * In a full implementation, this would temporarily adjust RiskCalculator parameters.
+     * By default ({@code matchLastRun=true}) uses the same ticker list and date range as the last
+     * successful UI/scheduled backtest — much faster than scanning the full symbol universe.
+     * Set {@code matchLastRun=false} for a full-universe 1y scan (slow).
+     * Optional {@code tpMultiplierDelta} / {@code slMultiplierDelta} add to ATR multipliers in
+     * {@link com.fgiaquinta.optionsquant.strategy.utils.RiskCalculator}
+     * for this run only (trial wider stops / targets — otherwise retest reproduces baseline).
+     * Optional {@code ticker}: run the backtest only on this symbol (same date window as {@code matchLastRun} branch);
+     * baseline comparison uses trades for that ticker only (aligned with scoped {@link #improveStrategy}).
      */
     @PostMapping("/retest/{strategyName}")
     public ResponseEntity<Map<String, Object>> retestStrategy(
             @PathVariable String strategyName,
             @RequestParam(defaultValue = "50000") double initialCapital,
-            @RequestParam(defaultValue = "0.02") double riskPct
+            @RequestParam(defaultValue = "0.02") double riskPct,
+            @RequestParam(defaultValue = "true") boolean matchLastRun,
+            @RequestParam(defaultValue = "0") double tpMultiplierDelta,
+            @RequestParam(defaultValue = "0") double slMultiplierDelta,
+            @RequestParam(required = false) String ticker
     ) {
         try {
-            log.info("Retesting strategy: {} with capital=${}, risk={}%", strategyName, initialCapital, riskPct * 100);
+            log.info("Retesting strategy: {} capital=${} risk={}% matchLastRun={} tpΔ={} slΔ={} ticker={}",
+                    strategyName, initialCapital, riskPct * 100, matchLastRun, tpMultiplierDelta, slMultiplierDelta, ticker);
 
-            // Get tickers: hot first, then rest
-            List<String> hotTickers = tickerService.getHotTickers();
-            List<String> allTickers = tickerService.getTickerSymbols();
-            List<String> tickers = new ArrayList<>(hotTickers);
-            allTickers.stream()
-                    .filter(t -> !hotTickers.contains(t))
-                    .forEach(tickers::add);
+            List<String> tickers;
+            LocalDate fromDate;
+            LocalDate toDate;
+            String retestMode;
 
-            LocalDate toDate = LocalDate.now();
-            LocalDate fromDate = toDate.minusYears(1);
+            if (matchLastRun && !lastUiBacktestTickers.isEmpty()) {
+                tickers = new ArrayList<>(lastUiBacktestTickers);
+                fromDate = lastUiBacktestFrom;
+                toDate = lastUiBacktestTo;
+                retestMode = "last_run";
+                log.info("Retest using last UI run: {} tickers, {} → {}", tickers.size(), fromDate, toDate);
+            } else if (matchLastRun) {
+                // No cache (e.g. server restart): HOT-only is far cheaper than full universe
+                tickers = new ArrayList<>(tickerService.getHotTickers());
+                toDate = LocalDate.now();
+                fromDate = toDate.minusYears(1);
+                retestMode = "hot_fallback";
+                log.info("Retest: no cached last-run tickers; using HOT-only ({} tickers), {} → {}",
+                        tickers.size(), fromDate, toDate);
+            } else {
+                List<String> hotTickers = tickerService.getHotTickers();
+                List<String> allTickers = tickerService.getTickerSymbols();
+                tickers = new ArrayList<>(hotTickers);
+                allTickers.stream()
+                        .filter(t -> !hotTickers.contains(t))
+                        .forEach(tickers::add);
+                toDate = LocalDate.now();
+                fromDate = toDate.minusYears(1);
+                retestMode = "full_universe";
+                log.info("Retest full universe: {} tickers, {} → {}", tickers.size(), fromDate, toDate);
+            }
+
+            String singleTickerKey = null;
+            if (ticker != null && !ticker.isBlank()) {
+                singleTickerKey = ticker.trim().toUpperCase(Locale.ROOT);
+                tickers = new ArrayList<>(List.of(singleTickerKey));
+                retestMode = switch (retestMode) {
+                    case "last_run" -> "single_ticker_last_run";
+                    case "hot_fallback" -> "single_ticker_hot_fallback";
+                    case "full_universe" -> "single_ticker_full_window";
+                    default -> "single_ticker_" + retestMode;
+                };
+                log.info("Retest scoped to single ticker {} — dates {} → {}", singleTickerKey, fromDate, toDate);
+            }
+
+            if (tickers.isEmpty()) {
+                Map<String, Object> err = new LinkedHashMap<>();
+                err.put("success", false);
+                err.put("error", "No tickers available for retest.");
+                return ResponseEntity.ok(err);
+            }
 
             BacktestConfig config = new BacktestConfig(
                     tickers, fromDate, toDate,
                     initialCapital, riskPct, 0.005, 0.65,
-                    3, com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15, true, false
+                    3, com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15, true, false,
+                    tpMultiplierDelta, slMultiplierDelta
             );
 
             BacktestReport report = backtestEngine.run(config);
 
-            // Read previous strategy trades for comparison
-            List<Map<String, Object>> previousTrades = readStrategyTrades(strategyName);
+            // Read previous strategy trades for comparison (same resolution as /improve); optional ticker filter
+            List<Map<String, Object>> previousTrades = resolveStrategyTradesForAnalysis(strategyName);
+            if (singleTickerKey != null) {
+                previousTrades = filterTradesByTicker(previousTrades, singleTickerKey);
+            }
             double previousPnl = previousTrades.stream().mapToDouble(t -> (double) t.getOrDefault("netPnl", 0.0)).sum();
             long previousWins = previousTrades.stream().filter(t -> (double) t.getOrDefault("netPnl", 0.0) > 0).count();
             double previousWinRate = previousTrades.isEmpty() ? 0 : (double) previousWins / previousTrades.size();
 
             // Find current strategy stats from report
-            StrategyStats currentStats = report.byStrategy().get(strategyName);
+            StrategyStats currentStats = findStrategyStats(report, strategyName);
             double currentPnl = currentStats != null ? currentStats.totalPnl() : 0;
             double currentWinRate = currentStats != null ? currentStats.winRate() : 0;
             int currentTrades = currentStats != null ? currentStats.trades() : 0;
@@ -1201,6 +1381,18 @@ public class BacktestDashboardController {
             result.put("previous", previous);
             result.put("current", current);
             result.put("improvement", improvement);
+            result.put("retestMode", retestMode);
+            result.put("retestTickerCount", tickers.size());
+            result.put("retestFrom", fromDate.toString());
+            result.put("retestTo", toDate.toString());
+            result.put("appliedTpMultiplierDelta", tpMultiplierDelta);
+            result.put("appliedSlMultiplierDelta", slMultiplierDelta);
+            if (singleTickerKey != null) {
+                result.put("singleTickerScoped", true);
+                result.put("filterTicker", singleTickerKey);
+            } else {
+                result.put("singleTickerScoped", false);
+            }
 
             log.info("Retest complete for {}: Before PnL=${}, After PnL=${}, Diff=${}",
                     strategyName, String.format("%.2f", previousPnl), String.format("%.2f", currentPnl), String.format("%.2f", currentPnl - previousPnl));
@@ -1215,6 +1407,88 @@ public class BacktestDashboardController {
         }
     }
 
+    private static String normalizeStrategyKey(String s) {
+        if (s == null) {
+            return "";
+        }
+        return s.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+    }
+
+    private static boolean strategyNamesMatch(String a, String b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        return normalizeStrategyKey(a).equals(normalizeStrategyKey(b));
+    }
+
+    /**
+     * Trades for analysis: last completed backtest in this JVM first, then trades.csv.
+     */
+    private List<Map<String, Object>> resolveStrategyTradesForAnalysis(String strategyName) {
+        List<Map<String, Object>> fromRun = filterTradesFromRecords(lastCompletedBacktestTrades, strategyName);
+        if (!fromRun.isEmpty()) {
+            return fromRun;
+        }
+        return readStrategyTrades(strategyName);
+    }
+
+    private List<Map<String, Object>> filterTradesFromRecords(List<TradeRecord> trades, String strategyName) {
+        if (trades == null || trades.isEmpty()) {
+            return List.of();
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (TradeRecord t : trades) {
+            if (strategyNamesMatch(t.strategy(), strategyName)) {
+                out.add(tradeRecordToAnalysisMap(t));
+            }
+        }
+        return out;
+    }
+
+    private List<Map<String, Object>> filterTradesByTicker(List<Map<String, Object>> trades, String ticker) {
+        String key = ticker.trim().toUpperCase(Locale.ROOT);
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Map<String, Object> row : trades) {
+            Object tv = row.get("ticker");
+            if (tv != null && key.equals(String.valueOf(tv).trim().toUpperCase(Locale.ROOT))) {
+                out.add(row);
+            }
+        }
+        return out;
+    }
+
+    private Map<String, Object> tradeRecordToAnalysisMap(TradeRecord t) {
+        Map<String, Object> trade = new LinkedHashMap<>();
+        trade.put("ticker", t.ticker());
+        trade.put("strategy", t.strategy());
+        trade.put("direction", t.direction());
+        trade.put("entryPrice", t.entryPrice());
+        trade.put("entryTime", t.entryTime().format(TS_FMT));
+        trade.put("exitPrice", t.exitPrice());
+        trade.put("exitTime", t.exitTime().format(TS_FMT));
+        trade.put("exitReason", t.exitReason());
+        trade.put("netPnl", t.netPnl());
+        trade.put("pattern", t.candlestickPattern());
+        return trade;
+    }
+
+    private StrategyStats findStrategyStats(BacktestReport report, String strategyName) {
+        Map<String, StrategyStats> map = report.byStrategy();
+        if (map == null) {
+            return null;
+        }
+        StrategyStats direct = map.get(strategyName);
+        if (direct != null) {
+            return direct;
+        }
+        for (Map.Entry<String, StrategyStats> e : map.entrySet()) {
+            if (strategyNamesMatch(e.getKey(), strategyName)) {
+                return e.getValue();
+            }
+        }
+        return null;
+    }
+
     /**
      * Reads trades for a specific strategy from trades.csv.
      */
@@ -1227,7 +1501,7 @@ public class BacktestDashboardController {
             List<String> lines = Files.readAllLines(tradesCsv);
             for (int i = 1; i < lines.size(); i++) {
                 String[] parts = lines.get(i).split(",");
-                if (parts.length >= 20 && parts[1].trim().equals(strategyName)) {
+                if (parts.length >= 20 && strategyNamesMatch(parts[1].trim(), strategyName)) {
                     Map<String, Object> trade = new LinkedHashMap<>();
                     trade.put("ticker", parts[0].trim());
                     trade.put("strategy", parts[1].trim());

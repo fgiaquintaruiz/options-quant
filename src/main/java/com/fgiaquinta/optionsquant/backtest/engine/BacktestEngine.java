@@ -8,6 +8,7 @@ import com.fgiaquinta.optionsquant.domain.Candle;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.service.CandleCsvService;
 import com.fgiaquinta.optionsquant.service.TickerMemory;
+import com.fgiaquinta.optionsquant.service.TickerStrategyProfile;
 import com.fgiaquinta.optionsquant.strategy.TradingStrategy;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.model.TradePlan;
@@ -203,6 +204,26 @@ public class BacktestEngine {
      * Full execution loop with status callbacks.
      */
     public BacktestReport run(BacktestConfig config, boolean resumeFromCheckpoint, AtomicBoolean stopRequested, ProgressCallback progressCallback) {
+        try (RetestMultiplierScope ignored = new RetestMultiplierScope(config)) {
+            return runCore(config, resumeFromCheckpoint, stopRequested, progressCallback);
+        }
+    }
+
+    /**
+     * Applies {@link BacktestConfig#tpMultiplierDelta()} / {@link BacktestConfig#slMultiplierDelta()} for this run (including parallel workers).
+     */
+    private static final class RetestMultiplierScope implements AutoCloseable {
+        RetestMultiplierScope(BacktestConfig config) {
+            RiskCalculator.setRetestMultiplierDeltas(config.tpMultiplierDelta(), config.slMultiplierDelta());
+        }
+
+        @Override
+        public void close() {
+            RiskCalculator.clearRetestMultiplierDeltas();
+        }
+    }
+
+    private BacktestReport runCore(BacktestConfig config, boolean resumeFromCheckpoint, AtomicBoolean stopRequested, ProgressCallback progressCallback) {
         log.info(">>> Backtest: tickers={}, {} to {}, capital=${}, risk={}%{}",
                 config.tickers().size(), config.fromDate(), config.toDate(),
                 config.initialCapital(), config.riskPerTradePct() * 100,
@@ -902,7 +923,8 @@ public class BacktestEngine {
                 boolean isCall = strategy.getClass().getSimpleName().toLowerCase().contains("call");
                 double entryPrice = candle.close();
 
-                TradePlan plan = RiskCalculator.generatePlan(data, ticker, time, isCall, entryPrice, strategy.getName());
+                TickerStrategyProfile profile = tickerMemory.getStrategyProfile(ticker, strategy.getName());
+                TradePlan plan = RiskCalculator.generatePlan(data, ticker, time, isCall, entryPrice, strategy.getName(), profile);
                 double riskPerContract = Math.abs(entryPrice - plan.stopLoss) * 100;
                 double maxRisk = equity * config.riskPerTradePct();
 

@@ -25,7 +25,17 @@ scanner:
   prioritization-mode: NATURAL
   hybrid-fundamental-weight: 0.65
   hybrid-memory-weight: 0.35
+  exclusive-scan-scheduler-lock-wait-ms: 5000
+  live-preempt-wait-ms: 60000
 
 logging:
   level:
     com.fgiaquinta.optionsquant: DEBUG
+
+grid-search:
+  max-cells: 500
+  timeout-ms: 0  # tests: explicit 0 unless a test overrides GridSearchProperties
+
+ticker:
+  memory:
+    file: data/ticker-memory.json

@@ -68,7 +68,8 @@ public class BacktestController {
         BacktestConfig config = new BacktestConfig(
                 tickerList, fromDate, toDate,
                 initialCapital, riskPct, slippagePct, commission,
-                maxConcurrent, execTimeframe, true, false
+                maxConcurrent, execTimeframe, true, false,
+                0.0, 0.0
         );
 
         BacktestReport report = backtestEngine.run(config);

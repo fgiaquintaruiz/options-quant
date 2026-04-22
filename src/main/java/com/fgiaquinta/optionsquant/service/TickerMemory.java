@@ -4,11 +4,15 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.text.DecimalFormat;
 import java.time.LocalTime;
 import java.time.ZonedDateTime;
@@ -35,7 +39,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class TickerMemory {
 
-    private static final Path MEMORY_FILE = Path.of("data/ticker-memory.json");
+    private final Path memoryFile;
     private static final int MIN_TRADES_FOR_CONFIDENCE = 3;
     private static final int SAVE_INTERVAL = 100;
 
@@ -82,9 +86,51 @@ public class TickerMemory {
     // Debounce counter for save operations
     private int tradeCounter = 0;
 
-    public TickerMemory() {
+    @Autowired
+    public TickerMemory(@Value("${ticker.memory.file:data/ticker-memory.json}") String memoryFilePath) {
+        this(Path.of(memoryFilePath));
+    }
+
+    /**
+     * Tests and tools: explicit file path (same format as production JSON).
+     */
+    TickerMemory(Path memoryFile) {
+        this.memoryFile = memoryFile;
         mapper.registerModule(new JavaTimeModule());
         load();
+    }
+
+    /**
+     * Persists absolute ATR multipliers for {@link com.fgiaquinta.optionsquant.strategy.utils.RiskCalculator} for this ticker+strategy
+     * (replaces global map values when set on the profile).
+     */
+    public synchronized void applyAtrMultiplierOverrides(String ticker, String strategy, double slAtrMult, double tpAtrMult) {
+        String ct = canonicalTicker(ticker);
+        String cs = canonicalStrategyName(strategy);
+        String key = profileMapKey(ct, cs);
+        TickerStrategyProfile profile = strategyProfiles.computeIfAbsent(
+                key, k -> new TickerStrategyProfile(ct, cs));
+        profile.slAtrMultOverride = slAtrMult;
+        profile.tpAtrMultOverride = tpAtrMult;
+        profile.lastUpdated = System.currentTimeMillis();
+        profile.updateCount++;
+        save();
+    }
+
+    /**
+     * Removes the strategy profile row for this ticker+strategy (including TP/SL ATR overrides).
+     *
+     * @return true if an entry existed and was removed
+     */
+    public synchronized boolean removeStrategyProfile(String ticker, String strategy) {
+        String key = profileMapKey(ticker, strategy);
+        TickerStrategyProfile removed = strategyProfiles.remove(key);
+        if (removed != null) {
+            save();
+            log.info("🧠 [Memory] Removed strategy profile key {}", key);
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -99,10 +145,11 @@ public class TickerMemory {
         TickerStats stats = memory.computeIfAbsent(ticker, TickerStats::new);
         stats.recordTrade(strategy, isWin, pnl, maxDrawdown, maxRunup);
 
-        // Update strategy-specific profile for learning
-        String profileKey = ticker + "::" + strategy;
+        // Update strategy-specific profile for learning (canonical key matches BacktestEngine + promote)
+        String ct = canonicalTicker(ticker);
+        String profileKey = profileMapKey(ct, strategy);
         TickerStrategyProfile profile = strategyProfiles.computeIfAbsent(
-                profileKey, k -> new TickerStrategyProfile(ticker, strategy));
+                profileKey, k -> new TickerStrategyProfile(ct, strategy));
         
         String lossCategory = !isWin ? categorizeLoss(pnl, maxDrawdown, maxRunup, atrAtEntry) : null;
         profile.recordTrade(pattern, isWin, pnl, lossCategory, entryHour, vixAtEntry, marketTrend);
@@ -159,8 +206,9 @@ public class TickerMemory {
      */
     public double getPositionSizeMultiplier(String ticker) {
         // Find all profiles for this ticker
+        String prefix = canonicalTicker(ticker) + "::";
         List<TickerStrategyProfile> profiles = strategyProfiles.entrySet().stream()
-                .filter(e -> e.getKey().startsWith(ticker + "::"))
+                .filter(e -> e.getKey().startsWith(prefix))
                 .map(Map.Entry::getValue)
                 .filter(p -> p.totalTrades >= MIN_TRADES_FOR_CONFIDENCE)
                 .toList();
@@ -215,8 +263,9 @@ public class TickerMemory {
      */
     public boolean isBlocked(String ticker) {
         // Check strategy profiles
+        String blockedPrefix = canonicalTicker(ticker) + "::";
         List<TickerStrategyProfile> profiles = strategyProfiles.entrySet().stream()
-                .filter(e -> e.getKey().startsWith(ticker + "::"))
+                .filter(e -> e.getKey().startsWith(blockedPrefix))
                 .map(Map.Entry::getValue)
                 .filter(p -> p.totalTrades >= 10)
                 .toList();
@@ -244,7 +293,7 @@ public class TickerMemory {
      * Useful for checking pattern filters and entry conditions.
      */
     public TickerStrategyProfile getStrategyProfile(String ticker, String strategy) {
-        return strategyProfiles.get(ticker + "::" + strategy);
+        return strategyProfiles.get(profileMapKey(ticker, strategy));
     }
 
     /**
@@ -424,7 +473,8 @@ public class TickerMemory {
      */
     public void resetTicker(String ticker) {
         memory.remove(ticker);
-        strategyProfiles.keySet().removeIf(k -> k.startsWith(ticker + "::"));
+        String prefix = canonicalTicker(ticker) + "::";
+        strategyProfiles.keySet().removeIf(k -> k.startsWith(prefix));
         save();
         log.info("🧹 [Memory] Reset stats for {}", ticker);
     }
@@ -455,13 +505,13 @@ public class TickerMemory {
 
     @SuppressWarnings("unchecked")
     private void load() {
-        if (!Files.exists(MEMORY_FILE)) {
+        if (!Files.exists(memoryFile)) {
             log.info("🧠 [Memory] No existing memory file found, starting fresh");
             return;
         }
 
         try {
-            Map<String, Object> data = mapper.readValue(MEMORY_FILE.toFile(),
+            Map<String, Object> data = mapper.readValue(memoryFile.toFile(),
                     new TypeReference<Map<String, Object>>() {});
 
             // Load aggregate stats
@@ -486,9 +536,15 @@ public class TickerMemory {
                     List<Map<String, Object>> profilesData =
                             (List<Map<String, Object>>) data.get("profiles");
                     for (Map<String, Object> profileMap : profilesData) {
-                        TickerStrategyProfile profile = loadStrategyProfile(profileMap);
+                        TickerStrategyProfile profile = loadStrategyProfileMap(profileMap);
                         if (profile != null) {
-                            strategyProfiles.put(profile.ticker + "::" + profile.strategy, profile);
+                            String key = profileMapKey(profile.ticker, profile.strategy);
+                            TickerStrategyProfile existing = strategyProfiles.get(key);
+                            if (existing == null) {
+                                strategyProfiles.put(key, profile);
+                            } else {
+                                mergeRiskOverridesOnLoad(existing, profile);
+                            }
                         }
                     }
                 } catch (Exception e) {
@@ -497,16 +553,16 @@ public class TickerMemory {
             }
 
             log.info("🧠 [Memory] Loaded {} tickers and {} profiles from {}",
-                    memory.size(), strategyProfiles.size(), MEMORY_FILE);
+                    memory.size(), strategyProfiles.size(), memoryFile);
 
         } catch (Exception e) {
             // If the file is corrupt or old format, start fresh
             log.warn("⚠️ [Memory] Failed to load memory file ({}), starting fresh. Consider deleting {}",
-                    e.getMessage(), MEMORY_FILE);
+                    e.getMessage(), memoryFile);
             // Try to backup the old file
             try {
-                Path backup = MEMORY_FILE.resolveSibling("ticker-memory.json.bak");
-                Files.copy(MEMORY_FILE, backup, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                Path backup = memoryFile.resolveSibling("ticker-memory.json.bak");
+                Files.copy(memoryFile, backup, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 log.info("🧠 [Memory] Backed up old file to {}", backup);
             } catch (IOException ioEx) {
                 log.debug("Could not backup old file: {}", ioEx.getMessage());
@@ -544,8 +600,11 @@ public class TickerMemory {
         }
     }
 
+    /**
+     * Maps one JSON profile object to {@link TickerStrategyProfile}. Package-private for unit tests.
+     */
     @SuppressWarnings("unchecked")
-    private TickerStrategyProfile loadStrategyProfile(Map<String, Object> m) {
+    static TickerStrategyProfile loadStrategyProfileMap(Map<String, Object> m) {
         String ticker = (String) m.get("ticker");
         String strategy = (String) m.get("strategy");
         if (ticker == null || strategy == null) return null;
@@ -574,20 +633,67 @@ public class TickerMemory {
             profile.lossCategories.putAll(lossCats);
         }
 
+        if (m.containsKey("slAtrMultOverride") && m.get("slAtrMultOverride") != null) {
+            profile.slAtrMultOverride = ((Number) m.get("slAtrMultOverride")).doubleValue();
+        }
+        if (m.containsKey("tpAtrMultOverride") && m.get("tpAtrMultOverride") != null) {
+            profile.tpAtrMultOverride = ((Number) m.get("tpAtrMultOverride")).doubleValue();
+        }
+
         return profile;
+    }
+
+    private static void mergeRiskOverridesOnLoad(TickerStrategyProfile primary, TickerStrategyProfile secondary) {
+        if (primary.getSlAtrMultOverride() == null && secondary.getSlAtrMultOverride() != null) {
+            primary.slAtrMultOverride = secondary.slAtrMultOverride;
+        }
+        if (primary.getTpAtrMultOverride() == null && secondary.getTpAtrMultOverride() != null) {
+            primary.tpAtrMultOverride = secondary.tpAtrMultOverride;
+        }
+    }
+
+    /** Uppercase ticker symbol for stable map keys (matches CSV / UI). */
+    public static String canonicalTicker(String ticker) {
+        if (ticker == null) return "";
+        return ticker.trim().toUpperCase(Locale.ROOT);
+    }
+
+    /**
+     * Same canonical form as {@link com.fgiaquinta.optionsquant.strategy.TradingStrategy#getName()} for labels from
+     * UI, JSON, or legacy compact keys (e.g. {@code p4openingput} → {@code p4 opening}).
+     */
+    public static String canonicalStrategyName(String raw) {
+        if (raw == null || raw.isBlank()) return "";
+        String name = raw.trim().toLowerCase(Locale.ROOT);
+        name = name.replaceAll("\\s+", "");
+        name = name.replaceAll("(call|put)$", "");
+        name = name.replaceAll("(c\\d|p\\d)([a-z])", "$1 $2");
+        return name.trim();
+    }
+
+    static String profileMapKey(String ticker, String strategy) {
+        return canonicalTicker(ticker) + "::" + canonicalStrategyName(strategy);
     }
 
     private void save() {
         try {
-            if (!Files.exists(MEMORY_FILE.getParent())) {
-                Files.createDirectories(MEMORY_FILE.getParent());
+            if (!Files.exists(memoryFile.getParent())) {
+                Files.createDirectories(memoryFile.getParent());
             }
-            
+
             Map<String, Object> data = new LinkedHashMap<>();
+            data.put("riskParamSchemaVersion", 1);
             data.put("memory", memory);
             data.put("profiles", new ArrayList<>(strategyProfiles.values()));
-            
-            mapper.writerWithDefaultPrettyPrinter().writeValue(MEMORY_FILE.toFile(), data);
+
+            String tmpName = memoryFile.getFileName().toString() + ".tmp";
+            Path tmp = memoryFile.resolveSibling(tmpName);
+            mapper.writerWithDefaultPrettyPrinter().writeValue(tmp.toFile(), data);
+            try {
+                Files.move(tmp, memoryFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(tmp, memoryFile, StandardCopyOption.REPLACE_EXISTING);
+            }
         } catch (IOException e) {
             log.warn("⚠️ [Memory] Failed to save memory file: {}", e.getMessage());
         }

@@ -1,224 +1,160 @@
-"""
-Unit tests for AnalyticsEngine - grid_search_optimization.
+"""Unit tests for AnalyticsEngine (no HTTP)."""
 
-Tests the grid search optimizer with deterministic mock strategies.
-"""
-
-import pandas as pd
 import numpy as np
+import pandas as pd
+import pytest
+
 from analytics_service.engine import AnalyticsEngine
 
 
-def mock_sma_strategy(data: pd.DataFrame, params: dict) -> dict:
-    """
-    Mock SMA strategy that returns known metrics based on params.
-    Higher period = higher Sharpe (deterministic test case).
-    """
-    period = params.get('period', 20)
+@pytest.fixture
+def engine():
+    return AnalyticsEngine()
 
-    # Deterministic metrics based on period
-    # Higher period -> higher sharpe_ratio (for test)
-    # period 20: sharpe 1.5
-    # period 50: sharpe 2.0
-    sharpe = 1.5 + (period - 20) * 0.02
-    sortino = sharpe * 1.1
-    total_pnl = period * 10.0
-    win_rate = 0.5 + (period % 100) * 0.001
 
-    return {
-        'metrics': {
-            'sharpe_ratio': round(sharpe, 4),
-            'sortino_ratio': round(sortino, 4),
-            'total_pnl': round(total_pnl, 2),
-            'win_rate': round(win_rate, 4),
-            'total_trades': period,
+def test_missing_close_raises(engine):
+    df = pd.DataFrame({"open": [1.0]})
+    with pytest.raises(ValueError, match="close"):
+        engine.calculate_technical_indicators(df, ["SMA"])
+
+
+def test_params_none_defaults_empty_dict(engine):
+    df = pd.DataFrame({"close": [1.0, 2.0, 3.0]})
+    out = engine.calculate_technical_indicators(df, ["SMA"], params=None)
+    assert "SMA_20" in out.columns
+
+
+def test_each_indicator_branch(engine):
+    df = pd.DataFrame(
+        {
+            "open": [10.0] * 40,
+            "high": [11.0] * 40,
+            "low": [9.0] * 40,
+            "close": np.linspace(10, 20, 40),
+            "volume": [1000] * 40,
         }
+    )
+    params = {
+        "SMA": {"period": 3},
+        "EMA": {"period": 3},
+        "RSI": {"period": 3},
+        "MACD": {"fast": 8, "slow": 17, "signal": 5},
+        "BB": {"period": 5, "std_mult": 2.0},
+        "ATR": {"period": 5},
+        "STOCH": {"period": 5},
     }
+    indicators = ["SMA", "EMA", "RSI", "MACD", "BB", "ATR", "STOCH", "UNKNOWN"]
+    out = engine.calculate_technical_indicators(df, indicators, params=params)
+    assert "SMA_3" in out.columns
+    assert "EMA_3" in out.columns
+    assert "RSI_3" in out.columns
+    assert "MACD_8_17" in out.columns
+    assert "BB_upper_5" in out.columns
+    assert "ATR_5" in out.columns
+    assert "STOCH_K_5" in out.columns
 
 
-def mock_rsi_strategy(data: pd.DataFrame, params: dict) -> dict:
-    """
-    Mock RSI strategy - higher RSI threshold = higher Sharpe.
-    """
-    threshold = params.get('threshold', 30)
-
-    # threshold 30: sharpe 1.0
-    # threshold 70: sharpe 2.5
-    sharpe = 1.0 + (threshold - 30) * 0.0375
-
-    return {
-        'metrics': {
-            'sharpe_ratio': round(sharpe, 4),
-            'sortino_ratio': round(sharpe * 0.9, 4),
-            'total_pnl': threshold * 5.0,
-            'win_rate': 0.55,
-        }
-    }
+def test_empty_trades_metrics(engine):
+    m = engine.calculate_performance_metrics([])
+    assert m["total_trades"] == 0
+    assert m["profit_factor"] == 0.0
 
 
-def mock_strategy_with_error(data: pd.DataFrame, params: dict) -> dict:
-    """Mock strategy that raises error for specific params."""
-    if params.get('error_case'):
-        raise ValueError("Intentional error for testing")
-    return {'metrics': {'sharpe_ratio': 1.0}}
+def test_all_winners_profit_factor_none(engine):
+    m = engine.calculate_performance_metrics([{"pnl": 10, "return": 0.1}, {"pnl": 5, "return": 0.05}])
+    assert m["profit_factor"] is None
 
 
-def create_test_data() -> pd.DataFrame:
-    """Create deterministic test data for strategies."""
-    np.random.seed(42)
-    dates = pd.date_range('2024-01-01', periods=100, freq='D')
-    prices = 100 + np.cumsum(np.random.randn(100) * 0.5)
-
-    return pd.DataFrame({
-        'date': dates,
-        'open': prices - 0.5,
-        'high': prices + 1.0,
-        'low': prices - 1.0,
-        'close': prices,
-        'volume': np.random.randint(1000000, 5000000, 100)
-    })
+def test_sharpe_zero_std(engine):
+    m = engine.calculate_performance_metrics(
+        [{"pnl": 1, "return": 0.0}, {"pnl": 1, "return": 0.0}]
+    )
+    assert m["sharpe_ratio"] == 0.0
 
 
-class TestGridSearchOptimization:
-    """Tests for grid_search_optimization method."""
-
-    def test_grid_search_returns_best_params_highest_sharpe(self):
-        """Top result should have highest sharpe_ratio."""
-        engine = AnalyticsEngine()
-        data = create_test_data()
-
-        param_grid = {
-            'period': [20, 30, 40, 50]
-        }
-
-        result = engine.grid_search_optimization(
-            strategy_func=mock_sma_strategy,
-            param_grid=param_grid,
-            data=data,
-            metric='sharpe_ratio'
-        )
-
-        # Verify structure
-        assert 'best_params' in result
-        assert 'best_metrics' in result
-        assert 'all_results' in result
-
-        # Verify best result has highest sharpe
-        all_results = result['all_results']
-        assert len(all_results) == 4, f"Expected 4 results, got {len(all_results)}"
-
-        # Check ordering: best first
-        sharpe_values = [r['sharpe_ratio'] for r in all_results]
-        assert sharpe_values == sorted(sharpe_values, reverse=True), \
-            f"Results not sorted descending: {sharpe_values}"
-
-        # Best should be period=50 (highest sharpe in mock)
-        assert result['best_params']['period'] == 50
-        assert result['best_metrics']['sharpe_ratio'] == 2.1  # 1.5 + (50-20)*0.02
-
-    def test_grid_search_with_multiple_params(self):
-        """Grid search works with multiple parameter dimensions."""
-        engine = AnalyticsEngine()
-        data = create_test_data()
-
-        param_grid = {
-            'threshold': [30, 40, 50, 60, 70]
-        }
-
-        result = engine.grid_search_optimization(
-            strategy_func=mock_rsi_strategy,
-            param_grid=param_grid,
-            data=data,
-            metric='sharpe_ratio'
-        )
-
-        assert len(result['all_results']) == 5
-        # threshold=70 should be best (highest in mock)
-        assert result['best_params']['threshold'] == 70
-
-    def test_grid_search_handles_empty_param_grid(self):
-        """Empty param_grid returns empty results."""
-        engine = AnalyticsEngine()
-        data = create_test_data()
-
-        result = engine.grid_search_optimization(
-            strategy_func=mock_sma_strategy,
-            param_grid={},
-            data=data
-        )
-
-        assert result['best_params'] == {}
-        assert result['best_metrics'] == {}
-        assert result['all_results'] == []
-
-    def test_grid_search_handles_strategy_errors(self):
-        """Strategy errors are caught and logged, not propagated."""
-        engine = AnalyticsEngine()
-        data = create_test_data()
-
-        param_grid = {
-            'error_case': [False, True, False]
-        }
-
-        result = engine.grid_search_optimization(
-            strategy_func=mock_strategy_with_error,
-            param_grid=param_grid,
-            data=data
-        )
-
-        # Should have 3 results: 2 success + 1 error
-        assert len(result['all_results']) == 3
-
-        # Error case should have error field
-        error_results = [r for r in result['all_results'] if 'error' in r]
-        assert len(error_results) == 1
-
-    def test_grid_search_default_metric_is_sharpe_ratio(self):
-        """Default metric is sharpe_ratio."""
-        engine = AnalyticsEngine()
-        data = create_test_data()
-
-        param_grid = {'period': [20, 30]}
-
-        # Call without metric param
-        result = engine.grid_search_optimization(
-            strategy_func=mock_sma_strategy,
-            param_grid=param_grid,
-            data=data
-        )
-
-        # Should use sharpe_ratio as default
-        assert 'sharpe_ratio' in result['best_metrics']
-        assert result['best_params']['period'] == 30  # Higher period = higher sharpe
+def test_sharpe_single_trade_early_exit(engine):
+    m = engine.calculate_performance_metrics([{"pnl": 1, "return": 0.1}])
+    assert m["sharpe_ratio"] == 0.0
 
 
-def test_integration_with_real_engine():
-    """Integration test with real AnalyticsEngine methods."""
-    engine = AnalyticsEngine()
-    data = create_test_data()
-
-    # Add indicators
-    data_with_indicators = engine.calculate_technical_indicators(data, ['SMA', 'RSI'])
-
-    # Verify indicators were calculated
-    assert 'SMA_20' in data_with_indicators.columns
-    assert 'RSI_14' in data_with_indicators.columns
-
-    # Test performance metrics calculation
-    trades = [
-        {'pnl': 100, 'return': 0.1, 'duration': 1},
-        {'pnl': -50, 'return': -0.05, 'duration': 2},
-        {'pnl': 200, 'return': 0.2, 'duration': 1},
-    ]
-
-    metrics = engine.calculate_performance_metrics(trades)
-
-    assert metrics['total_trades'] == 3
-    assert metrics['winning_trades'] == 2
-    assert metrics['losing_trades'] == 1
-    assert metrics['win_rate'] > 0
+def test_sortino_single_trade_early_exit(engine):
+    m = engine.calculate_performance_metrics([{"pnl": 1, "return": 0.1}])
+    assert m["sortino_ratio"] == 0.0
 
 
-if __name__ == '__main__':
-    import pytest
-    pytest.main([__file__, '-v'])
+def test_sortino_mixed_returns_full_path(engine):
+    # At least two negative returns so downside std is non-zero (single value → std == 0)
+    m = engine.calculate_performance_metrics(
+        [
+            {"pnl": 1, "return": 0.1},
+            {"pnl": -1, "return": -0.05},
+            {"pnl": -1, "return": -0.08},
+            {"pnl": 1, "return": 0.02},
+        ]
+    )
+    # Main Sortino path (not 0 / inf / early exit); sign depends on mean vs downside
+    assert m["sortino_ratio"] not in (0.0, float("inf"))
+    assert not np.isnan(m["sortino_ratio"])
+
+
+def test_sortino_downside_zero_std(engine):
+    m = engine.calculate_performance_metrics(
+        [{"pnl": -1, "return": -0.1}, {"pnl": -1, "return": -0.1}]
+    )
+    assert m["sortino_ratio"] == 0.0
+
+
+def test_sortino_no_downside_inf(engine):
+    # All positive excess returns -> Sortino path returns inf; rounded stays inf in metrics
+    m = engine.calculate_performance_metrics(
+        [{"pnl": 1, "return": 0.1}, {"pnl": 1, "return": 0.2}]
+    )
+    assert m["sortino_ratio"] == float("inf")
+
+
+def test_monte_carlo_empty_returns(engine):
+    r = engine.run_monte_carlo_simulation([], num_simulations=100, num_periods=10)
+    assert r["paths"] == []
+    assert r["summary"]["mean_return"] == 0.0
+
+
+def test_monte_carlo_happy_path(engine):
+    rets = [0.01, -0.02, 0.015] * 20
+    r = engine.run_monte_carlo_simulation(rets, num_simulations=50, num_periods=30)
+    assert "summary" in r
+    assert len(r["paths"]) == 50
+
+
+def test_grid_search_empty_grid(engine):
+    out = engine.grid_search_optimization(lambda d, p: {}, {}, pd.DataFrame({"close": [1.0]}))
+    assert out["best_params"] == {}
+    assert out["all_results"] == []
+
+
+def test_grid_search_success_and_failure(engine):
+    df = pd.DataFrame({"close": [1.0, 2.0]})
+
+    def strat(data, params):
+        if params.get("x") == 2:
+            raise RuntimeError("bad")
+        return {"metrics": {"sharpe_ratio": float(params.get("x", 0))}}
+
+    out = engine.grid_search_optimization(
+        strat, {"x": [1, 2]}, df, metric="sharpe_ratio"
+    )
+    assert len(out["all_results"]) == 2
+    assert out["best_params"]["x"] == 1
+
+
+def test_grid_search_non_dict_strategy_result(engine):
+    df = pd.DataFrame({"close": [1.0, 2.0]})
+
+    def strat(data, params):
+        return 42  # not a dict
+
+    out = engine.grid_search_optimization(strat, {"x": [1]}, df, metric="sharpe_ratio")
+    assert out["best_params"]["x"] == 1
+
+
+def test_max_drawdown_empty_pnls_private(engine):
+    assert engine._calculate_max_drawdown([]) == 0.0

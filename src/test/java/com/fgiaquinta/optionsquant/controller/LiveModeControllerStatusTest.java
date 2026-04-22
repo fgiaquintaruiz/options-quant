@@ -49,6 +49,8 @@ class LiveModeControllerStatusTest {
         when(scannerProperties.prioritizationMode()).thenReturn(ScannerProperties.PrioritizationMode.HYBRID);
         when(scannerProperties.hybridFundamentalWeight()).thenReturn(0.65);
         when(scannerProperties.hybridMemoryWeight()).thenReturn(0.35);
+        when(scannerProperties.exclusiveScanSchedulerLockWaitMs()).thenReturn(5000L);
+        when(scannerProperties.livePreemptWaitMs()).thenReturn(60_000L);
 
         controller = new LiveModeController(
                 scannerService, ibkrProperties, tradingService, tickerService,
