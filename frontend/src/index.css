@@ -238,6 +238,35 @@ tr:hover { background: #161b22; }
 .fund-form-hint { line-height: 1.45; margin: 0; }
 .textarea-resizable { resize: vertical; }
 
+/* TickerSelector */
+.ts-container         { position: relative; width: 100%; }
+.ts-input-row         { display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px; padding: 6px 10px; background: #0d1117; min-height: 40px; align-items: center; border: 1px solid #30363d; border-radius: 6px; opacity: 1; }
+.ts-input-row--disabled { opacity: 0.6; }
+.ts-scope-btn         { display: flex; align-items: center; gap: 3px; padding: 2px 8px; font-size: 11px; flex-shrink: 0; border-radius: 4px; cursor: pointer; }
+.ts-scope-btn-all     { background: transparent; border: 1px solid #30363d; color: #6e7681; }
+.ts-scope-btn-all--active  { background: #1f6feb22; border-color: #1f6feb88; color: #58a6ff; }
+.ts-scope-btn-hot     { background: transparent; border: 1px solid #30363d; color: #6e7681; }
+.ts-scope-btn-hot--active  { background: #9e6a0322; border-color: #9e6a0388; color: #f0883e; }
+.ts-divider           { height: 18px; margin: 0 4px; }
+.ts-chip              { display: flex; align-items: center; background: #21262d; border: 1px solid #30363d; border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 600; color: #c9d1d9; }
+.ts-chip-remove       { display: flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: #30363d; margin-left: 6px; color: #8b949e; font-size: 10px; cursor: pointer; transition: color 0.15s; }
+.ts-chip-remove:hover { color: #f85149; }
+.ts-input             { flex: 1; min-width: 100px; border: none; background: transparent; color: #c9d1d9; font-size: 13px; outline: none; height: 24px; }
+.ts-icon-hint         { flex-shrink: 0; opacity: 0.5; }
+.ts-dropdown          { position: absolute; top: 100%; left: 0; right: 0; margin-top: 6px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); z-index: 1000; overflow: hidden; }
+.ts-dropdown-header   { padding: 8px 12px; font-size: 10px; font-weight: 700; color: #8b949e; text-transform: uppercase; background: #0d1117; border-bottom: 1px solid #30363d; }
+.ts-dropdown-header--news { color: #f0883e; border-top: 1px solid #21262d; }
+.ts-dropdown-scroll   { max-height: 220px; overflow-y: auto; }
+.ts-dropdown-item     { padding: 9px 14px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #21262d; background: transparent; transition: background 0.15s; }
+.ts-dropdown-item--hl { background: #1f6feb22; }
+.ts-dropdown-item-news--hl { background: #f0883e15; }
+.ts-dropdown-group-name { display: flex; align-items: center; gap: 6px; font-weight: 700; }
+.ts-dropdown-group-meta { font-size: 10px; color: #6e7681; font-weight: 400; }
+.ts-dropdown-ticker-list { margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ts-dropdown-headline { margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ts-dropdown-footer   { display: block; padding: 9px 14px; font-size: 12px; color: #58a6ff; text-decoration: none; text-align: center; background: #0d1117; border-top: 1px solid #30363d; }
+.ts-news-badge        { padding: 1px 5px; font-size: 10px; }
+
 /* LiveTradeGrid */
 .ltg-th       { padding: 12px;    border-bottom: 2px solid #21262d; color: #8b949e; font-size: 11px; font-weight: 600; text-transform: uppercase; }
 .ltg-th-sm    { padding: 8px 12px; border-bottom: 2px solid #21262d; color: #8b949e; font-size: 11px; font-weight: 600; text-transform: uppercase; }

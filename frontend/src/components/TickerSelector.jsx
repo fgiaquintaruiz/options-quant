@@ -1,244 +1,247 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react'
-import { ChevronDown, List, X, Globe, Flame } from 'lucide-react'
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { X, Globe, Flame, List } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { LS } from '../utils/storage'
+import { liveApi } from '../api'
 
 const DEFAULT_GROUPS = [
-  { id: 'mega-tech', label: 'Mega Tech', tickers: 'AAPL,MSFT,NVDA,GOOGL,AMZN,META,TSLA,AMD,AVGO,ORCL' },
+  { id: 'mega-tech',  label: 'Mega Tech',  tickers: 'AAPL,MSFT,NVDA,GOOGL,AMZN,META,TSLA,AMD,AVGO,ORCL' },
   { id: 'spy-top-10', label: 'SPY Top 10', tickers: 'AAPL,MSFT,NVDA,AMZN,META,GOOGL,BRK B,GOOG,TSLA,AVGO' },
-  { id: 'semis', label: 'Semis', tickers: 'NVDA,AMD,AVGO,INTC,TSM,ASML,QCOM,MU,AMAT,LRCX' },
-  { id: 'finance', label: 'Finance', tickers: 'JPM,V,MA,BAC,MS,GS,HSBC,AXP,PYPL,COIN' },
-  { id: 'crypto', label: 'Crypto Proxy', tickers: 'COIN,MARA,RIOT,MSTR,CLSK,MHT,WULF,BTBT' },
-  { id: 'spy', label: 'SPY', tickers: 'SPY' },
-  { id: 'qqq', label: 'QQQ', tickers: 'QQQ' }
+  { id: 'semis',     label: 'Semis',      tickers: 'NVDA,AMD,AVGO,INTC,TSM,ASML,QCOM,MU,AMAT,LRCX' },
+  { id: 'finance',   label: 'Finance',    tickers: 'JPM,V,MA,BAC,MS,GS,HSBC,AXP,PYPL,COIN' },
+  { id: 'crypto',    label: 'Crypto Proxy',tickers: 'COIN,MARA,RIOT,MSTR,CLSK,MHT,WULF,BTBT' },
+  { id: 'spy',       label: 'SPY',        tickers: 'SPY' },
+  { id: 'qqq',       label: 'QQQ',        tickers: 'QQQ' },
 ]
 
+/** Merges incoming tickers into existing list, deduplicating while preserving order. */
+function mergeTickers(existing, incoming) {
+  const current = existing ? existing.split(',').map((t) => t.trim().toUpperCase()).filter(Boolean) : []
+  const added   = incoming.split(',').map((t) => t.trim().toUpperCase()).filter(Boolean)
+  const seen    = new Set(current)
+  const merged  = [...current]
+  for (const t of added) { if (!seen.has(t)) { seen.add(t); merged.push(t) } }
+  return merged.join(',')
+}
+
+// ── Keyboard navigation helpers ─────────────────────────────────────────────
+
+const navigateDown = (prev, max) => (prev < max - 1 ? prev + 1 : 0)
+const navigateUp   = (prev, max) => (prev > 0 ? prev - 1 : max - 1)
+
+// ── Main component ─────────────────────────────────────────────────────────
+
+/**
+ * Multi-ticker selector with autocomplete dropdown.
+ * Supports HOT/ALL scope toggles, group watchlists, and TWS news ticker suggestions.
+ * Props: value (comma-separated tickers), onChange, disabled, scope, onScopeChange.
+ */
 export default function TickerSelector({ value, onChange, disabled, scope, onScopeChange }) {
-  const [isOpen, setIsOpen] = useState(false)
-  const [inputValue, setInputValue] = useState('')
-  const [highlightedIdx, setHighlightedIdx] = useState(-1)
-  const [groups, setGroups] = useState(() => LS.get('ticker_groups', DEFAULT_GROUPS))
-  const dropdownRef = useRef(null)
+  const [inputValue, setInputValue]     = useState('')
+  const [showSuggestions, setShow]      = useState(false)
+  const [highlightedIdx, setHighlight]  = useState(-1)
+  const [groups, setGroups]             = useState(() => LS.get('ticker_groups', DEFAULT_GROUPS))
+  const [newsTickers, setNewsTickers]   = useState([])
+  const containerRef = useRef(null)
+  const inputRef     = useRef(null)
 
-  // Sync groups if changed in other tabs/settings
+  // Sync groups when localStorage changes (cross-tab); same-tab changes dispatch storage event via LS utility
   useEffect(() => {
-    const handleStorage = () => setGroups(LS.get('ticker_groups', DEFAULT_GROUPS))
-    window.addEventListener('storage', handleStorage)
-    const interval = setInterval(handleStorage, 3000)
-    return () => {
-      window.removeEventListener('storage', handleStorage)
-      clearInterval(interval)
-    }
+    const sync = () => setGroups(LS.get('ticker_groups', DEFAULT_GROUPS))
+    window.addEventListener('storage', sync)
+    return () => window.removeEventListener('storage', sync)
   }, [])
 
-  // Close dropdown on click outside
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setIsOpen(false)
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    liveApi.getNewsTickers().then((data) => {
+      if (Array.isArray(data)) setNewsTickers(data)
+    }).catch(() => {})
   }, [])
 
-  // Parse value (comma separated string) into ticker chips
-  const tickers = useMemo(() => {
-    if (!value) return []
-    return value.split(',')
-      .map(t => t.trim().toUpperCase())
-      .filter(t => t.length > 0)
-  }, [value])
+  useEffect(() => {
+    const onClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setShow(false)
+        setHighlight(-1)
+      }
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [])
+
+  const tickers = useMemo(
+    () => (value ? value.split(',').map((t) => t.trim().toUpperCase()).filter(Boolean) : []),
+    [value]
+  )
+
+  const filteredGroups = useMemo(() => {
+    const q = inputValue.trim().toLowerCase()
+    if (!q) return groups
+    return groups.filter((g) => g.label.toLowerCase().includes(q) || g.tickers.toLowerCase().includes(q))
+  }, [inputValue, groups])
+
+  const filteredNews = useMemo(() => {
+    const q = inputValue.trim().toLowerCase()
+    if (!newsTickers.length) return []
+    const results = q ? newsTickers.filter((n) => n.ticker.toLowerCase().includes(q)) : newsTickers
+    return results.slice(0, 5)
+  }, [inputValue, newsTickers])
+
+  const allSuggestions = useMemo(
+    () => [...filteredGroups.map((g) => ({ type: 'group', ...g })), ...filteredNews.map((n) => ({ type: 'news', ...n }))],
+    [filteredGroups, filteredNews]
+  )
+
+  const closeDropdown = useCallback(() => { setShow(false); setHighlight(-1) }, [])
+
+  const applyGroup = useCallback((groupTickers) => {
+    if (disabled) return
+    onChange(mergeTickers(value, groupTickers))
+    setInputValue('')
+    closeDropdown()
+  }, [disabled, onChange, value, closeDropdown])
+
+  const applyNewsTicker = useCallback((ticker) => {
+    if (disabled) return
+    if (!tickers.includes(ticker)) onChange(value ? `${value},${ticker}` : ticker)
+    setInputValue('')
+    closeDropdown()
+  }, [disabled, onChange, value, tickers, closeDropdown])
+
+  const confirmTyped = useCallback(() => {
+    const t = inputValue.trim().toUpperCase().replace(/[^A-Z0-9 .]/g, '')
+    if (t && !tickers.includes(t)) onChange(value ? `${value},${t}` : t)
+    setInputValue('')
+  }, [inputValue, tickers, onChange, value])
+
+  const handleKeyDown = useCallback((e) => {
+    if (!showSuggestions && e.key === 'ArrowDown') { setShow(true); return }
+
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlight((p) => navigateDown(p, allSuggestions.length)); return }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); setHighlight((p) => navigateUp(p, allSuggestions.length));   return }
+    if (e.key === 'Escape')    { closeDropdown(); return }
+
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (showSuggestions && highlightedIdx >= 0 && highlightedIdx < allSuggestions.length) {
+        const s = allSuggestions[highlightedIdx]
+        s.type === 'group' ? applyGroup(s.tickers) : applyNewsTicker(s.ticker)
+      } else {
+        confirmTyped()
+      }
+      return
+    }
+    if (e.key === ',') { e.preventDefault(); confirmTyped() }
+  }, [showSuggestions, highlightedIdx, allSuggestions, applyGroup, applyNewsTicker, confirmTyped, closeDropdown])
 
   const handleRemoveTicker = (ticker) => {
     if (disabled) return
-    const newList = tickers.filter(t => t !== ticker)
-    onChange(newList.join(','))
-  }
-
-  const handleAddTicker = (e) => {
-    if (e.key === 'Enter') {
-      if (isOpen && highlightedIdx >= 0 && highlightedIdx < groups.length) {
-        e.preventDefault()
-        handleGroupSelect(groups[highlightedIdx].tickers)
-        return
-      }
-      e.preventDefault()
-      const newTicker = inputValue.trim().toUpperCase().replace(/[^A-Z0-9 .]/g, '')
-      if (newTicker && !tickers.includes(newTicker)) {
-        onChange(value ? `${value},${newTicker}` : newTicker)
-      }
-      setInputValue('')
-    } else if (e.key === ',') {
-      e.preventDefault()
-      const newTicker = inputValue.trim().toUpperCase().replace(/[^A-Z0-9 .]/g, '')
-      if (newTicker && !tickers.includes(newTicker)) {
-        onChange(value ? `${value},${newTicker}` : newTicker)
-      }
-      setInputValue('')
-    } else if (e.key === 'ArrowDown' && isOpen) {
-      e.preventDefault()
-      setHighlightedIdx(prev => (prev < groups.length - 1 ? prev + 1 : 0))
-    } else if (e.key === 'ArrowUp' && isOpen) {
-      e.preventDefault()
-      setHighlightedIdx(prev => (prev > 0 ? prev - 1 : groups.length - 1))
-    }
-  }
-
-  const handleGroupSelect = (groupTickers) => {
-    if (disabled) return
-    onChange(groupTickers)
-    setIsOpen(false)
+    onChange(tickers.filter((t) => t !== ticker).join(','))
   }
 
   return (
-    <div style={{ position: 'relative', width: '100%' }} ref={dropdownRef}>
-      <div className="flex-row flex-wrap gap-6 border-main rounded-md" style={{ 
-        padding: '6px 10px', 
-        background: '#0d1117', 
-        minHeight: 40,
-        alignItems: 'center',
-        opacity: disabled ? 0.6 : 1
-      }}>
-        
-        {/* Chips */}
-        {tickers.map(t => (
-          <div key={t} className="flex-align-center" style={{
-            background: '#21262d',
-            border: '1px solid #30363d',
-            borderRadius: 4,
-            padding: '2px 8px',
-            fontSize: 12,
-            fontWeight: 600,
-            color: '#c9d1d9',
-            position: 'relative'
-          }}>
+    <div className="ts-container" ref={containerRef}>
+      <div className={`ts-input-row ${disabled ? 'ts-input-row--disabled' : ''}`}>
+
+        {/* Scope pills */}
+        {onScopeChange && (
+          <div className="flex-align-center gap-2" style={{ flexShrink: 0 }}>
+            <button type="button" className={`btn ts-scope-btn ts-scope-btn-all ${scope === 'ALL' ? 'ts-scope-btn-all--active' : ''}`}
+              onClick={() => !disabled && onScopeChange('ALL')} disabled={disabled}>
+              <Globe size={11} /> ALL
+            </button>
+            <button type="button" className={`btn ts-scope-btn ts-scope-btn-hot ${scope === 'HOT' ? 'ts-scope-btn-hot--active' : ''}`}
+              onClick={() => !disabled && onScopeChange('HOT')} disabled={disabled}>
+              <Flame size={11} /> HOT
+            </button>
+            <div className="divider-v ts-divider" />
+          </div>
+        )}
+
+        {/* Ticker chips */}
+        {tickers.map((t) => (
+          <div key={t} className="ts-chip">
             {t}
             {!disabled && (
-              <div 
-                onClick={() => handleRemoveTicker(t)}
-                style={{ 
-                  cursor: 'pointer', 
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 14,
-                  height: 14,
-                  borderRadius: '50%',
-                  background: '#30363d',
-                  marginLeft: 6,
-                  color: '#8b949e',
-                  fontSize: 10,
-                  transition: 'all 0.2s'
-                }}
-                onMouseOver={e => e.currentTarget.style.color = '#f85149'}
-                onMouseOut={e => e.currentTarget.style.color = '#8b949e'}
-              >
+              <span className="ts-chip-remove" onClick={() => handleRemoveTicker(t)} role="button" aria-label={`Remove ${t}`}>
                 <X size={10} />
-              </div>
+              </span>
             )}
           </div>
         ))}
 
-        {/* Input */}
+        {/* Text input */}
         <input
+          ref={inputRef}
           type="text"
+          className="ts-input"
           value={inputValue}
-          onChange={e => setInputValue(e.target.value.toUpperCase())}
-          onKeyDown={handleAddTicker}
-          placeholder={tickers.length === 0 ? "Type ticker and press Enter..." : ""}
+          onChange={(e) => { setInputValue(e.target.value.toUpperCase()); setShow(true); setHighlight(-1) }}
+          onFocus={() => setShow(true)}
+          onKeyDown={handleKeyDown}
+          placeholder={tickers.length === 0 ? 'Ticker, lista o watchlist…' : ''}
           disabled={disabled}
-          style={{
-            flex: 1,
-            minWidth: 100,
-            border: 'none',
-            background: 'transparent',
-            color: '#c9d1d9',
-            fontSize: 13,
-            outline: 'none',
-            height: 24
-          }}
         />
 
-        <div className="divider-v" style={{ height: 20, margin: '0 4px' }} />
-
-        {/* Dropdown Toggle */}
-        <button
-          className="btn"
-          onClick={() => !disabled && setIsOpen(!isOpen)}
-          disabled={disabled}
-          style={{ padding: '4px 8px', background: 'none', border: 'none', height: '100%' }}
-        >
-          <List size={16} className="color-muted" />
-          <ChevronDown size={14} className="color-muted" style={{ marginLeft: 2, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-        </button>
+        <List size={15} className="color-muted ts-icon-hint" />
       </div>
 
-      {isOpen && (
-        <div style={{
-          position: 'absolute', top: '100%', right: 0, marginTop: 8,
-          background: '#161b22', border: '1px solid #30363d', borderRadius: 8,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 1000,
-          minWidth: 260, overflow: 'hidden'
-        }}>
-          
-          {/* Universe Section (Integrated) */}
-          {onScopeChange && (
-            <div style={{ padding: '12px', background: '#0d1117', borderBottom: '1px solid #30363d' }}>
-              <div className="stat-label-sm color-muted mb-8" style={{ fontSize: 9 }}>SCAN UNIVERSE</div>
-              <div className="flex-row gap-4">
-                <button
-                  className="btn w-full"
-                  onClick={() => { onScopeChange('ALL'); setIsOpen(false); }}
-                  style={{ 
-                    padding: '6px', fontSize: 11, gap: 4,
-                    background: scope === 'ALL' ? '#1f6feb22' : 'transparent',
-                    border: `1px solid ${scope === 'ALL' ? '#1f6feb88' : '#30363d'}`,
-                    color: scope === 'ALL' ? '#58a6ff' : '#8b949e'
-                  }}
-                >
-                  <Globe size={12} /> All Tickers
-                </button>
-                <button
-                  className="btn w-full"
-                  onClick={() => { onScopeChange('HOT'); setIsOpen(false); }}
-                  style={{ 
-                    padding: '6px', fontSize: 11, gap: 4,
-                    background: scope === 'HOT' ? '#9e6a0322' : 'transparent',
-                    border: `1px solid ${scope === 'HOT' ? '#9e6a0388' : '#30363d'}`,
-                    color: scope === 'HOT' ? '#f0883e' : '#8b949e'
-                  }}
-                >
-                  <Flame size={12} /> Hot Only
-                </button>
+      {/* Autocomplete dropdown */}
+      {showSuggestions && !disabled && allSuggestions.length > 0 && (
+        <div className="ts-dropdown">
+
+          {filteredGroups.length > 0 && (
+            <>
+              <div className="ts-dropdown-header">Watchlists / Listas</div>
+              <div className="ts-dropdown-scroll">
+                {filteredGroups.map((g, i) => (
+                  <div
+                    key={g.id}
+                    className={`ts-dropdown-item ${highlightedIdx === i ? 'ts-dropdown-item--hl' : ''}`}
+                    onClick={() => applyGroup(g.tickers)}
+                    onMouseEnter={() => setHighlight(i)}
+                  >
+                    <div className="ts-dropdown-group-name font-bold color-text">
+                      {g.label}
+                      <span className="ts-dropdown-group-meta">{g.tickers.split(',').length} tickers</span>
+                    </div>
+                    <div className="text-xs color-muted ts-dropdown-ticker-list">{g.tickers}</div>
+                  </div>
+                ))}
               </div>
-            </div>
+            </>
           )}
 
-          <div style={{ padding: '8px 12px', fontSize: 10, fontWeight: 700, color: '#8b949e', textTransform: 'uppercase', background: '#0d1117', borderBottom: '1px solid #30363d' }}>
-            Quick Select Lists
-          </div>
-          <div style={{ maxHeight: 250, overflowY: 'auto' }}>
-            {groups.map(g => (
-              <div
-                key={g.id}
-                onClick={() => handleGroupSelect(g.tickers)}
-                style={{
-                  padding: '10px 15px', cursor: 'pointer', fontSize: 13, borderBottom: '1px solid #21262d',
-                  transition: 'background 0.2s'
-                }}
-                onMouseOver={e => e.currentTarget.style.background = '#1f6feb15'}
-                onMouseOut={e => e.currentTarget.style.background = 'transparent'}
-              >
-                <div className="font-bold color-text">{g.label}</div>
-                <div className="text-xs color-muted" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.tickers}</div>
+          {filteredNews.length > 0 && (
+            <>
+              <div className={`ts-dropdown-header ${filteredGroups.length ? 'ts-dropdown-header--news' : ''}`} style={{ color: '#f0883e' }}>
+                Noticias del día (TWS)
               </div>
-            ))}
-          </div>
-          <Link 
-            to="/settings"
-            style={{ display: 'block', padding: '10px 15px', fontSize: 12, color: '#58a6ff', textDecoration: 'none', textAlign: 'center', background: '#0d1117', borderTop: '1px solid #30363d' }}
-            onClick={() => setIsOpen(false)}
-          >
-            Manage Lists in Config...
+              {filteredNews.map((n, i) => {
+                const idx = filteredGroups.length + i
+                return (
+                  <div
+                    key={n.ticker}
+                    className={`ts-dropdown-item ${highlightedIdx === idx ? 'ts-dropdown-item-news--hl' : ''}`}
+                    onClick={() => applyNewsTicker(n.ticker)}
+                    onMouseEnter={() => setHighlight(idx)}
+                    title={n.headline || ''}
+                  >
+                    <div className="flex-align-center gap-6">
+                      <strong className="color-text">{n.ticker}</strong>
+                      {n.source && <span className="badge badge-hot ts-news-badge">{n.source}</span>}
+                    </div>
+                    {n.headline && (
+                      <div className="text-xs color-muted ts-dropdown-headline">{n.headline}</div>
+                    )}
+                  </div>
+                )
+              })}
+            </>
+          )}
+
+          <Link to="/settings" className="ts-dropdown-footer" onClick={closeDropdown}>
+            Configurar universo HOT + listas personalizadas…
           </Link>
         </div>
       )}
