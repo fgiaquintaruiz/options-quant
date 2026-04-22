@@ -1,8 +1,21 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  test: {
+    environment: 'jsdom',
+    include: ['src/**/*.{test,spec}.{js,jsx}'],
+    coverage: {
+      provider: 'v8',
+      reportsDirectory: '../build/reports/coverage-frontend',
+      reporter: ['text', 'html', 'lcov'],
+      /** Unit scope: API module + small utils. Pages/components are covered by Playwright e2e (Java). */
+      include: ['src/api.js', 'src/utils/**/*.js'],
+      exclude: ['**/*.test.js', '**/*.spec.js'],
+    },
+  },
   server: {
     port: 3000,
     proxy: {

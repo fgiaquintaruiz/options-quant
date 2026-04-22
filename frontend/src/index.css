@@ -16,6 +16,30 @@ body {
 .flex-between { display: flex; align-items: center; justify-content: space-between; }
 .flex-align-center { display: flex; align-items: center; }
 .flex-wrap { flex-wrap: wrap; }
+.flex-nowrap { flex-wrap: nowrap; }
+
+/* Live toolbar: force-stop label truncates; full text in title tooltip */
+.live-force-stop-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(260px, 46vw);
+  min-width: 88px;
+}
+.live-force-stop-ico { flex-shrink: 0; }
+.live-force-stop-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* Account / balance / risk strip — stays on one row, scrolls on narrow viewports */
+.live-account-strip {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 .gap-4 { gap: 4px; }
 .gap-6 { gap: 6px; }
 .gap-8 { gap: 8px; }
@@ -49,6 +73,17 @@ body {
 .bg-card { background: #161b22; }
 .border-main { border: 1px solid #30363d; }
 .rounded-md { border-radius: 6px; }
+
+/* Backtest: grid/promote collapsible */
+.bt-grid-promote-details > summary {
+  list-style: none;
+}
+.bt-grid-promote-details > summary::-webkit-details-marker {
+  display: none;
+}
+.bt-grid-promote-details[open] > summary {
+  margin-bottom: 4px;
+}
 
 /* Components */
 .header-compact {
@@ -198,6 +233,10 @@ tr:hover { background: #161b22; }
   outline: none;
 }
 .ticker-input:focus { border-color: #58a6ff; }
+
+.fund-form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.fund-form-hint { line-height: 1.45; margin: 0; }
+.textarea-resizable { resize: vertical; }
 
 .ticker-group-btn {
   padding: 2px 8px;
