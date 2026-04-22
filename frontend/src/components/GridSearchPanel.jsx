@@ -1,34 +1,19 @@
 /**
  * GridSearchPanel — grid search form, walk-forward controls, and result display.
  *
- * Owns no state: all values and callbacks come from the parent ImproveModal.
+ * Accepts a `gridSearch` object (the return value of the useGridSearch hook) to avoid
+ * prop-drilling individual state variables and setters.
  *
- * Props (form):
- *   ticker, strategyName — identifies the target (read-only labels)
- *   startParams          — { capital, risk } from the active backtest config
- *   maxConcurrent        — engine concurrency setting
- *   running              — true while a full backtest is in progress (disables grid button)
- *   modalLookback, setModalLookback
- *   modalGridFrom, setModalGridFrom
- *   modalGridTo, setModalGridTo
- *   modalTpAxis, setModalTpAxis
- *   modalSlAxis, setModalSlAxis
- *   gridMetric, setGridMetric
- *   modalGridMinTrades, setModalGridMinTrades
- *   modalGridMaxDdPct, setModalGridMaxDdPct
- *   modalWalkForward, setModalWalkForward
- *   modalWfTrainDays, setModalWfTrainDays
- *   modalWfTestDays, setModalWfTestDays
- *   modalWfStepDays, setModalWfStepDays
- *   modalGridLoading, modalGridElapsed
- *   onRunGrid            — triggers the grid search API call
- *   modalGridError
- * Props (results):
- *   modalGridResult      — API result or null
- *   retestLoading, retestError, retestData
- *   applyMemoryLoading, applyMemoryMessage
- *   onRunRetest          — triggers the retest API call
- *   onApplyAndStartScan  — saves the winning cell to memory and starts a new backtest
+ * Props:
+ *   gridSearch       — return value of useGridSearch (form state + result state + actions)
+ *   ticker           — ticker for display and request building
+ *   strategyName     — strategy name for display
+ *   startParams      — { capital, risk } from the active backtest config
+ *   maxConcurrent    — engine concurrency setting
+ *   running          — true while a full backtest is in progress (disables grid button)
+ *   onApplyAndStartScan — saves the winning cell to memory and triggers a new full backtest
+ *
+ * Note: UI labels intentionally mix Spanish and English — consistent with the rest of the app.
  */
 import React from 'react'
 import { formatUsd, lookbackMonthsToRange } from '../utils/backtestFormatters'
@@ -101,27 +86,26 @@ function GridRowsTable({ rows }) {
   )
 }
 
-export default function GridSearchPanel({
-  ticker, strategyName, startParams, maxConcurrent, running,
-  modalLookback, setModalLookback,
-  modalGridFrom, setModalGridFrom,
-  modalGridTo, setModalGridTo,
-  modalTpAxis, setModalTpAxis,
-  modalSlAxis, setModalSlAxis,
-  gridMetric, setGridMetric,
-  modalGridMinTrades, setModalGridMinTrades,
-  modalGridMaxDdPct, setModalGridMaxDdPct,
-  modalWalkForward, setModalWalkForward,
-  modalWfTrainDays, setModalWfTrainDays,
-  modalWfTestDays, setModalWfTestDays,
-  modalWfStepDays, setModalWfStepDays,
-  modalGridLoading, modalGridElapsed, modalGridError,
-  onRunGrid,
-  modalGridResult,
-  retestLoading, retestError, retestData,
-  applyMemoryLoading, applyMemoryMessage,
-  onRunRetest, onApplyAndStartScan,
-}) {
+export default function GridSearchPanel({ gridSearch, ticker, strategyName, startParams, maxConcurrent, running, onApplyAndStartScan }) {
+  const {
+    modalLookback, setModalLookback,
+    modalGridFrom, setModalGridFrom,
+    modalGridTo, setModalGridTo,
+    modalTpAxis, setModalTpAxis,
+    modalSlAxis, setModalSlAxis,
+    gridMetric, setGridMetric,
+    modalGridMinTrades, setModalGridMinTrades,
+    modalGridMaxDdPct, setModalGridMaxDdPct,
+    modalWalkForward, setModalWalkForward,
+    modalWfTrainDays, setModalWfTrainDays,
+    modalWfTestDays, setModalWfTestDays,
+    modalWfStepDays, setModalWfStepDays,
+    modalGridLoading, modalGridElapsed, modalGridError, modalGridResult,
+    retestLoading, retestError, retestData,
+    applyMemoryLoading, applyMemoryMessage,
+    runGrid, runRetest,
+  } = gridSearch
+
   const handleLookbackChange = (v) => {
     setModalLookback(v)
     const m = Number(v)
@@ -152,23 +136,19 @@ export default function GridSearchPanel({
           </select>
         </label>
         <label className="text-xs color-muted flex-align-center gap-4">
-          Desde
-          <input type="date" value={modalGridFrom} onChange={(e) => setModalGridFrom(e.target.value)} className="bt-date-input" />
+          Desde <input type="date" value={modalGridFrom} onChange={(e) => setModalGridFrom(e.target.value)} className="bt-date-input" />
         </label>
         <label className="text-xs color-muted flex-align-center gap-4">
-          Hasta
-          <input type="date" value={modalGridTo} onChange={(e) => setModalGridTo(e.target.value)} className="bt-date-input" />
+          Hasta <input type="date" value={modalGridTo} onChange={(e) => setModalGridTo(e.target.value)} className="bt-date-input" />
         </label>
       </div>
 
       <div className="flex-wrap flex-align-center gap-10 bt-grid-row">
         <label className="text-xs color-muted flex-col gap-4 bt-grid-axis-label">
-          TP Δ (coma)
-          <input value={modalTpAxis} onChange={(e) => setModalTpAxis(e.target.value)} className="bt-text-input w-full" />
+          TP Δ (coma) <input value={modalTpAxis} onChange={(e) => setModalTpAxis(e.target.value)} className="bt-text-input w-full" />
         </label>
         <label className="text-xs color-muted flex-col gap-4 bt-grid-axis-label">
-          SL Δ (coma)
-          <input value={modalSlAxis} onChange={(e) => setModalSlAxis(e.target.value)} className="bt-text-input w-full" />
+          SL Δ (coma) <input value={modalSlAxis} onChange={(e) => setModalSlAxis(e.target.value)} className="bt-text-input w-full" />
         </label>
         <label className="text-xs color-muted flex-align-center gap-6">
           Métrica
@@ -199,20 +179,15 @@ export default function GridSearchPanel({
         {modalWalkForward && (
           <div className="flex-wrap flex-align-center gap-10 bt-wf-inputs">
             <label className="text-xs color-muted flex-col gap-4 bt-wf-day-label">
-              Train (días)
-              <input type="number" min={1} value={modalWfTrainDays} onChange={(e) => setModalWfTrainDays(e.target.value)} className="bt-text-input w-full" />
+              Train (días) <input type="number" min={1} value={modalWfTrainDays} onChange={(e) => setModalWfTrainDays(e.target.value)} className="bt-text-input w-full" />
             </label>
             <label className="text-xs color-muted flex-col gap-4 bt-wf-day-label">
-              Test (días)
-              <input type="number" min={1} value={modalWfTestDays} onChange={(e) => setModalWfTestDays(e.target.value)} className="bt-text-input w-full" />
+              Test (días) <input type="number" min={1} value={modalWfTestDays} onChange={(e) => setModalWfTestDays(e.target.value)} className="bt-text-input w-full" />
             </label>
             <label className="text-xs color-muted flex-col gap-4 bt-wf-day-label">
-              Paso (días)
-              <input type="number" min={1} value={modalWfStepDays} onChange={(e) => setModalWfStepDays(e.target.value)} placeholder={modalWfTestDays || 'test'} className="bt-text-input w-full" />
+              Paso (días) <input type="number" min={1} value={modalWfStepDays} onChange={(e) => setModalWfStepDays(e.target.value)} placeholder={modalWfTestDays || 'test'} className="bt-text-input w-full" />
             </label>
-            <span className="text-xs color-muted bt-wf-hint">
-              Usa el rango Desde/Hasta del modal. Vacío en Paso = avanza igual que días de test.
-            </span>
+            <span className="text-xs color-muted bt-wf-hint">Usa el rango Desde/Hasta del modal. Vacío en Paso = avanza igual que días de test.</span>
           </div>
         )}
       </div>
@@ -221,7 +196,7 @@ export default function GridSearchPanel({
         type="button"
         className="btn btn-warning"
         disabled={modalGridLoading || running || !ticker}
-        onClick={onRunGrid}
+        onClick={runGrid}
         data-testid="bt-modal-grid-search"
       >
         {modalGridLoading
@@ -267,25 +242,16 @@ export default function GridSearchPanel({
                 type="button"
                 className="btn btn-secondary bt-grid-action-btn"
                 disabled={retestLoading || running}
-                onClick={onRunRetest}
-                title={ticker?.trim()
-                  ? 'Backtest solo en este ticker con los Δ del ganador.'
-                  : 'Backtest con el universo del último run y los Δ del ganador.'}
+                onClick={runRetest}
+                title={ticker?.trim() ? 'Backtest solo en este ticker con los Δ del ganador.' : 'Backtest con el universo del último run y los Δ del ganador.'}
               >
                 {retestLoading ? 'Retest…' : 'Validar con retest (Δ ganador)'}
               </button>
-              <button
-                type="button"
-                className="btn btn-primary bt-grid-action-btn"
-                disabled={applyMemoryLoading}
-                onClick={onApplyAndStartScan}
-              >
+              <button type="button" className="btn btn-primary bt-grid-action-btn" disabled={applyMemoryLoading} onClick={onApplyAndStartScan}>
                 {applyMemoryLoading ? 'Guardando…' : 'Guardar mejor celda en memoria'}
               </button>
               {applyMemoryMessage && (
-                <span className={`text-xs ${applyMemoryMessage.ok ? 'color-success' : 'color-error'}`}>
-                  {applyMemoryMessage.text}
-                </span>
+                <span className={`text-xs ${applyMemoryMessage.ok ? 'color-success' : 'color-error'}`}>{applyMemoryMessage.text}</span>
               )}
             </div>
           )}
@@ -297,9 +263,7 @@ export default function GridSearchPanel({
               <div className="font-bold bt-retest-title color-text">Retest (solo simulación; no guarda memoria)</div>
               <div className="color-muted">
                 Universo:{' '}
-                {retestData.singleTickerScoped && retestData.filterTicker
-                  ? <>solo <strong>{retestData.filterTicker}</strong> · </>
-                  : null}
+                {retestData.singleTickerScoped && retestData.filterTicker ? <>solo <strong>{retestData.filterTicker}</strong> · </> : null}
                 último run UI si existe; si no, HOT + fechas por defecto.
               </div>
               <div className="bt-retest-row">
