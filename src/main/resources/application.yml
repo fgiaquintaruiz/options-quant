@@ -129,3 +129,12 @@ ticker:
 # Backtest CLI Configuration
 backtest-cli:
   enabled: false  # Enable interactive backtest analysis menu (disabled by default - use for manual analysis only)
+
+# Live Replay Mode: historical candle replay through the live scanner pipeline.
+# Purpose: tune E2E detection outside US market hours. Orders DO fire to TWS paper.
+replay:
+  enabled: true
+  max-orders-per-minute: 10
+  jitter-ms-min: 100
+  jitter-ms-max: 800
+  signals-file-pattern: "data/replay-signals-%s-%s.jsonl"  # %s %s = date, runId

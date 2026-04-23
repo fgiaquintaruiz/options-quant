@@ -45,4 +45,9 @@ public record IbkrProperties(
     public List<String> getYamlTickers() {
         return tickers != null ? tickers : new ArrayList<>();
     }
+
+    /** IBKR paper accounts start with "DU" (e.g. DUN598126). Live accounts start with "U" or other. */
+    public boolean isPaperAccount() {
+        return accountId != null && accountId.strip().startsWith("DU");
+    }
 }

@@ -937,12 +937,19 @@ public class StrategyScannerService {
             double currentPrice,
             ZonedDateTime timestamp,
             TradePlan tradePlan,
-            String candlestickPattern  // NEW: detected pattern (e.g., "squeeze_breakout + hammer")
+            String candlestickPattern,  // detected pattern (e.g., "squeeze_breakout + hammer")
+            boolean replay              // true when emitted during live-replay-mode (UI/audit only)
     ) {
-        // Backward-compatible compact constructor
+        // Backward-compatible: no pattern, no replay
         public Signal(String ticker, String strategy, String direction, double currentPrice,
                      ZonedDateTime timestamp, TradePlan tradePlan) {
-            this(ticker, strategy, direction, currentPrice, timestamp, tradePlan, "unknown");
+            this(ticker, strategy, direction, currentPrice, timestamp, tradePlan, "unknown", false);
+        }
+
+        // Backward-compatible: with pattern, no replay
+        public Signal(String ticker, String strategy, String direction, double currentPrice,
+                     ZonedDateTime timestamp, TradePlan tradePlan, String candlestickPattern) {
+            this(ticker, strategy, direction, currentPrice, timestamp, tradePlan, candlestickPattern, false);
         }
     }
 }
