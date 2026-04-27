@@ -487,7 +487,7 @@ export default function LiveTradeGrid({
                       <div className="flex-col gap-4 ltg-price-stack">
                         <div className="flex-between">
                           <span className="text-xs color-muted">Avg</span>
-                          <span className="text-md font-bold">${Number(pos.avgCost).toFixed(2)}</span>
+                          <span className="text-md font-bold">${Number(pos.avg_cost).toFixed(2)}</span>
                         </div>
                       </div>
                     </td>
@@ -498,7 +498,7 @@ export default function LiveTradeGrid({
 
                     <td className="ltg-td text-sm color-muted">—</td>
                     <td className="ltg-td text-sm color-muted">—</td>
-                    <td className="ltg-td text-sm color-muted">{pos.snapshotAt || '—'}</td>
+                    <td className="ltg-td text-sm color-muted">{pos.snapshot_timestamp || '—'}</td>
                     <td className="ltg-td text-sm color-muted">—</td>
 
                     <td className="ltg-td--center">

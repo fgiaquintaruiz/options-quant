@@ -279,6 +279,10 @@ public class AccountManager {
             return;
         }
         String symbol = contract.symbol();
+        if (quantity <= 0) {
+            positionsSnapshot.remove(symbol);
+            return;
+        }
         String secType = secTypeEnum.getApiString();
         PositionSnapshot snapshot = new PositionSnapshot(symbol, secType, contract, quantity, avgCost, Instant.now());
         positionsSnapshot.put(symbol, snapshot);

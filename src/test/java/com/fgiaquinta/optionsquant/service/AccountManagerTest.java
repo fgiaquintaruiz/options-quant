@@ -250,6 +250,40 @@ class AccountManagerTest {
     }
 
     @Test
+    @DisplayName("handlePosition_withZeroQuantity_removesFromSnapshot")
+    void handlePosition_withZeroQuantity_removesFromSnapshot() {
+        // GIVEN — SPY already present in snapshot with qty=10
+        Contract contract = new Contract();
+        contract.symbol("SPY");
+        contract.secType("STK");
+        accountManager.handlePosition("DU123", contract, 10, 450.0);
+        assertThat(accountManager.getPositionsSnapshot()).containsKey("SPY");
+
+        // WHEN — TWS sends qty=0 (position closed)
+        accountManager.handlePosition("DU123", contract, 0, 0.0);
+
+        // THEN — SPY is removed from the snapshot
+        assertThat(accountManager.getPositionsSnapshot()).doesNotContainKey("SPY");
+    }
+
+    @Test
+    @DisplayName("handlePosition_withNegativeQuantity_removesFromSnapshot")
+    void handlePosition_withNegativeQuantity_removesFromSnapshot() {
+        // GIVEN — SPY already present in snapshot with qty=10
+        Contract contract = new Contract();
+        contract.symbol("SPY");
+        contract.secType("STK");
+        accountManager.handlePosition("DU123", contract, 10, 450.0);
+        assertThat(accountManager.getPositionsSnapshot()).containsKey("SPY");
+
+        // WHEN — TWS sends qty=-1 (edge case / short)
+        accountManager.handlePosition("DU123", contract, -1, 0.0);
+
+        // THEN — SPY is removed from the snapshot
+        assertThat(accountManager.getPositionsSnapshot()).doesNotContainKey("SPY");
+    }
+
+    @Test
     @DisplayName("reqPositions_isIdempotent_whenConnectCalledTwice")
     void reqPositions_isIdempotent_whenConnectCalledTwice() {
         // GIVEN — a mock client already connected (simulates double-connect guard at L54)
