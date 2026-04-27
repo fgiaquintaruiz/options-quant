@@ -2,9 +2,12 @@ package com.fgiaquinta.optionsquant.service;
 
 import com.ib.client.*;
 import com.fgiaquinta.optionsquant.config.IbkrProperties;
+import com.fgiaquinta.optionsquant.dto.PositionSnapshot;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -32,6 +35,14 @@ public class AccountManager {
 
     private final AtomicReference<EClientSocket> clientRef = new AtomicReference<>();
     private EJavaSignal signal;
+
+    // ── Position snapshot (FR-1, NFR-2) ──────────────────────────────────────
+    /** Live snapshot of account positions, keyed by ticker symbol. STK + OPT only. */
+    private final ConcurrentHashMap<String, PositionSnapshot> positionsSnapshot = new ConcurrentHashMap<>();
+    /** Instant of the last completed positionEnd() callback. Null until first snapshot. */
+    private volatile Instant lastSnapshotAt = null;
+    /** True once the first positionEnd() callback has fired (snapshot is ready to read). */
+    private volatile boolean snapshotReady = false;
 
     public AccountManager(IbkrProperties ibkrProperties) {
         this.ibkrProperties = ibkrProperties;
@@ -72,9 +83,24 @@ public class AccountManager {
 
             @Override
             public void nextValidId(int orderId) {
-                log.info("AccountManager connected, subscribing to account updates");
+                log.info("AccountManager connected, subscribing to account updates and positions");
                 EClientSocket client = clientRef.get();
-                if (client != null) client.reqAccountUpdates(true, "");
+                if (client != null) {
+                    client.reqAccountUpdates(true, "");
+                    // CRITICAL: reqPositions() MUST be called here (inside nextValidId),
+                    // NOT directly in connect() — IBKR API requires nextValidId to fire first.
+                    client.reqPositions();
+                }
+            }
+
+            @Override
+            public void position(String account, Contract contract, Decimal pos, double avgCost) {
+                handlePosition(account, contract, pos.isValid() ? (int) pos.longValue() : 0, avgCost);
+            }
+
+            @Override
+            public void positionEnd() {
+                handlePositionEnd();
             }
 
             @Override
@@ -204,6 +230,91 @@ public class AccountManager {
     public int getActiveTradeCount() { return activeTrades.get(); }
     public double getCurrentBalance() { return currentBalance; }
     public String getAccountId() { return currentAccountId; }
+
+    // ── Position snapshot actions ─────────────────────────────────────────────
+
+    /**
+     * Sends a {@code reqPositions()} request to TWS to refresh the position snapshot.
+     * No-op if the client is not connected (connection guard is at the caller, e.g.
+     * {@link PositionPollingScheduler#pollPositions()}).
+     */
+    public void reqPositions() {
+        EClientSocket client = clientRef.get();
+        if (client != null && client.isConnected()) {
+            client.reqPositions();
+        }
+    }
+
+    // ── Position snapshot accessors ───────────────────────────────────────────
+
+    /**
+     * Returns a defensive copy of the current position snapshot map.
+     * Thread-safe: caller receives an immutable view of the state at call time.
+     */
+    public Map<String, PositionSnapshot> getPositionsSnapshot() {
+        return new HashMap<>(positionsSnapshot);
+    }
+
+    /** True once the first {@code positionEnd()} callback has fired. */
+    public boolean isSnapshotReady() {
+        return snapshotReady;
+    }
+
+    /** Instant of the last completed position snapshot. Null until first snapshot. */
+    public Instant getLastSnapshotAt() {
+        return lastSnapshotAt;
+    }
+
+    // ── Package-private callback handlers (also used as test hooks) ───────────
+
+    /**
+     * Processes a single position update from the EWrapper {@code position()} callback.
+     * Filters out non-STK/OPT secTypes silently.
+     * Package-private to allow direct invocation in unit tests without a live TWS connection.
+     */
+    void handlePosition(String account, Contract contract, int quantity, double avgCost) {
+        Types.SecType secTypeEnum = contract.secType();
+        if (secTypeEnum != Types.SecType.STK && secTypeEnum != Types.SecType.OPT) {
+            log.debug("Ignoring position for non-STK/OPT contract: symbol={}, secType={}", contract.symbol(), secTypeEnum);
+            return;
+        }
+        String symbol = contract.symbol();
+        String secType = secTypeEnum.getApiString();
+        PositionSnapshot snapshot = new PositionSnapshot(symbol, secType, contract, quantity, avgCost, Instant.now());
+        positionsSnapshot.put(symbol, snapshot);
+        log.debug("Position snapshot updated: symbol={}, secType={}, qty={}, avgCost={}", symbol, secType, quantity, avgCost);
+    }
+
+    /**
+     * Marks the snapshot batch as complete when the EWrapper {@code positionEnd()} callback fires.
+     * Sets {@code snapshotReady = true} and records the timestamp.
+     * Package-private to allow direct invocation in unit tests.
+     */
+    void handlePositionEnd() {
+        lastSnapshotAt = Instant.now();
+        snapshotReady = true;
+        log.debug("Position snapshot complete: {} positions loaded at {}", positionsSnapshot.size(), lastSnapshotAt);
+    }
+
+    /**
+     * Simulates the {@code nextValidId()} callback logic for testing purposes.
+     * Calls {@code reqAccountUpdates} and {@code reqPositions} on the given client.
+     * Package-private — test hook only; production code uses the anonymous EWrapper.
+     */
+    void handleNextValidId(EClientSocket client) {
+        if (client != null) {
+            client.reqAccountUpdates(true, "");
+            client.reqPositions();
+        }
+    }
+
+    /**
+     * Injects a mock {@link EClientSocket} into the {@code clientRef} for unit testing.
+     * Package-private — test hook only; never called in production.
+     */
+    void injectClientForTest(EClientSocket client) {
+        clientRef.set(client);
+    }
 
     @jakarta.annotation.PreDestroy
     public void disconnect() {

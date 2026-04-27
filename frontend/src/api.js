@@ -33,12 +33,14 @@ export const liveApi = {
   getTwsStatus:         () => get('/live-ui/tws-status'),
   getMarketStatus:      () => get('/live-ui/market-status'),
   getScanActivity:      () => get('/live-ui/scan-activity'),
+  getScanScores:        () => get('/live-ui/scan-scores'),
   getNewsTickers:       () => get('/live-ui/news-tickers'),
   startScan:            () => post('/live-ui/scan-now'),
   stopScan:             () => post('/live-ui/stop-scan'),
   forceStop:            () => post('/live-ui/force-stop'),
   toggleExtendedHours:  () => post('/live-ui/toggle-extended-hours'),
   toggleAutoExecute:    () => post('/live-ui/toggle-auto-execute'),
+  toggleMacroFilter:    () => post('/live-ui/toggle-macro-filter'),
   toggleScheduler:      () => post('/live-ui/toggle-scheduler'),
   toggleMockMarket:     () => post('/live-ui/toggle-mock-market'),
   clearStaleSignals:    () => post('/live-ui/signals/clear-stale'),
@@ -114,7 +116,47 @@ export const tickerConfigApi = {
   get: () => get('/api/ticker-config'),
   put: (body) => putJson('/api/ticker-config', body ?? {}),
   deleteSymbol: (symbol) => del(`/api/ticker-config/symbol/${encodeURIComponent(symbol)}`),
+  validate: (symbol) => get(`/api/ticker-config/validate?symbol=${encodeURIComponent(symbol)}`),
+  getHotTickerCount: () => get('/api/ticker-config/hot-ticker-count'),
+  setHotTickerCount: (count) => fetch(`/api/ticker-config/hot-ticker-count?count=${encodeURIComponent(count)}`, {
+    method: 'PUT',
+  }).then(handleResponse),
 };
+
+// ===== Analytics sidecar (Python :8001) =====
+
+const ANALYTICS = 'http://localhost:8001'
+const analyticsGet = (path) => fetch(`${ANALYTICS}${path}`).then(handleResponse)
+
+export const analyticsApi = {
+  getTickerInfo: (ticker) => analyticsGet(`/api/v1/ticker-info/${encodeURIComponent(ticker)}`),
+}
+
+// ===== Replay + Account Mode API =====
+
+export const accountApi = {
+  getMode: () => get('/live-ui/account-mode'),
+}
+
+export const replayApi = {
+  start:    (date, speed)  => postQ('/live-ui/replay/start', `date=${encodeURIComponent(date)}&speed=${speed}`),
+  stop:     ()             => post('/live-ui/replay/stop'),
+  setSpeed: (speed)        => fetch(`${API}/live-ui/replay/speed?speed=${speed}`, { method: 'PUT' }).then(handleResponse),
+  status:   ()             => get('/live-ui/replay/status'),
+}
+
+// ===== External Positions API =====
+
+export const externalPositionsApi = {
+  getExternalPositions: () =>
+    get('/live-ui/external-positions'),
+
+  closeExternalPosition: (ticker) =>
+    post(`/live-ui/external-positions/${encodeURIComponent(ticker)}/close`),
+
+  scheduleClose1450: (ticker) =>
+    post(`/live-ui/external-positions/${encodeURIComponent(ticker)}/schedule-close-1450`),
+}
 
 // ===== Health API =====
 

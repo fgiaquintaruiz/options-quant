@@ -303,9 +303,13 @@ public class MacroEnvironmentFilter {
 
     /**
      * Gets market analysis as string for logging/Telegram.
+     * Uses String.format instead of shared DecimalFormat instances — DecimalFormat is not thread-safe
+     * and this method is called concurrently from the /live-ui/status polling endpoint.
      */
     public String getAnalysisString() {
-        return String.format("SPY $%s | 50-SMA $%s (%s%%) | Regime: %s | Momentum: %s",
-                FMT_2D.format(spyPrice), FMT_2D.format(sma50), FMT_SIGNED_2D.format(distanceFromSma50Pct), regime, momentum);
+        double pct = distanceFromSma50Pct;
+        String sign = pct >= 0 ? "+" : "";
+        return String.format("SPY $%.2f | 50-SMA $%.2f (%s%.2f%%) | Regime: %s | Momentum: %s",
+                spyPrice, sma50, sign, pct, regime, momentum);
     }
 }

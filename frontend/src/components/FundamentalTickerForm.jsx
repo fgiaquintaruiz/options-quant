@@ -78,7 +78,7 @@ export default function FundamentalTickerForm({ symbol, initial, onSave, onCance
 
   return (
     <form className="flex-col gap-12" onSubmit={handleSubmit}>
-      <div className="text-sm font-bold color-text">Fundamentales · {symbol}</div>
+      <div id="sp-fund-modal-title" className="text-sm font-bold color-text">Fundamentales · {symbol}</div>
       <p className="text-xs color-muted fund-form-hint">
         Estos datos alimentan el score híbrido del scanner (HYBRID) y la priorización junto a ticker-memory.
         Valores numéricos vacíos se envían como null.

@@ -18,6 +18,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 import fastapi
+import yfinance as yf
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 import pandas as pd
@@ -341,6 +342,38 @@ async def get_account_status():
         "status": "success",
         "account": account
     }
+
+
+# ================== Ticker Info (yfinance) ==================
+
+@app.get("/api/v1/ticker-info/{ticker}")
+async def get_ticker_info(ticker: str):
+    """
+    Fetch company fundamental info from Yahoo Finance via yfinance.
+    Returns companyName, sector, marketCapBillion, peRatio, beta, etc.
+    """
+    sym = ticker.strip().upper()
+    try:
+        info = yf.Ticker(sym).info
+        market_cap = info.get("marketCap")
+        return {
+            "ticker": sym,
+            "companyName":      info.get("longName") or info.get("shortName") or sym,
+            "sector":           info.get("sector"),
+            "industry":         info.get("industry"),
+            "marketCapBillion": round(market_cap / 1e9, 1) if market_cap else None,
+            "peRatio":          info.get("trailingPE") or info.get("forwardPE"),
+            "beta":             info.get("beta"),
+            "dividendYield":    round(info.get("dividendYield", 0) * 100, 2) if info.get("dividendYield") else None,
+            "epsGrowth":        round(info.get("earningsGrowth", 0) * 100, 1) if info.get("earningsGrowth") else None,
+            "revenueGrowth":    round(info.get("revenueGrowth", 0) * 100, 1) if info.get("revenueGrowth") else None,
+            "debtToEquity":     round(info.get("debtToEquity", 0) / 100, 2) if info.get("debtToEquity") else None,
+            "roe":              round(info.get("returnOnEquity", 0) * 100, 1) if info.get("returnOnEquity") else None,
+            "website":          info.get("website"),
+            "country":          info.get("country"),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"yfinance error for {sym}: {str(e)}")
 
 
 # ================== Main Entry Point ==================

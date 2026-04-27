@@ -15,6 +15,7 @@ import com.fgiaquinta.optionsquant.strategy.utils.SignalQualityFilter;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.ta4j.core.BarSeries;
 
@@ -70,6 +71,10 @@ public class StrategyScannerService {
 
     private final List<TradingStrategy> callStrategies;
     private final List<TradingStrategy> putStrategies;
+
+    // Live-replay-mode hooks — optional; null when feature disabled or not yet wired.
+    @Autowired(required = false) private ReplayClock replayClock;
+    @Autowired(required = false) private ReplayCandleSource replayCandleSource;
 
     // Separate logger for strategy analysis output
     private static final org.slf4j.Logger strategyLog = 
@@ -542,11 +547,21 @@ public class StrategyScannerService {
         // Load all timeframes concurrently with rate limiting
         Map<TimeFrame, List<Candle>> candlesByTimeframe = new ConcurrentHashMap<>();
         AtomicInteger totalNewCandles = new AtomicInteger(0);
-        
+
         List<TimeFrame> timeframesToLoad = Arrays.asList(TimeFrame.values());
         List<CompletableFuture<Void>> downloadFutures = new ArrayList<>();
 
-        for (TimeFrame tf : timeframesToLoad) {
+        // ===== REPLAY MODE SHORT-CIRCUIT =====
+        // During live-replay-mode: bypass CSV/IBKR entirely; use pre-loaded candles
+        // truncated to virtualNow so the scanner sees a simulated live feed.
+        boolean replayActive = replayClock != null && replayClock.isActive() && replayCandleSource != null;
+        if (replayActive) {
+            ZonedDateTime virtualNow = replayClock.getNow();
+            for (TimeFrame tf : timeframesToLoad) {
+                List<Candle> visible = replayCandleSource.getCandlesUntil(ticker, tf, virtualNow);
+                if (!visible.isEmpty()) candlesByTimeframe.put(tf, visible);
+            }
+        } else for (TimeFrame tf : timeframesToLoad) {
             List<Candle> cachedCandles = csvService.loadFromCsv(ticker, tf);
 
             if (cachedCandles.isEmpty()) {
@@ -742,7 +757,8 @@ public class StrategyScannerService {
                         currentPrice,
                         currentTime,
                         tradePlan,
-                        combinedPattern  // Include pattern in signal
+                        combinedPattern,  // Include pattern in signal
+                        replayActive      // UI/audit tag — routes to replaySignals list (execution unchanged)
                 );
 
                 signals.add(signal);

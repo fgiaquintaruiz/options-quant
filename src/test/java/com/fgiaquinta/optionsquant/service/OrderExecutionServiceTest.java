@@ -5,6 +5,9 @@ import com.ib.client.Decimal;
 import com.ib.client.EClientSocket;
 import com.ib.client.Order;
 import com.ib.client.OrderCancel;
+import com.ib.client.OrderCondition;
+import com.ib.client.PriceCondition;
+import com.ib.client.TimeCondition;
 import com.fgiaquinta.optionsquant.config.IbkrProperties;
 import com.fgiaquinta.optionsquant.strategy.model.TradePlan;
 import org.junit.jupiter.api.AfterEach;
@@ -14,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -240,6 +244,163 @@ class OrderExecutionServiceTest {
         // Verify cancel was still attempted (orders might have been pending)
         verify(mockClient).cancelOrder(eq(tpOrderId), any(OrderCancel.class));
         verify(mockClient).cancelOrder(eq(slOrderId), any(OrderCancel.class));
+    }
+
+    // -----------------------------------------------------------------------
+    // TASK 4.2 — placeMarketSellExternal
+    // -----------------------------------------------------------------------
+
+    @Test
+    void placeMarketSellExternal_callsFactoryAndPlacesOrder_returnsAssignedOrderId() {
+        // GIVEN a contract and quantity
+        Contract contract = new Contract();
+        contract.symbol("NVDA");
+        int quantity = 5;
+
+        // WHEN placing a market sell for an external position
+        int orderId = service.placeMarketSellExternal(contract, quantity);
+
+        // THEN placeOrder must be invoked on the IBKR client
+        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+        verify(mockClient).placeOrder(eq(orderId), eq(contract), orderCaptor.capture());
+
+        Order placed = orderCaptor.getValue();
+        assertEquals("SELL", placed.action().toString(), "Order action must be SELL");
+        assertEquals("MKT", placed.orderType().toString(), "Order type must be MKT");
+        assertEquals(Decimal.get(quantity), placed.totalQuantity(), "Quantity must match");
+        assertTrue(orderId > 0, "Returned orderId must be positive");
+    }
+
+    @Test
+    void placeMarketSellExternal_doesNotTouchBracketStateMap() {
+        // GIVEN an empty bracketStateMap
+        Contract contract = new Contract();
+        contract.symbol("AAPL");
+
+        // WHEN placing an external market sell
+        service.placeMarketSellExternal(contract, 3);
+
+        // THEN bracketStateMap must remain empty (external positions have no brackets)
+        try {
+            java.lang.reflect.Field field = OrderExecutionService.class.getDeclaredField("bracketStateMap");
+            field.setAccessible(true);
+            java.util.Map<?, ?> map = (java.util.Map<?, ?>) field.get(service);
+            assertTrue(map.isEmpty(), "bracketStateMap must not be touched for external positions");
+        } catch (Exception e) {
+            fail("Reflection failed: " + e.getMessage());
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // TASK 4.3 — placeConditionalOrder
+    // -----------------------------------------------------------------------
+
+    @Test
+    void placeConditionalOrder_attachesConditionAndPlacesOrder_returnsAssignedOrderId() {
+        // GIVEN a contract, a market SELL order, and a TimeCondition
+        Contract contract = new Contract();
+        contract.symbol("MSFT");
+
+        Order order = new Order();
+        order.action("SELL");
+        order.orderType("MKT");
+        order.totalQuantity(Decimal.get(2));
+
+        TimeCondition condition = (TimeCondition) OrderCondition.create(com.ib.client.OrderConditionType.Time);
+        condition.time("20260501 14:50:00 US/Eastern");
+        condition.isMore(false);
+
+        // WHEN placing a conditional order
+        int orderId = service.placeConditionalOrder(contract, order, condition);
+
+        // THEN placeOrder must be called with the updated order
+        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+        verify(mockClient).placeOrder(eq(orderId), eq(contract), orderCaptor.capture());
+
+        Order placed = orderCaptor.getValue();
+        assertFalse(placed.conditions().isEmpty(), "Condition must be attached to the order");
+        assertSame(condition, placed.conditions().get(0), "The exact condition instance must be attached");
+        assertTrue(orderId > 0, "Returned orderId must be positive");
+    }
+
+    @Test
+    void placeConditionalOrder_returnsOrderIdAssignedFromNextOrderId() {
+        // GIVEN two consecutive calls — orderId must be monotonically increasing
+        Contract c1 = new Contract(); c1.symbol("AMD");
+        Contract c2 = new Contract(); c2.symbol("TSLA");
+
+        Order o1 = new Order(); o1.action("SELL"); o1.orderType("MKT"); o1.totalQuantity(Decimal.get(1));
+        Order o2 = new Order(); o2.action("SELL"); o2.orderType("MKT"); o2.totalQuantity(Decimal.get(1));
+
+        TimeCondition cond = (TimeCondition) OrderCondition.create(com.ib.client.OrderConditionType.Time);
+
+        int first  = service.placeConditionalOrder(c1, o1, cond);
+        int second = service.placeConditionalOrder(c2, o2, cond);
+
+        assertTrue(second > first, "Second orderId must be greater than first (monotonically increasing)");
+    }
+
+    /**
+     * Regression test for the TWS multi-callback bug.
+     *
+     * IBKR fires contractDetails multiple times for ambiguous contracts (no primaryExch set).
+     * Each callback call to the EWrapper overwrites tickerToUnderlyingConId via plain put().
+     * When the first response has the correct primary exchange conId (e.g. 456) and a later
+     * response has a lower conId from a secondary exchange (e.g. 123), the plain put() leaves
+     * the map with 123 — the wrong value. validateTicker then returns false for a valid ticker.
+     *
+     * The fix: use merge(..., Math::max) so the highest conId seen across all callbacks wins.
+     */
+    @Test
+    void contractDetails_keepsBestConId_whenIbkrFiresMultipleCallbacks() throws Exception {
+        // Arrange: retrieve the EWrapper stored on the service so we can fire callbacks directly
+        java.lang.reflect.Field wrapperField = OrderExecutionService.class.getDeclaredField("wrapper");
+        wrapperField.setAccessible(true);
+        com.ib.client.EWrapper wrapper = (com.ib.client.EWrapper) wrapperField.get(service);
+
+        // Register reqId → ticker in the service's requestTracker
+        java.lang.reflect.Field trackerField = OrderExecutionService.class.getDeclaredField("requestTracker");
+        trackerField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        java.util.Map<Integer, String> requestTracker = (java.util.Map<Integer, String>) trackerField.get(service);
+
+        // Register reqId in pendingMetadataRequests (so contractDetailsEnd cleans up correctly)
+        java.lang.reflect.Field pendingField = OrderExecutionService.class.getDeclaredField("pendingMetadataRequests");
+        pendingField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        java.util.Set<Integer> pendingRequests = (java.util.Set<Integer>) pendingField.get(service);
+
+        // Get access to the conId map to assert final state
+        java.lang.reflect.Field mapField = OrderExecutionService.class.getDeclaredField("tickerToUnderlyingConId");
+        mapField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Integer> conIdMap = (java.util.Map<String, Integer>) mapField.get(service);
+
+        String ticker = "NVDA";
+        int reqId = 42;
+        requestTracker.put(reqId, ticker);
+        pendingRequests.add(reqId);
+
+        // Simulate IBKR firing contractDetails twice for the same reqId:
+        //   First call:  conId=456 — primary exchange (NASDAQ/ISLAND), the correct value
+        //   Second call: conId=123 — secondary exchange, lower but still > 0
+        // With plain put(), last write wins → map ends with 123 (BUG: validateTicker may return false or wrong)
+        // With merge(Math::max) → map ends with 456 (CORRECT: primary exchange conId preserved)
+        com.ib.client.ContractDetails cd1 = new com.ib.client.ContractDetails();
+        cd1.contract().conid(456);
+
+        com.ib.client.ContractDetails cd2 = new com.ib.client.ContractDetails();
+        cd2.contract().conid(123);
+
+        wrapper.contractDetails(reqId, cd1);   // first callback — primary exchange
+        wrapper.contractDetails(reqId, cd2);   // second callback — secondary exchange, lower conId
+
+        // Assert: highest conId must win regardless of call order
+        Integer result = conIdMap.get(ticker);
+        assertNotNull(result, "conId must be populated after contractDetails callbacks");
+        assertEquals(456, result,
+                "Expected highest conId (456) to survive multiple callbacks, but got: " + result +
+                ". This means the secondary-exchange response (123) overwrote the primary (456) — plain put() bug.");
     }
 
 }

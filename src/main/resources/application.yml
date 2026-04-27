@@ -57,27 +57,7 @@ ibkr:
   account-id: "DUN598126"
   default-qty: 10
   risk-per-trade-pct: 0.02
-  use-csv-tickers: true  # Use tickers.csv instead of YAML list
-  tickers: []  # Legacy list - kept for backwards compatibility. See data/tickers.csv
   hot-ticker-count: 20  # Used when hot-tickers is empty: top N CSV names by market cap (see TickerService)
-
-  # Full universe for "ALL" scope / TickerService — empty = use every symbol from data/tickers.csv
-  universe-tickers: []
-
-  # Hot Tickers: processed FIRST in this order (must be a subset of the active universe)
-  hot-tickers:
-    - NVDA    # NVIDIA
-    - AAPL    # Apple
-    - MSFT    # Microsoft
-    - GOOGL   # Alphabet
-    - AMZN    # Amazon
-    - META    # Meta
-    - TSLA    # Tesla
-    - AMD     # AMD
-    - JPM     # JPMorgan
-    - V       # Visa
-    - XOM     # Exxon
-    - JNJ     # Johnson & Johnson
 
 # Telegram Bot Configuration
 telegram:

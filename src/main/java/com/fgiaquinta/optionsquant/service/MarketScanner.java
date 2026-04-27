@@ -47,6 +47,13 @@ public class MarketScanner {
     private final com.fgiaquinta.optionsquant.controller.LiveModeController liveModeController;
     private final MarketCalendarService marketCalendar;
     private final ScannerProperties scannerProperties;
+    private final ScanPrioritizationService scanPrioritizationService;
+
+    // Live-replay-mode hooks — optional; null when feature not wired in the context.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private ReplayClock replayClock;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private ReplayOrderGate replayOrderGate;
 
     /** When false, scheduled scans are skipped (user can toggle from UI). */
     private final AtomicBoolean schedulerEnabled = new AtomicBoolean(true);
@@ -62,7 +69,8 @@ public class MarketScanner {
                          TrailingStopMonitor trailingStopMonitor,
                          com.fgiaquinta.optionsquant.controller.LiveModeController liveModeController,
                          MarketCalendarService marketCalendar,
-                         ScannerProperties scannerProperties) {
+                         ScannerProperties scannerProperties,
+                         ScanPrioritizationService scanPrioritizationService) {
         this.scannerService = scannerService;
         this.ibkrProperties = ibkrProperties;
         this.orderExecutionService = orderExecutionService;
@@ -72,6 +80,7 @@ public class MarketScanner {
         this.liveModeController = liveModeController;
         this.marketCalendar = marketCalendar;
         this.scannerProperties = scannerProperties;
+        this.scanPrioritizationService = scanPrioritizationService;
         log.info("🤖 MarketScanner initialized - Spain timezone, 15-min synchronized");
         log.info("   Auto-execute: {}", ibkrProperties.autoExecute());
         log.info("   Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)");
@@ -143,25 +152,31 @@ public class MarketScanner {
      */
     @Scheduled(cron = "2 0/15 10-21 * * MON-FRI", zone = "Europe/Madrid")
     public void scanAndExecute() {
-        ZonedDateTime nowSpain = ZonedDateTime.now(ZoneId.of("Europe/Madrid"));
+        boolean replayActive = replayClock != null && replayClock.isActive();
+        ZonedDateTime nowSpain = replayActive
+                ? replayClock.getNow().withZoneSameInstant(ZoneId.of("Europe/Madrid"))
+                : ZonedDateTime.now(ZoneId.of("Europe/Madrid"));
 
-        // Skip if outside market hours (unless extended hours is enabled)
-        int currentHour = nowSpain.getHour();
-        boolean isExtendedHours = (currentHour >= 8 && currentHour < 10) || (currentHour >= 22 && currentHour < 24);
+        // Market-hours and weekend gates are bypassed while replay is active —
+        // the whole point of replay is running the pipeline outside market hours.
+        if (!replayActive) {
+            int currentHour = nowSpain.getHour();
+            boolean isExtendedHours = (currentHour >= 8 && currentHour < 10) || (currentHour >= 22 && currentHour < 24);
 
-        if (!liveModeController.isExtendedHoursEnabled()) {
-            if (currentHour < 10 || currentHour >= 22) {
-                log.debug("⏸️ Outside market hours ({}:{} Spain) - skipping", currentHour, nowSpain.getMinute());
+            if (!liveModeController.isExtendedHoursEnabled()) {
+                if (currentHour < 10 || currentHour >= 22) {
+                    log.debug("⏸️ Outside market hours ({}:{} Spain) - skipping", currentHour, nowSpain.getMinute());
+                    return;
+                }
+            } else if (currentHour < 8 || currentHour >= 24) {
+                log.debug("⏸️ Outside extended hours ({}:{} Spain) - skipping", currentHour, nowSpain.getMinute());
                 return;
             }
-        } else if (currentHour < 8 || currentHour >= 24) {
-            log.debug("⏸️ Outside extended hours ({}:{} Spain) - skipping", currentHour, nowSpain.getMinute());
-            return;
-        }
 
-        // Skip weekend (double check - cron already handles this)
-        if (nowSpain.getDayOfWeek().getValue() > 5) {
-            return;
+            // Skip weekend (double check - cron already handles this)
+            if (nowSpain.getDayOfWeek().getValue() > 5) {
+                return;
+            }
         }
 
         // Skip if scheduler disabled or stop was requested
@@ -186,6 +201,9 @@ public class MarketScanner {
 
             liveModeController.setAutoScan(true);
             liveModeController.updateScanningState(true, "Starting...", 0, tickers.size());
+
+            // Compute and store scan scores BEFORE the scan loop (Pattern A dual-entrypoint).
+            liveModeController.setScanScores(scanPrioritizationService.computeScores(tickers));
 
             scannerService.setTickerOverride(tickers);
             long schedWait = scannerProperties.exclusiveScanSchedulerLockWaitMs();
@@ -254,20 +272,30 @@ public class MarketScanner {
             return;
         }
         boolean isCall = signal.direction().equals("CALL");
-        if (!macroFilter.isMacroFavorable(isCall)) {
-            log.warn("⏭️ Skipping {} {} - macro unfavorable", signal.ticker(), signal.direction());
+        if (liveModeController.isRuntimeMacroFilterEnabled() && !macroFilter.isMacroFavorable(isCall)) {
+            String skipReason = String.format("macro: %s + %s (%s)",
+                    macroFilter.getRegime(), macroFilter.getMomentum(), macroFilter.getAnalysisString());
+            log.warn("⏭️ Skipping {} {} — {}", signal.ticker(), signal.direction(), skipReason);
+            liveModeController.updateScanTickerSkipped(signal.ticker(), skipReason);
             return;
         }
 
         if (liveModeController.isLiveSignalOlderThanMaxAge(signal)) {
-            log.warn("⏭️ Skipping {} {} — signal candle timestamp older than 15 minutes (stale data)",
+            log.warn("⏭️ Skipping {} {} — signal candle timestamp older than 30 minutes (stale data)",
                     signal.ticker(), signal.direction());
             return;
         }
 
-        if (!marketCalendar.isRegularMarketHours(nowSpain)) {
+        if (!signal.replay() && !marketCalendar.isRegularMarketHours(nowSpain)) {
             log.info("    ⏸️ Skipping execution - outside regular market hours (9:30 AM - 4:00 PM ET)");
             log.info("       Signal remains in the grid for manual execution when the market opens");
+            return;
+        }
+
+        // Replay rate limit — high speeds can fire too many brackets at once.
+        if (signal.replay() && replayOrderGate != null && !replayOrderGate.tryConsume()) {
+            log.warn("    ⏭️ REPLAY rate limit: skipping auto-exec for {} {} (cap {} orders/min)",
+                    signal.ticker(), signal.direction(), replayOrderGate.count());
             return;
         }
 
@@ -326,7 +354,7 @@ public class MarketScanner {
                 plan.takeProfit, plan.stopLoss, plan.entryPrice);
 
         if (!shouldNotifyTelegram(signal)) {
-            log.info("    ℹ️ Telegram skipped (stale candle >15m or missing timestamp)");
+            log.info("    ℹ️ Telegram skipped (stale candle >30m or missing timestamp)");
             return false;
         }
         if (telegramService == null) {

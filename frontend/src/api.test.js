@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { handleResponse, liveApi, backtestApi, tickerConfigApi, healthApi } from './api.js'
+import { handleResponse, liveApi, backtestApi, tickerConfigApi, healthApi, replayApi, externalPositionsApi } from './api.js'
 
 describe('handleResponse', () => {
   it('parses JSON when ok', async () => {
@@ -156,5 +156,127 @@ describe('API clients (fetch mocked)', () => {
   it('tickerConfigApi.put coalesces null body to {}', async () => {
     await tickerConfigApi.put(null)
     expect(fetch.mock.calls[0][1].body).toBe(JSON.stringify({}))
+  })
+
+  it('liveApi.getScanScores GETs /live-ui/scan-scores', async () => {
+    await liveApi.getScanScores()
+    expect(fetch).toHaveBeenCalledWith('/live-ui/scan-scores')
+  })
+
+  it('tickerConfigApi.getHotTickerCount GETs correct endpoint', async () => {
+    await tickerConfigApi.getHotTickerCount()
+    expect(fetch).toHaveBeenCalledWith('/api/ticker-config/hot-ticker-count')
+  })
+
+  it('tickerConfigApi.setHotTickerCount PUTs with count query param', async () => {
+    await tickerConfigApi.setHotTickerCount(15)
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/ticker-config/hot-ticker-count?count=15',
+      { method: 'PUT' }
+    )
+  })
+})
+
+describe('externalPositionsApi', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({}),
+    })
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  // ── getExternalPositions ────────────────────────────────────────────────────
+
+  it('getExternalPositions GETs /live-ui/external-positions', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ positions: [{ ticker: 'AAPL' }] }),
+    })
+    const result = await externalPositionsApi.getExternalPositions()
+    expect(fetch).toHaveBeenCalledWith('/live-ui/external-positions')
+    expect(result).toEqual({ positions: [{ ticker: 'AAPL' }] })
+  })
+
+  it('getExternalPositions throws on 503 with correct message', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      statusText: 'Service Unavailable',
+      json: () => Promise.resolve({ error: 'TWS down' }),
+    })
+    await expect(externalPositionsApi.getExternalPositions()).rejects.toThrow('HTTP 503: TWS down')
+  })
+
+  // ── closeExternalPosition ───────────────────────────────────────────────────
+
+  it('closeExternalPosition POSTs /live-ui/external-positions/SPY/close', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ message: 'ok', orderId: 42 }),
+    })
+    const result = await externalPositionsApi.closeExternalPosition('SPY')
+    expect(fetch).toHaveBeenCalledWith('/live-ui/external-positions/SPY/close', { method: 'POST' })
+    expect(result).toEqual({ message: 'ok', orderId: 42 })
+  })
+
+  it('closeExternalPosition encodes special chars in ticker', async () => {
+    await externalPositionsApi.closeExternalPosition('BRK B')
+    expect(fetch.mock.calls[0][0]).toContain('/live-ui/external-positions/BRK%20B/close')
+  })
+
+  it('closeExternalPosition throws on 404 (position no longer exists)', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      statusText: 'Not Found',
+      json: () => Promise.resolve({ error: 'position not found' }),
+    })
+    await expect(externalPositionsApi.closeExternalPosition('SPY')).rejects.toThrow('HTTP 404: position not found')
+  })
+
+  it('closeExternalPosition throws on 503 (TWS down)', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      statusText: 'Service Unavailable',
+      json: () => Promise.resolve({ error: 'TWS not connected' }),
+    })
+    await expect(externalPositionsApi.closeExternalPosition('SPY')).rejects.toThrow('HTTP 503: TWS not connected')
+  })
+
+  // ── scheduleClose1450 ───────────────────────────────────────────────────────
+
+  it('scheduleClose1450 POSTs /live-ui/external-positions/AAPL/schedule-close-1450', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ orderId: 99, message: 'scheduled' }),
+    })
+    const result = await externalPositionsApi.scheduleClose1450('AAPL')
+    expect(fetch).toHaveBeenCalledWith('/live-ui/external-positions/AAPL/schedule-close-1450', { method: 'POST' })
+    expect(result).toEqual({ orderId: 99, message: 'scheduled' })
+  })
+
+  it('scheduleClose1450 throws on 503', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      statusText: 'Service Unavailable',
+      json: () => Promise.resolve({ error: 'TWS not connected' }),
+    })
+    await expect(externalPositionsApi.scheduleClose1450('AAPL')).rejects.toThrow('HTTP 503: TWS not connected')
+  })
+
+  it('scheduleClose1450 throws on 409 (already scheduled)', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      statusText: 'Conflict',
+      json: () => Promise.resolve({ error: 'already scheduled' }),
+    })
+    await expect(externalPositionsApi.scheduleClose1450('AAPL')).rejects.toThrow('HTTP 409: already scheduled')
   })
 })

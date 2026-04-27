@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { Activity, Trash2 } from 'lucide-react'
+import TickerTooltip from './TickerTooltip'
+import { compareScanRows } from '../utils/scanRowSort'
 
 // Trade lifecycle status config — color/label per state
 const TRADE_STATUS = {
@@ -15,14 +17,50 @@ const TRADE_STATUS = {
 
 // Scan activity status → badge color
 const SCAN_STATUS_COLOR = {
-  STARTING: '#f0883e',
-  SCANNING: '#58a6ff',
-  SIGNAL:   '#3fb950',
-  ERROR:    '#f85149',
-  STALE:    '#6e7681',
-  OK:       '#3fb950',
+  EN_COLA:   '#8b949e',
+  LOADING:   '#6e7681',
+  STARTING:  '#f0883e',
+  SCANNING:  '#58a6ff',
+  SIGNAL:    '#3fb950',
+  NO_SIGNAL: '#6e7681',
+  SKIPPED:   '#d29922',
+  ERROR:     '#f85149',
+  STALE:     '#6e7681',
+  OK:        '#3fb950',
 }
 const scanColor = (s) => SCAN_STATUS_COLOR[s] || '#8b949e'
+
+/** Text label for in-flight scan statuses. */
+function ScanStatusText({ status }) {
+  if (status === 'EN_COLA')      return <span className="scan-status-text scan-status-text--loading">En cola</span>
+  if (status === 'LOADING')      return <span className="scan-status-text scan-status-text--loading">Cargando...</span>
+  if (status === 'SCANNING')     return <span className="scan-status-text scan-status-text--scanning">Escaneando...</span>
+  if (status === 'SIGNAL_FOUND') return <span className="scan-status-text scan-status-text--signal">Señal ✓</span>
+  if (status === 'NO_SIGNAL')    return <span className="scan-status-text scan-status-text--no-signal">—</span>
+  return null
+}
+
+/**
+ * Buckets a scan row status into one of the five breakdown chips.
+ * Returns null for statuses that should not contribute to any chip.
+ */
+const chipBucketFor = (status) => {
+  if (status === 'EN_COLA' || status === '—') return 'EN_COLA'
+  if (status === 'LOADING') return 'LOADING'
+  if (status === 'SCANNING' || status === 'STARTING') return 'SCANNING'
+  if (status === 'OK' || status === 'NO_SIGNAL') return 'OK'
+  if (status === 'SIGNAL' || status === 'SIGNAL_FOUND') return 'SIGNAL'
+  return null
+}
+
+// Horizontal chip order + Spanish labels for the status breakdown.
+const CHIP_ORDER = [
+  { key: 'EN_COLA',  label: 'En cola' },
+  { key: 'LOADING',  label: 'Cargando' },
+  { key: 'SCANNING', label: 'Escaneando' },
+  { key: 'OK',       label: 'OK' },
+  { key: 'SIGNAL',   label: 'Señal' },
+]
 
 /** A trade is deletable when stale, not executed, and not closed. */
 const isStaleDeletable = (row) =>
@@ -76,9 +114,9 @@ function PriceStack({ ep, tp, sl }) {
 /**
  * Derives display-ready trade and scan rows from raw props.
  * Deduplicates by ticker, sorts active trades first then by recency.
- * Sorts scan rows HOT-first then alphabetically.
+ * Sorts scan rows HOT-first by hotList index, then by hybridScore desc, then alphabetically.
  */
-function useTradeData(trades, hotTickers, scanActivity) {
+function useTradeData(trades, hotTickers, scanActivity, scanScores) {
   const hotSet = useMemo(
     () => new Set(hotTickers.map((t) => String(t).toUpperCase())),
     [hotTickers]
@@ -97,18 +135,12 @@ function useTradeData(trades, hotTickers, scanActivity) {
     })
   }, [trades])
 
-  // Latest scan entry per ticker; HOT tickers sorted to the top
+  // Latest scan entry per ticker; HOT-first by hotList index, then hybridScore desc, then alpha
   const scanRows = useMemo(() => {
     const byTicker = {}
     scanActivity.forEach((a) => { byTicker[a.ticker] = a })
-    return Object.values(byTicker).sort((a, b) => {
-      const aHot = hotSet.has(String(a.ticker).toUpperCase())
-      const bHot = hotSet.has(String(b.ticker).toUpperCase())
-      if (aHot && !bHot) return -1
-      if (!aHot && bHot) return 1
-      return String(a.ticker).localeCompare(String(b.ticker))
-    })
-  }, [scanActivity, hotSet])
+    return Object.values(byTicker).sort((a, b) => compareScanRows(a, b, hotTickers, scanScores))
+  }, [scanActivity, hotTickers, scanScores])
 
   const staleTickersList = useMemo(
     () => trades.filter(isStaleDeletable).map((t) => t.ticker),
@@ -127,12 +159,21 @@ function useTradeData(trades, hotTickers, scanActivity) {
  * Props: trades, scanActivity, scanning, hotTickers, staleSignalCount, pendingActions,
  *        onCloseTrade, onCancelTrade, onDeleteSignal, onClearStaleBatch, onClearAllStale.
  */
+const isMacroConflict = (direction, regime) => {
+  if (!regime || !direction) return false
+  const bull = regime.includes('BULLISH')
+  const bear = regime.includes('BEARISH')
+  return (direction === 'PUT' && bull) || (direction === 'CALL' && bear)
+}
+
 export default function LiveTradeGrid({
   trades = [],
   scanActivity = [],
   scanning = false,
   hotTickers = [],
+  scanScores = {},
   staleSignalCount = 0,
+  macroRegime = null,
   onCloseTrade,
   onCancelTrade,
   onDeleteSignal,
@@ -141,7 +182,28 @@ export default function LiveTradeGrid({
   pendingActions = {}
 }) {
   const [selectedStale, setSelectedStale] = useState(() => new Set())
-  const { hotSet, activeTrades, scanRows, staleTickersList } = useTradeData(trades, hotTickers, scanActivity)
+  const { hotSet, activeTrades, scanRows, staleTickersList } = useTradeData(trades, hotTickers, scanActivity, scanScores)
+
+  // Status breakdown counts — derived from the real scanRows (post-dedupe).
+  // "En cola" is only surfaced during an active scan.
+  const statusCounts = useMemo(() => {
+    const counts = { EN_COLA: 0, LOADING: 0, SCANNING: 0, OK: 0, SIGNAL: 0 }
+    for (const row of scanRows) {
+      const bucket = chipBucketFor(row.status)
+      if (bucket) counts[bucket]++
+    }
+    return counts
+  }, [scanRows])
+
+  const chipsToShow = useMemo(
+    () => CHIP_ORDER
+      .filter(({ key }) => {
+        if (key === 'EN_COLA') return scanning && statusCounts.EN_COLA > 0
+        return statusCounts[key] > 0
+      })
+      .map(({ key, label }) => ({ key, label, count: statusCounts[key], color: scanColor(key) })),
+    [statusCounts, scanning]
+  )
 
   // Keep selection in sync as stale set changes (e.g. after signal refresh)
   useEffect(() => {
@@ -267,7 +329,9 @@ export default function LiveTradeGrid({
 
                     <td className="ltg-td">
                       <div className="flex-align-center gap-4">
-                        <strong className="ltg-ticker-label">{row.ticker}</strong>
+                        <TickerTooltip ticker={row.ticker}>
+                          <strong className="ltg-ticker-label">{row.ticker}</strong>
+                        </TickerTooltip>
                         {hotSet.has(String(row.ticker).toUpperCase()) && (
                           <span className="badge badge-hot text-xs" style={{ padding: '1px 4px' }}>HOT</span>
                         )}
@@ -305,23 +369,33 @@ export default function LiveTradeGrid({
                         <div className="flex-center gap-6" style={{ minHeight: 24 }}>
                           {pendingActions[row.ticker] ? (
                             <div className="spinner-sm" />
-                          ) : row.tradeStatus !== 'EXECUTED' ? (
-                            <button
-                              type="button"
-                              className="btn text-xs ltg-open-btn"
-                              disabled={Boolean(row.signalStale)}
-                              title={row.signalStale ? 'Señal >30 min — datos obsoletos' : 'Abrir posición'}
-                              onClick={() => !row.signalStale && onCloseTrade && onCloseTrade(row.ticker, row.ep, true)}
-                              style={{
-                                background: row.signalStale ? '#21262d' : '#23863622',
-                                border: `1px solid ${row.signalStale ? '#30363d' : '#23863666'}`,
-                                color: row.signalStale ? '#6e7681' : '#3fb950',
-                                cursor: row.signalStale ? 'not-allowed' : 'pointer',
-                              }}
-                            >
-                              Open
-                            </button>
-                          ) : (
+                          ) : row.tradeStatus !== 'EXECUTED' ? (() => {
+                            const conflict = isMacroConflict(row.direction, macroRegime)
+                            const stale = Boolean(row.signalStale)
+                            return (
+                              <button
+                                type="button"
+                                className="btn text-xs ltg-open-btn"
+                                disabled={stale}
+                                title={
+                                  stale
+                                    ? 'Señal >30 min — datos obsoletos'
+                                    : conflict
+                                      ? `⚠ Contra macro: ${macroRegime} — podés ejecutar igual`
+                                      : 'Abrir posición'
+                                }
+                                onClick={() => !stale && onCloseTrade && onCloseTrade(row.ticker, row.ep, true)}
+                                style={{
+                                  background: stale ? '#21262d' : conflict ? '#f0883e18' : '#23863622',
+                                  border: `1px solid ${stale ? '#30363d' : conflict ? '#f0883e88' : '#23863666'}`,
+                                  color: stale ? '#6e7681' : conflict ? '#f0883e' : '#3fb950',
+                                  cursor: stale ? 'not-allowed' : 'pointer',
+                                }}
+                              >
+                                {conflict ? '⚠ Open' : 'Open'}
+                              </button>
+                            )
+                          })() : (
                             <div className="flex-row gap-4">
                               <button
                                 className="btn text-xs ltg-action-btn"
@@ -380,9 +454,28 @@ export default function LiveTradeGrid({
       {/* ── Scan Activity ── */}
       {scanRows.length > 0 && (
         <div className="card">
-          <div className="stat-label-sm color-muted mb-8 text-uppercase font-bold ltg-section-label">
-            Scan Activity — {scanRows.length} tickers
-          </div>
+          {chipsToShow.length > 0 && (
+            <div className="flex-align-center flex-wrap gap-8 mb-8" data-testid="scan-status-breakdown">
+              {chipsToShow.map(({ key, label, count, color }, idx) => (
+                <React.Fragment key={key}>
+                  {idx > 0 && <span className="color-muted text-xs">·</span>}
+                  <span
+                    className="badge ltg-scan-badge"
+                    data-testid={`scan-chip-${key}`}
+                    style={{
+                      background: `${color}22`,
+                      color,
+                      border: `1px solid ${color}44`,
+                      padding: '2px 8px',
+                      fontSize: 11,
+                    }}
+                  >
+                    {label}: {count}
+                  </span>
+                </React.Fragment>
+              ))}
+            </div>
+          )}
           <div className="table-wrap">
             <table className="w-full">
               <thead>
@@ -393,6 +486,9 @@ export default function LiveTradeGrid({
                   <th className="ltg-th-sm">Scan Started</th>
                   <th className="ltg-th-sm">Scan Ended</th>
                   <th className="ltg-th-sm">Scan Duration</th>
+                  <th className="ltg-th-sm ltg-th--center">Fund</th>
+                  <th className="ltg-th-sm ltg-th--center">Mem</th>
+                  <th className="ltg-th-sm ltg-th--center">Score</th>
                 </tr>
               </thead>
               <tbody>
@@ -400,25 +496,39 @@ export default function LiveTradeGrid({
                   <tr key={`scan-${row.ticker}-${idx}`}>
                     <td className="ltg-td-sm">
                       <div className="flex-align-center gap-6">
-                        <strong className="text-md">{row.ticker}</strong>
+                        <TickerTooltip ticker={row.ticker}>
+                          <strong className="text-md">{row.ticker}</strong>
+                        </TickerTooltip>
                         {hotSet.has(String(row.ticker).toUpperCase()) && (
                           <span className="badge badge-hot text-xs" style={{ padding: '1px 4px' }}>HOT</span>
                         )}
                       </div>
                     </td>
                     <td className="ltg-td-sm ltg-th--center">
-                      <span className="badge ltg-scan-badge" style={{
-                        background: `${scanColor(row.status)}22`,
-                        color: scanColor(row.status),
-                        border: `1px solid ${scanColor(row.status)}44`,
-                      }}>
-                        {row.status}
-                      </span>
+                      <div className="flex-center gap-4">
+                        <ScanStatusText status={row.status} />
+                        <span className="badge ltg-scan-badge" style={{
+                          background: `${scanColor(row.status)}22`,
+                          color: scanColor(row.status),
+                          border: `1px solid ${scanColor(row.status)}44`,
+                        }}>
+                          {row.status}
+                        </span>
+                      </div>
                     </td>
                     <td className="ltg-td-sm text-sm color-muted">{row.detail || '—'}</td>
                     <td className="ltg-td-sm text-xs color-muted">{row.scanStarted || '-'}</td>
                     <td className="ltg-td-sm text-xs color-muted">{row.scanEnded || '-'}</td>
                     <td className="ltg-td-sm text-xs color-muted font-bold">{row.duration || '-'}</td>
+                    <td className="ltg-td-sm ltg-th--center text-xs color-muted">
+                      {scanScores[row.ticker]?.fundamentalScore?.toFixed(2) ?? '—'}
+                    </td>
+                    <td className="ltg-td-sm ltg-th--center text-xs color-muted">
+                      {scanScores[row.ticker]?.memoryScore?.toFixed(2) ?? '—'}
+                    </td>
+                    <td className="ltg-td-sm ltg-th--center text-xs font-bold">
+                      {scanScores[row.ticker]?.hybridScore?.toFixed(2) ?? '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>

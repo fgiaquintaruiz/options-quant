@@ -31,7 +31,7 @@ public record IbkrProperties(
     public IbkrProperties {
         // Default values
         if (tickers == null) tickers = new ArrayList<>();
-        if (hotTickers == null) hotTickers = List.of("SPY", "QQQ", "AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "META", "GOOGL", "AMD");
+        if (hotTickers == null) hotTickers = List.of();
         if (hotTickerCount <= 0) hotTickerCount = 20;  // Default: top 20 tickers by market cap
         if (universeTickers == null) universeTickers = List.of();
         if (historicalDataClientId <= 0) historicalDataClientId = 1;

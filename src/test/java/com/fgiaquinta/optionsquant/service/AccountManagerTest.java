@@ -1,13 +1,19 @@
 package com.fgiaquinta.optionsquant.service;
 
+import com.ib.client.Contract;
+import com.ib.client.EClientSocket;
 import com.fgiaquinta.optionsquant.config.IbkrProperties;
+import com.fgiaquinta.optionsquant.dto.PositionSnapshot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.mockito.Mockito;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.*;
 
 class AccountManagerTest {
 
@@ -108,5 +114,153 @@ class AccountManagerTest {
         accountManager.addActiveTrade();
         accountManager.addActiveTrade();
         assertThat(accountManager.canOpenNewTrade(0)).isTrue();
+    }
+
+    // ── Task 1.3: position snapshot map + EWrapper callbacks ─────────────────
+
+    @Test
+    @DisplayName("positionsSnapshot_initialState_isEmptyAndNotReady")
+    void positionsSnapshot_initialState_isEmptyAndNotReady() {
+        // THEN — before any callback fires, snapshot map is empty and snapshotReady is false
+        assertThat(accountManager.getPositionsSnapshot()).isEmpty();
+        assertThat(accountManager.isSnapshotReady()).isFalse();
+    }
+
+    @Test
+    @DisplayName("handlePosition_withStkType_addsEntryToSnapshotMap")
+    void handlePosition_withStkType_addsEntryToSnapshotMap() {
+        // GIVEN — a STK contract
+        Contract contract = new Contract();
+        contract.symbol("NVDA");
+        contract.secType("STK");
+
+        // WHEN — callback fires (via package-private test hook)
+        accountManager.handlePosition("DU123", contract, 100, 87.50);
+
+        // THEN — entry is recorded in snapshot map
+        Map<String, PositionSnapshot> snapshot = accountManager.getPositionsSnapshot();
+        assertThat(snapshot).containsKey("NVDA");
+        PositionSnapshot ps = snapshot.get("NVDA");
+        assertThat(ps.symbol()).isEqualTo("NVDA");
+        assertThat(ps.secType()).isEqualTo("STK");
+        assertThat(ps.quantity()).isEqualTo(100);
+        assertThat(ps.avgCost()).isEqualTo(87.50);
+        assertThat(ps.snapshotAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("handlePosition_withOptType_addsEntryToSnapshotMap")
+    void handlePosition_withOptType_addsEntryToSnapshotMap() {
+        // GIVEN — an OPT contract
+        Contract contract = new Contract();
+        contract.symbol("SPY");
+        contract.secType("OPT");
+
+        // WHEN
+        accountManager.handlePosition("DU123", contract, 10, 5.50);
+
+        // THEN — entry is recorded in snapshot map with all fields
+        Map<String, PositionSnapshot> snapshot = accountManager.getPositionsSnapshot();
+        assertThat(snapshot).containsKey("SPY");
+        PositionSnapshot ps = snapshot.get("SPY");
+        assertThat(ps.symbol()).isEqualTo("SPY");
+        assertThat(ps.secType()).isEqualTo("OPT");
+        assertThat(ps.quantity()).isEqualTo(10);
+        assertThat(ps.avgCost()).isEqualTo(5.50);
+        assertThat(ps.snapshotAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("handlePosition_withFutType_isIgnoredSilently")
+    void handlePosition_withFutType_isIgnoredSilently() {
+        // GIVEN — a FUT contract (futures — should be filtered out)
+        Contract contract = new Contract();
+        contract.symbol("6E");
+        contract.secType("FUT");
+
+        // WHEN
+        accountManager.handlePosition("DU123", contract, 1, 0.0);
+
+        // THEN — FUT is not in the snapshot map
+        assertThat(accountManager.getPositionsSnapshot()).doesNotContainKey("6E");
+    }
+
+    @Test
+    @DisplayName("handlePosition_withCashType_isIgnoredSilently")
+    void handlePosition_withCashType_isIgnoredSilently() {
+        // GIVEN — a CASH (forex) contract
+        Contract contract = new Contract();
+        contract.symbol("EUR");
+        contract.secType("CASH");
+
+        // WHEN
+        accountManager.handlePosition("DU123", contract, 1, 0.0);
+
+        // THEN — CASH is not in the snapshot map
+        assertThat(accountManager.getPositionsSnapshot()).doesNotContainKey("EUR");
+    }
+
+    @Test
+    @DisplayName("handlePositionEnd_setsSnapshotReadyTrue_andUpdatesLastSnapshotAt")
+    void handlePositionEnd_setsSnapshotReadyTrue_andUpdatesLastSnapshotAt() {
+        // WHEN — positionEnd callback fires
+        accountManager.handlePositionEnd();
+
+        // THEN — snapshotReady transitions to true
+        assertThat(accountManager.isSnapshotReady()).isTrue();
+        assertThat(accountManager.getLastSnapshotAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("getPositionsSnapshot_returnsDefensiveCopy")
+    void getPositionsSnapshot_returnsDefensiveCopy() {
+        // GIVEN — one position in map
+        Contract contract = new Contract();
+        contract.symbol("AAPL");
+        contract.secType("STK");
+        accountManager.handlePosition("DU123", contract, 50, 150.0);
+
+        // WHEN — get two copies
+        Map<String, PositionSnapshot> copy1 = accountManager.getPositionsSnapshot();
+        Map<String, PositionSnapshot> copy2 = accountManager.getPositionsSnapshot();
+
+        // THEN — copies are structurally equal but not the same instance
+        assertThat(copy1).isEqualTo(copy2);
+        assertThat(copy1).isNotSameAs(copy2);
+    }
+
+    // ── Task 1.4: reqPositions() called inside nextValidId() callback ────────
+
+    @Test
+    @DisplayName("reqPositions_isCalledInsideNextValidId_notDirectlyInConnect")
+    void reqPositions_isCalledInsideNextValidId_notDirectlyInConnect() {
+        // GIVEN — a mock EClientSocket (no real TWS)
+        EClientSocket mockClient = Mockito.mock(EClientSocket.class);
+        when(mockClient.isConnected()).thenReturn(false);
+
+        // Verify: invoking handleNextValidId (the package-private test hook) triggers reqPositions
+        // We inject a mock client via the package-private setter first
+        accountManager.injectClientForTest(mockClient);
+
+        // WHEN — nextValidId callback fires
+        accountManager.handleNextValidId(mockClient);
+
+        // THEN — reqPositions() must have been called on the client
+        verify(mockClient).reqPositions();
+    }
+
+    @Test
+    @DisplayName("reqPositions_isIdempotent_whenConnectCalledTwice")
+    void reqPositions_isIdempotent_whenConnectCalledTwice() {
+        // GIVEN — a mock client already connected (simulates double-connect guard at L54)
+        EClientSocket mockClient = Mockito.mock(EClientSocket.class);
+        when(mockClient.isConnected()).thenReturn(true);
+        accountManager.injectClientForTest(mockClient);
+
+        // WHEN — nextValidId fires once (second connect() returns early due to guard at L54)
+        accountManager.handleNextValidId(mockClient);
+
+        // THEN — reqPositions called exactly once (no double-fire)
+        verify(mockClient, times(1)).reqPositions();
     }
 }

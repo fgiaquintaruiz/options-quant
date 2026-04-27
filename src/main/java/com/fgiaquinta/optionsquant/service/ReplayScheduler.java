@@ -36,7 +36,9 @@ public class ReplayScheduler {
     private final AtomicReference<ScheduledExecutorService> executorRef = new AtomicReference<>();
     private final AtomicReference<ScheduledFuture<?>> taskRef = new AtomicReference<>();
 
-    public ReplayScheduler(ReplayClock clock, MarketScanner scanner, OrderExecutionService orderService) {
+    public ReplayScheduler(ReplayClock clock,
+                           @org.springframework.context.annotation.Lazy MarketScanner scanner,
+                           OrderExecutionService orderService) {
         this.clock = clock;
         this.scanner = scanner;
         this.orderService = orderService;

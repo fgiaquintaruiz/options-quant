@@ -10,7 +10,10 @@ export const LS = {
   set: (key, value) => {
     try {
       localStorage.setItem(key, JSON.stringify(value))
-    } catch {}
+      window.dispatchEvent(new CustomEvent('app-ls-change', { detail: { key } }))
+    } catch (e) {
+      console.warn('LS.set failed', key, e)
+    }
   },
   remove: (key) => {
     try {

@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Play, Square, Zap, ChevronUp, ChevronDown, Monitor, Cpu, ShieldCheck, ShieldAlert, OctagonAlert } from 'lucide-react'
-import { liveApi } from '../api'
+import { Play, Square, Zap, ChevronUp, ChevronDown, Monitor, Cpu, ShieldCheck, ShieldAlert, OctagonAlert, BookmarkPlus } from 'lucide-react'
+import { liveApi, replayApi } from '../api'
 import LiveTradeGrid from '../components/LiveTradeGrid'
-import TickerSelector from '../components/TickerSelector'
+import ExternalPositionsPanel from '../components/ExternalPositionsPanel'
+import TickerSelector, { resolveTickerEntries, DEFAULT_GROUPS } from '../components/TickerSelector'
 import SwapButton from '../components/SwapButton'
 import { LS } from '../utils/storage'
+import { useWatchlists } from '../hooks/useWatchlists'
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 
@@ -46,6 +48,25 @@ const formatMinSec = (s) => {
   return `${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 }
 
+// ── Market hours ─────────────────────────────────────────────────────────────
+
+function checkMarketOpen() {
+  const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
+  const day = et.getDay()
+  if (day === 0 || day === 6) return false
+  const mins = et.getHours() * 60 + et.getMinutes()
+  return mins >= 9 * 60 + 30 && mins < 16 * 60
+}
+
+function useMarketOpen() {
+  const [open, setOpen] = useState(checkMarketOpen)
+  useEffect(() => {
+    const id = setInterval(() => setOpen(checkMarketOpen()), 30_000)
+    return () => clearInterval(id)
+  }, [])
+  return open
+}
+
 // ── useLiveScanner — scanner state, polling, and IBKR lock management ─────
 
 /**
@@ -58,6 +79,8 @@ function useLiveScanner(setErrorMsg) {
   const [signals, setSignals]             = useState([])
   const [closedTrades, setClosedTrades]   = useState({})
   const [scanActivity, setScanActivity]   = useState([])
+  const [scanScores, setScanScores]       = useState({})
+  const [scanStartedAt, setScanStartedAt] = useState(null)
   const [staleClock, setStaleClock]       = useState(0)
   const [forceStopReleasing, setFSReleasing] = useState(false)
   const [exclusiveLockSinceMs, setLockSince] = useState(null)
@@ -78,6 +101,10 @@ function useLiveScanner(setErrorMsg) {
       await Promise.allSettled([
         liveApi.getStatus().then(setStatus).catch((e) => console.warn('[scanner] status poll:', e.message)),
         liveApi.getScanActivity().then((d) => setScanActivity(d.activity || [])).catch((e) => console.warn('[scanner] activity poll:', e.message)),
+        liveApi.getScanScores().then((d) => {
+          setScanScores(d?.scoresByTicker || {})
+          setScanStartedAt(d?.scanStartedAt || null)
+        }).catch((e) => console.warn('[scanner] scan-scores poll:', e.message)),
       ])
     }
     const id = setInterval(tick, 1000)
@@ -174,10 +201,14 @@ function useLiveScanner(setErrorMsg) {
   const scanning       = status?.isScanning || false
   const stopRequested  = status?.stopScanRequested || false
   const hotTickersList = status?.hotTickersList || []
+  const macroRegime   = status?.macroRegime   || null
+  const macroMomentum = status?.macroMomentum || null
+  const macroSummary  = status?.macroSummary  || null
 
   return {
-    status, signals, closedTrades, scanActivity, staleClock,
+    status, signals, closedTrades, scanActivity, scanScores, scanStartedAt, staleClock,
     scanning, stopRequested, exclusiveScanLockHeld, hotTickersList,
+    macroRegime, macroMomentum, macroSummary,
     forceStopReleasing, exclusiveLockSinceMs, exclusiveLockMinutes,
     fetchSignals,
     handleStartScan, handleStopScan, handleForceStop, handleToggleScheduler,
@@ -191,8 +222,9 @@ function useLiveScanner(setErrorMsg) {
  * UI state and trade actions live here; scanner polling is delegated to useLiveScanner.
  * Props: twsStatus (TWS connection state from parent — accountId, balance).
  */
-export default function LiveDashboard({ twsStatus }) {
+export default function LiveDashboard({ twsStatus, marketOpen }) {
   const [errorMsg, setErrorMsg]           = useState(null)
+  const [replayActive, setReplayActive]   = useState(false)
   const [maxConcurrent, setMaxConcurrent] = useState(() => normalizeLiveMaxConcurrent(LS.get('live_maxConcurrent', 4)))
   const [tickerFilter, setTickerFilter]   = useState(() => LS.get('live_tickerFilter', ''))
   const [tickerScope, setTickerScope]     = useState(() => LS.get('live_tickerScope', 'HOT'))
@@ -202,10 +234,28 @@ export default function LiveDashboard({ twsStatus }) {
   const [pendingActions, setPendingActions]   = useState({})
   const [elapsed, setElapsed]                 = useState(0)
   const [nextScanSecs, setNextScanSecs]       = useState(null)
+  const today                                 = new Date().toISOString().split('T')[0]
+  const [replayDate, setReplayDate]           = useState(today)
+  const [replaySpeed, setReplaySpeed]         = useState(30)
+  const SPEEDS                                = [30, 60, 180, 360]
+  const cycleSpeed                            = () => setReplaySpeed(s => SPEEDS[(SPEEDS.indexOf(s) + 1) % SPEEDS.length])
+  const [saveListPopover, setSaveListPopover] = useState(false)
+  const [saveListName, setSaveListName]       = useState('')
+  const saveListInputRef                      = useRef(null)
+  const saveListWrapRef                       = useRef(null)
+  const { addGroup: addWatchlist }            = useWatchlists()
+
+  useEffect(() => {
+    if (!saveListPopover) return
+    const close = (e) => { if (saveListWrapRef.current && !saveListWrapRef.current.contains(e.target)) { setSaveListPopover(false); setSaveListName('') } }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [saveListPopover])
 
   const {
-    status, signals, closedTrades, scanActivity, staleClock,
+    status, signals, closedTrades, scanActivity, scanScores, scanStartedAt, staleClock,
     scanning, stopRequested, exclusiveScanLockHeld, hotTickersList,
+    macroRegime, macroMomentum, macroSummary,
     forceStopReleasing, exclusiveLockSinceMs, exclusiveLockMinutes,
     fetchSignals,
     handleStartScan, handleStopScan, handleForceStop, handleToggleScheduler,
@@ -225,7 +275,8 @@ export default function LiveDashboard({ twsStatus }) {
   useEffect(() => {
     LS.set('live_tickerFilter', tickerFilter)
     LS.set('live_tickerScope', tickerScope)
-    liveApi.setScanFilter(tickerFilter, tickerScope).catch((e) => console.warn('[live] filter sync:', e.message))
+    const resolved = resolveTickerEntries(tickerFilter, LS.get('ticker_groups', DEFAULT_GROUPS))
+    liveApi.setScanFilter(resolved, tickerScope).catch((e) => console.warn('[live] filter sync:', e.message))
   }, [tickerFilter, tickerScope])
 
   // Countdown to next scheduled scan (every 15 minutes on the quarter-hour)
@@ -286,6 +337,10 @@ export default function LiveDashboard({ twsStatus }) {
     await liveApi.toggleAutoExecute().catch((e) => setErrorMsg(`Auto execute toggle failed: ${e.message}`))
   }
 
+  const handleToggleMacroFilter = async () => {
+    await liveApi.toggleMacroFilter().catch((e) => setErrorMsg(`Macro filter toggle failed: ${e.message}`))
+  }
+
   const handleToggleMockMarket = async () => {
     const prev = mockMarketOpen
     setMockMarketOpen(!prev)
@@ -294,6 +349,9 @@ export default function LiveDashboard({ twsStatus }) {
       setErrorMsg('Failed to toggle Mock Market')
     })
   }
+
+  const handleStartReplay = async () => { await replayApi.start(replayDate, replaySpeed); setReplayActive(true) }
+  const handleStopReplay  = async () => { await replayApi.stop(); setReplayActive(false) }
 
   const handleInjectMockSignal = async () => {
     setErrorMsg(null)
@@ -375,6 +433,19 @@ export default function LiveDashboard({ twsStatus }) {
     }
   }, [closedTrades])
 
+  const resolvedFilterTickers = useMemo(
+    () => resolveTickerEntries(tickerFilter, LS.get('ticker_groups', DEFAULT_GROUPS)).split(',').filter(Boolean),
+    [tickerFilter]
+  )
+
+  const handleSaveList = useCallback(() => {
+    const name = saveListName.trim()
+    if (!name || !resolvedFilterTickers.length) return
+    addWatchlist(name, resolvedFilterTickers.join(','))
+    setSaveListPopover(false)
+    setSaveListName('')
+  }, [saveListName, resolvedFilterTickers, addWatchlist])
+
   const trades = useMemo(
     () => [...signals.map(mapSignal), ...injectedSignals.map(mapSignal)],
     [signals, injectedSignals, mapSignal, staleClock]
@@ -385,10 +456,35 @@ export default function LiveDashboard({ twsStatus }) {
     [trades]
   )
 
-  const filteredScanActivity = useMemo(
-    () => scanActivity.filter((a) => !(a.detail && /^(Hot tickers:|Total:)\s*\d/.test(a.detail))),
-    [scanActivity]
-  )
+  // Seed the feed with stubs for every ticker in the scan universe DURING an active scan only.
+  // During a scan: missing tickers appear as "EN_COLA" (queued) until the real entry arrives.
+  // After the scan ends: stubs are dropped — only tickers that were actually scanned remain.
+  //   Backend retains rows (no mid-scan eviction) so the table shows real results, not phantoms.
+  // Merge strategy: real entries (from backend) always overwrite stubs — Map preserves
+  // insertion order and overwriting a key keeps the latest value.
+  const filteredScanActivity = useMemo(() => {
+    const base = scanActivity.filter((a) => !(a.detail && /^(Hot tickers:|Total:)\s*\d/.test(a.detail)))
+
+    // When scan is idle, show only the real entries (no stubs). Filters out any leftover queued stubs.
+    if (!scanning) return base
+
+    // During active scan: pre-populate every ticker in the universe as EN_COLA.
+    // Prefer allScanTickers (full 503 universe); fall back to scanningTickers (HOT batch).
+    const scanningList = status?.allScanTickers?.length ? status.allScanTickers : (status?.scanningTickers ?? [])
+    if (scanningList.length === 0) return base
+
+    // Build map: ticker → activity; real entries from backend overwrite stubs
+    const byTicker = new Map()
+    // Insert stubs first (lowest priority)
+    for (const ticker of scanningList) {
+      byTicker.set(ticker, { ticker, status: 'EN_COLA', detail: '—', scanStarted: '-', scanEnded: '-', duration: '-' })
+    }
+    // Real backend entries overwrite stubs (higher priority)
+    for (const a of base) {
+      byTicker.set(a.ticker, a)
+    }
+    return Array.from(byTicker.values())
+  }, [scanActivity, scanning, status?.allScanTickers, status?.scanningTickers])
 
   const forceStopTooltip = forceStopReleasing
     ? 'Esperando confirmación del servidor: interrupción de descargas IBKR y liberación del lock exclusivo…'
@@ -407,6 +503,11 @@ export default function LiveDashboard({ twsStatus }) {
   return (
     <div className="flex-col" data-testid="live-dashboard">
 
+      {replayActive && (
+        <div className="replay-banner">⚠ REPLAY MODE ACTIVE — signals/brackets are replay runs (PAPER) ⚠</div>
+      )}
+
+
       {errorMsg && (
         <div className="card mb-12 ld-error-banner">
           <span className="color-error font-bold">{errorMsg}</span>
@@ -419,10 +520,49 @@ export default function LiveDashboard({ twsStatus }) {
         <div className="flex-col gap-15">
 
           {/* Row 1: Tickers */}
-          <div className="flex-align-center gap-15">
+          <div className="flex-align-center gap-10 ld-tickers-row">
             <div className="stat-label-sm color-muted ld-tickers-label">Tickers to scan</div>
+            <div className="ld-save-list-wrap" ref={saveListWrapRef}>
+              <button
+                type="button"
+                className="btn ld-save-list-btn"
+                title="Guardar como Watchlist"
+                disabled={!tickerFilter || scanning}
+                onClick={() => {
+                  setSaveListPopover((v) => !v)
+                  setTimeout(() => saveListInputRef.current?.focus(), 50)
+                }}
+              >
+                <BookmarkPlus size={15} />
+              </button>
+              {saveListPopover && (
+                <div className="ld-save-list-popover">
+                  <div className="text-xs color-muted mb-6">Guardar como Watchlist</div>
+                  <input
+                    ref={saveListInputRef}
+                    type="text"
+                    className="ticker-input ld-save-list-input"
+                    placeholder="Nombre de la lista…"
+                    value={saveListName}
+                    onChange={(e) => setSaveListName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); handleSaveList() }
+                      if (e.key === 'Escape') { setSaveListPopover(false); setSaveListName('') }
+                    }}
+                  />
+                  <div className="text-xs color-muted ld-save-list-preview">
+                    {resolvedFilterTickers.slice(0, 6).join(', ')}
+                    {resolvedFilterTickers.length > 6 ? ` +${resolvedFilterTickers.length - 6} más` : ''}
+                  </div>
+                  <div className="flex-align-center gap-8 mt-8">
+                    <button type="button" className="btn btn-primary btn-sm" onClick={handleSaveList} disabled={!saveListName.trim()}>Guardar</button>
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setSaveListPopover(false); setSaveListName('') }}>Cancelar</button>
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="ld-tickers-field">
-              <TickerSelector value={tickerFilter} onChange={setTickerFilter} disabled={scanning} scope={tickerScope} onScopeChange={setTickerScope} />
+              <TickerSelector value={tickerFilter} onChange={setTickerFilter} disabled={scanning} scope={tickerScope} onScopeChange={setTickerScope} hotTickers={hotTickersList} />
             </div>
           </div>
 
@@ -470,6 +610,14 @@ export default function LiveDashboard({ twsStatus }) {
 
               <SwapButton active={status?.autoExecute} onText="Auto Open" offText="Manual Open" onClick={handleToggleAutoExecute} icon={Cpu} testId="live-toggle-auto-execute" />
 
+              <SwapButton
+                active={status?.macroFilterEnabled ?? true}
+                onText="Macro Filter" offText="Macro OFF"
+                onClick={handleToggleMacroFilter}
+                activeColor="#58a6ff" offColor="#f0883e"
+                testId="live-toggle-macro-filter"
+              />
+
               <div className="divider-v ld-divider" />
 
               <div className="flex-align-center gap-4">
@@ -481,33 +629,48 @@ export default function LiveDashboard({ twsStatus }) {
 
               <div className="divider-v ld-divider" />
 
+              <div className="flex-align-center gap-4">
+                <span className="stat-label-sm color-muted">Risk%:</span>
+                <strong className="color-text ld-risk-val">{riskInput}</strong>
+                <div className="flex-col gap-0">
+                  <ChevronUp size={12} className="color-muted" style={{ cursor: 'pointer' }} onClick={() => handleRiskAdjust(1.0)} />
+                  <ChevronDown size={12} className="color-muted" style={{ cursor: 'pointer' }} onClick={() => handleRiskAdjust(-1.0)} />
+                </div>
+              </div>
+
+              <div className="divider-v ld-divider" />
+
               <SwapButton active={mockMarketOpen} onText="Mock Mkt" offText="Real Mkt" onClick={handleToggleMockMarket}
                 activeColor="#f0883e" offColor="#3fb950" icon={mockMarketOpen ? ShieldAlert : ShieldCheck} testId="live-toggle-mock-market" />
 
               {mockMarketOpen && (
-                <button className="btn ld-mock-btn" onClick={handleInjectMockSignal}>
-                  <Zap size={14} /> Mock Signal
-                </button>
+                <>
+                  <button className="btn ld-mock-btn" onClick={handleInjectMockSignal} data-testid="live-inject-mock-signal">
+                    <Zap size={14}/> Mock Signal
+                  </button>
+                  <div className="divider-v ld-divider"/>
+                  <input
+                    type="date"
+                    className="ld-replay-date"
+                    value={replayDate}
+                    max={today}
+                    onChange={e => setReplayDate(e.target.value)}
+                    disabled={replayActive}
+                  />
+                  <button className="btn ld-speed-btn" onClick={cycleSpeed} disabled={replayActive}>
+                    {replaySpeed}x
+                  </button>
+                  <button
+                    className={`btn ${replayActive ? 'btn-secondary' : 'btn-primary'} ld-replay-start`}
+                    onClick={replayActive ? handleStopReplay : handleStartReplay}
+                  >
+                    {replayActive ? <Square size={14}/> : <Play size={14}/>}
+                  </button>
+                </>
               )}
+
             </div>
 
-            {/* Account strip */}
-            <div className="flex-align-center gap-8 ld-account-strip" data-testid="live-account-strip">
-              <span className="color-muted">Account:</span>
-              <strong className="pill pill-info ld-account-id">{twsStatus?.accountId || 'OFFLINE'}</strong>
-              <span className="color-muted">·</span>
-              <span className="color-muted">Balance:</span>
-              <strong className="color-success ld-balance">
-                {twsStatus?.balance > 0 ? `$${Number(twsStatus.balance).toLocaleString()}` : '$0'}
-              </strong>
-              <span className="color-muted">·</span>
-              <span className="color-muted">Risk %:</span>
-              <strong className="color-text ld-risk-val">{riskInput}</strong>
-              <div className="flex-col gap-0">
-                <ChevronUp size={13} className="color-muted" style={{ cursor: 'pointer' }} onClick={() => handleRiskAdjust(1.0)} />
-                <ChevronDown size={13} className="color-muted" style={{ cursor: 'pointer' }} onClick={() => handleRiskAdjust(-1.0)} />
-              </div>
-            </div>
           </div>
 
         </div>
@@ -518,6 +681,8 @@ export default function LiveDashboard({ twsStatus }) {
         scanActivity={filteredScanActivity}
         scanning={scanning}
         hotTickers={hotTickersList}
+        scanScores={scanScores}
+        macroRegime={macroRegime}
         staleSignalCount={staleSignalCount}
         onCloseTrade={handleCloseTrade}
         onCancelTrade={handleCancelTrade}
@@ -526,6 +691,8 @@ export default function LiveDashboard({ twsStatus }) {
         onClearAllStale={handleClearAllStale}
         pendingActions={pendingActions}
       />
+
+      <ExternalPositionsPanel />
     </div>
   )
 }

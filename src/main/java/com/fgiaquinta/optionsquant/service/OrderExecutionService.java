@@ -1,6 +1,7 @@
 package com.fgiaquinta.optionsquant.service;
 
 import com.ib.client.*;
+import com.ib.client.OrderCondition;
 import com.fgiaquinta.optionsquant.config.IbkrProperties;
 import com.fgiaquinta.optionsquant.infrastructure.IbkrCallbackHandler;
 import com.fgiaquinta.optionsquant.strategy.model.TradePlan;
@@ -35,6 +36,8 @@ public class OrderExecutionService {
     private final IbkrProperties ibkrProperties;
     private final EClientSocket client;
     private final EJavaSignal signal;
+    /** Stored so tests can fire callbacks directly without going through EClientSocket. */
+    final EWrapper wrapper;
     private final AtomicInteger nextOrderId = new AtomicInteger(1);
     /** New latch for every connect attempt — {@link CountDownLatch} is single-use. */
     private volatile CountDownLatch connectionLatch = new CountDownLatch(1);
@@ -56,13 +59,15 @@ public class OrderExecutionService {
     public OrderExecutionService(IbkrProperties ibkrProperties) {
         this.ibkrProperties = ibkrProperties;
         this.signal = new EJavaSignal();
-        this.client = new EClientSocket(createWrapper(this), this.signal);
+        this.wrapper = createWrapper(this);
+        this.client = new EClientSocket(this.wrapper, this.signal);
     }
 
     protected OrderExecutionService(IbkrProperties ibkrProperties, EClientSocket client) {
         this.ibkrProperties = ibkrProperties;
         this.client = client;
         this.signal = new EJavaSignal();
+        this.wrapper = createWrapper(this);
     }
 
     private static EWrapper createWrapper(OrderExecutionService service) {
@@ -80,7 +85,7 @@ public class OrderExecutionService {
                 if (ticker != null) {
                     int conId = contractDetails.contract().conid();
                     if (conId > 0) {
-                        service.tickerToUnderlyingConId.put(ticker, conId);
+                        service.tickerToUnderlyingConId.merge(ticker, conId, Math::max);
                         service.log.info("🎯 Resolved underlying conId for {}: {}", ticker, conId);
                     } else {
                         service.log.warn("Contract details for {} returned conId=0 (reqId={})", ticker, reqId);
@@ -141,6 +146,33 @@ public class OrderExecutionService {
 
     public boolean isConnected() {
         return client != null && client.isConnected();
+    }
+
+    public boolean validateTicker(String symbol) {
+        connect();
+        String sym = symbol.trim().toUpperCase(Locale.ROOT);
+
+        // Short-circuit: already resolved by scanner — no need to call TWS again
+        Integer cached = tickerToUnderlyingConId.get(sym);
+        if (cached != null && cached > 0) {
+            return true;
+        }
+
+        int reqId = nextOrderId.getAndIncrement();
+        requestTracker.put(reqId, sym);
+        pendingMetadataRequests.add(reqId);
+
+        client.reqContractDetails(reqId, IbkrCallbackHandler.createStockContract(sym));
+
+        long start = System.currentTimeMillis();
+        while (pendingMetadataRequests.contains(reqId) && (System.currentTimeMillis() - start) < resolveContractWaitMs) {
+            try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
+        }
+        pendingMetadataRequests.remove(reqId);
+        requestTracker.remove(reqId);
+
+        Integer conId = tickerToUnderlyingConId.get(sym);
+        return conId != null && conId > 0;
     }
 
     public synchronized void connect() {
@@ -312,6 +344,47 @@ public class OrderExecutionService {
         connect();
         log.info("🚫 Cancelling order ID: {}", orderId);
         client.cancelOrder(orderId, new OrderCancel());
+    }
+
+    /**
+     * Places a market SELL order for an external (non-app-tracked) position.
+     * Does NOT touch {@link #bracketStateMap} — external positions have no bracket state.
+     *
+     * @param contract The IBKR contract to sell (obtained from the position snapshot)
+     * @param quantity Number of shares / contracts to sell
+     * @return The order ID assigned by IBKR for this sell order
+     */
+    public int placeMarketSellExternal(Contract contract, int quantity) {
+        connect();
+        int orderId = nextOrderId.getAndIncrement();
+        Order marketSell = OrderFactory.createMarketOrder(orderId, "SELL", quantity);
+        log.info("📤 placeMarketSellExternal: orderId={}, contract={}, qty={}",
+                orderId, contract.symbol(), quantity);
+        client.placeOrder(orderId, contract, marketSell);
+        return orderId;
+    }
+
+    /**
+     * Places a conditional order — attaches the given {@link OrderCondition} to the order,
+     * assigns a fresh order ID, and submits to IBKR.
+     *
+     * <p>Accepts the abstract base {@link OrderCondition} so callers can pass any concrete
+     * condition type (TimeCondition, PriceCondition, etc.) without an extra overload per type.
+     *
+     * @param contract  The contract to trade
+     * @param order     The order template (action, type, quantity already set by caller)
+     * @param condition The condition to attach (e.g. a 14:50 TimeCondition)
+     * @return The order ID assigned for this conditional order
+     */
+    public int placeConditionalOrder(Contract contract, Order order, OrderCondition condition) {
+        connect();
+        order.conditions(java.util.List.of(condition));
+        int orderId = nextOrderId.getAndIncrement();
+        order.orderId(orderId);
+        log.info("📤 placeConditionalOrder: orderId={}, contract={}, conditionType={}",
+                orderId, contract.symbol(), condition.type());
+        client.placeOrder(orderId, contract, order);
+        return orderId;
     }
 
     /**

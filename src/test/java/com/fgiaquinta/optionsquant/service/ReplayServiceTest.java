@@ -103,7 +103,7 @@ class ReplayServiceTest {
         ReplayService.StartResult result = svc.start(date, 60);
 
         verify(source, times(1))
-                .preload(eq(date), eq(java.util.Set.of("AAPL", "NVDA")), any(List.class));
+                .preload(eq(date), eq(java.util.Set.of("AAPL", "NVDA")), org.mockito.ArgumentMatchers.<List<TimeFrame>>any());
         assertThat(replayClock.isActive()).isTrue();
         assertThat(replayClock.snapshot().speed()).isEqualTo(60);
         verify(scheduler, times(1)).start();

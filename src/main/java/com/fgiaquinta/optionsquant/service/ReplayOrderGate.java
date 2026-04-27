@@ -27,6 +27,7 @@ public class ReplayOrderGate {
     private final int maxPerWindow;
     private final Deque<Instant> hits = new ArrayDeque<>();
 
+    @org.springframework.beans.factory.annotation.Autowired
     public ReplayOrderGate(
             @Value("${replay.max-orders-per-minute:10}") int maxPerWindow) {
         this(Clock.systemUTC(), maxPerWindow);

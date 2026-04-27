@@ -164,7 +164,15 @@ public class TickerService {
     }
 
     /**
-     * HOT list: processed first (config order). Runtime {@code hot} → YAML {@code hot-tickers} → top market cap from CSV.
+     * HOT list: processed first (config order).
+     *
+     * <p>Guard semantics (runtime-wins with explicit-empty support):
+     * <ol>
+     *   <li>Runtime file present AND {@code hot != null} (including {@code []}) → return runtime list
+     *       filtered to universe. An explicit empty list is a valid override — no YAML fallback.</li>
+     *   <li>Runtime file absent OR {@code hot == null} → fall back to YAML {@code hot-tickers}
+     *       → then top market cap from CSV as last resort. Logs INFO once on YAML fallback.</li>
+     * </ol>
      */
     public List<String> getHotTickers() {
         if (!loaded) loadTickers();
@@ -172,10 +180,26 @@ public class TickerService {
         Set<String> universeSet = new LinkedHashSet<>(universe);
 
         Optional<TickerRuntimeConfigPayload> rt = runtimeConfigStore.load();
+
+        // HOT guard: if runtime file is present AND hot field was explicitly provided (non-null),
+        // return the runtime list (possibly empty) — never fall back to YAML in this branch.
+        if (rt.isPresent() && rt.get().hot() != null) {
+            List<String> runtimeHot = rt.get().hot();
+            List<String> ordered = new ArrayList<>();
+            for (String h : runtimeHot) {
+                if (h == null) continue;
+                String u = h.trim().toUpperCase(Locale.ROOT);
+                if (universeSet.contains(u)) {
+                    ordered.add(u);
+                }
+            }
+            return ordered;
+        }
+
+        // YAML fallback — runtime absent or hot field explicitly null
+        log.info("HOT bootstrapped from YAML; create runtime to override");
         List<String> configured = null;
-        if (rt.isPresent() && !rt.get().hot().isEmpty()) {
-            configured = rt.get().hot();
-        } else if (ibkrProperties.hotTickers() != null && !ibkrProperties.hotTickers().isEmpty()) {
+        if (ibkrProperties.hotTickers() != null && !ibkrProperties.hotTickers().isEmpty()) {
             configured = ibkrProperties.hotTickers();
         }
 
@@ -191,11 +215,14 @@ public class TickerService {
             return ordered;
         }
 
+        int effectiveCount = rt.isPresent() && rt.get().hotTickerCount() != null
+                ? rt.get().hotTickerCount()
+                : ibkrProperties.hotTickerCount();
         return tickerMap.values().stream()
                 .filter(t -> t.marketCapBillion() != null && t.marketCapBillion() > 50)
                 .filter(t -> universeSet.contains(t.ticker()))
                 .sorted((a, b) -> Long.compare(b.marketCapBillion(), a.marketCapBillion()))
-                .limit(15)
+                .limit(effectiveCount)
                 .map(TickerInfo::ticker)
                 .collect(Collectors.toList());
     }

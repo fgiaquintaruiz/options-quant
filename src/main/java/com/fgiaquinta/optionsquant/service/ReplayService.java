@@ -46,6 +46,7 @@ public class ReplayService {
     private final IbkrProperties ibkrProperties;
     private final Clock wallClock;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public ReplayService(ReplayClock clock, ReplayCandleSource source, ReplayScheduler scheduler,
                          OrderExecutionService orderService, IbkrProperties ibkrProperties) {
         this(clock, source, scheduler, orderService, ibkrProperties, Clock.system(MADRID));
