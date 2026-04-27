@@ -250,20 +250,43 @@ class AccountManagerTest {
     }
 
     @Test
-    @DisplayName("handlePosition_withZeroQuantity_removesFromSnapshot")
+    @DisplayName("handlePosition_withZeroQuantity_removesFromSnapshot_whenSecTypeMatches")
     void handlePosition_withZeroQuantity_removesFromSnapshot() {
-        // GIVEN — SPY already present in snapshot with qty=10
+        // GIVEN — SPY STK already present in snapshot with qty=10
         Contract contract = new Contract();
         contract.symbol("SPY");
         contract.secType("STK");
         accountManager.handlePosition("DU123", contract, 10, 450.0);
         assertThat(accountManager.getPositionsSnapshot()).containsKey("SPY");
 
-        // WHEN — TWS sends qty=0 (position closed)
+        // WHEN — TWS sends qty=0 for the SAME secType (position closed)
         accountManager.handlePosition("DU123", contract, 0, 0.0);
 
-        // THEN — SPY is removed from the snapshot
+        // THEN — SPY is removed from the snapshot (same secType: STK → STK)
         assertThat(accountManager.getPositionsSnapshot()).doesNotContainKey("SPY");
+    }
+
+    @Test
+    @DisplayName("handlePosition_withZeroQuantity_doesNotRemoveSnapshotIfSecTypeDiffers")
+    void handlePosition_withZeroQuantity_doesNotRemoveSnapshotIfSecTypeDiffers() {
+        // GIVEN — GOOG OPT qty=5 already in snapshot
+        Contract optContract = new Contract();
+        optContract.symbol("GOOG");
+        optContract.secType("OPT");
+        accountManager.handlePosition("DU123", optContract, 5, 12.50);
+        assertThat(accountManager.getPositionsSnapshot()).containsKey("GOOG");
+        assertThat(accountManager.getPositionsSnapshot().get("GOOG").secType()).isEqualTo("OPT");
+
+        // WHEN — TWS sends qty=0 for GOOG STK (stock position closed, different secType)
+        Contract stkContract = new Contract();
+        stkContract.symbol("GOOG");
+        stkContract.secType("STK");
+        accountManager.handlePosition("DU123", stkContract, 0, 0.0);
+
+        // THEN — snapshot STILL contains GOOG (the OPT entry was preserved, only STK would be removed)
+        assertThat(accountManager.getPositionsSnapshot()).containsKey("GOOG");
+        assertThat(accountManager.getPositionsSnapshot().get("GOOG").secType()).isEqualTo("OPT");
+        assertThat(accountManager.getPositionsSnapshot().get("GOOG").quantity()).isEqualTo(5);
     }
 
     @Test

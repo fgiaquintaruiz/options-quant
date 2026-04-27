@@ -280,7 +280,9 @@ public class AccountManager {
         }
         String symbol = contract.symbol();
         if (quantity <= 0) {
-            positionsSnapshot.remove(symbol);
+            final String secTypeStr = secTypeEnum.getApiString();
+            positionsSnapshot.computeIfPresent(symbol, (k, existing) ->
+                existing.secType().equals(secTypeStr) ? null : existing);
             return;
         }
         String secType = secTypeEnum.getApiString();
