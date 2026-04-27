@@ -179,9 +179,14 @@ export default function LiveTradeGrid({
   onDeleteSignal,
   onClearStaleBatch,
   onClearAllStale,
-  pendingActions = {}
+  pendingActions = {},
+  externalPositions = [],
+  onCloseExternal,
+  onScheduleClose1450,
 }) {
   const [selectedStale, setSelectedStale] = useState(() => new Set())
+  const [closingExternal, setClosingExternal] = useState(() => new Set())
+  const [scheduled1450, setScheduled1450] = useState(() => new Set())
   const { hotSet, activeTrades, scanRows, staleTickersList } = useTradeData(trades, hotTickers, scanActivity, scanScores)
 
   // Status breakdown counts — derived from the real scanRows (post-dedupe).
@@ -240,7 +245,7 @@ export default function LiveTradeGrid({
             <Activity size={18} className="color-info" />
             Live Signals &amp; Positions
           </h3>
-          <span className="text-sm color-muted">{activeTrades.length} records</span>
+          <span className="text-sm color-muted">{activeTrades.length + externalPositions.length} records</span>
         </div>
 
         <div className="table-wrap">
@@ -439,7 +444,98 @@ export default function LiveTradeGrid({
                 )
               })}
 
-              {activeTrades.length === 0 && (
+              {externalPositions.map((pos) => {
+                const isClosing   = closingExternal.has(pos.ticker)
+                const isScheduled = scheduled1450.has(pos.ticker)
+
+                const handleCloseExt = async () => {
+                  const ok = window.confirm(`Cerrar posición ${pos.ticker} a mercado?`)
+                  if (!ok) return
+                  setClosingExternal((prev) => new Set(prev).add(pos.ticker))
+                  try {
+                    await onCloseExternal?.(pos.ticker)
+                  } finally {
+                    setClosingExternal((prev) => { const n = new Set(prev); n.delete(pos.ticker); return n })
+                  }
+                }
+
+                const handleScheduleExt = async () => {
+                  setScheduled1450((prev) => new Set(prev).add(pos.ticker))
+                  try {
+                    await onScheduleClose1450?.(pos.ticker)
+                  } catch {
+                    setScheduled1450((prev) => { const n = new Set(prev); n.delete(pos.ticker); return n })
+                  }
+                }
+
+                return (
+                  <tr key={`ext-${pos.ticker}`} className="ltg-row-normal">
+                    <td className="ltg-td--center">
+                      <span className="text-xs color-muted">—</span>
+                    </td>
+
+                    <td className="ltg-td">
+                      <div className="flex-align-center gap-4">
+                        <strong className="ltg-ticker-label">{pos.ticker}</strong>
+                        <span className="badge badge-external text-xs" style={{ padding: '1px 4px' }}>EXTERNAL</span>
+                      </div>
+                    </td>
+
+                    <td className="ltg-td text-sm color-muted">—</td>
+
+                    <td className="ltg-td">
+                      <div className="flex-col gap-4 ltg-price-stack">
+                        <div className="flex-between">
+                          <span className="text-xs color-muted">Avg</span>
+                          <span className="text-md font-bold">${Number(pos.avgCost).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="ltg-td--center">
+                      <span className="badge" style={{ background: '#d2992222', color: '#d29922', border: '1px solid #d2992244' }}>EXTERNAL</span>
+                    </td>
+
+                    <td className="ltg-td text-sm color-muted">—</td>
+                    <td className="ltg-td text-sm color-muted">—</td>
+                    <td className="ltg-td text-sm color-muted">{pos.snapshotAt || '—'}</td>
+                    <td className="ltg-td text-sm color-muted">—</td>
+
+                    <td className="ltg-td--center">
+                      <div className="flex-center gap-6">
+                        <button
+                          type="button"
+                          className="btn text-xs ltg-action-btn"
+                          disabled={isClosing}
+                          onClick={handleCloseExt}
+                          style={{ background: '#f8514922', border: '1px solid #f8514966', color: isClosing ? '#8b949e' : '#f85149' }}
+                        >
+                          {isClosing ? 'Cerrando…' : 'Close'}
+                        </button>
+                        {isScheduled ? (
+                          <span className="badge badge-scheduled-1450">14:50 ET</span>
+                        ) : (
+                          <label className="flex-align-center gap-4 text-xs color-muted" style={{ cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              disabled={isScheduled}
+                              onChange={handleScheduleExt}
+                              style={{ cursor: 'pointer' }}
+                            />
+                            14:50 ET
+                          </label>
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="ltg-td--center">
+                      <span className="text-xs color-muted">—</span>
+                    </td>
+                  </tr>
+                )
+              })}
+
+              {activeTrades.length === 0 && externalPositions.length === 0 && (
                 <tr>
                   <td colSpan={COL_COUNT} className="ltg-empty">
                     No active signals or positions. {scanning ? 'Scanning market…' : 'Start a scan to find opportunities.'}

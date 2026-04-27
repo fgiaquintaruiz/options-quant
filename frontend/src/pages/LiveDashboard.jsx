@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Play, Square, Zap, ChevronUp, ChevronDown, Monitor, Cpu, ShieldCheck, ShieldAlert, OctagonAlert, BookmarkPlus } from 'lucide-react'
-import { liveApi, replayApi } from '../api'
+import { liveApi, replayApi, externalPositionsApi } from '../api'
 import LiveTradeGrid from '../components/LiveTradeGrid'
-import ExternalPositionsPanel from '../components/ExternalPositionsPanel'
 import TickerSelector, { resolveTickerEntries, DEFAULT_GROUPS } from '../components/TickerSelector'
 import SwapButton from '../components/SwapButton'
 import { LS } from '../utils/storage'
 import { useWatchlists } from '../hooks/useWatchlists'
+import { useExternalPositions } from '../hooks/useExternalPositions'
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 
@@ -260,6 +260,17 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
     fetchSignals,
     handleStartScan, handleStopScan, handleForceStop, handleToggleScheduler,
   } = useLiveScanner(setErrorMsg)
+
+  const { positions: externalPositions, refresh: refreshExternal } = useExternalPositions()
+
+  const handleCloseExternal = async (ticker) => {
+    await externalPositionsApi.closeExternalPosition(ticker)
+    refreshExternal()
+  }
+
+  const handleScheduleClose1450 = async (ticker) => {
+    await externalPositionsApi.scheduleClose1450(ticker)
+  }
 
   // Restore pool size from localStorage and align JVM on mount
   useEffect(() => {
@@ -690,9 +701,10 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
         onClearStaleBatch={handleClearStaleBatch}
         onClearAllStale={handleClearAllStale}
         pendingActions={pendingActions}
+        externalPositions={externalPositions}
+        onCloseExternal={handleCloseExternal}
+        onScheduleClose1450={handleScheduleClose1450}
       />
-
-      <ExternalPositionsPanel />
     </div>
   )
 }

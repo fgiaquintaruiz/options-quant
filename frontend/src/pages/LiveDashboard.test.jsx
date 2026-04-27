@@ -27,9 +27,9 @@ vi.mock('../hooks/useWatchlists', () => ({
   }),
 }))
 
-// Mock ExternalPositionsPanel so it doesn't fetch and has a stable testId
-vi.mock('../components/ExternalPositionsPanel', () => ({
-  default: () => <div data-testid="external-positions-panel">ExternalPositionsPanel</div>,
+// Mock useExternalPositions so LiveDashboard doesn't poll in tests
+vi.mock('../hooks/useExternalPositions', () => ({
+  useExternalPositions: () => ({ positions: [], error: null, loading: false, refresh: vi.fn() }),
 }))
 
 // Mock LiveTradeGrid to keep the test focused on composition
@@ -60,18 +60,10 @@ describe('LiveDashboard', () => {
     expect(screen.getByTestId('live-trade-grid')).toBeInTheDocument()
   })
 
-  it('renders ExternalPositionsPanel below LiveTradeGrid', () => {
+  it('passes externalPositions props to LiveTradeGrid (no separate ExternalPositionsPanel)', () => {
     render(<LiveDashboard twsStatus={{}} marketOpen={false} />)
-    const grid  = screen.getByTestId('live-trade-grid')
-    const panel = screen.getByTestId('external-positions-panel')
-
-    // Both must be present
-    expect(grid).toBeInTheDocument()
-    expect(panel).toBeInTheDocument()
-
-    // ExternalPositionsPanel must appear AFTER LiveTradeGrid in the DOM
-    const position = grid.compareDocumentPosition(panel)
-    // DOCUMENT_POSITION_FOLLOWING = 4
-    expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeGreaterThan(0)
+    // LiveTradeGrid is rendered; ExternalPositionsPanel is no longer a separate component
+    expect(screen.getByTestId('live-trade-grid')).toBeInTheDocument()
+    expect(screen.queryByTestId('external-positions-panel')).not.toBeInTheDocument()
   })
 })
