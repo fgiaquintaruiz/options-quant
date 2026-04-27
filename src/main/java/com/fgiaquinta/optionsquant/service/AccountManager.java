@@ -269,13 +269,13 @@ public class AccountManager {
 
     /**
      * Processes a single position update from the EWrapper {@code position()} callback.
-     * Filters out non-STK/OPT secTypes silently.
+     * Filters out non-OPT secTypes silently — only options contracts are tracked.
      * Package-private to allow direct invocation in unit tests without a live TWS connection.
      */
     void handlePosition(String account, Contract contract, int quantity, double avgCost) {
         Types.SecType secTypeEnum = contract.secType();
-        if (secTypeEnum != Types.SecType.STK && secTypeEnum != Types.SecType.OPT) {
-            log.debug("Ignoring position for non-STK/OPT contract: symbol={}, secType={}", contract.symbol(), secTypeEnum);
+        if (secTypeEnum != Types.SecType.OPT) {
+            log.debug("Ignoring position for non-OPT contract: symbol={}, secType={}", contract.symbol(), secTypeEnum);
             return;
         }
         String symbol = contract.symbol();

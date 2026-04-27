@@ -127,9 +127,9 @@ class AccountManagerTest {
     }
 
     @Test
-    @DisplayName("handlePosition_withStkType_addsEntryToSnapshotMap")
-    void handlePosition_withStkType_addsEntryToSnapshotMap() {
-        // GIVEN — a STK contract
+    @DisplayName("handlePosition_withStkType_isIgnoredSilently")
+    void handlePosition_withStkType_isIgnoredSilently() {
+        // GIVEN — a STK contract (stocks are no longer tracked — OPT only)
         Contract contract = new Contract();
         contract.symbol("NVDA");
         contract.secType("STK");
@@ -137,15 +137,9 @@ class AccountManagerTest {
         // WHEN — callback fires (via package-private test hook)
         accountManager.handlePosition("DU123", contract, 100, 87.50);
 
-        // THEN — entry is recorded in snapshot map
+        // THEN — STK is ignored, not stored in snapshot map
         Map<String, PositionSnapshot> snapshot = accountManager.getPositionsSnapshot();
-        assertThat(snapshot).containsKey("NVDA");
-        PositionSnapshot ps = snapshot.get("NVDA");
-        assertThat(ps.symbol()).isEqualTo("NVDA");
-        assertThat(ps.secType()).isEqualTo("STK");
-        assertThat(ps.quantity()).isEqualTo(100);
-        assertThat(ps.avgCost()).isEqualTo(87.50);
-        assertThat(ps.snapshotAt()).isNotNull();
+        assertThat(snapshot).doesNotContainKey("NVDA");
     }
 
     @Test
@@ -214,10 +208,10 @@ class AccountManagerTest {
     @Test
     @DisplayName("getPositionsSnapshot_returnsDefensiveCopy")
     void getPositionsSnapshot_returnsDefensiveCopy() {
-        // GIVEN — one position in map
+        // GIVEN — one OPT position in map
         Contract contract = new Contract();
         contract.symbol("AAPL");
-        contract.secType("STK");
+        contract.secType("OPT");
         accountManager.handlePosition("DU123", contract, 50, 150.0);
 
         // WHEN — get two copies
@@ -252,17 +246,17 @@ class AccountManagerTest {
     @Test
     @DisplayName("handlePosition_withZeroQuantity_removesFromSnapshot_whenSecTypeMatches")
     void handlePosition_withZeroQuantity_removesFromSnapshot() {
-        // GIVEN — SPY STK already present in snapshot with qty=10
+        // GIVEN — SPY OPT already present in snapshot with qty=10
         Contract contract = new Contract();
         contract.symbol("SPY");
-        contract.secType("STK");
+        contract.secType("OPT");
         accountManager.handlePosition("DU123", contract, 10, 450.0);
         assertThat(accountManager.getPositionsSnapshot()).containsKey("SPY");
 
         // WHEN — TWS sends qty=0 for the SAME secType (position closed)
         accountManager.handlePosition("DU123", contract, 0, 0.0);
 
-        // THEN — SPY is removed from the snapshot (same secType: STK → STK)
+        // THEN — SPY is removed from the snapshot (same secType: OPT → OPT)
         assertThat(accountManager.getPositionsSnapshot()).doesNotContainKey("SPY");
     }
 
@@ -292,10 +286,10 @@ class AccountManagerTest {
     @Test
     @DisplayName("handlePosition_withNegativeQuantity_removesFromSnapshot")
     void handlePosition_withNegativeQuantity_removesFromSnapshot() {
-        // GIVEN — SPY already present in snapshot with qty=10
+        // GIVEN — SPY OPT already present in snapshot with qty=10
         Contract contract = new Contract();
         contract.symbol("SPY");
-        contract.secType("STK");
+        contract.secType("OPT");
         accountManager.handlePosition("DU123", contract, 10, 450.0);
         assertThat(accountManager.getPositionsSnapshot()).containsKey("SPY");
 
