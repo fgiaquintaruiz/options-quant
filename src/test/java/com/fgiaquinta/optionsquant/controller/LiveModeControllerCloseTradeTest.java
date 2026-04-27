@@ -43,10 +43,13 @@ class LiveModeControllerCloseTradeTest {
         when(scannerProperties.exclusiveScanSchedulerLockWaitMs()).thenReturn(5000L);
         when(scannerProperties.livePreemptWaitMs()).thenReturn(60_000L);
 
+        MacroEnvironmentFilter macroFilter = mock(MacroEnvironmentFilter.class);
+
         this.controller = new LiveModeController(
                 scannerService, ibkrProperties, tradingService, tickerService,
                 accountManager, ibkrService, orderExecutionService,
-                marketCalendarService, marketScanner, scannerProperties
+                marketCalendarService, marketScanner, scannerProperties, macroFilter,
+                mock(ScanPrioritizationService.class)
         );
     }
 

@@ -17,7 +17,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Manual execute must reject live rows whose signal timestamp is older than 15 minutes (server clock).
+ * Manual execute must reject live rows whose signal timestamp is older than 30 minutes (server clock).
  */
 class LiveModeControllerStaleSignalTest {
 
@@ -45,22 +45,25 @@ class LiveModeControllerStaleSignalTest {
         when(scannerProperties.exclusiveScanSchedulerLockWaitMs()).thenReturn(5000L);
         when(scannerProperties.livePreemptWaitMs()).thenReturn(60_000L);
 
+        MacroEnvironmentFilter macroFilter = mock(MacroEnvironmentFilter.class);
+
         controller = new LiveModeController(
                 scannerService, ibkrProperties, tradingService, tickerService,
                 accountManager, ibkrService, orderExecutionService,
-                marketCalendarService, marketScanner, scannerProperties
+                marketCalendarService, marketScanner, scannerProperties, macroFilter,
+                mock(ScanPrioritizationService.class)
         );
     }
 
     @Test
-    @DisplayName("executeTrade returns stale=true and does not call TradingService when signal timestamp is >15m old")
+    @DisplayName("executeTrade returns stale=true and does not call TradingService when signal timestamp is >30m old")
     void executeTrade_blocksStaleSignal() {
         StrategyScannerService.Signal stale = new StrategyScannerService.Signal(
                 "AAPL",
                 "squeeze_strat",
                 "CALL",
                 180.0,
-                ZonedDateTime.now().minus(20, ChronoUnit.MINUTES),
+                ZonedDateTime.now().minus(40, ChronoUnit.MINUTES),
                 null
         );
         controller.addLiveSignal(stale);

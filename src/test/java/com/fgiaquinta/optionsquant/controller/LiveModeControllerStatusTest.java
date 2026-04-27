@@ -52,10 +52,15 @@ class LiveModeControllerStatusTest {
         when(scannerProperties.exclusiveScanSchedulerLockWaitMs()).thenReturn(5000L);
         when(scannerProperties.livePreemptWaitMs()).thenReturn(60_000L);
 
+        MacroEnvironmentFilter macroFilter = mock(MacroEnvironmentFilter.class);
+        when(macroFilter.getRegime()).thenReturn(MacroEnvironmentFilter.MarketRegime.NEUTRAL);
+        when(macroFilter.getMomentum()).thenReturn(MacroEnvironmentFilter.ShortTermMomentum.FLAT);
+
         controller = new LiveModeController(
                 scannerService, ibkrProperties, tradingService, tickerService,
                 accountManager, ibkrService, orderExecutionService,
-                marketCalendarService, marketScanner, scannerProperties
+                marketCalendarService, marketScanner, scannerProperties, macroFilter,
+                mock(ScanPrioritizationService.class)
         );
     }
 
