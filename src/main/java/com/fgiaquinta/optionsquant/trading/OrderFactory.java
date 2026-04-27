@@ -87,8 +87,8 @@ public class OrderFactory {
 
         // Price trigger: when underlying hits the price level
         o.conditions().add(ConditionBuilder.createPriceCondition(conId, primaryExch, isMore, price));
-        // Golden Rule: don't execute after 21:55 ET (no overnight options)
-        o.conditions().add(ConditionBuilder.createGoldenRuleCondition("21:55:00"));
+        // Golden Rule: don't execute after 15:50 ET (10 min margin before 16:00 options close)
+        o.conditions().add(ConditionBuilder.createGoldenRuleCondition("15:50:00"));
 
         return o;
     }
