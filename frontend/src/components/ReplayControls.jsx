@@ -1,95 +1,87 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Play, Square } from 'lucide-react'
 import { replayApi } from '../api'
+import { LS } from '../utils/storage'
 
-const SPEED_PRESETS = [30, 60, 180, 360]
+const SPEEDS = [30, 60, 180, 360]
 
-const formatVirtualNow = (iso) => {
-  if (!iso) return '—'
-  try { return new Date(iso).toISOString().slice(0, 16).replace('T', ' ') }
-  catch { return iso }
-}
+function todayStr()     { return new Date().toISOString().split('T')[0] }
+function yesterdayStr() { return new Date(Date.now() - 86_400_000).toISOString().split('T')[0] }
 
-/**
- * Replay controls for off-hours E2E scanner testing.
- * Auto-shows when market is closed; hidden during regular session unless replay is active.
- */
-export default function ReplayControls({ onActiveChange, marketOpen }) {
-  const today = new Date().toISOString().slice(0, 10)
-  const [date, setDate]     = useState(today)
-  const [speed, setSpeed]   = useState(60)
-  const [status, setStatus] = useState({ active: false, virtualNow: null, speed: 0, runId: null, replaySignalsCount: 0 })
-  const [error, setError]   = useState(null)
-  const [busy, setBusy]     = useState(false)
+export default function ReplayControls({ marketOpen, onActiveChange, onError }) {
+  const today     = todayStr()
+  const yesterday = yesterdayStr()
 
-  const refresh = useCallback(() => {
-    replayApi.status()
-      .then((s) => { setStatus(s); if (onActiveChange) onActiveChange(s.active) })
-      .catch(() => { /* replay disabled — ignore */ })
-  }, [onActiveChange])
+  const [replayDate,   setReplayDate]   = useState(() => LS.get('replay_lastDate', yesterday))
+  const [replaySpeed,  setReplaySpeed]  = useState(30)
+  const [replayActive, setReplayActive] = useState(false)
+  const lastActiveRef = useRef(false)
 
   useEffect(() => {
-    refresh()
-    const id = setInterval(refresh, 2000)
-    return () => clearInterval(id)
-  }, [refresh])
+    let cancelled = false
+    const tick = async () => {
+      try {
+        const data = await replayApi.status()
+        if (cancelled) return
+        const isActive = !!data?.active
+        if (isActive !== lastActiveRef.current) {
+          lastActiveRef.current = isActive
+          setReplayActive(isActive)
+          onActiveChange?.(isActive)
+        }
+      } catch (e) {
+        console.warn('[replay-controls] status poll:', e.message)
+      }
+    }
+    tick()
+    const id = setInterval(tick, 2000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [onActiveChange])
 
-  // Hide during market hours unless a replay is already active
-  if (marketOpen && !status.active) return null
+  const cycleSpeed = () => setReplaySpeed(s => SPEEDS[(SPEEDS.indexOf(s) + 1) % SPEEDS.length])
 
   const handleStart = async () => {
-    setError(null); setBusy(true)
-    try { await replayApi.start(date, speed); refresh() }
-    catch (e) { setError(e.message || 'Failed to start replay') }
-    finally { setBusy(false) }
+    try {
+      await replayApi.start(replayDate, replaySpeed)
+      LS.set('replay_lastDate', replayDate)
+      setReplayActive(true)
+      lastActiveRef.current = true
+      onActiveChange?.(true)
+    } catch (e) {
+      onError?.(e.message || 'Replay blocked during market hours')
+    }
   }
 
   const handleStop = async () => {
-    setError(null); setBusy(true)
-    try { await replayApi.stop(); refresh() }
-    catch (e) { setError(e.message || 'Failed to stop replay') }
-    finally { setBusy(false) }
-  }
-
-  const handleSpeedChange = async (next) => {
-    setSpeed(next)
-    if (!status.active) return
-    try { await replayApi.setSpeed(next) }
-    catch (e) { setError(e.message || 'Failed to set speed') }
+    await replayApi.stop()
+    setReplayActive(false)
+    lastActiveRef.current = false
+    onActiveChange?.(false)
   }
 
   return (
-    <div className="replay-controls">
-      <div className="replay-controls-row">
-        <span className="replay-controls-title">Off-Hours Replay</span>
-        {status.active && (
-          <span className="replay-controls-virtual">
-            Virtual: <strong>{formatVirtualNow(status.virtualNow)}</strong>
-            <span className="replay-controls-meta">{status.speed}x · run {status.runId} · {status.replaySignalsCount} signals</span>
-          </span>
-        )}
-        <input
-          type="date"
-          className="ticker-input"
-          value={date}
-          max={today}
-          disabled={status.active || busy}
-          onChange={(e) => setDate(e.target.value)}
-        />
-        <div className="replay-speed-presets">
-          {SPEED_PRESETS.map((s) => (
-            <button key={s} type="button"
-              className={`replay-speed-btn${speed === s ? ' replay-speed-btn--active' : ''}`}
-              disabled={busy}
-              onClick={() => handleSpeedChange(s)}>{s}x</button>
-          ))}
-        </div>
-        {!status.active
-          ? <button type="button" className="btn btn-primary" disabled={busy} onClick={handleStart}><Play size={14} /> Start</button>
-          : <button type="button" className="btn btn-secondary replay-stop-btn" disabled={busy} onClick={handleStop}><Square size={14} /> Stop</button>
-        }
-      </div>
-      {error && <div className="replay-controls-error">{error}</div>}
-    </div>
+    <>
+      <input
+        type="date"
+        className="ld-replay-date"
+        data-testid="replay-date-input"
+        value={replayDate}
+        max={today}
+        onChange={e => setReplayDate(e.target.value)}
+        disabled={replayActive}
+      />
+      <button className="btn ld-speed-btn" data-testid={`replay-speed-btn-${replaySpeed}`} onClick={cycleSpeed} disabled={replayActive}>
+        {replaySpeed}x
+      </button>
+      <button
+        className={`btn ${replayActive ? 'btn-secondary' : 'btn-primary'} ld-replay-start`}
+        data-testid="replay-start-btn"
+        onClick={replayActive ? handleStop : handleStart}
+        disabled={marketOpen && !replayActive}
+        title={marketOpen && !replayActive ? 'Not available during market hours' : undefined}
+      >
+        {replayActive ? <Square size={14}/> : <Play size={14}/>}
+      </button>
+    </>
   )
 }

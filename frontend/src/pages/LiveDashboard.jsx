@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Play, Square, Zap, ChevronUp, ChevronDown, Monitor, Cpu, ShieldCheck, ShieldAlert, OctagonAlert, BookmarkPlus } from 'lucide-react'
-import { liveApi, replayApi, externalPositionsApi } from '../api'
+import { liveApi, externalPositionsApi } from '../api'
 import LiveTradeGrid from '../components/LiveTradeGrid'
+import ReplayControls from '../components/ReplayControls'
 import TickerSelector, { resolveTickerEntries, DEFAULT_GROUPS } from '../components/TickerSelector'
 import SwapButton from '../components/SwapButton'
 import { LS } from '../utils/storage'
@@ -233,16 +234,9 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
   const [tickerScope, setTickerScope]     = useState(() => LS.get('live_tickerScope', 'HOT'))
   const [riskInput, setRiskInput]         = useState(() => LS.get('live_riskPct', '2.0'))
   const [mockMarketOpen, setMockMarketOpen] = useState(() => LS.get('live_mockMarketOpen', false))
-  const [injectedSignals, setInjectedSignals] = useState([])
   const [pendingActions, setPendingActions]   = useState({})
   const [elapsed, setElapsed]                 = useState(0)
   const [nextScanSecs, setNextScanSecs]       = useState(null)
-  const today                                 = new Date().toISOString().split('T')[0]
-  const yesterday                             = new Date(Date.now() - 86_400_000).toISOString().split('T')[0]
-  const [replayDate, setReplayDate]           = useState(() => LS.get('replay_lastDate', yesterday))
-  const [replaySpeed, setReplaySpeed]         = useState(30)
-  const SPEEDS                                = [30, 60, 180, 360]
-  const cycleSpeed                            = () => setReplaySpeed(s => SPEEDS[(SPEEDS.indexOf(s) + 1) % SPEEDS.length])
   const [saveListPopover, setSaveListPopover] = useState(false)
   const [saveListName, setSaveListName]       = useState('')
   const saveListInputRef                      = useRef(null)
@@ -254,6 +248,11 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
     const close = (e) => { if (saveListWrapRef.current && !saveListWrapRef.current.contains(e.target)) { setSaveListPopover(false); setSaveListName('') } }
     document.addEventListener('mousedown', close)
     return () => document.removeEventListener('mousedown', close)
+  }, [saveListPopover])
+
+  // Focus the save-list input when the popover opens (idiomatic React — no setTimeout).
+  useEffect(() => {
+    if (saveListPopover) saveListInputRef.current?.focus()
   }, [saveListPopover])
 
   const {
@@ -365,9 +364,6 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
     })
   }
 
-  const handleStartReplay = async () => { await replayApi.start(replayDate, replaySpeed); LS.set('replay_lastDate', replayDate); setReplayActive(true) }
-  const handleStopReplay  = async () => { await replayApi.stop(); setReplayActive(false) }
-
   const handleInjectMockSignal = async () => {
     setErrorMsg(null)
     const hot = hotTickersList.length > 0 ? hotTickersList : ['SPY', 'QQQ', 'AAPL', 'NVDA', 'TSLA']
@@ -407,7 +403,8 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
         if (signal.signalStale) { setErrorMsg('Señal >30 min — ejecución bloqueada. Revisa velas / fuente.'); done(); return }
         const ok = await liveApi.executeSignal(ticker, signal.direction, price, signal.strategy)
         if (!ok.success) setErrorMsg(`Execution failed: ${ok.message}`)
-        setTimeout(() => { done(); fetchSignals() }, 800)
+        await fetchSignals()
+        done()
         return
       }
       const ok = await liveApi.closeTrade(ticker, price, tpOrderId, slOrderId)
@@ -462,8 +459,8 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
   }, [saveListName, resolvedFilterTickers, addWatchlist])
 
   const trades = useMemo(
-    () => [...signals.map(mapSignal), ...injectedSignals.map(mapSignal)],
-    [signals, injectedSignals, mapSignal, staleClock]
+    () => signals.map(mapSignal),
+    [signals, mapSignal, staleClock]
   )
 
   const staleSignalCount = useMemo(
@@ -543,10 +540,7 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
                 className="btn ld-save-list-btn"
                 title="Guardar como Watchlist"
                 disabled={!tickerFilter || scanning}
-                onClick={() => {
-                  setSaveListPopover((v) => !v)
-                  setTimeout(() => saveListInputRef.current?.focus(), 50)
-                }}
+                onClick={() => setSaveListPopover((v) => !v)}
               >
                 <BookmarkPlus size={15} />
               </button>
@@ -664,23 +658,11 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
                     <Zap size={14}/> Mock Signal
                   </button>
                   <div className="divider-v ld-divider"/>
-                  <input
-                    type="date"
-                    className="ld-replay-date"
-                    value={replayDate}
-                    max={today}
-                    onChange={e => setReplayDate(e.target.value)}
-                    disabled={replayActive}
+                  <ReplayControls
+                    marketOpen={marketOpen}
+                    onActiveChange={setReplayActive}
+                    onError={setErrorMsg}
                   />
-                  <button className="btn ld-speed-btn" onClick={cycleSpeed} disabled={replayActive}>
-                    {replaySpeed}x
-                  </button>
-                  <button
-                    className={`btn ${replayActive ? 'btn-secondary' : 'btn-primary'} ld-replay-start`}
-                    onClick={replayActive ? handleStopReplay : handleStartReplay}
-                  >
-                    {replayActive ? <Square size={14}/> : <Play size={14}/>}
-                  </button>
                 </>
               )}
 

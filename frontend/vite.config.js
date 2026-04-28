@@ -13,9 +13,12 @@ export default defineConfig({
       provider: 'v8',
       reportsDirectory: '../build/reports/coverage-frontend',
       reporter: ['text', 'html', 'lcov'],
-      /** Unit scope: API module + small utils. Pages/components are covered by Playwright e2e (Java). */
-      include: ['src/api.js', 'src/utils/**/*.js'],
-      exclude: ['**/*.test.js', '**/*.spec.js'],
+      exclude: [
+        '**/*.test.js',
+        '**/*.test.jsx',
+        '**/*.spec.js',
+        'src/test-setup.js',
+      ],
     },
   },
   server: {
