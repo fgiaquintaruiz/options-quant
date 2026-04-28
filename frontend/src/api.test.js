@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { handleResponse, liveApi, backtestApi, tickerConfigApi, healthApi, replayApi, externalPositionsApi } from './api.js'
+import { handleResponse, liveApi, backtestApi, tickerConfigApi, healthApi, replayApi, externalPositionsApi, analyticsApi, accountApi } from './api.js'
 
 describe('handleResponse', () => {
   it('parses JSON when ok', async () => {
@@ -174,6 +174,248 @@ describe('API clients (fetch mocked)', () => {
       '/api/ticker-config/hot-ticker-count?count=15',
       { method: 'PUT' }
     )
+  })
+
+  it('handleResponse falls back to statusText when JSON body has no error/message', async () => {
+    const r = {
+      ok: false,
+      status: 422,
+      statusText: 'Unprocessable',
+      json: () => Promise.resolve({ code: 42 }),
+    }
+    await expect(handleResponse(r)).rejects.toThrow('HTTP 422: Unprocessable')
+  })
+
+  it('liveApi.getSignals GETs /live-ui/signals', async () => {
+    await liveApi.getSignals()
+    expect(fetch).toHaveBeenCalledWith('/live-ui/signals')
+  })
+
+  it('liveApi.getTickers GETs /live-ui/tickers', async () => {
+    await liveApi.getTickers()
+    expect(fetch).toHaveBeenCalledWith('/live-ui/tickers')
+  })
+
+  it('liveApi.getTwsStatus GETs /live-ui/tws-status', async () => {
+    await liveApi.getTwsStatus()
+    expect(fetch).toHaveBeenCalledWith('/live-ui/tws-status')
+  })
+
+  it('liveApi.getMarketStatus GETs /live-ui/market-status', async () => {
+    await liveApi.getMarketStatus()
+    expect(fetch).toHaveBeenCalledWith('/live-ui/market-status')
+  })
+
+  it('liveApi.getScanActivity GETs /live-ui/scan-activity', async () => {
+    await liveApi.getScanActivity()
+    expect(fetch).toHaveBeenCalledWith('/live-ui/scan-activity')
+  })
+
+  it('liveApi.getNewsTickers GETs /live-ui/news-tickers', async () => {
+    await liveApi.getNewsTickers()
+    expect(fetch).toHaveBeenCalledWith('/live-ui/news-tickers')
+  })
+
+  it('liveApi.startScan POSTs /live-ui/scan-now', async () => {
+    await liveApi.startScan()
+    expect(fetch).toHaveBeenCalledWith('/live-ui/scan-now', { method: 'POST' })
+  })
+
+  it('liveApi.stopScan POSTs /live-ui/stop-scan', async () => {
+    await liveApi.stopScan()
+    expect(fetch).toHaveBeenCalledWith('/live-ui/stop-scan', { method: 'POST' })
+  })
+
+  it('liveApi.toggleExtendedHours POSTs /live-ui/toggle-extended-hours', async () => {
+    await liveApi.toggleExtendedHours()
+    expect(fetch).toHaveBeenCalledWith('/live-ui/toggle-extended-hours', { method: 'POST' })
+  })
+
+  it('liveApi.toggleAutoExecute POSTs /live-ui/toggle-auto-execute', async () => {
+    await liveApi.toggleAutoExecute()
+    expect(fetch).toHaveBeenCalledWith('/live-ui/toggle-auto-execute', { method: 'POST' })
+  })
+
+  it('liveApi.toggleMacroFilter POSTs /live-ui/toggle-macro-filter', async () => {
+    await liveApi.toggleMacroFilter()
+    expect(fetch).toHaveBeenCalledWith('/live-ui/toggle-macro-filter', { method: 'POST' })
+  })
+
+  it('liveApi.toggleScheduler POSTs /live-ui/toggle-scheduler', async () => {
+    await liveApi.toggleScheduler()
+    expect(fetch).toHaveBeenCalledWith('/live-ui/toggle-scheduler', { method: 'POST' })
+  })
+
+  it('liveApi.toggleMockMarket POSTs /live-ui/toggle-mock-market', async () => {
+    await liveApi.toggleMockMarket()
+    expect(fetch).toHaveBeenCalledWith('/live-ui/toggle-mock-market', { method: 'POST' })
+  })
+
+  it('liveApi.clearStaleSignals POSTs /live-ui/signals/clear-stale', async () => {
+    await liveApi.clearStaleSignals()
+    expect(fetch).toHaveBeenCalledWith('/live-ui/signals/clear-stale', { method: 'POST' })
+  })
+
+  it('liveApi.setRisk POSTs with pct query param', async () => {
+    await liveApi.setRisk(5)
+    expect(fetch.mock.calls[0][0]).toContain('pct=5')
+    expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'POST' })
+  })
+
+  it('liveApi.setMaxConcurrent POSTs with count query param', async () => {
+    await liveApi.setMaxConcurrent(3)
+    expect(fetch.mock.calls[0][0]).toContain('count=3')
+    expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'POST' })
+  })
+
+  it('liveApi.injectMockSignal defaults to SPY ticker', async () => {
+    await liveApi.injectMockSignal()
+    expect(fetch.mock.calls[0][0]).toContain('ticker=SPY')
+    expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'POST' })
+  })
+
+  it('liveApi.setScanFilter includes filter and scope in query', async () => {
+    await liveApi.setScanFilter('hot', 'HOT')
+    const url = fetch.mock.calls[0][0]
+    expect(url).toContain('filter=hot')
+    expect(url).toContain('scope=HOT')
+    expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'POST' })
+  })
+
+  it('liveApi.executeTrade POSTs to /live-ui/execute-trade', async () => {
+    await liveApi.executeTrade('SPY', 'CALL', 400, 'x')
+    expect(fetch.mock.calls[0][0]).toContain('/live-ui/execute-trade')
+    expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'POST' })
+  })
+
+  it('liveApi.cancelTrade POSTs with ticker and orderId', async () => {
+    await liveApi.cancelTrade('SPY', 123)
+    const url = fetch.mock.calls[0][0]
+    expect(url).toContain('ticker=SPY')
+    expect(url).toContain('orderId=123')
+    expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'POST' })
+  })
+
+  it('liveApi.closeTrade without optional order ids omits tpOrderId and slOrderId', async () => {
+    await liveApi.closeTrade('AAPL', 200)
+    const url = fetch.mock.calls[0][0]
+    expect(url).toContain('ticker=')
+    expect(url).toContain('price=')
+    expect(url).not.toContain('tpOrderId')
+    expect(url).not.toContain('slOrderId')
+  })
+
+  it('liveApi.deleteSignal DELETEs with ticker in URL', async () => {
+    await liveApi.deleteSignal('AAPL')
+    expect(fetch.mock.calls[0][0]).toContain('/live-ui/signal?ticker=AAPL')
+    expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'DELETE' })
+  })
+
+  it('backtestApi.isRunning GETs /backtest-ui/running', async () => {
+    await backtestApi.isRunning()
+    expect(fetch).toHaveBeenCalledWith('/backtest-ui/running')
+  })
+
+  it('backtestApi.stopBacktest POSTs /backtest-ui/stop', async () => {
+    await backtestApi.stopBacktest()
+    expect(fetch).toHaveBeenCalledWith('/backtest-ui/stop', { method: 'POST' })
+  })
+
+  it('backtestApi.getCheckpoint GETs /backtest-ui/checkpoint', async () => {
+    await backtestApi.getCheckpoint()
+    expect(fetch).toHaveBeenCalledWith('/backtest-ui/checkpoint')
+  })
+
+  it('backtestApi.clearCheckpoint POSTs /backtest-ui/checkpoint/clear', async () => {
+    await backtestApi.clearCheckpoint()
+    expect(fetch).toHaveBeenCalledWith('/backtest-ui/checkpoint/clear', { method: 'POST' })
+  })
+
+  it('backtestApi.getMaxConcurrent GETs /backtest-ui/max-concurrent', async () => {
+    await backtestApi.getMaxConcurrent()
+    expect(fetch).toHaveBeenCalledWith('/backtest-ui/max-concurrent')
+  })
+
+  it('backtestApi.setMaxConcurrent POSTs with count query param', async () => {
+    await backtestApi.setMaxConcurrent(4)
+    expect(fetch.mock.calls[0][0]).toContain('count=4')
+    expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'POST' })
+  })
+
+  it('backtestApi.getScheduler GETs /backtest-ui/scheduler', async () => {
+    await backtestApi.getScheduler()
+    expect(fetch).toHaveBeenCalledWith('/backtest-ui/scheduler')
+  })
+
+  it('backtestApi.getTickerMemoryRiskProfiles GETs /backtest-ui/ticker-memory-profiles', async () => {
+    await backtestApi.getTickerMemoryRiskProfiles()
+    expect(fetch).toHaveBeenCalledWith('/backtest-ui/ticker-memory-profiles')
+  })
+
+  it('backtestApi.runBacktest with default args omits tickerFilter', async () => {
+    await backtestApi.runBacktest()
+    expect(fetch.mock.calls[0][0]).not.toContain('tickerFilter=')
+  })
+
+  it('tickerConfigApi.get GETs /api/ticker-config', async () => {
+    await tickerConfigApi.get()
+    expect(fetch).toHaveBeenCalledWith('/api/ticker-config')
+  })
+
+  it('tickerConfigApi.deleteSymbol DELETEs with encoded symbol', async () => {
+    await tickerConfigApi.deleteSymbol('TSLA')
+    expect(fetch.mock.calls[0][0]).toContain('/api/ticker-config/symbol/TSLA')
+    expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'DELETE' })
+  })
+
+  it('tickerConfigApi.validate GETs with symbol query param', async () => {
+    await tickerConfigApi.validate('AAPL')
+    expect(fetch.mock.calls[0][0]).toContain('/api/ticker-config/validate?symbol=AAPL')
+  })
+
+  it('analyticsApi.getTickerInfo GETs from analytics base URL', async () => {
+    await analyticsApi.getTickerInfo('NVDA')
+    expect(fetch.mock.calls[0][0]).toBe('http://localhost:8001/api/v1/ticker-info/NVDA')
+  })
+
+  it('accountApi.getMode GETs /live-ui/account-mode', async () => {
+    await accountApi.getMode()
+    expect(fetch).toHaveBeenCalledWith('/live-ui/account-mode')
+  })
+
+  it('replayApi.start POSTs with date and speed', async () => {
+    await replayApi.start('2024-01-15', 2)
+    const url = fetch.mock.calls[0][0]
+    expect(url).toContain('date=2024-01-15')
+    expect(url).toContain('speed=2')
+    expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'POST' })
+  })
+
+  it('replayApi.stop POSTs /live-ui/replay/stop', async () => {
+    await replayApi.stop()
+    expect(fetch).toHaveBeenCalledWith('/live-ui/replay/stop', { method: 'POST' })
+  })
+
+  it('replayApi.setSpeed PUTs with speed query param', async () => {
+    await replayApi.setSpeed(4)
+    const url = fetch.mock.calls[0][0]
+    expect(url).toContain('/live-ui/replay/speed?speed=4')
+    expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'PUT' })
+  })
+
+  it('replayApi.status GETs /live-ui/replay/status', async () => {
+    await replayApi.status()
+    expect(fetch).toHaveBeenCalledWith('/live-ui/replay/status')
+  })
+
+  it('healthApi.getHealth GETs /actuator/health', async () => {
+    await healthApi.getHealth()
+    expect(fetch).toHaveBeenCalledWith('/actuator/health')
+  })
+
+  it('healthApi.getLiveness GETs /actuator/health/liveness', async () => {
+    await healthApi.getLiveness()
+    expect(fetch).toHaveBeenCalledWith('/actuator/health/liveness')
   })
 })
 
