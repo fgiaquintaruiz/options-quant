@@ -267,6 +267,22 @@ class LiveModeControllerExternalPositionsTest {
         assertEquals("Market SELL placed", response.getBody().get("message"));
         assertEquals(42, response.getBody().get("orderId"));
         verify(orderExecutionService, times(1)).placeMarketSellExternal(any(Contract.class), anyInt());
+        // Optimistic removal: snapshot must be updated immediately, before IBKR callback fires
+        verify(accountManager, times(1)).removePositionFromSnapshot("NVDA");
+    }
+
+    @Test
+    @DisplayName("POST /external-positions/{ticker}/close — optimistic removal NOT called when ticker is invalid")
+    void closeExternalPosition_invalidTicker_doesNotRemoveFromSnapshot() {
+        // GIVEN empty snapshot
+        when(accountManager.getPositionsSnapshot()).thenReturn(Map.of());
+
+        // WHEN
+        controller.closeExternalPosition("NVDA");
+
+        // THEN order not placed, snapshot not touched
+        verify(orderExecutionService, never()).placeMarketSellExternal(any(), anyInt());
+        verify(accountManager, never()).removePositionFromSnapshot(anyString());
     }
 
     @Test

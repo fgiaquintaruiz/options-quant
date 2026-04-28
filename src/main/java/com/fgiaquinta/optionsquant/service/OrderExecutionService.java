@@ -358,8 +358,13 @@ public class OrderExecutionService {
         connect();
         int orderId = nextOrderId.getAndIncrement();
         Order marketSell = OrderFactory.createMarketOrder(orderId, "SELL", quantity);
-        log.info("📤 placeMarketSellExternal: orderId={}, contract={}, qty={}",
-                orderId, contract.symbol(), quantity);
+        if (contract.exchange() == null || contract.exchange().isBlank()) {
+            contract.exchange("SMART");
+        }
+        log.info("📤 TWS connection state before placeOrder: connected={}", client.isConnected());
+        log.info("📤 placeMarketSellExternal: orderId={}, symbol={}, secType={}, exchange={}, currency={}, expiry={}, strike={}, right={}, multiplier={}, qty={}",
+                orderId, contract.symbol(), contract.secType(), contract.exchange(), contract.currency(),
+                contract.lastTradeDateOrContractMonth(), contract.strike(), contract.right(), contract.multiplier(), quantity);
         client.placeOrder(orderId, contract, marketSell);
         return orderId;
     }

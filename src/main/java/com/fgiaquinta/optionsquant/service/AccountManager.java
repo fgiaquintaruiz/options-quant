@@ -248,6 +248,17 @@ public class AccountManager {
     // ── Position snapshot accessors ───────────────────────────────────────────
 
     /**
+     * Removes a position from the snapshot optimistically, before the IBKR callback fires.
+     * Used after placing a market SELL to reflect the close immediately in the UI.
+     * Thread-safe: delegates to the underlying {@link ConcurrentHashMap}.
+     *
+     * @param ticker Ticker symbol to remove
+     */
+    public void removePositionFromSnapshot(String ticker) {
+        positionsSnapshot.remove(ticker);
+    }
+
+    /**
      * Returns a defensive copy of the current position snapshot map.
      * Thread-safe: caller receives an immutable view of the state at call time.
      */
