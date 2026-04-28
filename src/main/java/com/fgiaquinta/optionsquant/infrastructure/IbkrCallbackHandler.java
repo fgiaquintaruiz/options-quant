@@ -149,8 +149,22 @@ public final class IbkrCallbackHandler extends DefaultEWrapper {
             return;
         }
 
-        log.error("IBKR Error: id={}, code={}, message={}", id, errorCode, errorMsg);
+        log.error("🚨 TWS error for orderId={}: code={}, msg={}", id, errorCode, errorMsg);
         onError.accept(new ErrorEvent(id, errorCode, errorMsg));
+    }
+
+    @Override
+    public void orderStatus(int orderId, String status, Decimal filled, Decimal remaining,
+                            double avgFillPrice, long permId, int parentId, double lastFillPrice,
+                            int clientId, String whyHeld, double mktCapPrice) {
+        log.info("📋 TWS orderStatus: orderId={}, status={}, filled={}, remaining={}",
+                orderId, status, filled, remaining);
+    }
+
+    @Override
+    public void openOrder(int orderId, Contract contract, Order order, OrderState orderState) {
+        log.info("📋 TWS openOrder: orderId={}, symbol={}, action={}, qty={}, state={}",
+                orderId, contract.symbol(), order.action(), order.totalQuantity(), orderState.status());
     }
 
     @Override
