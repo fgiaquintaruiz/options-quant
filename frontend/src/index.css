@@ -276,6 +276,7 @@ tr:hover { background: #161b22; }
 .ld-macro-badge--bearish               { background: #d2992214; border-color: #d2992244; color: #d29922; }
 .ld-macro-badge--strongly-bearish      { background: #f8514922; border-color: #f8514966; color: #f85149; }
 .ld-risk-val          { font-size: 13px; min-width: 22px; }
+.btn-icon             { background: none; border: none; padding: 0; cursor: pointer; display: flex; align-items: center; }
 .hdr-account-id       { font-size: 11px; padding: 1px 7px; }
 .hdr-balance          { font-size: 11px; }
 .hdr-clock            { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 62px; text-align: right; }
