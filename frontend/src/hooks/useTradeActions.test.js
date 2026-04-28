@@ -53,6 +53,7 @@ function makeProps(overrides = {}) {
     setErrorMsg: vi.fn(),
     externalPositions: [],
     refreshExternalPositions: vi.fn(),
+    staleClock: 0,
     ...overrides,
   }
 }

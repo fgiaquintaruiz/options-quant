@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from 'react'
 import { liveApi, externalPositionsApi } from '../api'
 import { formatSignalTimestamp, formatTodayWallClock, isSignalStale } from '../utils/liveSignalUtils'
 
-export function useTradeActions({ signals, closedTrades, fetchSignals, setErrorMsg, externalPositions, refreshExternalPositions }) {
+export function useTradeActions({ signals, closedTrades, fetchSignals, setErrorMsg, externalPositions, refreshExternalPositions, staleClock }) {
   const [pendingActions, setPendingActions] = useState({})
 
   const mapSignal = useCallback((s) => {
@@ -26,7 +26,7 @@ export function useTradeActions({ signals, closedTrades, fetchSignals, setErrorM
 
   const trades = useMemo(
     () => signals.map(mapSignal),
-    [signals, mapSignal]
+    [signals, mapSignal, staleClock]
   )
 
   const staleSignalCount = useMemo(

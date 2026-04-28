@@ -50,7 +50,7 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
     handleCloseTrade, handleCancelTrade, handleDeleteSignal,
     handleClearStaleBatch, handleClearAllStale,
     handleCloseExternal, handleScheduleClose1450,
-  } = useTradeActions({ signals, closedTrades, fetchSignals, setErrorMsg, externalPositions, refreshExternalPositions: refreshExternal })
+  } = useTradeActions({ signals, closedTrades, fetchSignals, setErrorMsg, externalPositions, refreshExternalPositions: refreshExternal, staleClock })
 
   // Sync filter/scope to backend on change
   useEffect(() => {
