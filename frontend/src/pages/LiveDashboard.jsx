@@ -235,7 +235,8 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
   const [elapsed, setElapsed]                 = useState(0)
   const [nextScanSecs, setNextScanSecs]       = useState(null)
   const today                                 = new Date().toISOString().split('T')[0]
-  const [replayDate, setReplayDate]           = useState(today)
+  const yesterday                             = new Date(Date.now() - 86_400_000).toISOString().split('T')[0]
+  const [replayDate, setReplayDate]           = useState(() => LS.get('replay_lastDate', yesterday))
   const [replaySpeed, setReplaySpeed]         = useState(30)
   const SPEEDS                                = [30, 60, 180, 360]
   const cycleSpeed                            = () => setReplaySpeed(s => SPEEDS[(SPEEDS.indexOf(s) + 1) % SPEEDS.length])
@@ -361,7 +362,7 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
     })
   }
 
-  const handleStartReplay = async () => { await replayApi.start(replayDate, replaySpeed); setReplayActive(true) }
+  const handleStartReplay = async () => { await replayApi.start(replayDate, replaySpeed); LS.set('replay_lastDate', replayDate); setReplayActive(true) }
   const handleStopReplay  = async () => { await replayApi.stop(); setReplayActive(false) }
 
   const handleInjectMockSignal = async () => {
