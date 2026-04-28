@@ -4,6 +4,7 @@
 
 // Returns locale-aware thousands-separated USD string, or '—'.
 export function formatUsd(v) {
+  if (v == null) return '—'
   const n = Number(v)
   return Number.isFinite(n) ? n.toLocaleString() : '—'
 }
