@@ -18,6 +18,7 @@ export default defineConfig({
         '**/*.test.jsx',
         '**/*.spec.js',
         'src/test-setup.js',
+        'vite.config.js',
       ],
     },
   },
