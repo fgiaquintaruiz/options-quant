@@ -1,13 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { Play, Square, Zap, ChevronUp, ChevronDown, Monitor, Cpu, ShieldCheck, ShieldAlert, OctagonAlert } from 'lucide-react'
 import SaveListPopover from '../components/SaveListPopover'
 import { liveApi, externalPositionsApi } from '../api'
 import LiveTradeGrid from '../components/LiveTradeGrid'
-import ReplayControls from '../components/ReplayControls'
+import ScanEngineControls from '../components/ScanEngineControls'
 import TickerSelector, { resolveTickerEntries, DEFAULT_GROUPS } from '../components/TickerSelector'
-import SwapButton from '../components/SwapButton'
 import { LS } from '../utils/storage'
-import { formatSignalTimestamp, formatTodayWallClock, isSignalStale, formatMinSec } from '../utils/liveSignalUtils'
+import { formatSignalTimestamp, formatTodayWallClock, isSignalStale } from '../utils/liveSignalUtils'
 import { useWatchlists } from '../hooks/useWatchlists'
 import { useExternalPositions } from '../hooks/useExternalPositions'
 import { useScanCountdown } from '../hooks/useScanCountdown'
@@ -44,7 +42,7 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
     handleToggleAutoExecute, handleToggleMacroFilter, handleToggleMockMarket,
   } = useScanSettings({ status, setErrorMsg })
 
-  const { nextScanSecs, elapsed } = useScanCountdown({ scanning })
+  const { nextScanSecs } = useScanCountdown({ scanning })
 
   const { positions: externalPositions, refresh: refreshExternal } = useExternalPositions()
 
@@ -193,19 +191,7 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
     return Array.from(byTicker.values())
   }, [scanActivity, scanning, status?.allScanTickers, status?.scanningTickers])
 
-  const forceStopTooltip = forceStopReleasing
-    ? 'Esperando confirmación del servidor: interrupción de descargas IBKR y liberación del lock exclusivo…'
-    : exclusiveScanLockHeld
-      ? `IBKR: bloqueo exclusivo del scanner${status?.exclusiveScanOwnerThread ? ` — ${status.exclusiveScanOwnerThread}` : ''}. ~${exclusiveLockMinutes} min.`
-      : 'Sin bloqueo exclusivo del scanner IBKR (libre).'
-
   // ── Render ───────────────────────────────────────────────────────────────
-
-  const forceStopClass = forceStopReleasing ? 'ld-force-stop-btn--releasing'
-    : exclusiveScanLockHeld ? 'ld-force-stop-btn--locked' : 'ld-force-stop-btn--free'
-  const forceStopLabelClass = (forceStopReleasing || exclusiveScanLockHeld)
-    ? 'live-force-stop-label ld-force-stop-label--bold'
-    : 'live-force-stop-label ld-force-stop-label--normal'
 
   return (
     <div className="flex-col" data-testid="live-dashboard">
@@ -239,100 +225,34 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
             </div>
           </div>
 
-          {/* Row 2: Engine controls + Account strip */}
-          <div className="flex-between flex-wrap gap-10 ld-controls-row">
-            <div className="flex-align-center gap-10 flex-wrap">
-
-              {/* Force stop / IBKR lock indicator */}
-              <button type="button" data-testid="live-force-stop"
-                className={`btn live-force-stop-btn ld-force-stop-btn ${forceStopClass}`}
-                onClick={handleForceStop} disabled={forceStopReleasing} title={forceStopTooltip}>
-                <OctagonAlert size={16} className="live-force-stop-ico" aria-hidden />
-                <span className={forceStopLabelClass}>
-                  {forceStopReleasing ? 'Liberando…'
-                    : exclusiveScanLockHeld ? (exclusiveLockSinceMs != null ? `IBKR locked · ${exclusiveLockMinutes}m` : 'IBKR locked')
-                    : 'IBKR libre'}
-                </span>
-              </button>
-
-              <div className="divider-v ld-divider" />
-
-              {/* Auto Scan group */}
-              <div className="flex-align-center gap-0 ld-auto-scan-group">
-                <button type="button" data-testid="live-toggle-scheduler"
-                  className={`ld-scheduler-btn ${status?.schedulerEnabled ? 'ld-scheduler-btn--on' : 'ld-scheduler-btn--off'}`}
-                  onClick={handleToggleScheduler}>
-                  <Monitor size={14} /> Auto Scan
-                </button>
-
-                {scanning || stopRequested ? (
-                  <button type="button" data-testid="live-stop-scan" className="ld-scan-btn-base ld-scan-stop-btn" onClick={handleStopScan} title="Detener scan">
-                    <Square size={13} /> Stop
-                  </button>
-                ) : (
-                  <button type="button" data-testid="live-start-scan"
-                    className={`ld-scan-btn-base ${canScan ? 'ld-scan-start-btn--on' : 'ld-scan-start-btn--off'}`}
-                    onClick={handleStartScan} disabled={!canScan}
-                    title={canScan ? 'Iniciar scan manual' : 'Fuera de horario de mercado'}>
-                    <Play size={13} /> Scan
-                  </button>
-                )}
-
-                {status?.schedulerEnabled && <span className="ld-countdown">{formatMinSec(nextScanSecs)}</span>}
-              </div>
-
-              <SwapButton active={status?.autoExecute} onText="Auto Open" offText="Manual Open" onClick={handleToggleAutoExecute} icon={Cpu} testId="live-toggle-auto-execute" />
-
-              <SwapButton
-                active={status?.macroFilterEnabled ?? true}
-                onText="Macro Filter" offText="Macro OFF"
-                onClick={handleToggleMacroFilter}
-                activeColor="#58a6ff" offColor="#f0883e"
-                testId="live-toggle-macro-filter"
-              />
-
-              <div className="divider-v ld-divider" />
-
-              <div className="flex-align-center gap-4">
-                <span className="stat-label-sm color-muted">Concurrent:</span>
-                <input type="number" min="1" max="16" value={maxConcurrent}
-                  onChange={(e) => handleMaxConcurrentChange(e.target.value)} disabled={scanning}
-                  className="ld-concurrent-input" />
-              </div>
-
-              <div className="divider-v ld-divider" />
-
-              <div className="flex-align-center gap-4">
-                <span className="stat-label-sm color-muted">Risk%:</span>
-                <strong className="color-text ld-risk-val">{riskInput}</strong>
-                <div className="flex-col gap-0">
-                  <button type="button" className="btn-icon color-muted" onClick={() => handleRiskAdjust(1.0)}><ChevronUp size={12} /></button>
-                  <button type="button" className="btn-icon color-muted" onClick={() => handleRiskAdjust(-1.0)}><ChevronDown size={12} /></button>
-                </div>
-              </div>
-
-              <div className="divider-v ld-divider" />
-
-              <SwapButton active={mockMarketOpen} onText="Mock Mkt" offText="Real Mkt" onClick={handleToggleMockMarket}
-                activeColor="#f0883e" offColor="#3fb950" icon={mockMarketOpen ? ShieldAlert : ShieldCheck} testId="live-toggle-mock-market" />
-
-              {mockMarketOpen && (
-                <>
-                  <button className="btn ld-mock-btn" onClick={handleInjectMockSignal} data-testid="live-inject-mock-signal">
-                    <Zap size={14}/> Mock Signal
-                  </button>
-                  <div className="divider-v ld-divider"/>
-                  <ReplayControls
-                    marketOpen={marketOpen}
-                    onActiveChange={setReplayActive}
-                    onError={setErrorMsg}
-                  />
-                </>
-              )}
-
-            </div>
-
-          </div>
+          {/* Row 2: Engine controls */}
+          <ScanEngineControls
+            scanning={scanning}
+            stopRequested={stopRequested}
+            canScan={canScan}
+            status={status}
+            forceStopReleasing={forceStopReleasing}
+            exclusiveScanLockHeld={exclusiveScanLockHeld}
+            exclusiveLockSinceMs={exclusiveLockSinceMs}
+            exclusiveLockMinutes={exclusiveLockMinutes}
+            maxConcurrent={maxConcurrent}
+            riskInput={riskInput}
+            mockMarketOpen={mockMarketOpen}
+            nextScanSecs={nextScanSecs}
+            marketOpen={marketOpen}
+            onStartScan={handleStartScan}
+            onStopScan={handleStopScan}
+            onForceStop={handleForceStop}
+            onToggleScheduler={handleToggleScheduler}
+            onToggleAutoExecute={handleToggleAutoExecute}
+            onToggleMacroFilter={handleToggleMacroFilter}
+            onMaxConcurrentChange={handleMaxConcurrentChange}
+            onRiskAdjust={handleRiskAdjust}
+            onToggleMockMarket={handleToggleMockMarket}
+            onInjectMockSignal={handleInjectMockSignal}
+            onReplayActiveChange={setReplayActive}
+            onError={setErrorMsg}
+          />
 
         </div>
       </div>
