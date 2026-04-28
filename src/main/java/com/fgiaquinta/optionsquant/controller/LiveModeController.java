@@ -257,7 +257,7 @@ public class LiveModeController {
 
         PositionSnapshot pos = snapshot.get(ticker);
         int orderId = orderExecutionService.placeMarketSellExternal(pos.contract(), pos.quantity());
-
+        accountManager.removePositionFromSnapshot(ticker);
         log.info("closeExternalPosition: placed market SELL for {} — orderId={}", ticker, orderId);
         return ResponseEntity.ok(Map.of("message", "Market SELL placed", "orderId", orderId));
     }
@@ -399,8 +399,10 @@ public class LiveModeController {
 
     @GetMapping("/signals")
     public ResponseEntity<Map<String, Object>> getSignals() {
-        List<Map<String, Object>> signalData = liveSignals.stream()
-                .filter(s -> !isLiveSignalOlderThanMaxAge(s) || hasOpenExecutedPosition(s.ticker()))
+        boolean replayActive = replayClock != null && replayClock.isActive();
+        List<Signal> sourceSignals = replayActive ? replaySignals : liveSignals;
+        List<Map<String, Object>> signalData = sourceSignals.stream()
+                .filter(s -> replayActive || !isLiveSignalOlderThanMaxAge(s) || hasOpenExecutedPosition(s.ticker()))
                 .map(s -> {
                     Map<String, Object> map = new LinkedHashMap<>();
                     map.put("ticker", s.ticker());

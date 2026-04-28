@@ -3,6 +3,7 @@ package com.fgiaquinta.optionsquant.controller;
 import com.fgiaquinta.optionsquant.config.IbkrProperties;
 import com.fgiaquinta.optionsquant.config.ScannerProperties;
 import com.fgiaquinta.optionsquant.service.*;
+import com.fgiaquinta.optionsquant.service.StrategyScannerService.Signal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -10,8 +11,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -145,5 +148,72 @@ class LiveModeControllerReplayTest {
         assertThat(response.getBody()).containsEntry("active", true);
         assertThat(response.getBody()).containsEntry("speed", 60);
         assertThat(response.getBody()).containsEntry("runId", "R-test01");
+    }
+
+    // ─── getSignals source-selection tests ──────────────────────────────────
+
+    @Test
+    @DisplayName("GET /signals during replay returns replaySignals, not liveSignals")
+    void getSignals_whenReplayActive_returnsReplaySignals() {
+        Signal replaySig = new Signal("AAPL", "SMA", "BUY", 180.0,
+                ZonedDateTime.now(), null, "none", true);
+        Signal liveSig   = new Signal("MSFT", "EMA", "SELL", 310.0,
+                ZonedDateTime.now(), null, "none", false);
+
+        CopyOnWriteArrayList<Signal> replayList = new CopyOnWriteArrayList<>(List.of(replaySig));
+        CopyOnWriteArrayList<Signal> liveList   = new CopyOnWriteArrayList<>(List.of(liveSig));
+        ReflectionTestUtils.setField(controller, "replaySignals", replayList);
+        ReflectionTestUtils.setField(controller, "liveSignals", liveList);
+
+        replayClock.activate(ZonedDateTime.parse("2026-04-22T14:30:00Z"), 60, "R-test");
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> signals =
+                (List<Map<String, Object>>) controller.getSignals().getBody().get("signals");
+
+        assertThat(signals).hasSize(1);
+        assertThat(signals.get(0)).containsEntry("ticker", "AAPL");
+    }
+
+    @Test
+    @DisplayName("GET /signals when replay inactive returns liveSignals")
+    void getSignals_whenReplayInactive_returnsLiveSignals() {
+        Signal liveSig = new Signal("MSFT", "EMA", "SELL", 310.0,
+                ZonedDateTime.now(), null, "none", false);
+
+        CopyOnWriteArrayList<Signal> liveList = new CopyOnWriteArrayList<>(List.of(liveSig));
+        ReflectionTestUtils.setField(controller, "liveSignals", liveList);
+        ReflectionTestUtils.setField(controller, "replaySignals", new CopyOnWriteArrayList<>());
+
+        // replayClock is inactive by default
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> signals =
+                (List<Map<String, Object>>) controller.getSignals().getBody().get("signals");
+
+        assertThat(signals).hasSize(1);
+        assertThat(signals.get(0)).containsEntry("ticker", "MSFT");
+    }
+
+    @Test
+    @DisplayName("GET /signals during replay does not leak any liveSignals item")
+    void getSignals_whenReplayActive_doesNotLeakLiveSignals() {
+        Signal replaySig = new Signal("AAPL", "SMA", "BUY", 180.0,
+                ZonedDateTime.now(), null, "none", true);
+        Signal liveSig   = new Signal("MSFT", "EMA", "SELL", 310.0,
+                ZonedDateTime.now(), null, "none", false);
+
+        CopyOnWriteArrayList<Signal> replayList = new CopyOnWriteArrayList<>(List.of(replaySig));
+        CopyOnWriteArrayList<Signal> liveList   = new CopyOnWriteArrayList<>(List.of(liveSig));
+        ReflectionTestUtils.setField(controller, "replaySignals", replayList);
+        ReflectionTestUtils.setField(controller, "liveSignals", liveList);
+
+        replayClock.activate(ZonedDateTime.parse("2026-04-22T14:30:00Z"), 60, "R-leak-test");
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> signals =
+                (List<Map<String, Object>>) controller.getSignals().getBody().get("signals");
+
+        assertThat(signals).noneMatch(m -> "MSFT".equals(m.get("ticker")));
     }
 }
