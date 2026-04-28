@@ -3,6 +3,19 @@ import { Activity, Trash2 } from 'lucide-react'
 import TickerTooltip from './TickerTooltip'
 import { compareScanRows } from '../utils/scanRowSort'
 
+/** Format an ISO 8601 timestamp to dd/MM HH:mi:ss in browser local time. */
+function fmtTimestamp(iso) {
+  if (!iso || iso === '—' || iso === '-') return '—'
+  const d = new Date(iso)
+  if (isNaN(d)) return iso
+  const dd  = String(d.getDate()).padStart(2, '0')
+  const mm  = String(d.getMonth() + 1).padStart(2, '0')
+  const hh  = String(d.getHours()).padStart(2, '0')
+  const mi  = String(d.getMinutes()).padStart(2, '0')
+  const ss  = String(d.getSeconds()).padStart(2, '0')
+  return `${dd}/${mm} ${hh}:${mi}:${ss}`
+}
+
 // Trade lifecycle status config — color/label per state
 const TRADE_STATUS = {
   FOUND:    { label: 'FOUND',    color: '#f0883e', bg: '#f0883e22' },
@@ -366,8 +379,8 @@ export default function LiveTradeGrid({
                     </td>
 
                     <td className="ltg-td text-sm color-muted">{row.signalFound || '—'}</td>
-                    <td className="ltg-td text-sm color-muted">{row.entryAt || '—'}</td>
-                    <td className="ltg-td text-sm color-muted">{row.exitedAt && row.exitedAt !== '-' ? row.exitedAt : '—'}</td>
+                    <td className="ltg-td text-sm color-muted">{fmtTimestamp(row.entryAt)}</td>
+                    <td className="ltg-td text-sm color-muted">{fmtTimestamp(row.exitedAt)}</td>
 
                     <td className="ltg-td--center">
                       {!exited ? (
@@ -548,30 +561,34 @@ export default function LiveTradeGrid({
       </div>
 
       {/* ── Scan Activity ── */}
-      {scanRows.length > 0 && (
-        <div className="card">
-          {chipsToShow.length > 0 && (
-            <div className="flex-align-center flex-wrap gap-8 mb-8" data-testid="scan-status-breakdown">
-              {chipsToShow.map(({ key, label, count, color }, idx) => (
-                <React.Fragment key={key}>
-                  {idx > 0 && <span className="color-muted text-xs">·</span>}
-                  <span
-                    className="badge ltg-scan-badge"
-                    data-testid={`scan-chip-${key}`}
-                    style={{
-                      background: `${color}22`,
-                      color,
-                      border: `1px solid ${color}44`,
-                      padding: '2px 8px',
-                      fontSize: 11,
-                    }}
-                  >
-                    {label}: {count}
-                  </span>
-                </React.Fragment>
-              ))}
-            </div>
-          )}
+      <div className="card">
+        {chipsToShow.length > 0 && (
+          <div className="flex-align-center flex-wrap gap-8 mb-8" data-testid="scan-status-breakdown">
+            {chipsToShow.map(({ key, label, count, color }, idx) => (
+              <React.Fragment key={key}>
+                {idx > 0 && <span className="color-muted text-xs">·</span>}
+                <span
+                  className="badge ltg-scan-badge"
+                  data-testid={`scan-chip-${key}`}
+                  style={{
+                    background: `${color}22`,
+                    color,
+                    border: `1px solid ${color}44`,
+                    padding: '2px 8px',
+                    fontSize: 11,
+                  }}
+                >
+                  {label}: {count}
+                </span>
+              </React.Fragment>
+            ))}
+          </div>
+        )}
+        {scanRows.length === 0 ? (
+          <p style={{ color: '#8b949e', padding: '12px 0', fontSize: '13px' }}>
+            Waiting for first scan...
+          </p>
+        ) : (
           <div className="table-wrap">
             <table className="w-full">
               <thead>
@@ -630,8 +647,8 @@ export default function LiveTradeGrid({
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
