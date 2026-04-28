@@ -160,3 +160,172 @@ describe('ReplayControls — polling transitions', () => {
     expect(onActiveChange).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('ReplayControls — branch coverage', () => {
+
+  // ── 1. cycleSpeed — full cycle ─────────────────────────────────────────────
+
+  it('cycleSpeed cycles through all SPEEDS and wraps back to 30', async () => {
+    api.replayApi.status.mockResolvedValue({ active: false })
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    // 30 → 60
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('replay-speed-btn-30'))
+      await Promise.resolve()
+    })
+    expect(screen.getByTestId('replay-speed-btn-60')).toBeTruthy()
+
+    // 60 → 180
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('replay-speed-btn-60'))
+      await Promise.resolve()
+    })
+    expect(screen.getByTestId('replay-speed-btn-180')).toBeTruthy()
+
+    // 180 → 360
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('replay-speed-btn-180'))
+      await Promise.resolve()
+    })
+    expect(screen.getByTestId('replay-speed-btn-360')).toBeTruthy()
+
+    // 360 → 30 (wrap)
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('replay-speed-btn-360'))
+      await Promise.resolve()
+    })
+    expect(screen.getByTestId('replay-speed-btn-30')).toBeTruthy()
+  })
+
+  // ── 2. handleStart error — with e.message ──────────────────────────────────
+
+  it('handleStart calls onError with e.message when start rejects with an Error', async () => {
+    api.replayApi.status.mockResolvedValue({ active: false })
+    api.replayApi.start.mockRejectedValue(new Error('market open'))
+    const onError = vi.fn()
+
+    render(<ReplayControls marketOpen={false} onError={onError} />)
+    await flushMountTick()
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('replay-start-btn'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(onError).toHaveBeenCalledWith('market open')
+  })
+
+  // ── 3. handleStart error — without e.message (fallback string) ─────────────
+
+  it('handleStart calls onError with fallback string when rejection has no message', async () => {
+    api.replayApi.status.mockResolvedValue({ active: false })
+    api.replayApi.start.mockRejectedValue({})
+    const onError = vi.fn()
+
+    render(<ReplayControls marketOpen={false} onError={onError} />)
+    await flushMountTick()
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('replay-start-btn'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(onError).toHaveBeenCalledWith('Replay blocked during market hours')
+  })
+
+  // ── 4. handleStart — no onError prop (no crash) ────────────────────────────
+
+  it('handleStart does not throw when onError prop is omitted', async () => {
+    api.replayApi.status.mockResolvedValue({ active: false })
+    api.replayApi.start.mockRejectedValue(new Error('oops'))
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('replay-start-btn'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    // If we reach here without throwing, the test passes
+    expect(screen.getByTestId('replay-start-btn')).toBeTruthy()
+  })
+
+  // ── 5. marketOpen=true disables start button when inactive ─────────────────
+
+  it('start button is disabled and titled when marketOpen=true and replay inactive', async () => {
+    api.replayApi.status.mockResolvedValue({ active: false })
+
+    render(<ReplayControls marketOpen={true} />)
+    await flushMountTick()
+
+    const startBtn = screen.getByTestId('replay-start-btn')
+    expect(startBtn).toBeDisabled()
+    expect(startBtn.title).toBe('Not available during market hours')
+  })
+
+  // ── 6. Date input change updates value ────────────────────────────────────
+
+  it('changing the date input updates the displayed value', async () => {
+    api.replayApi.status.mockResolvedValue({ active: false })
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    fireEvent.change(screen.getByTestId('replay-date-input'), {
+      target: { value: '2025-12-01' },
+    })
+
+    expect(screen.getByTestId('replay-date-input').value).toBe('2025-12-01')
+  })
+
+  // ── 7. Polling error is swallowed silently ─────────────────────────────────
+
+  it('polling errors are swallowed and the component keeps rendering', async () => {
+    api.replayApi.status.mockRejectedValue(new Error('network error'))
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    // Component must still be present despite the error
+    expect(screen.getByTestId('replay-start-btn')).toBeTruthy()
+
+    // Advance one polling cycle — still no crash
+    await advancePolling(2000)
+
+    expect(screen.getByTestId('replay-start-btn')).toBeTruthy()
+  })
+
+  // ── 8. handleStop without onActiveChange prop (no crash) ──────────────────
+
+  it('handleStop does not throw when onActiveChange prop is omitted', async () => {
+    api.replayApi.status
+      .mockResolvedValueOnce({ active: true })
+      .mockResolvedValue({ active: false })
+    api.replayApi.stop.mockResolvedValue({ ok: true })
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    // Component should now show the stop button (active state)
+    const startBtn = screen.getByTestId('replay-start-btn')
+    expect(startBtn.className).toContain('btn-secondary')
+
+    await act(async () => {
+      fireEvent.click(startBtn)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    // If we reach here without throwing, the test passes
+    expect(screen.getByTestId('replay-start-btn')).toBeTruthy()
+  })
+})
