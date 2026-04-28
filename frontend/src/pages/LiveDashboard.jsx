@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Play, Square, Zap, ChevronUp, ChevronDown, Monitor, Cpu, ShieldCheck, ShieldAlert, OctagonAlert, BookmarkPlus } from 'lucide-react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { Play, Square, Zap, ChevronUp, ChevronDown, Monitor, Cpu, ShieldCheck, ShieldAlert, OctagonAlert } from 'lucide-react'
+import SaveListPopover from '../components/SaveListPopover'
 import { liveApi, externalPositionsApi } from '../api'
 import LiveTradeGrid from '../components/LiveTradeGrid'
 import ReplayControls from '../components/ReplayControls'
@@ -26,23 +27,7 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
   const [tickerFilter, setTickerFilter]   = useState(() => LS.get('live_tickerFilter', ''))
   const [tickerScope, setTickerScope]     = useState(() => LS.get('live_tickerScope', 'HOT'))
   const [pendingActions, setPendingActions]   = useState({})
-  const [saveListPopover, setSaveListPopover] = useState(false)
-  const [saveListName, setSaveListName]       = useState('')
-  const saveListInputRef                      = useRef(null)
-  const saveListWrapRef                       = useRef(null)
   const { addGroup: addWatchlist }            = useWatchlists()
-
-  useEffect(() => {
-    if (!saveListPopover) return
-    const close = (e) => { if (saveListWrapRef.current && !saveListWrapRef.current.contains(e.target)) { setSaveListPopover(false); setSaveListName('') } }
-    document.addEventListener('mousedown', close)
-    return () => document.removeEventListener('mousedown', close)
-  }, [saveListPopover])
-
-  // Focus the save-list input when the popover opens (idiomatic React — no setTimeout).
-  useEffect(() => {
-    if (saveListPopover) saveListInputRef.current?.focus()
-  }, [saveListPopover])
 
   const {
     status, signals, closedTrades, scanActivity, scanScores, scanStartedAt, staleClock,
@@ -168,14 +153,6 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
     [tickerFilter]
   )
 
-  const handleSaveList = useCallback(() => {
-    const name = saveListName.trim()
-    if (!name || !resolvedFilterTickers.length) return
-    addWatchlist(name, resolvedFilterTickers.join(','))
-    setSaveListPopover(false)
-    setSaveListName('')
-  }, [saveListName, resolvedFilterTickers, addWatchlist])
-
   const trades = useMemo(
     () => signals.map(mapSignal),
     [signals, mapSignal, staleClock]
@@ -252,42 +229,11 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
           {/* Row 1: Tickers */}
           <div className="flex-align-center gap-10 ld-tickers-row">
             <div className="stat-label-sm color-muted ld-tickers-label">Tickers to scan</div>
-            <div className="ld-save-list-wrap" ref={saveListWrapRef}>
-              <button
-                type="button"
-                className="btn ld-save-list-btn"
-                title="Guardar como Watchlist"
-                disabled={!tickerFilter || scanning}
-                onClick={() => setSaveListPopover((v) => !v)}
-              >
-                <BookmarkPlus size={15} />
-              </button>
-              {saveListPopover && (
-                <div className="ld-save-list-popover">
-                  <div className="text-xs color-muted mb-6">Guardar como Watchlist</div>
-                  <input
-                    ref={saveListInputRef}
-                    type="text"
-                    className="ticker-input ld-save-list-input"
-                    placeholder="Nombre de la lista…"
-                    value={saveListName}
-                    onChange={(e) => setSaveListName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') { e.preventDefault(); handleSaveList() }
-                      if (e.key === 'Escape') { setSaveListPopover(false); setSaveListName('') }
-                    }}
-                  />
-                  <div className="text-xs color-muted ld-save-list-preview">
-                    {resolvedFilterTickers.slice(0, 6).join(', ')}
-                    {resolvedFilterTickers.length > 6 ? ` +${resolvedFilterTickers.length - 6} más` : ''}
-                  </div>
-                  <div className="flex-align-center gap-8 mt-8">
-                    <button type="button" className="btn btn-primary btn-sm" onClick={handleSaveList} disabled={!saveListName.trim()}>Guardar</button>
-                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setSaveListPopover(false); setSaveListName('') }}>Cancelar</button>
-                  </div>
-                </div>
-              )}
-            </div>
+            <SaveListPopover
+              disabled={!tickerFilter || scanning}
+              resolvedTickers={resolvedFilterTickers}
+              onSave={(name, tickers) => addWatchlist(name, tickers.join(','))}
+            />
             <div className="ld-tickers-field">
               <TickerSelector value={tickerFilter} onChange={setTickerFilter} disabled={scanning} scope={tickerScope} onScopeChange={setTickerScope} hotTickers={hotTickersList} />
             </div>
