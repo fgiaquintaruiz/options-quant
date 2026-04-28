@@ -155,7 +155,10 @@ function useLiveScanner(setErrorMsg) {
 
   const handleStartScan = async () => {
     setErrorMsg(null)
-    await liveApi.startScan().catch((e) => setErrorMsg(`Scan failed: ${e.message}`))
+    const result = await liveApi.startScan().catch((e) => { setErrorMsg(`Scan failed: ${e.message}`); return null })
+    if (result && result.success === false) {
+      setErrorMsg(result.message || 'Scan blocked')
+    }
   }
 
   const handleStopScan = async () => {
