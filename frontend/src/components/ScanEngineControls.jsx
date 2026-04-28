@@ -85,7 +85,7 @@ export default function ScanEngineControls({
             </button>
           )}
 
-          {status?.schedulerEnabled && <span className="ld-countdown">{formatMinSec(nextScanSecs)}</span>}
+          {status?.schedulerEnabled && <span className="ld-countdown" data-testid="scan-countdown">{formatMinSec(nextScanSecs)}</span>}
         </div>
 
         <SwapButton active={status?.autoExecute} onText="Auto Open" offText="Manual Open" onClick={onToggleAutoExecute} icon={Cpu} testId="live-toggle-auto-execute" />

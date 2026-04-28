@@ -88,7 +88,7 @@ describe('ScanEngineControls', () => {
         nextScanSecs={45}
       />
     )
-    const countdown = document.querySelector('.ld-countdown')
+    const countdown = screen.getByTestId('scan-countdown')
     expect(countdown).toBeTruthy()
     expect(countdown.textContent).toContain('0:45')
   })
