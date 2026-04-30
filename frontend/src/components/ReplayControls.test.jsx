@@ -15,7 +15,7 @@ vi.mock('../api', () => ({
 const FIXED_DATE = '2026-04-27'
 
 beforeEach(() => {
-  localStorage.setItem('replay_lastDate', FIXED_DATE)
+  localStorage.setItem('replay_lastDate', JSON.stringify(FIXED_DATE))
   vi.useFakeTimers()
 })
 
