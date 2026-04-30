@@ -57,3 +57,5 @@ scanner.log
 exploration_result.md
 tasks.md
 *.stackdump
+# Runtime logs (untracked from 2026-04-30)
+other_logs.txt

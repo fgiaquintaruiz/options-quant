@@ -172,6 +172,11 @@ function useTradeData(trades, hotTickers, scanActivity, scanScores) {
  * Props: trades, scanActivity, scanning, hotTickers, staleSignalCount, pendingActions,
  *        onCloseTrade, onCancelTrade, onDeleteSignal, onClearStaleBatch, onClearAllStale.
  */
+// Stable empty references for default props — prevents new-ref-per-render loop
+// (see useMemo on line 158 + useEffect on line 227 in this file)
+const EMPTY_ARRAY = Object.freeze([])
+const EMPTY_OBJECT = Object.freeze({})
+
 const isMacroConflict = (direction, regime) => {
   if (!regime || !direction) return false
   const bull = regime.includes('BULLISH')
@@ -180,11 +185,11 @@ const isMacroConflict = (direction, regime) => {
 }
 
 export default function LiveTradeGrid({
-  trades = [],
-  scanActivity = [],
+  trades = EMPTY_ARRAY,
+  scanActivity = EMPTY_ARRAY,
   scanning = false,
-  hotTickers = [],
-  scanScores = {},
+  hotTickers = EMPTY_ARRAY,
+  scanScores = EMPTY_OBJECT,
   staleSignalCount = 0,
   macroRegime = null,
   onCloseTrade,
@@ -192,8 +197,8 @@ export default function LiveTradeGrid({
   onDeleteSignal,
   onClearStaleBatch,
   onClearAllStale,
-  pendingActions = {},
-  externalPositions = [],
+  pendingActions = EMPTY_OBJECT,
+  externalPositions = EMPTY_ARRAY,
   onCloseExternal,
   onScheduleClose1450,
 }) {
@@ -229,6 +234,15 @@ export default function LiveTradeGrid({
       const staleSet = new Set(staleTickersList)
       const next = new Set()
       prev.forEach((t) => { if (staleSet.has(t)) next.add(t) })
+      // Bail out if contents are unchanged — prevents re-render loop when
+      // staleTickersList is recomputed but resolves to the same membership
+      if (next.size === prev.size) {
+        let same = true
+        for (const t of next) {
+          if (!prev.has(t)) { same = false; break }
+        }
+        if (same) return prev
+      }
       return next
     })
   }, [staleTickersList])
