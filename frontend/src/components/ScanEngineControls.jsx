@@ -113,8 +113,8 @@ export default function ScanEngineControls({
           <span className="stat-label-sm color-muted">Risk%:</span>
           <strong className="color-text ld-risk-val">{riskInput}</strong>
           <div className="flex-col gap-0">
-            <button type="button" className="btn-icon color-muted" onClick={() => onRiskAdjust(1.0)}><ChevronUp size={12} /></button>
-            <button type="button" className="btn-icon color-muted" onClick={() => onRiskAdjust(-1.0)}><ChevronDown size={12} /></button>
+            <button type="button" data-testid="live-risk-up" className="btn-icon color-muted" onClick={() => onRiskAdjust(1.0)}><ChevronUp size={12} /></button>
+            <button type="button" data-testid="live-risk-down" className="btn-icon color-muted" onClick={() => onRiskAdjust(-1.0)}><ChevronDown size={12} /></button>
           </div>
         </div>
 

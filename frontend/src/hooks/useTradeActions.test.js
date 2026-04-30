@@ -22,9 +22,15 @@ vi.mock('../utils/liveSignalUtils', () => ({
   formatTodayWallClock: vi.fn((v) => v ?? '-'),
 }))
 
-import { liveApi } from '../api'
+import { liveApi, externalPositionsApi } from '../api'
 import { isSignalStale } from '../utils/liveSignalUtils'
 import { useTradeActions } from './useTradeActions'
+
+/**
+ * Tests for useTradeActions — derives `trades` and `staleSignalCount`,
+ * exposes handlers for close/cancel/delete/external/scheduleClose1450.
+ * Mocks liveApi and externalPositionsApi to assert call signatures and side-effects.
+ */
 
 function makeSignal(overrides = {}) {
   return {
@@ -64,7 +70,7 @@ describe('useTradeActions', () => {
     isSignalStale.mockReturnValue(false)
   })
 
-  it('trades derivado: dado signals=[{ticker:AAPL}], trades incluye la señal mapeada', () => {
+  it('derives trades from signals: includes the mapped signal', () => {
     const signal = makeSignal()
     const props = makeProps({ signals: [signal] })
 
@@ -76,7 +82,7 @@ describe('useTradeActions', () => {
     expect(result.current.trades[0].strategy).toBe('ORB')
   })
 
-  it('staleSignalCount: señal con isSignalStale=true y sin exitedAt → staleSignalCount >= 1', () => {
+  it('staleSignalCount: counts a stale signal without exitedAt', () => {
     isSignalStale.mockReturnValue(true)
     const signal = makeSignal()
     const props = makeProps({ signals: [signal] })
@@ -86,7 +92,7 @@ describe('useTradeActions', () => {
     expect(result.current.staleSignalCount).toBeGreaterThanOrEqual(1)
   })
 
-  it('staleSignalCount: señal EXECUTED no cuenta como stale aunque isSignalStale=true', () => {
+  it('staleSignalCount: EXECUTED signal does not count as stale even if isSignalStale=true', () => {
     isSignalStale.mockReturnValue(true)
     const signal = makeSignal({ tradeStatus: 'EXECUTED' })
     const props = makeProps({ signals: [signal] })
@@ -96,7 +102,7 @@ describe('useTradeActions', () => {
     expect(result.current.staleSignalCount).toBe(0)
   })
 
-  it('handleDeleteSignal: llama liveApi.deleteSignal(ticker) y luego fetchSignals', async () => {
+  it('handleDeleteSignal: calls liveApi.deleteSignal(ticker) and then fetchSignals', async () => {
     const props = makeProps()
     const { result } = renderHook(() => useTradeActions(props))
 
@@ -108,7 +114,7 @@ describe('useTradeActions', () => {
     expect(props.fetchSignals).toHaveBeenCalled()
   })
 
-  it('handleCloseTrade con signal (isOpenPos=true): llama liveApi.executeSignal con ticker/direction/price/strategy', async () => {
+  it('handleCloseTrade with isOpenPos=true: calls liveApi.executeSignal with ticker/direction/price/strategy', async () => {
     const signal = makeSignal({ ticker: 'AAPL', currentPrice: 150, direction: 'LONG', strategy: 'ORB' })
     const props = makeProps({ signals: [signal] })
 
@@ -122,7 +128,7 @@ describe('useTradeActions', () => {
     expect(props.fetchSignals).toHaveBeenCalled()
   })
 
-  it('handleCloseTrade (isOpenPos=true): pendingActions[ticker]=true durante la llamada, false después', async () => {
+  it('handleCloseTrade with isOpenPos=true: pendingActions[ticker]=true during the call, false after', async () => {
     let resolveExec
     liveApi.executeSignal.mockImplementationOnce(
       () => new Promise((res) => { resolveExec = () => res({ success: true }) })
@@ -148,7 +154,7 @@ describe('useTradeActions', () => {
     expect(result.current.pendingActions['TSLA']).toBe(false)
   })
 
-  it('handleCancelTrade: llama liveApi.cancelTrade(ticker, orderId)', async () => {
+  it('handleCancelTrade: calls liveApi.cancelTrade(ticker, orderId)', async () => {
     const props = makeProps()
     const { result } = renderHook(() => useTradeActions(props))
 
@@ -159,7 +165,7 @@ describe('useTradeActions', () => {
     expect(liveApi.cancelTrade).toHaveBeenCalledWith('AAPL', 'ORDER-123')
   })
 
-  it('handleCancelTrade: no hace nada si orderId es falsy', async () => {
+  it('handleCancelTrade: no-op if orderId is falsy', async () => {
     const props = makeProps()
     const { result } = renderHook(() => useTradeActions(props))
 
@@ -170,7 +176,7 @@ describe('useTradeActions', () => {
     expect(liveApi.cancelTrade).not.toHaveBeenCalled()
   })
 
-  it('handleClearStaleBatch: llama liveApi.batchDeleteSignals con los tickers', async () => {
+  it('handleClearStaleBatch: calls liveApi.batchDeleteSignals with the tickers', async () => {
     const props = makeProps()
     const { result } = renderHook(() => useTradeActions(props))
 
@@ -182,7 +188,7 @@ describe('useTradeActions', () => {
     expect(props.fetchSignals).toHaveBeenCalled()
   })
 
-  it('handleClearAllStale: llama liveApi.clearStaleSignals', async () => {
+  it('handleClearAllStale: calls liveApi.clearStaleSignals', async () => {
     const props = makeProps()
     const { result } = renderHook(() => useTradeActions(props))
 
@@ -194,7 +200,7 @@ describe('useTradeActions', () => {
     expect(props.fetchSignals).toHaveBeenCalled()
   })
 
-  it('error handling: si liveApi.executeSignal falla, llama setErrorMsg', async () => {
+  it('error handling: if liveApi.executeSignal rejects, calls setErrorMsg', async () => {
     liveApi.executeSignal.mockRejectedValueOnce(new Error('TWS timeout'))
     const signal = makeSignal({ ticker: 'NVDA', currentPrice: 500 })
     const props = makeProps({ signals: [signal] })
@@ -206,5 +212,66 @@ describe('useTradeActions', () => {
     })
 
     expect(props.setErrorMsg).toHaveBeenCalledWith(expect.stringContaining('TWS timeout'))
+  })
+
+  it('handleCloseTrade con isOpenPos=false: llama liveApi.closeTrade(ticker, price, tpOrderId, slOrderId) y fetchSignals', async () => {
+    const props = makeProps()
+    const { result } = renderHook(() => useTradeActions(props))
+
+    await act(async () => {
+      await result.current.handleCloseTrade('AAPL', 100, false, 'TP-1', 'SL-2')
+    })
+
+    expect(liveApi.closeTrade).toHaveBeenCalledWith('AAPL', 100, 'TP-1', 'SL-2')
+    expect(props.fetchSignals).toHaveBeenCalled()
+  })
+
+  it('handleCloseTrade con isOpenPos=false y closeTrade success=false: NO llama fetchSignals', async () => {
+    liveApi.closeTrade.mockResolvedValueOnce({ success: false, message: 'denied' })
+    const props = makeProps()
+    const { result } = renderHook(() => useTradeActions(props))
+
+    await act(async () => {
+      await result.current.handleCloseTrade('AAPL', 100, false, 'TP-1', 'SL-2')
+    })
+
+    expect(liveApi.closeTrade).toHaveBeenCalledWith('AAPL', 100, 'TP-1', 'SL-2')
+    expect(props.fetchSignals).not.toHaveBeenCalled()
+  })
+
+  it('handleCloseExternal: llama externalPositionsApi.closeExternalPosition(ticker) y refreshExternalPositions', async () => {
+    const props = makeProps()
+    const { result } = renderHook(() => useTradeActions(props))
+
+    await act(async () => {
+      await result.current.handleCloseExternal('NVDA')
+    })
+
+    expect(externalPositionsApi.closeExternalPosition).toHaveBeenCalledWith('NVDA')
+    expect(props.refreshExternalPositions).toHaveBeenCalled()
+  })
+
+  it('handleScheduleClose1450: llama externalPositionsApi.scheduleClose1450(ticker)', async () => {
+    const props = makeProps()
+    const { result } = renderHook(() => useTradeActions(props))
+
+    await act(async () => {
+      await result.current.handleScheduleClose1450('TSLA')
+    })
+
+    expect(externalPositionsApi.scheduleClose1450).toHaveBeenCalledWith('TSLA')
+  })
+
+  it('handleCancelTrade error path: si liveApi.cancelTrade rechaza, llama setErrorMsg y NO llama fetchSignals', async () => {
+    liveApi.cancelTrade.mockRejectedValueOnce(new Error('TWS down'))
+    const props = makeProps()
+    const { result } = renderHook(() => useTradeActions(props))
+
+    await act(async () => {
+      await result.current.handleCancelTrade('AAPL', 'ORDER-1')
+    })
+
+    expect(props.setErrorMsg).toHaveBeenCalledWith(expect.stringContaining('TWS down'))
+    expect(props.fetchSignals).not.toHaveBeenCalled()
   })
 })
