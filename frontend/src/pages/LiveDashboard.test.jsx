@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, act } from '@testing-library/react'
 import LiveDashboard from './LiveDashboard'
 
 // Mock all external dependencies LiveDashboard uses so it renders in isolation
@@ -55,13 +55,17 @@ vi.mock('../utils/storage', () => ({
 }))
 
 describe('LiveDashboard', () => {
-  it('renders LiveTradeGrid', () => {
-    render(<LiveDashboard twsStatus={{}} marketOpen={false} />)
+  it('renders LiveTradeGrid', async () => {
+    await act(async () => {
+      render(<LiveDashboard twsStatus={{}} marketOpen={false} />)
+    })
     expect(screen.getByTestId('live-trade-grid')).toBeInTheDocument()
   })
 
-  it('passes externalPositions props to LiveTradeGrid (no separate ExternalPositionsPanel)', () => {
-    render(<LiveDashboard twsStatus={{}} marketOpen={false} />)
+  it('passes externalPositions props to LiveTradeGrid (no separate ExternalPositionsPanel)', async () => {
+    await act(async () => {
+      render(<LiveDashboard twsStatus={{}} marketOpen={false} />)
+    })
     // LiveTradeGrid is rendered; ExternalPositionsPanel is no longer a separate component
     expect(screen.getByTestId('live-trade-grid')).toBeInTheDocument()
     expect(screen.queryByTestId('external-positions-panel')).not.toBeInTheDocument()
