@@ -186,4 +186,48 @@ describe('useScanSettings', () => {
 
     expect(result.current.riskInput).toBe('3.5')
   })
+
+  it('handleMaxConcurrentChange: rollback y setErrorMsg si la API falla', async () => {
+    // The mount useEffect calls setMaxConcurrent once (resolved); make the handler call fail
+    liveApi.setMaxConcurrent
+      .mockResolvedValueOnce({}) // mount effect
+      .mockRejectedValueOnce(new Error('timeout')) // handler call
+    const setErrorMsg = makeSetErrorMsg()
+
+    const { result } = renderHook(() =>
+      useScanSettings({ status: null, setErrorMsg })
+    )
+
+    const prevValue = result.current.maxConcurrent
+
+    await act(async () => {
+      await result.current.handleMaxConcurrentChange('8')
+    })
+
+    expect(result.current.maxConcurrent).toBe(prevValue)
+    expect(setErrorMsg).toHaveBeenCalledWith('Concurrent update failed: timeout')
+  })
+
+  it('handleRiskAdjust: rollback y setErrorMsg si la API falla', async () => {
+    liveApi.setRisk.mockRejectedValueOnce(new Error('risk error'))
+    LS.get.mockImplementation((key, def) => {
+      if (key === 'live_riskPct') return '2.0'
+      return def
+    })
+    const setErrorMsg = makeSetErrorMsg()
+
+    const { result } = renderHook(() =>
+      useScanSettings({ status: null, setErrorMsg })
+    )
+
+    const prevRisk = result.current.riskInput
+
+    await act(async () => {
+      await result.current.handleRiskAdjust(1.0)
+    })
+
+    expect(result.current.riskInput).toBe(prevRisk)
+    expect(LS.set).toHaveBeenLastCalledWith('live_riskPct', prevRisk)
+    expect(setErrorMsg).toHaveBeenCalledWith('Risk update failed: risk error')
+  })
 })
