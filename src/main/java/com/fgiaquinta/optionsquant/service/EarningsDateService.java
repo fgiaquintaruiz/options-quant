@@ -10,6 +10,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -283,17 +284,26 @@ public class EarningsDateService {
     }
 
     private void saveToCache() {
+        Path tmp = null;
         try {
-            if (!Files.exists(EARNINGS_CACHE_FILE.getParent())) {
-                Files.createDirectories(EARNINGS_CACHE_FILE.getParent());
+            Path dir = EARNINGS_CACHE_FILE.getParent();
+            if (!Files.exists(dir)) {
+                Files.createDirectories(dir);
             }
 
             com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
             mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
-            mapper.writerWithDefaultPrettyPrinter().writeValue(EARNINGS_CACHE_FILE.toFile(), earningsDates);
+
+            tmp = Files.createTempFile(dir, "earnings-dates", ".tmp");
+            mapper.writerWithDefaultPrettyPrinter().writeValue(tmp.toFile(), earningsDates);
+            Files.move(tmp, EARNINGS_CACHE_FILE, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
 
         } catch (IOException e) {
             log.warn("⚠️ [Earnings] Failed to save cache: {}", e.getMessage());
+        } finally {
+            if (tmp != null) {
+                try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
+            }
         }
     }
 }
