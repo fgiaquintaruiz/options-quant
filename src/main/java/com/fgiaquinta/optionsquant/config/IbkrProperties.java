@@ -9,7 +9,7 @@ import java.util.List;
  * Type-safe IBKR configuration.
  * Supports both YAML-list and CSV-based ticker loading.
  */
-@ConfigurationProperties(prefix = "ibkr")
+@ConfigurationProperties(prefix = "ibkr", ignoreUnknownFields = true)
 public record IbkrProperties(
         String host,
         int port,
@@ -20,10 +20,7 @@ public record IbkrProperties(
         int defaultQty,
         double riskPerTradePct,
         boolean useCsvTickers,
-        List<String> hotTickers,  // Priority tickers to scan first
-        int hotTickerCount,        // How many CSV tickers to promote as hot (if hotTickers is empty)
-        // When non-empty, replaces CSV as full universe (ALL scope). Empty = all symbols from data/tickers.csv
-        List<String> universeTickers,
+        int hotTickerCount,        // How many CSV tickers to promote as hot (top N by market cap)
         int historicalDataClientId,   // IbkrService / historical data client id
         int orderExecutionClientId,   // Order execution client id
         int accountManagerClientId    // AccountManager client id
@@ -31,9 +28,7 @@ public record IbkrProperties(
     public IbkrProperties {
         // Default values
         if (tickers == null) tickers = new ArrayList<>();
-        if (hotTickers == null) hotTickers = List.of();
         if (hotTickerCount <= 0) hotTickerCount = 20;  // Default: top 20 tickers by market cap
-        if (universeTickers == null) universeTickers = List.of();
         if (historicalDataClientId <= 0) historicalDataClientId = 1;
         if (orderExecutionClientId <= 0) orderExecutionClientId = 2;
         if (accountManagerClientId <= 0) accountManagerClientId = 999;

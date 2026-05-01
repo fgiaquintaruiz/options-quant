@@ -25,8 +25,7 @@ class AccountManagerTest {
         properties = new IbkrProperties(
             "127.0.0.1", 7497, 30,
             List.of("SPY"),
-            false, "", 1, 0.02, false, List.of("SPY", "QQQ", "AAPL"), 20,
-            List.of(),
+            false, "", 1, 0.02, false, 20,
             1, 3, 999
         );
         accountManager = new AccountManager(properties);
@@ -68,8 +67,7 @@ class AccountManagerTest {
         // Test with 5% risk
         var highRiskProps = new IbkrProperties(
             "127.0.0.1", 7497, 30,
-            List.of("SPY"), false, "", 1, 0.05, false, List.of("SPY", "QQQ", "AAPL"), 20,
-            List.of(),
+            List.of("SPY"), false, "", 1, 0.05, false, 20,
             1, 3, 999
         );
         var highRiskManager = new AccountManager(highRiskProps);

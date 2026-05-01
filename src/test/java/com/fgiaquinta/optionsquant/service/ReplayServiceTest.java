@@ -1,6 +1,5 @@
 package com.fgiaquinta.optionsquant.service;
 
-import com.fgiaquinta.optionsquant.config.IbkrProperties;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,7 +34,7 @@ class ReplayServiceTest {
     private ReplayCandleSource source;
     private ReplayScheduler scheduler;
     private OrderExecutionService orderService;
-    private IbkrProperties ibkrProperties;
+    private TickerService tickerService;
 
     @BeforeEach
     void setUp() {
@@ -43,13 +42,13 @@ class ReplayServiceTest {
         source = mock(ReplayCandleSource.class);
         scheduler = mock(ReplayScheduler.class);
         orderService = mock(OrderExecutionService.class);
-        ibkrProperties = mock(IbkrProperties.class);
-        when(ibkrProperties.hotTickers()).thenReturn(List.of("AAPL", "NVDA"));
+        tickerService = mock(TickerService.class);
+        when(tickerService.getHotTickers()).thenReturn(List.of("AAPL", "NVDA"));
         when(orderService.isConnected()).thenReturn(true);
     }
 
     private ReplayService newService(Clock wall) {
-        return new ReplayService(replayClock, source, scheduler, orderService, ibkrProperties, wall);
+        return new ReplayService(replayClock, source, scheduler, orderService, tickerService, wall);
     }
 
     @Test

@@ -1,6 +1,5 @@
 package com.fgiaquinta.optionsquant.service;
 
-import com.fgiaquinta.optionsquant.config.IbkrProperties;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -43,23 +42,23 @@ public class ReplayService {
     private final ReplayCandleSource source;
     private final ReplayScheduler scheduler;
     private final OrderExecutionService orderService;
-    private final IbkrProperties ibkrProperties;
+    private final TickerService tickerService;
     private final Clock wallClock;
 
     @org.springframework.beans.factory.annotation.Autowired
     public ReplayService(ReplayClock clock, ReplayCandleSource source, ReplayScheduler scheduler,
-                         OrderExecutionService orderService, IbkrProperties ibkrProperties) {
-        this(clock, source, scheduler, orderService, ibkrProperties, Clock.system(MADRID));
+                         OrderExecutionService orderService, TickerService tickerService) {
+        this(clock, source, scheduler, orderService, tickerService, Clock.system(MADRID));
     }
 
     // Package-private for tests (injectable wall clock).
     ReplayService(ReplayClock clock, ReplayCandleSource source, ReplayScheduler scheduler,
-                  OrderExecutionService orderService, IbkrProperties ibkrProperties, Clock wallClock) {
+                  OrderExecutionService orderService, TickerService tickerService, Clock wallClock) {
         this.clock = clock;
         this.source = source;
         this.scheduler = scheduler;
         this.orderService = orderService;
-        this.ibkrProperties = ibkrProperties;
+        this.tickerService = tickerService;
         this.wallClock = wallClock;
     }
 
@@ -70,7 +69,7 @@ public class ReplayService {
         if (isRealMarketOpen()) throw new ReplayRejectedException("market-open");
         if (!orderService.isConnected()) throw new ReplayRejectedException("tws-disconnected");
 
-        Set<String> tickers = new HashSet<>(ibkrProperties.hotTickers());
+        Set<String> tickers = new HashSet<>(tickerService.getHotTickers());
         try {
             source.preload(replayDate, tickers, REPLAY_TIMEFRAMES);
         } catch (ReplayCandleSource.MissingDataException e) {

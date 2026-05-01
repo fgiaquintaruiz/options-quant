@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
 
 /**
  * Loads tickers from CSV, merges optional {@code data/ticker-runtime.json} (ABM),
- * and resolves universe / HOT order from runtime file → YAML → CSV defaults.
+ * and resolves universe / HOT order from runtime file → CSV defaults.
  */
 @Slf4j
 @Service
@@ -115,9 +115,6 @@ public class TickerService {
         if (runtime != null && !runtime.universe().isEmpty()) {
             return normalizeSymbolList(runtime.universe());
         }
-        if (ibkrProperties.universeTickers() != null && !ibkrProperties.universeTickers().isEmpty()) {
-            return normalizeSymbolList(ibkrProperties.universeTickers());
-        }
         return tickerMap.keySet().stream().sorted().collect(Collectors.toList());
     }
 
@@ -149,16 +146,16 @@ public class TickerService {
     }
 
     /**
-     * Active trading universe (ALL scope): runtime → YAML {@code universe-tickers} → all CSV symbols.
+     * Active trading universe (ALL scope): runtime universe → CSV sorted keySet.
+     *
+     * <p>If the runtime config has a non-empty {@code universe} list, that list is used as-is.
+     * Otherwise falls back to all CSV symbols sorted by key.
      */
     public List<String> getTickerSymbols() {
         if (!loaded) loadTickers();
         Optional<TickerRuntimeConfigPayload> rt = runtimeConfigStore.load();
         if (rt.isPresent() && !rt.get().universe().isEmpty()) {
             return normalizeSymbolList(rt.get().universe());
-        }
-        if (ibkrProperties.universeTickers() != null && !ibkrProperties.universeTickers().isEmpty()) {
-            return normalizeSymbolList(ibkrProperties.universeTickers());
         }
         return tickerMap.keySet().stream().sorted().collect(Collectors.toList());
     }
@@ -169,9 +166,9 @@ public class TickerService {
      * <p>Guard semantics (runtime-wins with explicit-empty support):
      * <ol>
      *   <li>Runtime file present AND {@code hot != null} (including {@code []}) → return runtime list
-     *       filtered to universe. An explicit empty list is a valid override — no YAML fallback.</li>
-     *   <li>Runtime file absent OR {@code hot == null} → fall back to YAML {@code hot-tickers}
-     *       → then top market cap from CSV as last resort. Logs INFO once on YAML fallback.</li>
+     *       filtered to universe. An explicit empty list is a valid override — no CSV fallback.</li>
+     *   <li>Runtime file absent OR {@code hot == null} → top-N by market cap from CSV
+     *       (N = runtime hotTickerCount or YAML hotTickerCount).</li>
      * </ol>
      */
     public List<String> getHotTickers() {
@@ -196,25 +193,7 @@ public class TickerService {
             return ordered;
         }
 
-        // YAML fallback — runtime absent or hot field explicitly null
-        log.info("HOT bootstrapped from YAML; create runtime to override");
-        List<String> configured = null;
-        if (ibkrProperties.hotTickers() != null && !ibkrProperties.hotTickers().isEmpty()) {
-            configured = ibkrProperties.hotTickers();
-        }
-
-        if (configured != null && !configured.isEmpty()) {
-            List<String> ordered = new ArrayList<>();
-            for (String h : configured) {
-                if (h == null) continue;
-                String u = h.trim().toUpperCase(Locale.ROOT);
-                if (universeSet.contains(u)) {
-                    ordered.add(u);
-                }
-            }
-            return ordered;
-        }
-
+        // CSV market-cap fallback — runtime absent or hot field explicitly null
         int effectiveCount = rt.isPresent() && rt.get().hotTickerCount() != null
                 ? rt.get().hotTickerCount()
                 : ibkrProperties.hotTickerCount();

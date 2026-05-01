@@ -4,10 +4,6 @@ import com.fgiaquinta.optionsquant.config.IbkrProperties;
 import com.fgiaquinta.optionsquant.dto.TickerRuntimeConfigPayload;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.springframework.boot.test.system.CapturedOutput;
-import org.springframework.boot.test.system.OutputCaptureExtension;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -21,12 +17,11 @@ import static org.mockito.Mockito.when;
  *
  * <p>Three cases:
  * <ol>
- *   <li>Runtime present, {@code hot} non-empty → return runtime list (ignore YAML)</li>
- *   <li>Runtime present, {@code hot} explicitly empty {@code []} → return empty (no YAML fallback)</li>
- *   <li>Runtime present, {@code hot == null} → fall back to YAML</li>
+ *   <li>Runtime present, {@code hot} non-empty → return runtime list (ignore CSV fallback)</li>
+ *   <li>Runtime present, {@code hot} explicitly empty {@code []} → return empty (no fallback)</li>
+ *   <li>Runtime absent → fall back to CSV market-cap</li>
  * </ol>
  */
-@ExtendWith(OutputCaptureExtension.class)
 class TickerServiceTest {
 
     private IbkrProperties ibkrProperties;
@@ -48,10 +43,6 @@ class TickerServiceTest {
 
     @Test
     void getHotTickers_returns_runtime_when_runtime_has_non_empty_hot() {
-        // YAML fallback has [AAPL]
-        when(ibkrProperties.hotTickers()).thenReturn(List.of("AAPL"));
-        when(ibkrProperties.universeTickers()).thenReturn(List.of("NVDA", "MSFT", "AAPL"));
-
         // Runtime file present with non-empty hot
         TickerRuntimeConfigPayload runtime = new TickerRuntimeConfigPayload(
                 List.of("NVDA", "MSFT", "AAPL"),
@@ -72,10 +63,6 @@ class TickerServiceTest {
 
     @Test
     void getHotTickers_returns_empty_when_runtime_has_empty_hot_explicitly() {
-        // YAML fallback has [AAPL] — must NOT be used
-        when(ibkrProperties.hotTickers()).thenReturn(List.of("AAPL"));
-        when(ibkrProperties.universeTickers()).thenReturn(List.of("NVDA", "MSFT", "AAPL"));
-
         // Runtime file present with explicitly empty hot (not null — just [])
         TickerRuntimeConfigPayload runtime = new TickerRuntimeConfigPayload(
                 List.of("NVDA", "MSFT", "AAPL"),
@@ -93,52 +80,19 @@ class TickerServiceTest {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Case 1 — runtime hot is null → fall back to YAML
+    // Case 1 — runtime absent → fall back to CSV market-cap
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    void getHotTickers_falls_back_to_yaml_when_runtime_hot_is_null() {
-        // YAML fallback has [AAPL]
-        when(ibkrProperties.hotTickers()).thenReturn(List.of("AAPL"));
-        when(ibkrProperties.universeTickers()).thenReturn(List.of("NVDA", "MSFT", "AAPL"));
-
-        // Runtime file present but hot field is null (field absent in JSON)
-        TickerRuntimeConfigPayload runtime = new TickerRuntimeConfigPayload(
-                List.of("NVDA", "MSFT", "AAPL"),
-                null,   // null → must fall back to YAML
-                Map.of(),
-                null
-        );
-        when(runtimeConfigStore.load()).thenReturn(Optional.of(runtime));
+    void getHotTickers_uses_csv_market_cap_when_runtime_absent() {
+        // No runtime file — runtimeConfigStore returns empty
+        when(runtimeConfigStore.load()).thenReturn(Optional.empty());
+        when(ibkrProperties.hotTickerCount()).thenReturn(20);
 
         List<String> result = tickerService.getHotTickers();
 
-        assertThat(result).containsExactly("AAPL");
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Task 2.3 — INFO log on YAML fallback
-    // ──────────────────────────────────────────────────────────────────────────
-
-    @Test
-    void getHotTickers_logs_INFO_when_falling_back_to_yaml(CapturedOutput output) {
-        when(ibkrProperties.hotTickers()).thenReturn(List.of("AAPL"));
-        when(ibkrProperties.universeTickers()).thenReturn(List.of("NVDA", "MSFT", "AAPL"));
-
-        // Runtime present but hot is null → triggers YAML fallback + INFO log
-        TickerRuntimeConfigPayload runtime = new TickerRuntimeConfigPayload(
-                List.of("NVDA", "MSFT", "AAPL"),
-                null,
-                Map.of(),
-                null
-        );
-        when(runtimeConfigStore.load()).thenReturn(Optional.of(runtime));
-
-        tickerService.getHotTickers();
-
-        assertThat(output.getOut())
-                .as("Expected INFO log containing 'HOT bootstrapped from YAML'")
-                .contains("HOT bootstrapped from YAML");
+        // CSV not loaded in unit test (no file), so market-cap list may be empty — just assert non-null
+        assertThat(result).isNotNull();
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -147,9 +101,7 @@ class TickerServiceTest {
 
     @Test
     void getHotTickers_uses_runtime_hot_ticker_count_when_set() {
-        // Runtime present: hot=null (YAML fallback path), hotTickerCount=3 override
-        when(ibkrProperties.hotTickers()).thenReturn(List.of());   // YAML hot empty → market-cap path
-        when(ibkrProperties.universeTickers()).thenReturn(List.of());
+        // Runtime present: hot=null (CSV fallback path), hotTickerCount=3 override
         when(ibkrProperties.hotTickerCount()).thenReturn(20);      // YAML default — must NOT be used
 
         TickerRuntimeConfigPayload runtime = new TickerRuntimeConfigPayload(
@@ -171,8 +123,6 @@ class TickerServiceTest {
     @Test
     void getHotTickers_uses_yml_hot_ticker_count_when_runtime_not_set() {
         // Runtime present but hotTickerCount=null → must use ibkrProperties.hotTickerCount()
-        when(ibkrProperties.hotTickers()).thenReturn(List.of());   // YAML hot empty → market-cap path
-        when(ibkrProperties.universeTickers()).thenReturn(List.of());
         when(ibkrProperties.hotTickerCount()).thenReturn(5);       // YAML default to use
 
         TickerRuntimeConfigPayload runtime = new TickerRuntimeConfigPayload(

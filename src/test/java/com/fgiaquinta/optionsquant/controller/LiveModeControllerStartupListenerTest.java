@@ -40,10 +40,10 @@ class LiveModeControllerStartupListenerTest {
         IbkrProperties ibkrProperties = mock(IbkrProperties.class);
         when(ibkrProperties.autoExecute()).thenReturn(false);
         when(ibkrProperties.riskPerTradePct()).thenReturn(0.02);
-        when(ibkrProperties.hotTickers()).thenReturn(List.of("SPY", "QQQ"));
 
         TradingService tradingService = mock(TradingService.class);
         TickerService tickerService = mock(TickerService.class);
+        when(tickerService.getHotTickers()).thenReturn(List.of("SPY", "QQQ"));
 
         accountManager = mock(AccountManager.class);
         when(accountManager.isConnected()).thenReturn(false);

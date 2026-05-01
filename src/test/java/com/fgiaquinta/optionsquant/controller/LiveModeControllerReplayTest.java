@@ -39,7 +39,6 @@ class LiveModeControllerReplayTest {
         ibkrProperties = mock(IbkrProperties.class);
         when(ibkrProperties.autoExecute()).thenReturn(false);
         when(ibkrProperties.riskPerTradePct()).thenReturn(0.02);
-        when(ibkrProperties.hotTickers()).thenReturn(List.of("SPY"));
         when(ibkrProperties.accountId()).thenReturn("DUN598126");
 
         ScannerProperties scannerProperties = mock(ScannerProperties.class);

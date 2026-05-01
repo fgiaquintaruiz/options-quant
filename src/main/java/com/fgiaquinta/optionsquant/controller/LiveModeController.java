@@ -357,11 +357,8 @@ public class LiveModeController {
         status.put("twsConnected", accountManager.isConnected());
 
         // Include hot tickers list for UI badge display (same order as scan)
-        List<String> hotTickers = ibkrProperties.useCsvTickers()
-                ? tickerService.getHotTickers()
-                : (ibkrProperties.hotTickers() != null
-                        ? ibkrProperties.hotTickers()
-                        : List.of("SPY", "QQQ", "AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "META", "GOOGL", "AMD"));
+        // TODO: useCsvTickers flag is always true in prod — see change remove-use-csv-tickers-flag
+        List<String> hotTickers = tickerService.getHotTickers();
         status.put("hotTickersList", hotTickers);
         status.put("schedulerEnabled", marketScanner.isSchedulerEnabled());
         status.put("mockMarketOpen", mockMarketOpen.get());
@@ -454,11 +451,8 @@ public class LiveModeController {
         List<String> allTickers = ibkrProperties.useCsvTickers()
                 ? tickerService.getTickerSymbols()
                 : ibkrProperties.tickers();
-        List<String> hotTickers = ibkrProperties.useCsvTickers()
-                ? tickerService.getHotTickers()
-                : (ibkrProperties.hotTickers() != null
-                        ? ibkrProperties.hotTickers()
-                        : List.of("SPY", "QQQ", "AAPL", "MSFT", "NVDA"));
+        // TODO: useCsvTickers flag is always true in prod — see change remove-use-csv-tickers-flag
+        List<String> hotTickers = tickerService.getHotTickers();
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("allTickers", allTickers);
@@ -1014,11 +1008,8 @@ public class LiveModeController {
         List<String> allTickers = ibkrProperties.useCsvTickers()
                 ? tickerService.getTickerSymbols()
                 : ibkrProperties.tickers();
-        List<String> hotList = ibkrProperties.useCsvTickers()
-                ? tickerService.getHotTickers()
-                : (ibkrProperties.hotTickers() != null
-                        ? ibkrProperties.hotTickers()
-                        : List.of("SPY", "QQQ", "AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "META", "GOOGL", "AMD"));
+        // TODO: useCsvTickers flag is always true in prod — see change remove-use-csv-tickers-flag
+        List<String> hotList = tickerService.getHotTickers();
         java.util.Set<String> hotSet = new java.util.HashSet<>(hotList);
 
         String scope = liveTickerScope.get();
@@ -1305,11 +1296,8 @@ public class LiveModeController {
      * Copy of {@link #scanActivity} ordered by HOT config (then ticker), so the feed matches priority even when parallel scans finish out of order.
      */
     private List<ScanActivity> scanActivitySortedByHotPriority() {
-        List<String> hotOrder = ibkrProperties.useCsvTickers()
-                ? tickerService.getHotTickers()
-                : (ibkrProperties.hotTickers() != null
-                        ? ibkrProperties.hotTickers()
-                        : List.of("SPY", "QQQ", "AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "META", "GOOGL", "AMD"));
+        // TODO: useCsvTickers flag is always true in prod — see change remove-use-csv-tickers-flag
+        List<String> hotOrder = tickerService.getHotTickers();
         Map<String, Integer> hotIndex = new HashMap<>();
         for (int i = 0; i < hotOrder.size(); i++) {
             hotIndex.put(hotOrder.get(i).toUpperCase(Locale.ROOT), i);
