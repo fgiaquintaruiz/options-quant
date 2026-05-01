@@ -333,10 +333,9 @@ public class StrategyScannerService {
         List<String> override = tickerOverride.get();
         List<String> allTickers = (override != null && !override.isEmpty())
                 ? override
-                : (ibkrProperties.useCsvTickers() ? tickerService.getTickerSymbols() : ibkrProperties.tickers());
+                : tickerService.getTickerSymbols();
 
         // HOT first, order = ticker config (runtime → CSV market-cap fallback)
-        // TODO: useCsvTickers flag is always true in prod — see change remove-use-csv-tickers-flag
         List<String> hotOrder = tickerService.getHotTickers();
         List<String> hotTickersToScan = tickerService.orderHotForScan(allTickers, hotOrder);
         java.util.Set<String> hotSet = new java.util.LinkedHashSet<>(hotTickersToScan);

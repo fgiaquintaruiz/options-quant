@@ -58,12 +58,9 @@ public class BacktestController {
         LocalDate fromDate = LocalDate.parse(from);
         LocalDate toDate = LocalDate.parse(to);
         
-        // Use CSV tickers if enabled and no explicit tickers provided
         List<String> tickerList = tickers != null && !tickers.isEmpty()
                 ? List.of(tickers.split(","))
-                : (ibkrProperties.useCsvTickers() 
-                    ? tickerService.getTickerSymbols()
-                    : ibkrProperties.getYamlTickers());
+                : tickerService.getTickerSymbols();
 
         BacktestConfig config = new BacktestConfig(
                 tickerList, fromDate, toDate,
@@ -101,10 +98,7 @@ public class BacktestController {
     ) {
         log.info(">>> POST /api/backtest/run-all from={} to={}", from, to);
 
-        // Use CSV tickers if enabled, otherwise fall back to YAML
-        List<String> tickerList = ibkrProperties.useCsvTickers()
-                ? tickerService.getTickerSymbols()
-                : ibkrProperties.getYamlTickers();
+        List<String> tickerList = tickerService.getTickerSymbols();
 
         BacktestConfig config = BacktestConfig.defaults(
                 tickerList,

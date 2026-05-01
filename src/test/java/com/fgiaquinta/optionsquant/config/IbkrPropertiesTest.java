@@ -10,7 +10,7 @@ class IbkrPropertiesTest {
 
     private static IbkrProperties propsWithAccount(String accountId) {
         return new IbkrProperties(
-            "localhost", 7497, 10, List.of("SPY"), true, accountId, 1, 0.02, false, 20,
+            "localhost", 7497, 10, List.of("SPY"), true, accountId, 1, 0.02, 20,
             1, 2, 999
         );
     }
