@@ -192,6 +192,7 @@ export default function LiveTradeGrid({
   scanScores = EMPTY_OBJECT,
   staleSignalCount = 0,
   macroRegime = null,
+  replayActive = false,
   onCloseTrade,
   onCancelTrade,
   onDeleteSignal,
@@ -272,7 +273,12 @@ export default function LiveTradeGrid({
             <Activity size={18} className="color-info" />
             Live Signals &amp; Positions
           </h3>
-          <span className="text-sm color-muted">{activeTrades.length + externalPositions.length} records</span>
+          <div className="flex-align-center gap-12">
+            {replayActive && (
+              <span className="text-xs color-muted">Solo lectura durante replay</span>
+            )}
+            <span className="text-sm color-muted">{activeTrades.length + externalPositions.length} records</span>
+          </div>
         </div>
 
         <div className="table-wrap">
@@ -302,30 +308,31 @@ export default function LiveTradeGrid({
                         {' '}señal(es) con vela de más de 30 minutos — Open deshabilitado.
                       </span>
                       <div className="flex-align-center gap-8 flex-wrap">
-                        <button type="button" className="btn text-xs" onClick={selectAllStale} style={{ padding: '3px 8px' }}>
+                        <button type="button" className="btn text-xs" disabled={replayActive} onClick={selectAllStale} style={{ padding: '3px 8px', opacity: replayActive ? 0.4 : 1 }}>
                           Seleccionar todas
                         </button>
-                        <button type="button" className="btn text-xs" onClick={clearSelection} style={{ padding: '3px 8px' }}>
+                        <button type="button" className="btn text-xs" disabled={replayActive} onClick={clearSelection} style={{ padding: '3px 8px', opacity: replayActive ? 0.4 : 1 }}>
                           Limpiar selección
                         </button>
                         <button
                           type="button"
                           className="btn text-xs"
-                          disabled={selectedStale.size === 0}
+                          disabled={selectedStale.size === 0 || replayActive}
                           onClick={() => {
                             if (selectedStale.size === 0 || !onClearStaleBatch) return
                             onClearStaleBatch(Array.from(selectedStale))
                             clearSelection()
                           }}
-                          style={{ padding: '3px 8px', borderColor: '#d2992266', color: '#d29922' }}
+                          style={{ padding: '3px 8px', borderColor: '#d2992266', color: '#d29922', opacity: replayActive ? 0.4 : 1 }}
                         >
                           Borrar seleccionadas ({selectedStale.size})
                         </button>
                         <button
                           type="button"
                           className="btn text-xs"
+                          disabled={replayActive}
                           onClick={() => onClearAllStale && onClearAllStale()}
-                          style={{ padding: '3px 8px', background: '#f8514922', border: '1px solid #f8514944', color: '#f85149' }}
+                          style={{ padding: '3px 8px', background: '#f8514922', border: '1px solid #f8514944', color: '#f85149', opacity: replayActive ? 0.4 : 1 }}
                         >
                           Borrar todas las &gt;30m
                         </button>
@@ -462,10 +469,10 @@ export default function LiveTradeGrid({
                       <button
                         type="button"
                         className="btn text-xs ltg-delete-btn"
-                        title="Quitar esta señal de la lista"
-                        disabled={Boolean(pendingActions[row.ticker])}
+                        title={replayActive ? 'Solo lectura durante replay' : 'Quitar esta señal de la lista'}
+                        disabled={Boolean(pendingActions[row.ticker]) || replayActive}
                         onClick={() => onDeleteSignal && onDeleteSignal(row.ticker)}
-                        style={{ cursor: pendingActions[row.ticker] ? 'not-allowed' : 'pointer' }}
+                        style={{ cursor: (pendingActions[row.ticker] || replayActive) ? 'not-allowed' : 'pointer', opacity: replayActive ? 0.4 : 1 }}
                       >
                         <Trash2 size={16} aria-hidden />
                       </button>

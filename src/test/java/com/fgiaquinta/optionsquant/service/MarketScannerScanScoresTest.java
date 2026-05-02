@@ -9,6 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
@@ -97,5 +98,28 @@ class MarketScannerScanScoresTest {
         // setScanScores must be called before scanAll
         inOrder.verify(liveModeController).setScanScores(computed);
         inOrder.verify(strategyScannerService).scanAll(anyBoolean(), anyBoolean(), anyBoolean(), anyLong());
+    }
+
+    // ─── W3 — market-hours bypass when replay is active ─────────────────────────
+
+    @Test
+    @DisplayName("scanAndExecute bypasses market-hours gate when replayClock is active at 3am")
+    void scanAndExecute_bypassesMarketHoursGate_whenReplayActive() {
+        // GIVEN: replay clock is active and reports 03:00 Spain time (deep outside market hours)
+        ZonedDateTime threeAm = ZonedDateTime.now(ZoneId.of("Europe/Madrid"))
+                .withHour(3).withMinute(0).withSecond(0).withNano(0);
+
+        ReplayClock mockClock = mock(ReplayClock.class);
+        when(mockClock.isActive()).thenReturn(true);
+        when(mockClock.getNow()).thenReturn(threeAm);
+        ReflectionTestUtils.setField(marketScanner, "replayClock", mockClock);
+
+        when(scanPrioritizationService.computeScores(anyList())).thenReturn(Map.of());
+
+        // WHEN: scanAndExecute() is called
+        marketScanner.scanAndExecute();
+
+        // THEN: the scan proceeds — scanAll is invoked, proving the market-hours guard was bypassed
+        verify(strategyScannerService).scanAll(anyBoolean(), anyBoolean(), anyBoolean(), anyLong());
     }
 }

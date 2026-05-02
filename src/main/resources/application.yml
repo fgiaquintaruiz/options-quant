@@ -113,7 +113,7 @@ backtest-cli:
 # Live Replay Mode: historical candle replay through the live scanner pipeline.
 # Purpose: tune E2E detection outside US market hours. Orders DO fire to TWS paper.
 replay:
-  enabled: true
+  enabled: false
   max-orders-per-minute: 10
   jitter-ms-min: 100
   jitter-ms-max: 800

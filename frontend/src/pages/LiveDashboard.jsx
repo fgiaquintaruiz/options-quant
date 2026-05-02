@@ -180,6 +180,7 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
         scanScores={scanScores}
         macroRegime={macroRegime}
         staleSignalCount={staleSignalCount}
+        replayActive={replayActive}
         onCloseTrade={handleCloseTrade}
         onCancelTrade={handleCancelTrade}
         onDeleteSignal={handleDeleteSignal}
