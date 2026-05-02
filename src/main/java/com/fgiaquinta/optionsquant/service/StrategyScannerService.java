@@ -2,6 +2,7 @@ package com.fgiaquinta.optionsquant.service;
 
 import com.google.common.util.concurrent.RateLimiter;
 import com.fgiaquinta.optionsquant.config.IbkrProperties;
+import com.fgiaquinta.optionsquant.domain.NewsBias;
 import com.fgiaquinta.optionsquant.config.ScannerConcurrency;
 import com.fgiaquinta.optionsquant.config.ScannerProperties;
 import com.fgiaquinta.optionsquant.domain.Candle;
@@ -65,6 +66,7 @@ public class StrategyScannerService {
     private final TickerService tickerService;
     private final TickerMemory tickerMemory;
     private final EarningsDateService earningsService;
+    private final NewsBiasService newsBiasService;
     private final MarketCalendarService marketCalendar;
     private final ScannerProperties scannerProperties;
     private final ScanPrioritizationService scanPrioritizationService;
@@ -131,6 +133,7 @@ public class StrategyScannerService {
     public StrategyScannerService(CandleCsvService csvService, IbkrService ibkrService,
                                    IbkrProperties ibkrProperties, TickerService tickerService,
                                    TickerMemory tickerMemory, EarningsDateService earningsService,
+                                   NewsBiasService newsBiasService,
                                    MarketCalendarService marketCalendar,
                                    ScannerProperties scannerProperties,
                                    ScanPrioritizationService scanPrioritizationService) {
@@ -140,6 +143,7 @@ public class StrategyScannerService {
         this.tickerService = tickerService;
         this.tickerMemory = tickerMemory;
         this.earningsService = earningsService;
+        this.newsBiasService = newsBiasService;
         this.marketCalendar = marketCalendar;
         this.scannerProperties = scannerProperties;
         this.scanPrioritizationService = scanPrioritizationService;
@@ -334,6 +338,12 @@ public class StrategyScannerService {
         List<String> allTickers = (override != null && !override.isEmpty())
                 ? override
                 : tickerService.getTickerSymbols();
+
+        try {
+            newsBiasService.prefetchAsync(allTickers);
+        } catch (Exception e) {
+            log.warn("news prefetch failed, bias will default to NEUTRAL: {}", e.getMessage());
+        }
 
         // HOT first, order = ticker config (runtime → CSV market-cap fallback)
         List<String> hotOrder = tickerService.getHotTickers();
@@ -755,7 +765,9 @@ public class StrategyScannerService {
                         currentTime,
                         tradePlan,
                         combinedPattern,  // Include pattern in signal
-                        replayActive      // UI/audit tag — routes to replaySignals list (execution unchanged)
+                        replayActive,     // UI/audit tag — routes to replaySignals list (execution unchanged)
+                        newsBiasService.getBias(ticker),
+                        earningsService.hasEarningsSoon(ticker, 7)
                 );
 
                 signals.add(signal);
@@ -951,18 +963,26 @@ public class StrategyScannerService {
             ZonedDateTime timestamp,
             TradePlan tradePlan,
             String candlestickPattern,  // detected pattern (e.g., "squeeze_breakout + hammer")
-            boolean replay              // true when emitted during live-replay-mode (UI/audit only)
+            boolean replay,             // true when emitted during live-replay-mode (UI/audit only)
+            NewsBias newsBias,
+            boolean earningsAlert
     ) {
         // Backward-compatible: no pattern, no replay
         public Signal(String ticker, String strategy, String direction, double currentPrice,
                      ZonedDateTime timestamp, TradePlan tradePlan) {
-            this(ticker, strategy, direction, currentPrice, timestamp, tradePlan, "unknown", false);
+            this(ticker, strategy, direction, currentPrice, timestamp, tradePlan, "unknown", false, NewsBias.NEUTRAL, false);
         }
 
         // Backward-compatible: with pattern, no replay
         public Signal(String ticker, String strategy, String direction, double currentPrice,
                      ZonedDateTime timestamp, TradePlan tradePlan, String candlestickPattern) {
-            this(ticker, strategy, direction, currentPrice, timestamp, tradePlan, candlestickPattern, false);
+            this(ticker, strategy, direction, currentPrice, timestamp, tradePlan, candlestickPattern, false, NewsBias.NEUTRAL, false);
+        }
+
+        // Backward-compatible: with pattern + replay
+        public Signal(String ticker, String strategy, String direction, double currentPrice,
+                     ZonedDateTime timestamp, TradePlan tradePlan, String candlestickPattern, boolean replay) {
+            this(ticker, strategy, direction, currentPrice, timestamp, tradePlan, candlestickPattern, replay, NewsBias.NEUTRAL, false);
         }
     }
 }
