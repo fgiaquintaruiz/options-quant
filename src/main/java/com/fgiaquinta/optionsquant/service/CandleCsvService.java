@@ -60,21 +60,30 @@ public class CandleCsvService {
             String filename = timeframe.toCacheKey(ticker) + ".csv";
             Path filepath = dataDir.resolve(filename);
 
-            try (PrintWriter pw = new PrintWriter(Files.newBufferedWriter(filepath))) {
-                pw.println("Time,Open,High,Low,Close,Volume");
+            Path tmp = null;
+            try {
+                tmp = Files.createTempFile(dataDir, "candle-csv", ".tmp");
+                try (PrintWriter pw = new PrintWriter(Files.newBufferedWriter(tmp))) {
+                    pw.println("Time,Open,High,Low,Close,Volume");
 
-                for (Candle candle : candles) {
-                    String timeStr = candle.timestamp()
-                            .withZoneSameInstant(ZoneId.systemDefault())
-                            .format(CSV_FORMAT);
+                    for (Candle candle : candles) {
+                        String timeStr = candle.timestamp()
+                                .withZoneSameInstant(ZoneId.systemDefault())
+                                .format(CSV_FORMAT);
 
-                    pw.printf(Locale.US, "%s,%.2f,%.2f,%.2f,%.2f,%d%n",
-                            timeStr,
-                            candle.open(),
-                            candle.high(),
-                            candle.low(),
-                            candle.close(),
-                            candle.volume());
+                        pw.printf(Locale.US, "%s,%.2f,%.2f,%.2f,%.2f,%d%n",
+                                timeStr,
+                                candle.open(),
+                                candle.high(),
+                                candle.low(),
+                                candle.close(),
+                                candle.volume());
+                    }
+                }
+                Files.move(tmp, filepath, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } finally {
+                if (tmp != null) {
+                    try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
                 }
             }
 

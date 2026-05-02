@@ -97,4 +97,41 @@ class CandleCsvServiceTest {
         assertEquals("10 D", TimeFrame.MIN_5.getIbkrDuration());
         assertEquals("5min", TimeFrame.MIN_5.getFileSuffix());
     }
+
+    @Test
+    @DisplayName("saveToCsv: destination file exists with correct header and content after write")
+    void saveToCsv_destinationFileExistsWithCorrectContent() throws IOException {
+        List<Candle> candles = List.of(
+                new Candle(ZonedDateTime.of(2026, 4, 6, 16, 0, 0, 0, ZoneId.of("America/New_York")),
+                        150.0, 155.0, 149.0, 153.0, 500000L)
+        );
+
+        service.saveToCsv("TSLA", TimeFrame.DAY_1, candles);
+
+        Path destFile = tempDir.resolve(TimeFrame.DAY_1.toCacheKey("TSLA") + ".csv");
+        assertTrue(Files.exists(destFile), "Destination CSV file must exist after saveToCsv");
+
+        List<String> lines = Files.readAllLines(destFile);
+        assertFalse(lines.isEmpty(), "File must not be empty");
+        assertEquals("Time,Open,High,Low,Close,Volume", lines.get(0), "First line must be the CSV header");
+        assertTrue(lines.get(1).contains("150.00"), "Data line must contain the open price");
+        assertTrue(lines.get(1).contains("153.00"), "Data line must contain the close price");
+        assertTrue(lines.get(1).contains("500000"), "Data line must contain the volume");
+    }
+
+    @Test
+    @DisplayName("saveToCsv: no .tmp file remains in directory after successful write")
+    void saveToCsv_noTmpFileRemainsAfterSuccessfulWrite() throws IOException {
+        List<Candle> candles = List.of(
+                new Candle(ZonedDateTime.of(2026, 4, 7, 16, 0, 0, 0, ZoneId.of("America/New_York")),
+                        200.0, 210.0, 199.0, 205.0, 800000L)
+        );
+
+        service.saveToCsv("AAPL", TimeFrame.DAY_1, candles);
+
+        long tmpCount = Files.list(tempDir)
+                .filter(p -> p.getFileName().toString().endsWith(".tmp"))
+                .count();
+        assertEquals(0, tmpCount, "No .tmp files should remain in dataDir after a successful write");
+    }
 }
