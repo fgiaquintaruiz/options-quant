@@ -367,6 +367,9 @@ export default function LiveTradeGrid({
                         {hotSet.has(String(row.ticker).toUpperCase()) && (
                           <span className="badge badge-hot text-xs" style={{ padding: '1px 4px' }}>HOT</span>
                         )}
+                        {row.replay && (
+                          <span className="badge text-xs" style={{ background: '#1f3a5f', color: '#58a6ff', border: '1px solid #1f6feb', padding: '1px 4px' }}>REPLAY</span>
+                        )}
                         {staleHighlight && (
                           <span className="ltg-stale-warn" title="Marca de tiempo de vela >30 min">VELA VIEJA</span>
                         )}

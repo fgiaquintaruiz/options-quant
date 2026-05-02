@@ -56,6 +56,10 @@ public class LiveModeController {
     private final MacroEnvironmentFilter macroFilter;
     private final ScanPrioritizationService scanPrioritizationService;
 
+    /** Base directory for replay-signal JSONL files. Overridable in tests via ReflectionTestUtils. */
+    @org.springframework.beans.factory.annotation.Value("${replay.signal-dir:data}")
+    String replaySignalDir = "data";
+
     // Live-replay-mode — optional; null until services are wired in the context.
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private ReplayService replayService;
@@ -1146,7 +1150,7 @@ public class LiveModeController {
 
     private void appendReplaySignalToJsonl(Signal signal) {
         try {
-            java.nio.file.Path dir = java.nio.file.Path.of("data");
+            java.nio.file.Path dir = java.nio.file.Path.of(replaySignalDir);
             if (!java.nio.file.Files.exists(dir)) java.nio.file.Files.createDirectories(dir);
             String date = signal.timestamp().toLocalDate().toString();
             java.nio.file.Path file = dir.resolve("replay-signals-" + date + ".jsonl");
