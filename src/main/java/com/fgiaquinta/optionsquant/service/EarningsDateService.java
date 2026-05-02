@@ -152,7 +152,7 @@ public class EarningsDateService {
         for (String ticker : tickers) {
             Optional<LocalDate> date = yahooClient.fetchEarningsDate(ticker);
             if (date.isPresent()) {
-                earningsDates.put(ticker, date.get());
+                earningsDates.put(ticker.toUpperCase(), date.get());
                 loaded++;
             }
             // absent → keep existing entry (safe degradation)

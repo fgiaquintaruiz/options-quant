@@ -35,7 +35,7 @@ public class NewsBiasService {
         return CompletableFuture.runAsync(
                 () -> tickers.parallelStream().forEach(this::prefetchOne),
                 executor
-        );
+        ).thenRun(() -> lastPrefetchTime = System.currentTimeMillis());
     }
 
     private void prefetchOne(String ticker) {

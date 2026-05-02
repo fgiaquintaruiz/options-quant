@@ -2,6 +2,7 @@ package com.fgiaquinta.optionsquant.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.util.concurrent.RateLimiter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +26,7 @@ public class YahooFinanceClient {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    private final RateLimiter rateLimiter = RateLimiter.create(2.0);
     private final HttpClient http;
 
     public YahooFinanceClient() {
@@ -95,6 +97,7 @@ public class YahooFinanceClient {
     }
 
     private HttpResponse<String> get(String url) throws IOException, InterruptedException {
+        rateLimiter.acquire();
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("User-Agent", "Mozilla/5.0")
