@@ -529,6 +529,69 @@ describe('LiveTradeGrid — Posiciones EXTERNAL', () => {
   })
 })
 
+// ── Group 6: Badges NEWS↑ / NEWS↓ / ⚡EARN ───────────────────────────────────
+
+describe('LiveTradeGrid — Badges newsBias y earningsAlert', () => {
+
+  it('muestra badge NEWS↑ cuando newsBias=CALL', () => {
+    const trade = makeSignal({ newsBias: 'CALL' })
+    render(<LiveTradeGrid trades={[trade]} />)
+    expect(screen.getByText('NEWS↑')).toBeTruthy()
+  })
+
+  it('muestra badge NEWS↓ cuando newsBias=PUT', () => {
+    const trade = makeSignal({ newsBias: 'PUT' })
+    render(<LiveTradeGrid trades={[trade]} />)
+    expect(screen.getByText('NEWS↓')).toBeTruthy()
+  })
+
+  it('NO muestra badge NEWS↑ ni NEWS↓ cuando newsBias=NEUTRAL', () => {
+    const trade = makeSignal({ newsBias: 'NEUTRAL' })
+    render(<LiveTradeGrid trades={[trade]} />)
+    expect(screen.queryByText('NEWS↑')).toBeNull()
+    expect(screen.queryByText('NEWS↓')).toBeNull()
+  })
+
+  it('NO muestra badge NEWS↑ ni NEWS↓ cuando newsBias está ausente (undefined)', () => {
+    const trade = makeSignal()
+    render(<LiveTradeGrid trades={[trade]} />)
+    expect(screen.queryByText('NEWS↑')).toBeNull()
+    expect(screen.queryByText('NEWS↓')).toBeNull()
+  })
+
+  it('muestra badge ⚡EARN cuando earningsAlert=true', () => {
+    const trade = makeSignal({ earningsAlert: true })
+    render(<LiveTradeGrid trades={[trade]} />)
+    expect(screen.getByText('⚡EARN')).toBeTruthy()
+  })
+
+  it('NO muestra badge ⚡EARN cuando earningsAlert=false', () => {
+    const trade = makeSignal({ earningsAlert: false })
+    render(<LiveTradeGrid trades={[trade]} />)
+    expect(screen.queryByText('⚡EARN')).toBeNull()
+  })
+
+  it('NO muestra badge ⚡EARN cuando earningsAlert está ausente (undefined)', () => {
+    const trade = makeSignal()
+    render(<LiveTradeGrid trades={[trade]} />)
+    expect(screen.queryByText('⚡EARN')).toBeNull()
+  })
+
+  it('muestra ambos badges NEWS↑ y ⚡EARN cuando newsBias=CALL y earningsAlert=true', () => {
+    const trade = makeSignal({ newsBias: 'CALL', earningsAlert: true })
+    render(<LiveTradeGrid trades={[trade]} />)
+    expect(screen.getByText('NEWS↑')).toBeTruthy()
+    expect(screen.getByText('⚡EARN')).toBeTruthy()
+  })
+
+  it('muestra NEWS↓ y ⚡EARN juntos cuando newsBias=PUT y earningsAlert=true', () => {
+    const trade = makeSignal({ newsBias: 'PUT', earningsAlert: true })
+    render(<LiveTradeGrid trades={[trade]} />)
+    expect(screen.getByText('NEWS↓')).toBeTruthy()
+    expect(screen.getByText('⚡EARN')).toBeTruthy()
+  })
+})
+
 // ── Group 5: Scan Activity breakdown chips ────────────────────────────────────
 
 describe('LiveTradeGrid — Scan activity chips', () => {

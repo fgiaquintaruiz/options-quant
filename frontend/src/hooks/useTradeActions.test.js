@@ -262,6 +262,74 @@ describe('useTradeActions', () => {
     expect(externalPositionsApi.scheduleClose1450).toHaveBeenCalledWith('TSLA')
   })
 
+  // ── mapSignal: newsBias y earningsAlert ──────────────────────────────────────
+
+  it('mapSignal: newsBias se mapea a CALL cuando la señal tiene newsBias=CALL', () => {
+    const signal = makeSignal({ newsBias: 'CALL' })
+    const props = makeProps({ signals: [signal] })
+
+    const { result } = renderHook(() => useTradeActions(props))
+
+    expect(result.current.trades[0].newsBias).toBe('CALL')
+  })
+
+  it('mapSignal: newsBias se mapea a PUT cuando la señal tiene newsBias=PUT', () => {
+    const signal = makeSignal({ newsBias: 'PUT' })
+    const props = makeProps({ signals: [signal] })
+
+    const { result } = renderHook(() => useTradeActions(props))
+
+    expect(result.current.trades[0].newsBias).toBe('PUT')
+  })
+
+  it('mapSignal: newsBias defaultea a NEUTRAL cuando la señal no tiene newsBias (undefined)', () => {
+    const signal = makeSignal()
+    // makeSignal no incluye newsBias — queda undefined
+    delete signal.newsBias
+    const props = makeProps({ signals: [signal] })
+
+    const { result } = renderHook(() => useTradeActions(props))
+
+    expect(result.current.trades[0].newsBias).toBe('NEUTRAL')
+  })
+
+  it('mapSignal: newsBias defaultea a NEUTRAL cuando la señal tiene newsBias=null', () => {
+    const signal = makeSignal({ newsBias: null })
+    const props = makeProps({ signals: [signal] })
+
+    const { result } = renderHook(() => useTradeActions(props))
+
+    expect(result.current.trades[0].newsBias).toBe('NEUTRAL')
+  })
+
+  it('mapSignal: earningsAlert se mapea a true cuando la señal tiene earningsAlert=true', () => {
+    const signal = makeSignal({ earningsAlert: true })
+    const props = makeProps({ signals: [signal] })
+
+    const { result } = renderHook(() => useTradeActions(props))
+
+    expect(result.current.trades[0].earningsAlert).toBe(true)
+  })
+
+  it('mapSignal: earningsAlert defaultea a false cuando la señal no tiene earningsAlert (undefined)', () => {
+    const signal = makeSignal()
+    delete signal.earningsAlert
+    const props = makeProps({ signals: [signal] })
+
+    const { result } = renderHook(() => useTradeActions(props))
+
+    expect(result.current.trades[0].earningsAlert).toBe(false)
+  })
+
+  it('mapSignal: earningsAlert defaultea a false cuando la señal tiene earningsAlert=null', () => {
+    const signal = makeSignal({ earningsAlert: null })
+    const props = makeProps({ signals: [signal] })
+
+    const { result } = renderHook(() => useTradeActions(props))
+
+    expect(result.current.trades[0].earningsAlert).toBe(false)
+  })
+
   it('handleCancelTrade error path: si liveApi.cancelTrade rechaza, llama setErrorMsg y NO llama fetchSignals', async () => {
     liveApi.cancelTrade.mockRejectedValueOnce(new Error('TWS down'))
     const props = makeProps()
