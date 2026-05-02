@@ -377,6 +377,15 @@ export default function LiveTradeGrid({
                         {row.replay && (
                           <span className="badge text-xs" style={{ background: '#1f3a5f', color: '#58a6ff', border: '1px solid #1f6feb', padding: '1px 4px' }}>REPLAY</span>
                         )}
+                        {row.newsBias === 'CALL' && (
+                          <span className="badge text-xs" style={{ background: '#23863618', color: '#3fb950', border: '1px solid #2ea04326', padding: '1px 4px' }}>NEWS↑</span>
+                        )}
+                        {row.newsBias === 'PUT' && (
+                          <span className="badge text-xs" style={{ background: '#da363318', color: '#f85149', border: '1px solid #da363326', padding: '1px 4px' }}>NEWS↓</span>
+                        )}
+                        {row.earningsAlert && (
+                          <span className="badge badge-hot text-xs" style={{ padding: '1px 4px' }}>⚡EARN</span>
+                        )}
                         {staleHighlight && (
                           <span className="ltg-stale-warn" title="Marca de tiempo de vela >30 min">VELA VIEJA</span>
                         )}

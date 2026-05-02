@@ -414,6 +414,8 @@ public class LiveModeController {
                     map.put("signalFoundAt", found != null ? found.toString() : null);
                     map.put("tradePlan", s.tradePlan());
                     map.put("candlestickPattern", s.candlestickPattern());
+                    map.put("newsBias", s.newsBias() != null ? s.newsBias().name() : "NEUTRAL");
+                    map.put("earningsAlert", s.earningsAlert());
 
                     ExecutedTradeInfo exec = executedTrades.get(s.ticker());
                     if (exec != null) {

@@ -22,6 +22,8 @@ export function useTradeActions({ signals, closedTrades, fetchSignals, setErrorM
       netPnl: null, executeTime: s.executeTime, tradeStatus: s.tradeStatus,
       orderId: s.orderId, tpOrderId: s.tpOrderId, slOrderId: s.slOrderId, signalStale,
       replay: s.replay ?? false,
+      newsBias: s.newsBias ?? 'NEUTRAL',
+      earningsAlert: s.earningsAlert ?? false,
     }
   }, [closedTrades])
 
