@@ -7,6 +7,15 @@ import com.fgiaquinta.optionsquant.strategy.indicator.WordenStochasticIndicator;
 import com.fgiaquinta.optionsquant.strategy.C5ContinuationCallStrategy;
 import com.fgiaquinta.optionsquant.strategy.P5ContinuationPutStrategy;
 import com.fgiaquinta.optionsquant.strategy.C1SqueezeCallStrategy;
+import com.fgiaquinta.optionsquant.strategy.P1SqueezePutStrategy;
+import com.fgiaquinta.optionsquant.strategy.C4OpeningCallStrategy;
+import com.fgiaquinta.optionsquant.strategy.P4OpeningPutStrategy;
+import com.fgiaquinta.optionsquant.strategy.C2TrendCallStrategy;
+import com.fgiaquinta.optionsquant.strategy.P2TrendPutStrategy;
+import com.fgiaquinta.optionsquant.strategy.C3BounceCallStrategy;
+import com.fgiaquinta.optionsquant.strategy.P3BouncePutStrategy;
+import com.fgiaquinta.optionsquant.strategy.C6ReversalCallStrategy;
+import com.fgiaquinta.optionsquant.strategy.P6ReversalPutStrategy;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
@@ -826,6 +835,1224 @@ class StrategyUnitTest {
 
             boolean triggered = strategy.isTriggered("TEST", data, testTime);
             assertThat(triggered).isFalse();
+        }
+    }
+
+    // =========================================================================
+    // P1SqueezePutStrategy Tests (mirror of C1 — bearish)
+    // =========================================================================
+
+    @Nested
+    class P1SqueezePutStrategyTest {
+
+        private StrategyData buildP1Data(
+                ZonedDateTime currentTime,
+                double[] hourlyCloses,
+                double[] hourlyLows,
+                double[] hourlyOpens,
+                double[] candles15mOhlcv
+        ) {
+            List<Candle> hourlyCandles = new ArrayList<>();
+            ZonedDateTime hourBase = currentTime.minusHours(hourlyCloses.length);
+            for (int i = 0; i < hourlyCloses.length; i++) {
+                hourlyCandles.add(candle(
+                        hourBase.plusHours(i),
+                        hourlyOpens[i], hourlyCloses[i] + 0.5, hourlyLows[i], hourlyCloses[i], 2000000L
+                ));
+            }
+
+            List<Candle> candles15m = new ArrayList<>();
+            ZonedDateTime marketOpen = currentTime.toLocalDate().atTime(9, 30).atZone(NY)
+                    .minusMinutes(15L * 20);
+            for (int i = 0; i < 20; i++) {
+                double close = 100.0;
+                candles15m.add(candle(
+                        marketOpen.plusMinutes(15L * i),
+                        close, close + 0.5, close - 0.5, close, 500000L
+                ));
+            }
+            candles15m.add(candle(
+                    currentTime,
+                    candles15mOhlcv[0], candles15mOhlcv[1], candles15mOhlcv[2], candles15mOhlcv[3], (long) candles15mOhlcv[4]
+            ));
+
+            Map<TimeFrame, List<Candle>> data = new EnumMap<>(TimeFrame.class);
+            data.put(TimeFrame.HOUR_1, hourlyCandles);
+            data.put(TimeFrame.MIN_15, candles15m);
+
+            return new StrategyData(data);
+        }
+
+        @Test
+        @DisplayName("Should trigger P1 squeeze put with compressed SMAs and bearish breakout")
+        void shouldTriggerP1WithCompressedSMAsAndBearishBreakout() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 14, 0, 0, 0, NY);
+
+            // ChannelAnalyzer.isSmaLateralChannel needs prevIdx >= 200 + 70 → 272 bars minimum
+            int totalBars = 280;
+            double[] hourlyCloses = new double[totalBars];
+            double[] hourlyLows = new double[totalBars];
+            double[] hourlyOpens = new double[totalBars];
+
+            for (int i = 0; i < totalBars - 1; i++) {
+                double base = 100.0 + (i % 3) * 0.2 - 0.2;
+                hourlyCloses[i] = base;
+                hourlyLows[i] = base - 0.5;
+                hourlyOpens[i] = base;
+            }
+
+            // Breakout bar: close breaks below the floor (min low of last 70 bars ~99.3), red candle
+            int last = totalBars - 1;
+            hourlyOpens[last] = 100.0;
+            hourlyCloses[last] = 95.0;
+            hourlyLows[last] = 94.5;
+
+            // 15m close riding lower band: with all historical 15m closes at 100, lower band ~100
+            // close=99.5 <= 100 * 1.005 = 100.5 → riding lower band
+            double[] current15m = {99.6, 99.8, 99.3, 99.5, 2000000L};
+
+            StrategyData data = buildP1Data(testTime, hourlyCloses, hourlyLows, hourlyOpens, current15m);
+            P1SqueezePutStrategy strategy = new P1SqueezePutStrategy();
+
+            boolean triggered = strategy.isTriggered("TEST", data, testTime);
+            assertThat(triggered).isTrue();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger P1 when breakout direction is bullish (close > open)")
+        void shouldNotTriggerP1WhenBreakoutIsGreenCandle() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 14, 0, 0, 0, NY);
+
+            int totalBars = 280;
+            double[] hourlyCloses = new double[totalBars];
+            double[] hourlyLows = new double[totalBars];
+            double[] hourlyOpens = new double[totalBars];
+
+            for (int i = 0; i < totalBars - 1; i++) {
+                double base = 100.0 + (i % 3) * 0.2 - 0.2;
+                hourlyCloses[i] = base;
+                hourlyLows[i] = base - 0.5;
+                hourlyOpens[i] = base;
+            }
+
+            // Price breaks below floor but candle is GREEN (close > open) → not a bearish breakout
+            int last = totalBars - 1;
+            hourlyOpens[last] = 94.0;
+            hourlyCloses[last] = 95.0;
+            hourlyLows[last] = 93.5;
+
+            double[] current15m = {99.6, 99.8, 99.3, 99.5, 2000000L};
+
+            StrategyData data = buildP1Data(testTime, hourlyCloses, hourlyLows, hourlyOpens, current15m);
+            P1SqueezePutStrategy strategy = new P1SqueezePutStrategy();
+
+            boolean triggered = strategy.isTriggered("TEST", data, testTime);
+            assertThat(triggered).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger P1 when SMAs are not compressed (strong downtrend)")
+        void shouldNotTriggerP1WhenSMAsNotCompressed() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 14, 0, 0, 0, NY);
+
+            int totalBars = 201;
+            double[] hourlyCloses = new double[totalBars];
+            double[] hourlyLows = new double[totalBars];
+            double[] hourlyOpens = new double[totalBars];
+
+            // Strong downtrend: SMA200 >> SMA20 → spread > 4%
+            for (int i = 0; i < totalBars; i++) {
+                double close = 120.0 - i * 0.2;
+                hourlyCloses[i] = close;
+                hourlyLows[i] = close - 0.5;
+                hourlyOpens[i] = close + 0.1;
+            }
+
+            double[] current15m = {79.5, 79.8, 79.0, 79.3, 2000000L};
+
+            StrategyData data = buildP1Data(testTime, hourlyCloses, hourlyLows, hourlyOpens, current15m);
+            P1SqueezePutStrategy strategy = new P1SqueezePutStrategy();
+
+            boolean triggered = strategy.isTriggered("TEST", data, testTime);
+            assertThat(triggered).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger P1 with insufficient 1H history (< 200 bars)")
+        void shouldNotTriggerP1WithInsufficientHistory() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 14, 0, 0, 0, NY);
+
+            int totalBars = 150;
+            double[] hourlyCloses = new double[totalBars];
+            double[] hourlyLows = new double[totalBars];
+            double[] hourlyOpens = new double[totalBars];
+
+            for (int i = 0; i < totalBars; i++) {
+                double base = 100.0 + (i % 3) * 0.2 - 0.2;
+                hourlyCloses[i] = base;
+                hourlyLows[i] = base - 0.5;
+                hourlyOpens[i] = base;
+            }
+
+            double[] current15m = {99.5, 99.8, 99.0, 99.3, 2000000L};
+
+            StrategyData data = buildP1Data(testTime, hourlyCloses, hourlyLows, hourlyOpens, current15m);
+            P1SqueezePutStrategy strategy = new P1SqueezePutStrategy();
+
+            boolean triggered = strategy.isTriggered("TEST", data, testTime);
+            assertThat(triggered).isFalse();
+        }
+    }
+
+    // =========================================================================
+    // C4OpeningCallStrategy Tests (time window — gap down + green candle)
+    // =========================================================================
+
+    @Nested
+    class C4OpeningCallStrategyTest {
+
+        /**
+         * Builds StrategyData for C4/P4 opening strategies.
+         * The 15m series has 21 flat candles at basePrice ending at the current bar.
+         * The 5m series has 2 candles: yesterday close (idx=0) and today's open bar (idx=1).
+         * The gap is engineered so openToday = closeYesterday * (1 + gapPct).
+         * With all historical 15m at basePrice, the BB is extremely tight:
+         *   upper ≈ lower ≈ basePrice, so openToday < lower triggers gap-down (C4)
+         *   and openToday > upper triggers gap-up (P4).
+         */
+        private StrategyData buildC4P4Data(
+                ZonedDateTime currentTime,
+                double basePrice,
+                double closeYesterday,
+                double openToday,
+                boolean greenCandle
+        ) {
+            List<Candle> candles15m = new ArrayList<>();
+            ZonedDateTime marketOpen15m = currentTime.toLocalDate().atTime(9, 30).atZone(NY)
+                    .minusMinutes(15L * 20);
+            for (int i = 0; i < 20; i++) {
+                candles15m.add(candle(
+                        marketOpen15m.plusMinutes(15L * i),
+                        basePrice, basePrice + 0.5, basePrice - 0.5, basePrice, 500000L
+                ));
+            }
+            // Current 15m bar at today's open time (idx=20)
+            candles15m.add(candle(
+                    currentTime,
+                    openToday, openToday + 1, openToday - 1, openToday, 1000000L
+            ));
+
+            List<Candle> candles5m = new ArrayList<>();
+            // Yesterday's last 5m close (idx=0)
+            candles5m.add(candle(
+                    currentTime.minusDays(1).withHour(16).withMinute(0),
+                    closeYesterday, closeYesterday + 0.5, closeYesterday - 0.5, closeYesterday, 500000L
+            ));
+            // Today's open 5m candle (idx=1) — green or red determined by caller
+            double close5m = greenCandle ? openToday + 0.5 : openToday - 0.5;
+            candles5m.add(candle(
+                    currentTime,
+                    openToday, openToday + 1, openToday - 1, close5m, 2000000L
+            ));
+
+            Map<TimeFrame, List<Candle>> data = new EnumMap<>(TimeFrame.class);
+            data.put(TimeFrame.MIN_15, candles15m);
+            data.put(TimeFrame.MIN_5, candles5m);
+
+            return new StrategyData(data);
+        }
+
+        @Test
+        @DisplayName("Should trigger C4 when gap down in range and green 5m candle at 9:30")
+        void shouldTriggerC4WhenAllConditionsMet() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 9, 33, 0, 0, NY);
+
+            double basePrice = 100.0;
+            double closeYesterday = 100.0;
+            // Gap down of -3% → well within -1.5% to -6% range
+            // openToday < lower band (lower ≈ basePrice with flat history) ✓
+            double openToday = 97.0;
+
+            StrategyData data = buildC4P4Data(testTime, basePrice, closeYesterday, openToday, true);
+            C4OpeningCallStrategy strategy = new C4OpeningCallStrategy();
+
+            boolean triggered = strategy.isTriggered("TEST", data, testTime);
+            assertThat(triggered).isTrue();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger C4 outside 9:30-9:35 AM window (at 10:00 AM)")
+        void shouldNotTriggerC4OutsideTimeWindow() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 10, 0, 0, 0, NY);
+
+            double basePrice = 100.0;
+            double closeYesterday = 100.0;
+            double openToday = 97.0;
+
+            StrategyData data = buildC4P4Data(testTime, basePrice, closeYesterday, openToday, true);
+            C4OpeningCallStrategy strategy = new C4OpeningCallStrategy();
+
+            boolean triggered = strategy.isTriggered("TEST", data, testTime);
+            assertThat(triggered).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger C4 when 5m candle is red (wrong direction)")
+        void shouldNotTriggerC4WhenCandleIsRed() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 9, 33, 0, 0, NY);
+
+            double basePrice = 100.0;
+            double closeYesterday = 100.0;
+            double openToday = 97.0;
+
+            StrategyData data = buildC4P4Data(testTime, basePrice, closeYesterday, openToday, false);
+            C4OpeningCallStrategy strategy = new C4OpeningCallStrategy();
+
+            boolean triggered = strategy.isTriggered("TEST", data, testTime);
+            assertThat(triggered).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger C4 when gap is too small (< -1.5%)")
+        void shouldNotTriggerC4WhenGapTooSmall() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 9, 33, 0, 0, NY);
+
+            double basePrice = 100.0;
+            double closeYesterday = 100.0;
+            // Gap of only -0.5% → below the -1.5% threshold
+            double openToday = 99.5;
+
+            StrategyData data = buildC4P4Data(testTime, basePrice, closeYesterday, openToday, true);
+            C4OpeningCallStrategy strategy = new C4OpeningCallStrategy();
+
+            boolean triggered = strategy.isTriggered("TEST", data, testTime);
+            assertThat(triggered).isFalse();
+        }
+    }
+
+    // =========================================================================
+    // P4OpeningPutStrategy Tests (mirror of C4 — gap up + red candle)
+    // =========================================================================
+
+    @Nested
+    class P4OpeningPutStrategyTest {
+
+        private StrategyData buildP4Data(
+                ZonedDateTime currentTime,
+                double basePrice,
+                double closeYesterday,
+                double openToday,
+                boolean redCandle
+        ) {
+            List<Candle> candles15m = new ArrayList<>();
+            ZonedDateTime marketOpen15m = currentTime.toLocalDate().atTime(9, 30).atZone(NY)
+                    .minusMinutes(15L * 20);
+            for (int i = 0; i < 20; i++) {
+                candles15m.add(candle(
+                        marketOpen15m.plusMinutes(15L * i),
+                        basePrice, basePrice + 0.5, basePrice - 0.5, basePrice, 500000L
+                ));
+            }
+            candles15m.add(candle(
+                    currentTime,
+                    openToday, openToday + 1, openToday - 1, openToday, 1000000L
+            ));
+
+            List<Candle> candles5m = new ArrayList<>();
+            candles5m.add(candle(
+                    currentTime.minusDays(1).withHour(16).withMinute(0),
+                    closeYesterday, closeYesterday + 0.5, closeYesterday - 0.5, closeYesterday, 500000L
+            ));
+            double close5m = redCandle ? openToday - 0.5 : openToday + 0.5;
+            candles5m.add(candle(
+                    currentTime,
+                    openToday, openToday + 1, openToday - 1, close5m, 2000000L
+            ));
+
+            Map<TimeFrame, List<Candle>> data = new EnumMap<>(TimeFrame.class);
+            data.put(TimeFrame.MIN_15, candles15m);
+            data.put(TimeFrame.MIN_5, candles5m);
+
+            return new StrategyData(data);
+        }
+
+        @Test
+        @DisplayName("Should trigger P4 when gap up in range and red 5m candle at 9:30")
+        void shouldTriggerP4WhenAllConditionsMet() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 9, 33, 0, 0, NY);
+
+            double basePrice = 100.0;
+            double closeYesterday = 100.0;
+            // Gap up of +3% → within +1.5% to +6% range
+            // openToday > upper band (upper ≈ basePrice with flat history) ✓
+            double openToday = 103.0;
+
+            StrategyData data = buildP4Data(testTime, basePrice, closeYesterday, openToday, true);
+            P4OpeningPutStrategy strategy = new P4OpeningPutStrategy();
+
+            boolean triggered = strategy.isTriggered("TEST", data, testTime);
+            assertThat(triggered).isTrue();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger P4 outside 9:30-9:35 AM window (at 10:00 AM)")
+        void shouldNotTriggerP4OutsideTimeWindow() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 10, 0, 0, 0, NY);
+
+            double basePrice = 100.0;
+            double closeYesterday = 100.0;
+            double openToday = 103.0;
+
+            StrategyData data = buildP4Data(testTime, basePrice, closeYesterday, openToday, true);
+            P4OpeningPutStrategy strategy = new P4OpeningPutStrategy();
+
+            boolean triggered = strategy.isTriggered("TEST", data, testTime);
+            assertThat(triggered).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger P4 when 5m candle is green (wrong direction)")
+        void shouldNotTriggerP4WhenCandleIsGreen() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 9, 33, 0, 0, NY);
+
+            double basePrice = 100.0;
+            double closeYesterday = 100.0;
+            double openToday = 103.0;
+
+            StrategyData data = buildP4Data(testTime, basePrice, closeYesterday, openToday, false);
+            P4OpeningPutStrategy strategy = new P4OpeningPutStrategy();
+
+            boolean triggered = strategy.isTriggered("TEST", data, testTime);
+            assertThat(triggered).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger P4 when gap is too small (< +1.5%)")
+        void shouldNotTriggerP4WhenGapTooSmall() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 9, 33, 0, 0, NY);
+
+            double basePrice = 100.0;
+            double closeYesterday = 100.0;
+            // Gap of only +0.5% → below the +1.5% threshold
+            double openToday = 100.5;
+
+            StrategyData data = buildP4Data(testTime, basePrice, closeYesterday, openToday, true);
+            P4OpeningPutStrategy strategy = new P4OpeningPutStrategy();
+
+            boolean triggered = strategy.isTriggered("TEST", data, testTime);
+            assertThat(triggered).isFalse();
+        }
+    }
+
+    // =========================================================================
+    // C2TrendCallStrategy Tests (Trend + Pullback CALL)
+    // =========================================================================
+
+    @Nested
+    class C2TrendCallStrategyTest {
+
+        /**
+         * DAY_1  : 22 bars; closes mildly rising so idx-1 > idx-2 (daily uptrend)
+         * HOUR_1 : 25 bars; bars 0..20 flat at 100; bars 21..23 at 101.5 (above SMA20);
+         *          bar 24 is the "current" bar, engineered to pass all 1h rules
+         * MIN_15 : 22 bars; bars 0..20 flat at 101 (above SMA20 which ~=100), bar 21 current
+         *
+         * SMA20 on HOUR_1 at idx=24:
+         *   bars 5..24 contribute: bars 5..20 = 100.0 (16 bars), bars 21..23 = 101.5 (3 bars), bar 24 = close1h
+         *   With close1h ≈ 100.5, SMA20 ≈ (16*100 + 3*101.5 + 100.5) / 20 = 100.325
+         *   low1h = 100.1 ≤ 100.325 * 1.005 = 100.776 → touchedSupport ✓
+         *   close1h = 100.5 > 100.325 → rejectedSupport ✓
+         *   open1h = 100.0 < close1h → bullish ✓
+         *   range = high - low = 101.5 - 100.1 = 1.4; (high - close) = 1.0 ≤ 1.4 * 0.35 = 0.49 — too big
+         *   Need close near high: high=100.55, low=100.1, close=100.5
+         *   range=0.45; (high-close)=0.05 ≤ 0.45*0.35=0.1575 ✓
+         */
+        private StrategyData buildC2Data(
+                ZonedDateTime currentTime,
+                double[] dailyCloses,
+                double[] hourlyCloses,
+                double hourlyOpen,
+                double hourlyHigh,
+                double hourlyLow,
+                double hourlyClose,
+                long hourlyVolume,
+                double[] candles15mCloses
+        ) {
+            List<Candle> dailyCandles = new ArrayList<>();
+            ZonedDateTime dayBase = currentTime.toLocalDate().atStartOfDay(NY).minusDays(dailyCloses.length - 1);
+            for (int i = 0; i < dailyCloses.length; i++) {
+                double c = dailyCloses[i];
+                dailyCandles.add(candle(dayBase.plusDays(i), c, c + 1, c - 1, c, 5000000L));
+            }
+
+            List<Candle> hourlyCandles = new ArrayList<>();
+            ZonedDateTime hourBase = currentTime.minusHours(hourlyCloses.length);
+            for (int i = 0; i < hourlyCloses.length; i++) {
+                double c = hourlyCloses[i];
+                hourlyCandles.add(candle(hourBase.plusHours(i), c, c + 0.5, c - 0.5, c, 2000000L));
+            }
+            hourlyCandles.add(candle(currentTime, hourlyOpen, hourlyHigh, hourlyLow, hourlyClose, hourlyVolume));
+
+            List<Candle> candles15m = new ArrayList<>();
+            ZonedDateTime min15Base = currentTime.toLocalDate().atTime(9, 30).atZone(NY)
+                    .minusMinutes(15L * (candles15mCloses.length - 1));
+            for (int i = 0; i < candles15mCloses.length - 1; i++) {
+                double c = candles15mCloses[i];
+                candles15m.add(candle(min15Base.plusMinutes(15L * i), c, c + 0.5, c - 0.5, c, 500000L));
+            }
+            double lastC = candles15mCloses[candles15mCloses.length - 1];
+            candles15m.add(candle(currentTime, lastC, lastC + 0.5, lastC - 0.5, lastC, 500000L));
+
+            Map<TimeFrame, List<Candle>> data = new EnumMap<>(TimeFrame.class);
+            data.put(TimeFrame.DAY_1, dailyCandles);
+            data.put(TimeFrame.HOUR_1, hourlyCandles);
+            data.put(TimeFrame.MIN_15, candles15m);
+            return new StrategyData(data);
+        }
+
+        private double[] risingDailyCloses(int count) {
+            double[] closes = new double[count];
+            for (int i = 0; i < count; i++) closes[i] = 100.0 + i * 0.1;
+            return closes;
+        }
+
+        private double[] hourlyClosesWithUptrend() {
+            double[] closes = new double[24];
+            for (int i = 0; i < 21; i++) closes[i] = 100.0;
+            closes[21] = 101.5;
+            closes[22] = 101.5;
+            closes[23] = 101.5;
+            return closes;
+        }
+
+        private double[] bullish15mCloses(int count) {
+            double[] closes = new double[count];
+            for (int i = 0; i < count; i++) closes[i] = 98.0 + i * 0.1;
+            return closes;
+        }
+
+        @Test
+        @DisplayName("Should trigger C2 when all conditions are met")
+        void shouldTriggerC2WhenAllConditionsMet() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 11, 0, 0, 0, NY);
+
+            double[] daily = risingDailyCloses(22);
+            double[] hourly = hourlyClosesWithUptrend();
+            double[] min15 = bullish15mCloses(22);
+
+            StrategyData data = buildC2Data(testTime, daily, hourly,
+                    100.0, 100.55, 100.1, 100.5, 2000000L, min15);
+            C2TrendCallStrategy strategy = new C2TrendCallStrategy();
+
+            boolean triggered = strategy.isTriggered("AAPL", data, testTime);
+            assertThat(triggered).isTrue();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger C2 at 9 AM NY")
+        void shouldNotTriggerC2At9AM() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 9, 45, 0, 0, NY);
+
+            double[] daily = risingDailyCloses(22);
+            double[] hourly = hourlyClosesWithUptrend();
+            double[] min15 = bullish15mCloses(22);
+
+            StrategyData data = buildC2Data(testTime, daily, hourly,
+                    100.0, 100.55, 100.1, 100.5, 2000000L, min15);
+            C2TrendCallStrategy strategy = new C2TrendCallStrategy();
+
+            boolean triggered = strategy.isTriggered("AAPL", data, testTime);
+            assertThat(triggered).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger C2 when cooldown active (second call same ticker same instance)")
+        void shouldNotTriggerC2WhenCooldownActive() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 11, 0, 0, 0, NY);
+
+            double[] daily = risingDailyCloses(22);
+            double[] hourly = hourlyClosesWithUptrend();
+            double[] min15 = bullish15mCloses(22);
+
+            StrategyData data = buildC2Data(testTime, daily, hourly,
+                    100.0, 100.55, 100.1, 100.5, 2000000L, min15);
+            C2TrendCallStrategy strategy = new C2TrendCallStrategy();
+
+            boolean first = strategy.isTriggered("AAPL", data, testTime);
+            boolean second = strategy.isTriggered("AAPL", data, testTime);
+
+            assertThat(first).isTrue();
+            assertThat(second).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger C2 when low does not touch SMA20 (no pullback)")
+        void shouldNotTriggerC2WhenNoPullbackToSma() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 11, 0, 0, 0, NY);
+
+            double[] daily = risingDailyCloses(22);
+            double[] hourly = hourlyClosesWithUptrend();
+            double[] min15 = bullish15mCloses(22);
+
+            // SMA20 at idx=24 ≈ 100.325 (from 16 bars at 100 + 3 bars at 101.5 + this close)
+            // low=101.0 > 100.325 * 1.005 = 100.826 → touchedSupport = false
+            StrategyData data = buildC2Data(testTime, daily, hourly,
+                    101.0, 101.6, 101.0, 101.5, 2000000L, min15);
+            C2TrendCallStrategy strategy = new C2TrendCallStrategy();
+
+            boolean triggered = strategy.isTriggered("AAPL", data, testTime);
+            assertThat(triggered).isFalse();
+        }
+    }
+
+    // =========================================================================
+    // P2TrendPutStrategy Tests (Trend + Pullback PUT)
+    // =========================================================================
+
+    @Nested
+    class P2TrendPutStrategyTest {
+
+        private StrategyData buildP2Data(
+                ZonedDateTime currentTime,
+                double[] dailyCloses,
+                double[] hourlyCloses,
+                double hourlyOpen,
+                double hourlyHigh,
+                double hourlyLow,
+                double hourlyClose,
+                long hourlyVolume,
+                double[] candles15mCloses
+        ) {
+            List<Candle> dailyCandles = new ArrayList<>();
+            ZonedDateTime dayBase = currentTime.toLocalDate().atStartOfDay(NY).minusDays(dailyCloses.length - 1);
+            for (int i = 0; i < dailyCloses.length; i++) {
+                double c = dailyCloses[i];
+                dailyCandles.add(candle(dayBase.plusDays(i), c, c + 1, c - 1, c, 5000000L));
+            }
+
+            List<Candle> hourlyCandles = new ArrayList<>();
+            ZonedDateTime hourBase = currentTime.minusHours(hourlyCloses.length);
+            for (int i = 0; i < hourlyCloses.length; i++) {
+                double c = hourlyCloses[i];
+                hourlyCandles.add(candle(hourBase.plusHours(i), c, c + 0.5, c - 0.5, c, 2000000L));
+            }
+            hourlyCandles.add(candle(currentTime, hourlyOpen, hourlyHigh, hourlyLow, hourlyClose, hourlyVolume));
+
+            List<Candle> candles15m = new ArrayList<>();
+            ZonedDateTime min15Base = currentTime.toLocalDate().atTime(9, 30).atZone(NY)
+                    .minusMinutes(15L * (candles15mCloses.length - 1));
+            for (int i = 0; i < candles15mCloses.length - 1; i++) {
+                double c = candles15mCloses[i];
+                candles15m.add(candle(min15Base.plusMinutes(15L * i), c, c + 0.5, c - 0.5, c, 500000L));
+            }
+            double lastC = candles15mCloses[candles15mCloses.length - 1];
+            candles15m.add(candle(currentTime, lastC, lastC + 0.5, lastC - 0.5, lastC, 500000L));
+
+            Map<TimeFrame, List<Candle>> data = new EnumMap<>(TimeFrame.class);
+            data.put(TimeFrame.DAY_1, dailyCandles);
+            data.put(TimeFrame.HOUR_1, hourlyCandles);
+            data.put(TimeFrame.MIN_15, candles15m);
+            return new StrategyData(data);
+        }
+
+        private double[] fallingDailyCloses(int count) {
+            double[] closes = new double[count];
+            for (int i = 0; i < count; i++) closes[i] = 102.0 - i * 0.1;
+            return closes;
+        }
+
+        private double[] hourlyClosesWithDowntrend() {
+            double[] closes = new double[24];
+            for (int i = 0; i < 21; i++) closes[i] = 100.0;
+            closes[21] = 98.5;
+            closes[22] = 98.5;
+            closes[23] = 98.5;
+            return closes;
+        }
+
+        private double[] bearish15mCloses(int count) {
+            double[] closes = new double[count];
+            for (int i = 0; i < count; i++) closes[i] = 102.0 - i * 0.1;
+            return closes;
+        }
+
+        @Test
+        @DisplayName("Should trigger P2 when all conditions are met")
+        void shouldTriggerP2WhenAllConditionsMet() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 11, 0, 0, 0, NY);
+
+            double[] daily = fallingDailyCloses(22);
+            double[] hourly = hourlyClosesWithDowntrend();
+            double[] min15 = bearish15mCloses(22);
+
+            // SMA20 at idx=24 ≈ (16*100 + 3*98.5 + close) / 20
+            // close = 99.5 → SMA20 ≈ (1600 + 295.5 + 99.5) / 20 = 99.75
+            // high=99.85 >= 99.75 * 0.995 = 99.25 → touchedResistance ✓
+            // close=99.5 < 99.75 → rejectedResistance ✓
+            // open=100.1 > close=99.5 → bearish ✓
+            // range = 99.85 - 99.4 = 0.45; (close - low) = 99.5 - 99.4 = 0.1 ≤ 0.45*0.35 = 0.1575 ✓
+            StrategyData data = buildP2Data(testTime, daily, hourly,
+                    100.1, 99.85, 99.4, 99.5, 2000000L, min15);
+            P2TrendPutStrategy strategy = new P2TrendPutStrategy();
+
+            boolean triggered = strategy.isTriggered("AAPL", data, testTime);
+            assertThat(triggered).isTrue();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger P2 at 9 AM NY")
+        void shouldNotTriggerP2At9AM() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 9, 45, 0, 0, NY);
+
+            double[] daily = fallingDailyCloses(22);
+            double[] hourly = hourlyClosesWithDowntrend();
+            double[] min15 = bearish15mCloses(22);
+
+            StrategyData data = buildP2Data(testTime, daily, hourly,
+                    100.1, 99.85, 99.4, 99.5, 2000000L, min15);
+            P2TrendPutStrategy strategy = new P2TrendPutStrategy();
+
+            boolean triggered = strategy.isTriggered("AAPL", data, testTime);
+            assertThat(triggered).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger P2 when cooldown active (second call same ticker same instance)")
+        void shouldNotTriggerP2WhenCooldownActive() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 11, 0, 0, 0, NY);
+
+            double[] daily = fallingDailyCloses(22);
+            double[] hourly = hourlyClosesWithDowntrend();
+            double[] min15 = bearish15mCloses(22);
+
+            StrategyData data = buildP2Data(testTime, daily, hourly,
+                    100.1, 99.85, 99.4, 99.5, 2000000L, min15);
+            P2TrendPutStrategy strategy = new P2TrendPutStrategy();
+
+            boolean first = strategy.isTriggered("AAPL", data, testTime);
+            boolean second = strategy.isTriggered("AAPL", data, testTime);
+
+            assertThat(first).isTrue();
+            assertThat(second).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger P2 when high does not touch SMA20 (no pullback)")
+        void shouldNotTriggerP2WhenNoPullbackToSma() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 11, 0, 0, 0, NY);
+
+            double[] daily = fallingDailyCloses(22);
+            double[] hourly = hourlyClosesWithDowntrend();
+            double[] min15 = bearish15mCloses(22);
+
+            // SMA20 ≈ 99.75; high=98.5 < 99.75 * 0.995 = 99.25 → touchedResistance = false
+            StrategyData data = buildP2Data(testTime, daily, hourly,
+                    99.0, 98.5, 97.5, 98.0, 2000000L, min15);
+            P2TrendPutStrategy strategy = new P2TrendPutStrategy();
+
+            boolean triggered = strategy.isTriggered("AAPL", data, testTime);
+            assertThat(triggered).isFalse();
+        }
+    }
+
+    // =========================================================================
+    // C3BounceCallStrategy Tests (SMA20 bounce — CALL)
+    // =========================================================================
+
+    @Nested
+    class C3BounceCallStrategyTest {
+
+        /**
+         * Builds StrategyData for C3 tests.
+         *
+         * DAY_1  : 25 bars (idx=24 is "today"), closes supplied via dailyCloses array
+         * HOUR_1 : 30 bars; bars at positions 25-27 set to dipClose to produce a
+         *          recent brokeBelowLowerBand event; bar 29 is the "current" bar
+         * MIN_15 : 25 bars; all flat at 100 except the last bar whose close/low
+         *          are set by the caller
+         */
+        private StrategyData buildC3Data(
+                ZonedDateTime currentTime,
+                double[] dailyCloses,
+                double dipClose,
+                double current1hClose,
+                double current1hLow,
+                double current15mClose
+        ) {
+            List<Candle> dailyCandles = new ArrayList<>();
+            ZonedDateTime dayBase = currentTime.toLocalDate().atStartOfDay(NY).minusDays(dailyCloses.length - 1);
+            for (int i = 0; i < dailyCloses.length; i++) {
+                double c = dailyCloses[i];
+                dailyCandles.add(candle(dayBase.plusDays(i), c, c + 1, c - 1, c, 5000000L));
+            }
+
+            List<Candle> hourlyCandles = new ArrayList<>();
+            int totalHours = 30;
+            ZonedDateTime hourBase = currentTime.minusHours(totalHours);
+            for (int i = 0; i < totalHours; i++) {
+                double c = (i >= 25 && i <= 27) ? dipClose : 100.0;
+                if (i == totalHours - 1) {
+                    hourlyCandles.add(candle(hourBase.plusHours(i),
+                            current1hClose, current1hClose + 1, current1hLow, current1hClose, 2000000L));
+                } else {
+                    hourlyCandles.add(candle(hourBase.plusHours(i), c, c + 0.5, c - 0.5, c, 2000000L));
+                }
+            }
+
+            List<Candle> candles15m = new ArrayList<>();
+            int total15m = 25;
+            ZonedDateTime min15Base = currentTime.toLocalDate().atTime(9, 30).atZone(NY)
+                    .minusMinutes(15L * (total15m - 1));
+            for (int i = 0; i < total15m; i++) {
+                if (i == total15m - 1) {
+                    candles15m.add(candle(min15Base.plusMinutes(15L * i),
+                            current15mClose, current15mClose + 0.5, current15mClose - 0.5,
+                            current15mClose, 1000000L));
+                } else {
+                    candles15m.add(candle(min15Base.plusMinutes(15L * i),
+                            100.0, 100.5, 99.5, 100.0, 500000L));
+                }
+            }
+
+            Map<TimeFrame, List<Candle>> data = new EnumMap<>(TimeFrame.class);
+            data.put(TimeFrame.DAY_1, dailyCandles);
+            data.put(TimeFrame.HOUR_1, hourlyCandles);
+            data.put(TimeFrame.MIN_15, candles15m);
+            return new StrategyData(data);
+        }
+
+        @Test
+        @DisplayName("Should trigger C3 when all conditions are met")
+        void shouldTriggerC3WhenAllConditionsMet() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 10, 5, 0, 0, NY);
+
+            double[] dailyCloses = new double[25];
+            for (int i = 0; i < 24; i++) dailyCloses[i] = 100.0 + i * 0.1;
+            dailyCloses[24] = 102.0;
+
+            StrategyData data = buildC3Data(testTime, dailyCloses, 90.0, 99.0, 98.0, 102.0);
+            C3BounceCallStrategy strategy = new C3BounceCallStrategy();
+
+            boolean triggered = strategy.isTriggered("AAPL", data, testTime);
+            assertThat(triggered).isTrue();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger C3 before 10 AM NY")
+        void shouldNotTriggerC3BeforeTenAM() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 9, 50, 0, 0, NY);
+
+            double[] dailyCloses = new double[25];
+            for (int i = 0; i < 24; i++) dailyCloses[i] = 100.0 + i * 0.1;
+            dailyCloses[24] = 102.0;
+
+            StrategyData data = buildC3Data(testTime, dailyCloses, 90.0, 99.0, 98.0, 102.0);
+            C3BounceCallStrategy strategy = new C3BounceCallStrategy();
+
+            boolean triggered = strategy.isTriggered("AAPL", data, testTime);
+            assertThat(triggered).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger C3 when cooldown is active (second call in same 2h window)")
+        void shouldNotTriggerC3WhenCooldownActive() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 10, 5, 0, 0, NY);
+
+            double[] dailyCloses = new double[25];
+            for (int i = 0; i < 24; i++) dailyCloses[i] = 100.0 + i * 0.1;
+            dailyCloses[24] = 102.0;
+
+            StrategyData data = buildC3Data(testTime, dailyCloses, 90.0, 99.0, 98.0, 102.0);
+            C3BounceCallStrategy strategy = new C3BounceCallStrategy();
+
+            boolean first = strategy.isTriggered("AAPL", data, testTime);
+            boolean second = strategy.isTriggered("AAPL", data, testTime);
+
+            assertThat(first).isTrue();
+            assertThat(second).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger C3 when uptrend is absent (flat daily closes)")
+        void shouldNotTriggerC3WhenNoTrend() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 10, 5, 0, 0, NY);
+
+            double[] dailyCloses = new double[25];
+            for (int i = 0; i < 25; i++) dailyCloses[i] = 100.0;
+
+            StrategyData data = buildC3Data(testTime, dailyCloses, 90.0, 99.0, 98.0, 102.0);
+            C3BounceCallStrategy strategy = new C3BounceCallStrategy();
+
+            boolean triggered = strategy.isTriggered("AAPL", data, testTime);
+            assertThat(triggered).isFalse();
+        }
+    }
+
+    // =========================================================================
+    // P3BouncePutStrategy Tests (SMA20 rejection — PUT)
+    // =========================================================================
+
+    @Nested
+    class P3BouncePutStrategyTest {
+
+        /**
+         * Builds StrategyData for P3 tests.
+         *
+         * DAY_1  : 25 bars; closes supplied via dailyCloses array
+         * HOUR_1 : 30 bars; bars at positions 25-27 set to spikeClose to produce a
+         *          recent brokeAboveUpperBand event; bar 29 is the "current" bar
+         * MIN_15 : 25 bars; flat at 100 except the last bar with supplied close
+         */
+        private StrategyData buildP3Data(
+                ZonedDateTime currentTime,
+                double[] dailyCloses,
+                double spikeClose,
+                double current1hClose,
+                double current1hHigh,
+                double current15mClose
+        ) {
+            List<Candle> dailyCandles = new ArrayList<>();
+            ZonedDateTime dayBase = currentTime.toLocalDate().atStartOfDay(NY).minusDays(dailyCloses.length - 1);
+            for (int i = 0; i < dailyCloses.length; i++) {
+                double c = dailyCloses[i];
+                dailyCandles.add(candle(dayBase.plusDays(i), c, c + 1, c - 1, c, 5000000L));
+            }
+
+            List<Candle> hourlyCandles = new ArrayList<>();
+            int totalHours = 30;
+            ZonedDateTime hourBase = currentTime.minusHours(totalHours);
+            for (int i = 0; i < totalHours; i++) {
+                double c = (i >= 25 && i <= 27) ? spikeClose : 100.0;
+                if (i == totalHours - 1) {
+                    hourlyCandles.add(candle(hourBase.plusHours(i),
+                            current1hClose, current1hHigh, current1hClose - 0.5, current1hClose, 2000000L));
+                } else {
+                    hourlyCandles.add(candle(hourBase.plusHours(i), c, c + 0.5, c - 0.5, c, 2000000L));
+                }
+            }
+
+            List<Candle> candles15m = new ArrayList<>();
+            int total15m = 25;
+            ZonedDateTime min15Base = currentTime.toLocalDate().atTime(9, 30).atZone(NY)
+                    .minusMinutes(15L * (total15m - 1));
+            for (int i = 0; i < total15m; i++) {
+                if (i == total15m - 1) {
+                    candles15m.add(candle(min15Base.plusMinutes(15L * i),
+                            current15mClose, current15mClose + 0.5, current15mClose - 0.5,
+                            current15mClose, 1000000L));
+                } else {
+                    candles15m.add(candle(min15Base.plusMinutes(15L * i),
+                            100.0, 100.5, 99.5, 100.0, 500000L));
+                }
+            }
+
+            Map<TimeFrame, List<Candle>> data = new EnumMap<>(TimeFrame.class);
+            data.put(TimeFrame.DAY_1, dailyCandles);
+            data.put(TimeFrame.HOUR_1, hourlyCandles);
+            data.put(TimeFrame.MIN_15, candles15m);
+            return new StrategyData(data);
+        }
+
+        @Test
+        @DisplayName("Should trigger P3 when all conditions are met")
+        void shouldTriggerP3WhenAllConditionsMet() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 10, 5, 0, 0, NY);
+
+            double[] dailyCloses = new double[25];
+            for (int i = 0; i < 24; i++) dailyCloses[i] = 102.0 - i * 0.1;
+            dailyCloses[24] = 100.0;
+
+            StrategyData data = buildP3Data(testTime, dailyCloses, 110.0, 100.5, 101.5, 98.0);
+            P3BouncePutStrategy strategy = new P3BouncePutStrategy();
+
+            boolean triggered = strategy.isTriggered("AAPL", data, testTime);
+            assertThat(triggered).isTrue();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger P3 before 10 AM NY")
+        void shouldNotTriggerP3BeforeTenAM() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 9, 50, 0, 0, NY);
+
+            double[] dailyCloses = new double[25];
+            for (int i = 0; i < 24; i++) dailyCloses[i] = 102.0 - i * 0.1;
+            dailyCloses[24] = 100.0;
+
+            StrategyData data = buildP3Data(testTime, dailyCloses, 110.0, 100.5, 101.5, 98.0);
+            P3BouncePutStrategy strategy = new P3BouncePutStrategy();
+
+            boolean triggered = strategy.isTriggered("AAPL", data, testTime);
+            assertThat(triggered).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger P3 when cooldown is active (second call in same 2h window)")
+        void shouldNotTriggerP3WhenCooldownActive() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 10, 5, 0, 0, NY);
+
+            double[] dailyCloses = new double[25];
+            for (int i = 0; i < 24; i++) dailyCloses[i] = 102.0 - i * 0.1;
+            dailyCloses[24] = 100.0;
+
+            StrategyData data = buildP3Data(testTime, dailyCloses, 110.0, 100.5, 101.5, 98.0);
+            P3BouncePutStrategy strategy = new P3BouncePutStrategy();
+
+            boolean first = strategy.isTriggered("AAPL", data, testTime);
+            boolean second = strategy.isTriggered("AAPL", data, testTime);
+
+            assertThat(first).isTrue();
+            assertThat(second).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger P3 when downtrend is absent (flat daily closes)")
+        void shouldNotTriggerP3WhenNoTrend() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 10, 5, 0, 0, NY);
+
+            double[] dailyCloses = new double[25];
+            for (int i = 0; i < 25; i++) dailyCloses[i] = 100.0;
+
+            StrategyData data = buildP3Data(testTime, dailyCloses, 110.0, 100.5, 101.5, 98.0);
+            P3BouncePutStrategy strategy = new P3BouncePutStrategy();
+
+            boolean triggered = strategy.isTriggered("AAPL", data, testTime);
+            assertThat(triggered).isFalse();
+        }
+    }
+
+    // =========================================================================
+    // C6ReversalCallStrategy Tests
+    // =========================================================================
+
+    @Nested
+    class C6ReversalCallStrategyTest {
+
+        /**
+         * Builds StrategyData for C6:
+         * DAY_1  : 22 flat bars (just to satisfy idx1D >= 20)
+         * HOUR_1 : 24 history bars + 1 current bar (engineered OHLCV passed in)
+         *          bars 0..20 = 100.0 (SMA20 anchor)
+         *          bars 21..23 = belowSmaClose (to create the 3-bar downtrend prior to breakout)
+         * MIN_15 : 21 history bars + 1 current bar (all at min15Close, last one at currentTime)
+         *          bars built so SMA20 is rising: last 2 bars differ by +0.1
+         */
+        private StrategyData buildC6Data(
+                ZonedDateTime currentTime,
+                double belowSmaClose,
+                double currentHourOpen,
+                double currentHourHigh,
+                double currentHourLow,
+                double currentHourClose,
+                long currentHourVolume,
+                double min15Close
+        ) {
+            List<Candle> dailyCandles = new ArrayList<>();
+            ZonedDateTime dayBase = currentTime.toLocalDate().atStartOfDay(NY).minusDays(21);
+            for (int i = 0; i < 22; i++) {
+                dailyCandles.add(candle(dayBase.plusDays(i), 100.0, 101.0, 99.0, 100.0, 5000000L));
+            }
+
+            List<Candle> hourlyCandles = new ArrayList<>();
+            ZonedDateTime hourBase = currentTime.minusHours(24);
+            for (int i = 0; i < 21; i++) {
+                hourlyCandles.add(candle(hourBase.plusHours(i), 100.0, 100.5, 99.5, 100.0, 2000000L));
+            }
+            for (int i = 21; i < 24; i++) {
+                hourlyCandles.add(candle(hourBase.plusHours(i), belowSmaClose, belowSmaClose + 0.3, belowSmaClose - 0.3, belowSmaClose, 2000000L));
+            }
+            hourlyCandles.add(candle(currentTime, currentHourOpen, currentHourHigh, currentHourLow, currentHourClose, currentHourVolume));
+
+            List<Candle> candles15m = new ArrayList<>();
+            ZonedDateTime min15Base = currentTime.minusMinutes(15L * 21);
+            for (int i = 0; i < 20; i++) {
+                double c = min15Close - 0.2 + i * 0.01;
+                candles15m.add(candle(min15Base.plusMinutes(15L * i), c, c + 0.2, c - 0.2, c, 500000L));
+            }
+            candles15m.add(candle(min15Base.plusMinutes(15L * 20), min15Close - 0.1, min15Close + 0.1, min15Close - 0.3, min15Close - 0.1, 500000L));
+            candles15m.add(candle(currentTime, min15Close, min15Close + 0.2, min15Close - 0.1, min15Close, 500000L));
+
+            Map<TimeFrame, List<Candle>> data = new EnumMap<>(TimeFrame.class);
+            data.put(TimeFrame.DAY_1, dailyCandles);
+            data.put(TimeFrame.HOUR_1, hourlyCandles);
+            data.put(TimeFrame.MIN_15, candles15m);
+            return new StrategyData(data);
+        }
+
+        @Test
+        @DisplayName("Should trigger C6 when all conditions are met")
+        void shouldTriggerC6WhenAllConditionsMet() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 11, 0, 0, 0, NY);
+
+            // belowSmaClose=98.5 → prior 3 bars below SMA20 (~100)
+            // current bar: open=98.5 (below SMA), close=100.8 (above SMA ~100), bullish, top 35%
+            // high=100.9, low=98.4 → range=2.5, (high-close)=0.1 ≤ 2.5*0.35=0.875 ✓
+            // volume=2200000 >= avgVol(2000000)*0.90=1800000 ✓
+            // min15Close=101.0 → above SMA20 and SMA slope up
+            StrategyData data = buildC6Data(testTime, 98.5,
+                    98.5, 100.9, 98.4, 100.8, 2200000L, 101.0);
+            C6ReversalCallStrategy strategy = new C6ReversalCallStrategy();
+
+            assertThat(strategy.isTriggered("AAPL", data, testTime)).isTrue();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger C6 when cooldown active (same instance, same ticker, two calls)")
+        void shouldNotTriggerC6WhenCooldownActive() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 11, 0, 0, 0, NY);
+
+            StrategyData data = buildC6Data(testTime, 98.5,
+                    98.5, 100.9, 98.4, 100.8, 2200000L, 101.0);
+            C6ReversalCallStrategy strategy = new C6ReversalCallStrategy();
+
+            boolean first = strategy.isTriggered("AAPL", data, testTime);
+            boolean second = strategy.isTriggered("AAPL", data, testTime);
+
+            assertThat(first).isTrue();
+            assertThat(second).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger C6 when close does not break above SMA20")
+        void shouldNotTriggerC6WhenNoBreakoutAboveSma() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 11, 0, 0, 0, NY);
+
+            // close=99.5 < SMA20 (~100) → crossedAboveSma = false
+            StrategyData data = buildC6Data(testTime, 98.5,
+                    98.5, 99.8, 98.0, 99.5, 2200000L, 101.0);
+            C6ReversalCallStrategy strategy = new C6ReversalCallStrategy();
+
+            assertThat(strategy.isTriggered("AAPL", data, testTime)).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger C6 when candle closes weak (long upper wick, not in top 35%)")
+        void shouldNotTriggerC6WhenCandleWeak() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 11, 0, 0, 0, NY);
+
+            // close=100.2, high=103.0, low=98.4 → range=4.6, (high-close)=2.8 > 4.6*0.35=1.61 → closedNearHigh=false
+            StrategyData data = buildC6Data(testTime, 98.5,
+                    98.5, 103.0, 98.4, 100.2, 2200000L, 101.0);
+            C6ReversalCallStrategy strategy = new C6ReversalCallStrategy();
+
+            assertThat(strategy.isTriggered("AAPL", data, testTime)).isFalse();
+        }
+    }
+
+    // =========================================================================
+    // P6ReversalPutStrategy Tests
+    // =========================================================================
+
+    @Nested
+    class P6ReversalPutStrategyTest {
+
+        /**
+         * Builds StrategyData for P6 (mirror of C6):
+         * DAY_1  : 22 flat bars
+         * HOUR_1 : 24 history bars + 1 current bar
+         *          bars 0..20 = 100.0 (SMA20 anchor)
+         *          bars 21..23 = aboveSmaClose (3-bar uptrend prior to breakdown)
+         * MIN_15 : 21 history bars + 1 current bar at min15Close
+         *          built so SMA20 is falling: last 2 bars differ by -0.1
+         */
+        private StrategyData buildP6Data(
+                ZonedDateTime currentTime,
+                double aboveSmaClose,
+                double currentHourOpen,
+                double currentHourHigh,
+                double currentHourLow,
+                double currentHourClose,
+                long currentHourVolume,
+                double min15Close
+        ) {
+            List<Candle> dailyCandles = new ArrayList<>();
+            ZonedDateTime dayBase = currentTime.toLocalDate().atStartOfDay(NY).minusDays(21);
+            for (int i = 0; i < 22; i++) {
+                dailyCandles.add(candle(dayBase.plusDays(i), 100.0, 101.0, 99.0, 100.0, 5000000L));
+            }
+
+            List<Candle> hourlyCandles = new ArrayList<>();
+            ZonedDateTime hourBase = currentTime.minusHours(24);
+            for (int i = 0; i < 21; i++) {
+                hourlyCandles.add(candle(hourBase.plusHours(i), 100.0, 100.5, 99.5, 100.0, 2000000L));
+            }
+            for (int i = 21; i < 24; i++) {
+                hourlyCandles.add(candle(hourBase.plusHours(i), aboveSmaClose, aboveSmaClose + 0.3, aboveSmaClose - 0.3, aboveSmaClose, 2000000L));
+            }
+            hourlyCandles.add(candle(currentTime, currentHourOpen, currentHourHigh, currentHourLow, currentHourClose, currentHourVolume));
+
+            List<Candle> candles15m = new ArrayList<>();
+            ZonedDateTime min15Base = currentTime.minusMinutes(15L * 21);
+            for (int i = 0; i < 20; i++) {
+                double c = min15Close + 0.2 - i * 0.01;
+                candles15m.add(candle(min15Base.plusMinutes(15L * i), c, c + 0.2, c - 0.2, c, 500000L));
+            }
+            candles15m.add(candle(min15Base.plusMinutes(15L * 20), min15Close + 0.1, min15Close + 0.3, min15Close - 0.1, min15Close + 0.1, 500000L));
+            candles15m.add(candle(currentTime, min15Close, min15Close + 0.1, min15Close - 0.2, min15Close, 500000L));
+
+            Map<TimeFrame, List<Candle>> data = new EnumMap<>(TimeFrame.class);
+            data.put(TimeFrame.DAY_1, dailyCandles);
+            data.put(TimeFrame.HOUR_1, hourlyCandles);
+            data.put(TimeFrame.MIN_15, candles15m);
+            return new StrategyData(data);
+        }
+
+        @Test
+        @DisplayName("Should trigger P6 when all conditions are met")
+        void shouldTriggerP6WhenAllConditionsMet() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 11, 0, 0, 0, NY);
+
+            // aboveSmaClose=101.5 → prior 3 bars above SMA20 (~100)
+            // current bar: open=101.5 (above SMA), close=99.2 (below SMA ~100), bearish, bottom 35%
+            // high=101.6, low=99.1 → range=2.5, (close-low)=0.1 ≤ 2.5*0.35=0.875 ✓
+            // volume=2200000 >= avgVol(2000000)*0.90=1800000 ✓
+            // min15Close=99.0 → below SMA20 and SMA slope down
+            StrategyData data = buildP6Data(testTime, 101.5,
+                    101.5, 101.6, 99.1, 99.2, 2200000L, 99.0);
+            P6ReversalPutStrategy strategy = new P6ReversalPutStrategy();
+
+            assertThat(strategy.isTriggered("AAPL", data, testTime)).isTrue();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger P6 when cooldown active (same instance, same ticker, two calls)")
+        void shouldNotTriggerP6WhenCooldownActive() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 11, 0, 0, 0, NY);
+
+            StrategyData data = buildP6Data(testTime, 101.5,
+                    101.5, 101.6, 99.1, 99.2, 2200000L, 99.0);
+            P6ReversalPutStrategy strategy = new P6ReversalPutStrategy();
+
+            boolean first = strategy.isTriggered("AAPL", data, testTime);
+            boolean second = strategy.isTriggered("AAPL", data, testTime);
+
+            assertThat(first).isTrue();
+            assertThat(second).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger P6 when close does not break below SMA20")
+        void shouldNotTriggerP6WhenNoBreakdownBelowSma() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 11, 0, 0, 0, NY);
+
+            // close=100.5 > SMA20 (~100) → crossedBelowSma = false
+            StrategyData data = buildP6Data(testTime, 101.5,
+                    101.5, 101.6, 100.2, 100.5, 2200000L, 99.0);
+            P6ReversalPutStrategy strategy = new P6ReversalPutStrategy();
+
+            assertThat(strategy.isTriggered("AAPL", data, testTime)).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should NOT trigger P6 when candle closes weak (long lower wick, not in bottom 35%)")
+        void shouldNotTriggerP6WhenCandleWeak() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 11, 0, 0, 0, NY);
+
+            // close=99.8, high=101.6, low=96.0 → range=5.6, (close-low)=3.8 > 5.6*0.35=1.96 → closedNearLow=false
+            StrategyData data = buildP6Data(testTime, 101.5,
+                    101.5, 101.6, 96.0, 99.8, 2200000L, 99.0);
+            P6ReversalPutStrategy strategy = new P6ReversalPutStrategy();
+
+            assertThat(strategy.isTriggered("AAPL", data, testTime)).isFalse();
         }
     }
 }
