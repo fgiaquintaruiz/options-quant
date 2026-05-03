@@ -27,6 +27,7 @@ import static org.mockito.Mockito.*;
  * <ul>
  *   <li>GET /api/ticker-config → universe + hot + entries + fundamentals + flags</li>
  *   <li>PUT /api/ticker-config → persists payload, reloads tickers, returns success body</li>
+ *   <li>GET /api/ticker-config/validate?symbol=X → delegates to OrderExecutionService, never throws</li>
  * </ul>
  */
 class TickerConfigControllerTest {
@@ -97,5 +98,17 @@ class TickerConfigControllerTest {
         assertThat((List<String>) body.get("hot")).containsExactly("AAPL");
         verify(runtimeConfigStore).save(payload);
         verify(tickerService).reload();
+    }
+
+    // ── GET /api/ticker-config/validate ──────────────────────────────────────
+
+    @Test
+    void validateTicker_returns_valid_true_when_tws_confirms() {
+        when(orderExecutionService.validateTicker("AAPL")).thenReturn(true);
+
+        ResponseEntity<Map<String, Object>> resp = controller.validateTicker("AAPL");
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(resp.getBody()).containsEntry("valid", true);
     }
 }
