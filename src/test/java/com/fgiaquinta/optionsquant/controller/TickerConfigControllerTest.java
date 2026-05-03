@@ -2,6 +2,7 @@ package com.fgiaquinta.optionsquant.controller;
 
 import com.fgiaquinta.optionsquant.config.IbkrProperties;
 import com.fgiaquinta.optionsquant.domain.TickerInfo;
+import com.fgiaquinta.optionsquant.dto.TickerFundamentalPayload;
 import com.fgiaquinta.optionsquant.dto.TickerRuntimeConfigPayload;
 import com.fgiaquinta.optionsquant.service.OrderExecutionService;
 import com.fgiaquinta.optionsquant.service.TickerRuntimeConfigStore;
@@ -28,6 +29,7 @@ import static org.mockito.Mockito.*;
  *   <li>GET /api/ticker-config → universe + hot + entries + fundamentals + flags</li>
  *   <li>PUT /api/ticker-config → persists payload, reloads tickers, returns success body</li>
  *   <li>GET /api/ticker-config/validate?symbol=X → delegates to OrderExecutionService, never throws</li>
+ *   <li>DELETE /api/ticker-config/symbol/{symbol} → removes from universe/hot/fundamentals, persists, reloads</li>
  * </ul>
  */
 class TickerConfigControllerTest {
@@ -110,5 +112,34 @@ class TickerConfigControllerTest {
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(resp.getBody()).containsEntry("valid", true);
+    }
+
+    // ── DELETE /api/ticker-config/symbol/{symbol} ────────────────────────────
+
+    @Test
+    void deleteSymbol_removes_symbol_from_universe_hot_and_fundamentals_then_reloads() throws IOException {
+        Map<String, TickerFundamentalPayload> fundamentals = new LinkedHashMap<>();
+        fundamentals.put("AAPL", new TickerFundamentalPayload(
+                "Apple Inc.", "Tech", 3000L, 28.5, 0.5, 1.2, 8.0, 7.0, 0.4, 25.0, null));
+        fundamentals.put("NVDA", new TickerFundamentalPayload(
+                "NVIDIA", "Tech", 1500L, 60.0, 0.0, 1.6, 30.0, 25.0, 0.2, 30.0, null));
+        TickerRuntimeConfigPayload existing = new TickerRuntimeConfigPayload(
+                List.of("AAPL", "NVDA", "MSFT"), List.of("NVDA", "MSFT"), fundamentals, 10);
+        when(runtimeConfigStore.load()).thenReturn(Optional.of(existing));
+
+        ResponseEntity<Map<String, Object>> resp = controller.deleteSymbol("nvda");
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(resp.getBody()).containsEntry("success", true);
+        assertThat(resp.getBody()).containsEntry("deleted", "NVDA");
+
+        var captor = org.mockito.ArgumentCaptor.forClass(TickerRuntimeConfigPayload.class);
+        verify(runtimeConfigStore).save(captor.capture());
+        TickerRuntimeConfigPayload saved = captor.getValue();
+        assertThat(saved.universe()).containsExactly("AAPL", "MSFT");
+        assertThat(saved.hot()).containsExactly("MSFT");
+        assertThat(saved.fundamentals()).containsOnlyKeys("AAPL");
+        assertThat(saved.hotTickerCount()).isEqualTo(10);
+        verify(tickerService).reload();
     }
 }
