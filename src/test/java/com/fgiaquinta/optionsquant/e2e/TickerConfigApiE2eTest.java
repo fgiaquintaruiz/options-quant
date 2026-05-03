@@ -81,4 +81,43 @@ class TickerConfigApiE2eTest extends BasePlaywrightTest {
         assertEquals(400, resp.statusCode());
         assertTrue(resp.body().contains("\"error\""));
     }
+
+    @Test
+    @DisplayName("PUT config with valid payload returns 200 and success/universe fields")
+    void putConfig_validPayload_returns200() throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        String body = "{\"universe\":[\"SPY\",\"AAPL\"],\"hot\":[\"SPY\"],\"fundamentals\":{}}";
+        HttpResponse<String> resp = client.send(
+            HttpRequest.newBuilder(URI.create(BASE_URL + "/api/ticker-config"))
+                .PUT(HttpRequest.BodyPublishers.ofString(body))
+                .header("Content-Type", "application/json")
+                .build(),
+            HttpResponse.BodyHandlers.ofString()
+        );
+        assertEquals(200, resp.statusCode());
+        assertTrue(resp.body().contains("success"));
+        assertTrue(resp.body().contains("universe"));
+    }
+
+    @Test
+    @DisplayName("DELETE symbol SPY returns 200 and success field")
+    void deleteSymbol_validSymbol_returns200() throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        String putBody = "{\"universe\":[\"SPY\",\"AAPL\"],\"hot\":[\"SPY\"],\"fundamentals\":{}}";
+        client.send(
+            HttpRequest.newBuilder(URI.create(BASE_URL + "/api/ticker-config"))
+                .PUT(HttpRequest.BodyPublishers.ofString(putBody))
+                .header("Content-Type", "application/json")
+                .build(),
+            HttpResponse.BodyHandlers.ofString()
+        );
+        HttpResponse<String> resp = client.send(
+            HttpRequest.newBuilder(URI.create(BASE_URL + "/api/ticker-config/symbol/SPY"))
+                .DELETE()
+                .build(),
+            HttpResponse.BodyHandlers.ofString()
+        );
+        assertEquals(200, resp.statusCode());
+        assertTrue(resp.body().contains("success"));
+    }
 }

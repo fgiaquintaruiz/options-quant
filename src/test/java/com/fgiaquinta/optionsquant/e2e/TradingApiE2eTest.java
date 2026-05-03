@@ -63,4 +63,60 @@ class TradingApiE2eTest extends BasePlaywrightTest {
         assertNotNull(body);
         assertTrue(body.contains("\"status\":\"ok\""));
     }
+
+    @Test
+    @DisplayName("Execute signal with valid params returns 200")
+    void executeSignal_validParams_returns200() throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpResponse<String> resp = client.send(
+            HttpRequest.newBuilder(URI.create(BASE_URL + "/api/trading/execute?ticker=SPY&direction=BUY&qty=1&entryPrice=450.0&tp=460.0&sl=440.0"))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .build(),
+            HttpResponse.BodyHandlers.ofString()
+        );
+        assertEquals(200, resp.statusCode());
+    }
+
+    @Test
+    @DisplayName("Download candles for SPY DAY returns 200")
+    void downloadCandles_validTicker_returns200() throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpResponse<String> resp = client.send(
+            HttpRequest.newBuilder(URI.create(BASE_URL + "/api/candles/download?ticker=SPY&timeframe=DAY&saveToCsv=false"))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .build(),
+            HttpResponse.BodyHandlers.ofString()
+        );
+        assertEquals(200, resp.statusCode());
+    }
+
+    @Test
+    @DisplayName("Download all candles for SPY returns 200")
+    void downloadAllCandles_validTicker_returns200() throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpResponse<String> resp = client.send(
+            HttpRequest.newBuilder(URI.create(BASE_URL + "/api/candles/download-all?ticker=SPY&saveToCsv=false"))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .build(),
+            HttpResponse.BodyHandlers.ofString()
+        );
+        assertEquals(200, resp.statusCode());
+    }
+
+    @Test
+    @DisplayName("Download all tickers candles returns 200")
+    void downloadAllTickersCandles_returns200() throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpResponse<String> resp = client.send(
+            HttpRequest.newBuilder(URI.create(BASE_URL + "/api/candles/download-all-tickers?saveToCsv=false"))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .build(),
+            HttpResponse.BodyHandlers.ofString()
+        );
+        assertEquals(200, resp.statusCode());
+    }
 }
