@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +26,7 @@ import static org.mockito.Mockito.*;
  * <p>Contract:
  * <ul>
  *   <li>GET /api/ticker-config → universe + hot + entries + fundamentals + flags</li>
+ *   <li>PUT /api/ticker-config → persists payload, reloads tickers, returns success body</li>
  * </ul>
  */
 class TickerConfigControllerTest {
@@ -74,5 +76,26 @@ class TickerConfigControllerTest {
         assertThat(body).containsEntry("runtimeUniverseEmpty", false);
         assertThat(body).containsEntry("runtimeHotEmpty", false);
         verify(tickerService).loadTickers();
+    }
+
+    // ── PUT /api/ticker-config ───────────────────────────────────────────────
+
+    @Test
+    void putConfig_persists_payload_reloads_and_returns_success_body() throws IOException {
+        TickerRuntimeConfigPayload payload = new TickerRuntimeConfigPayload(
+                List.of("AAPL", "MSFT"), List.of("AAPL"), Map.of(), null);
+        when(tickerService.getTickerSymbols()).thenReturn(List.of("AAPL", "MSFT"));
+        when(tickerService.getHotTickers()).thenReturn(List.of("AAPL"));
+
+        ResponseEntity<Map<String, Object>> resp = controller.putConfig(payload);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<String, Object> body = resp.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body).containsEntry("success", true);
+        assertThat((List<String>) body.get("universe")).containsExactly("AAPL", "MSFT");
+        assertThat((List<String>) body.get("hot")).containsExactly("AAPL");
+        verify(runtimeConfigStore).save(payload);
+        verify(tickerService).reload();
     }
 }
