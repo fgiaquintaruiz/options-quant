@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.util.concurrent.RateLimiter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -30,6 +31,7 @@ public class YahooFinanceClient {
     private final RateLimiter rateLimiter;
     private final HttpClient http;
 
+    @Autowired
     public YahooFinanceClient(@Value("${yahoo.finance.rate-limit-per-second:1.0}") double ratePerSecond) {
         this(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build(), ratePerSecond);
     }
