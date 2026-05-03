@@ -14,6 +14,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @SuppressWarnings({"unchecked", "rawtypes"})
@@ -29,7 +31,7 @@ class YahooFinanceClientTest {
         mockResponse = mock(HttpResponse.class);
         // doReturn avoids generic type inference issues with HttpClient.send()
         doReturn(mockResponse).when(mockHttp).send(any(), any());
-        client = new YahooFinanceClient(mockHttp);
+        client = new YahooFinanceClient(mockHttp, 1000.0);
     }
 
     // --- fetchEarningsDate ---
@@ -98,5 +100,35 @@ class YahooFinanceClientTest {
         List<String> result = client.fetchHeadlines("AAPL");
 
         assertThat(result).isEmpty();
+    }
+
+    // --- retry behavior ---
+
+    @Test
+    void get_429ThenSuccess_retriesAndReturnsSuccessResponse() throws Exception {
+        HttpResponse successResponse = mock(HttpResponse.class);
+        when(successResponse.statusCode()).thenReturn(200);
+        when(successResponse.body()).thenReturn("""
+                {"news":[{"title":"Retry Title"}]}
+                """);
+
+        when(mockResponse.statusCode()).thenReturn(429);
+        doReturn(mockResponse).doReturn(mockResponse).doReturn(successResponse)
+                .when(mockHttp).send(any(), any());
+
+        List<String> result = client.fetchHeadlines("AAPL");
+
+        assertThat(result).containsExactly("Retry Title");
+        verify(mockHttp, times(3)).send(any(), any());
+    }
+
+    @Test
+    void get_429AllThreeAttempts_returnsEmptyList() throws Exception {
+        when(mockResponse.statusCode()).thenReturn(429);
+
+        List<String> result = client.fetchHeadlines("AAPL");
+
+        assertThat(result).isEmpty();
+        verify(mockHttp, times(3)).send(any(), any());
     }
 }

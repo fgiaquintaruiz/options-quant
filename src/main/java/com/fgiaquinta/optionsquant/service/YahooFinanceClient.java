@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.util.concurrent.RateLimiter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -26,15 +27,20 @@ public class YahooFinanceClient {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private final RateLimiter rateLimiter = RateLimiter.create(2.0);
+    private final RateLimiter rateLimiter;
     private final HttpClient http;
 
-    public YahooFinanceClient() {
-        this(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build());
+    public YahooFinanceClient(@Value("${yahoo.finance.rate-limit-per-second:1.0}") double ratePerSecond) {
+        this(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build(), ratePerSecond);
     }
 
     YahooFinanceClient(HttpClient http) {
+        this(http, 1.0);
+    }
+
+    YahooFinanceClient(HttpClient http, double ratePerSecond) {
         this.http = http;
+        this.rateLimiter = RateLimiter.create(ratePerSecond);
     }
 
     public Optional<LocalDate> fetchEarningsDate(String ticker) {
@@ -103,6 +109,16 @@ public class YahooFinanceClient {
                 .header("User-Agent", "Mozilla/5.0")
                 .GET()
                 .build();
-        return http.send(request, HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response = null;
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            response = http.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 429) {
+                return response;
+            }
+            log.warn("get: 429 rate-limited (attempt {}/3) for {}", attempt, url);
+            Thread.sleep(1000L << attempt);
+        }
+        log.error("get: all 3 attempts returned 429 for {}", url);
+        return response;
     }
 }

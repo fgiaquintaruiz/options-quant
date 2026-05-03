@@ -118,3 +118,7 @@ replay:
   jitter-ms-min: 100
   jitter-ms-max: 800
   signals-file-pattern: "data/replay-signals-%s-%s.jsonl"  # %s %s = date, runId
+
+yahoo:
+  finance:
+    rate-limit-per-second: 1.0
