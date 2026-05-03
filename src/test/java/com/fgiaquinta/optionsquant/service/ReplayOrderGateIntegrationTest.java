@@ -1,6 +1,5 @@
 package com.fgiaquinta.optionsquant.service;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -25,9 +24,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>No TWS connection required — all IBKR-touching beans are mocked.
  */
-@Disabled("BUG: Spring DI fails — YahooFinanceClient has 3 constructors and no @Autowired marker (commit 879c050). " +
-        "Spring cannot pick a constructor and falls back to default ctor (which doesn't exist). " +
-        "Affects entire SpringBootTest context load. Re-enable after prod fix.")
 @Tag("integration")
 @SpringBootTest(classes = OptionsQuantApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.NONE)
