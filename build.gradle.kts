@@ -34,6 +34,7 @@ dependencies {
     implementation(platform("org.springframework.boot:spring-boot-dependencies:4.0.5"))
     implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.starter.actuator)
+    implementation(libs.spring.boot.starter.security)
     developmentOnly(libs.spring.boot.devtools)
     // IBKR TWS API (local JAR)
     implementation(files("libs/TwsApi.jar"))
