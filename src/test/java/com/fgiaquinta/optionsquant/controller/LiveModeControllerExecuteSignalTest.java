@@ -180,11 +180,11 @@ class LiveModeControllerExecuteSignalTest {
     // ── Order execution throws ───────────────────────────────────────────────
 
     @Test
-    @DisplayName("executeSignal when TradingService throws → success=false with sanitized 'Internal Error' message")
+    @DisplayName("executeSignal when TradingService throws → success=false with sanitized message and errorId, no exception leak")
     void executeSignal_orderExecutionThrows_returnsErrorWithoutLeakingStacktrace() {
         // Arrange
         when(tradingService.executeManualTrade(anyString(), anyString(), anyString(), anyDouble()))
-                .thenThrow(new RuntimeException("boom"));
+                .thenThrow(new RuntimeException("boom: jdbc://prod-db.internal:5432 connection refused"));
 
         // Act
         ResponseEntity<Map<String, Object>> res =
@@ -195,9 +195,15 @@ class LiveModeControllerExecuteSignalTest {
         Map<String, Object> body = res.getBody();
         assertThat(body).isNotNull();
         assertThat(body).containsEntry("success", false);
-        assertThat((String) body.get("message")).startsWith("Internal Error:");
-        // Exception message is included but must not be a serialized stacktrace.
+        // Lock the new sanitized contract — exact match, no internal details.
+        assertThat(body).containsEntry("message", "Trade execution failed — see logs.");
+        // The exception message must NEVER be concatenated into the response.
+        assertThat((String) body.get("message")).doesNotContain("boom");
+        assertThat((String) body.get("message")).doesNotContain("jdbc");
         assertThat((String) body.get("message")).doesNotContain("at com.fgiaquinta.optionsquant");
+        // errorId must be present so ops can correlate logs ↔ client report.
+        assertThat(body).containsKey("errorId");
+        assertThat((String) body.get("errorId")).isNotBlank();
     }
 
     // ── Order execution returns null ─────────────────────────────────────────

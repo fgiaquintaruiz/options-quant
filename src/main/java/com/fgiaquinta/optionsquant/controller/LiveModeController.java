@@ -882,12 +882,23 @@ public class LiveModeController {
             if (ok) result.put("orderId", orderResult.parentId());
             return ResponseEntity.ok(result);
         } catch (Exception e) {
-            log.error("❌ Manual trade exception: {}", e.getMessage(), e);
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("success", false);
-            result.put("message", "Internal Error: " + e.getMessage());
-            return ResponseEntity.ok(result);
+            String errorId = UUID.randomUUID().toString();
+            log.error("❌ Manual trade exception [{}]: {}", errorId, e.getMessage(), e);
+            return ResponseEntity.ok(errorBody("message", "Trade execution failed — see logs.", errorId));
         }
+    }
+
+    /**
+     * Builds a sanitized error response body. Never leaks exception messages or
+     * internal infrastructure details. The {@code errorId} correlates the user-facing
+     * response with the server-side log entry where the full stacktrace is recorded.
+     */
+    private static Map<String, Object> errorBody(String messageKey, String message, String errorId) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("success", false);
+        body.put(messageKey, message);
+        body.put("errorId", errorId);
+        return body;
     }
 
     @PostMapping("/close-trade")
@@ -1431,9 +1442,9 @@ public class LiveModeController {
             body.put("speed", r.speed());
             return ResponseEntity.ok(body);
         } catch (ReplayService.ReplayRejectedException e) {
-            body.put("success", false);
-            body.put("error", e.getMessage());
-            return ResponseEntity.status(409).body(body);
+            String errorId = UUID.randomUUID().toString();
+            log.error("❌ Replay start rejected [{}]: {}", errorId, e.getMessage(), e);
+            return ResponseEntity.status(409).body(errorBody("error", "Replay start failed — see logs.", errorId));
         } catch (java.time.format.DateTimeParseException e) {
             body.put("success", false);
             body.put("error", "invalid-date: " + date);
@@ -1456,7 +1467,9 @@ public class LiveModeController {
             replayService.setSpeed(speed);
             return ResponseEntity.ok(Map.of("success", true, "speed", speed));
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "error", e.getMessage()));
+            String errorId = UUID.randomUUID().toString();
+            log.error("❌ Replay speed change failed [{}]: {}", errorId, e.getMessage(), e);
+            return ResponseEntity.badRequest().body(errorBody("error", "Replay speed change failed — see logs.", errorId));
         }
     }
 

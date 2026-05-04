@@ -90,16 +90,22 @@ class LiveModeControllerReplayTest {
     }
 
     @Test
-    @DisplayName("POST /replay/start returns 409 when ReplayService rejects")
+    @DisplayName("POST /replay/start returns 409 with sanitized error and errorId when ReplayService rejects")
     void startReplay_returnsConflictOnRejection() {
-        doThrow(new ReplayService.ReplayRejectedException("market-open"))
+        doThrow(new ReplayService.ReplayRejectedException("market-open: internal-host:5432"))
                 .when(replayService).start(any(LocalDate.class), anyInt());
 
         ResponseEntity<Map<String, Object>> response = controller.startReplay("2026-04-22", 60);
 
         assertThat(response.getStatusCode().value()).isEqualTo(409);
         assertThat(response.getBody()).containsEntry("success", false);
-        assertThat(response.getBody()).containsEntry("error", "market-open");
+        // Lock the new sanitized contract — exception message is NOT leaked.
+        assertThat(response.getBody()).containsEntry("error", "Replay start failed — see logs.");
+        assertThat((String) response.getBody().get("error")).doesNotContain("market-open");
+        assertThat((String) response.getBody().get("error")).doesNotContain("internal-host");
+        // errorId correlates the response with the server-side log.
+        assertThat(response.getBody()).containsKey("errorId");
+        assertThat((String) response.getBody().get("errorId")).isNotBlank();
     }
 
     @Test
