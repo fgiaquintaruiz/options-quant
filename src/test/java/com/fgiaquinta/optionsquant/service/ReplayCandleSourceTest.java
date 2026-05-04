@@ -1,5 +1,6 @@
 package com.fgiaquinta.optionsquant.service;
 
+import com.fgiaquinta.optionsquant.candle.CandleRepository;
 import com.fgiaquinta.optionsquant.domain.Candle;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,15 +28,15 @@ class ReplayCandleSourceTest {
     private static final ZoneId UTC = ZoneId.of("UTC");
     private static final LocalDate REPLAY_DATE = LocalDate.of(2026, 4, 22);
 
-    private CandleCsvService csvService;
+    private CandleRepository candleRepository;
     private IbkrService ibkrService;
     private ReplayCandleSource source;
 
     @BeforeEach
     void setUp() {
-        csvService = mock(CandleCsvService.class);
+        candleRepository = mock(CandleRepository.class);
         ibkrService = mock(IbkrService.class);
-        source = new ReplayCandleSource(csvService, ibkrService);
+        source = new ReplayCandleSource(candleRepository, ibkrService);
     }
 
     private Candle candle(ZonedDateTime t, double close) {
@@ -52,20 +53,20 @@ class ReplayCandleSourceTest {
     }
 
     @Test
-    void preload_doesNotCallIbkr_whenCsvCoversTargetDate() {
+    void preload_doesNotCallIbkr_whenRepositoryCoversTargetDate() {
         List<Candle> cached = candlesFor(REPLAY_DATE, 78, 5);
-        when(csvService.loadFromCsv("AAPL", TimeFrame.MIN_5)).thenReturn(cached);
+        when(candleRepository.load("AAPL", TimeFrame.MIN_5)).thenReturn(cached);
         when(ibkrService.isConnected()).thenReturn(true);
 
         source.preload(REPLAY_DATE, Set.of("AAPL"), List.of(TimeFrame.MIN_5));
 
-        verify(csvService).loadFromCsv("AAPL", TimeFrame.MIN_5);
+        verify(candleRepository).load("AAPL", TimeFrame.MIN_5);
         verify(ibkrService, never()).downloadHistoricalData(any(), any());
     }
 
     @Test
-    void preload_backfillsFromIbkr_whenCsvMissesTargetDate() {
-        when(csvService.loadFromCsv("NVDA", TimeFrame.MIN_5))
+    void preload_backfillsFromIbkr_whenRepositoryMissesTargetDate() {
+        when(candleRepository.load("NVDA", TimeFrame.MIN_5))
                 .thenReturn(candlesFor(REPLAY_DATE.minusDays(5), 20, 5));
         List<Candle> fresh = candlesFor(REPLAY_DATE, 78, 5);
         when(ibkrService.isConnected()).thenReturn(true);
@@ -74,12 +75,12 @@ class ReplayCandleSourceTest {
         source.preload(REPLAY_DATE, Set.of("NVDA"), List.of(TimeFrame.MIN_5));
 
         verify(ibkrService).downloadHistoricalData("NVDA", TimeFrame.MIN_5);
-        verify(csvService, times(1)).saveToCsv(eq("NVDA"), eq(TimeFrame.MIN_5), any());
+        verify(candleRepository, times(1)).upsert(eq("NVDA"), eq(TimeFrame.MIN_5), any());
     }
 
     @Test
     void preload_throws_whenDateMissingAndTwsDisconnected() {
-        when(csvService.loadFromCsv("TSLA", TimeFrame.MIN_5))
+        when(candleRepository.load("TSLA", TimeFrame.MIN_5))
                 .thenReturn(candlesFor(REPLAY_DATE.minusDays(3), 5, 5));
         when(ibkrService.isConnected()).thenReturn(false);
 
@@ -90,7 +91,7 @@ class ReplayCandleSourceTest {
 
     @Test
     void getCandlesUntil_returnsOnlyCandlesBeforeOrEqualToVirtualNow() {
-        when(csvService.loadFromCsv("AAPL", TimeFrame.MIN_5))
+        when(candleRepository.load("AAPL", TimeFrame.MIN_5))
                 .thenReturn(candlesFor(REPLAY_DATE, 10, 5));
         when(ibkrService.isConnected()).thenReturn(true);
         source.preload(REPLAY_DATE, Set.of("AAPL"), List.of(TimeFrame.MIN_5));
@@ -113,7 +114,7 @@ class ReplayCandleSourceTest {
 
     @Test
     void clear_evictsAllCachedData() {
-        when(csvService.loadFromCsv("AAPL", TimeFrame.MIN_5))
+        when(candleRepository.load("AAPL", TimeFrame.MIN_5))
                 .thenReturn(candlesFor(REPLAY_DATE, 10, 5));
         when(ibkrService.isConnected()).thenReturn(true);
         source.preload(REPLAY_DATE, Set.of("AAPL"), List.of(TimeFrame.MIN_5));
@@ -127,9 +128,9 @@ class ReplayCandleSourceTest {
 
     @Test
     void preload_reportsAllMissingTickers_whenMultipleFail() {
-        when(csvService.loadFromCsv("A", TimeFrame.MIN_5))
+        when(candleRepository.load("A", TimeFrame.MIN_5))
                 .thenReturn(candlesFor(REPLAY_DATE.minusDays(2), 5, 5));
-        when(csvService.loadFromCsv("B", TimeFrame.MIN_5))
+        when(candleRepository.load("B", TimeFrame.MIN_5))
                 .thenReturn(candlesFor(REPLAY_DATE.minusDays(2), 5, 5));
         when(ibkrService.isConnected()).thenReturn(false);
 

@@ -1,5 +1,6 @@
 package com.fgiaquinta.optionsquant.service;
 
+import com.fgiaquinta.optionsquant.candle.CandleRepository;
 import com.fgiaquinta.optionsquant.domain.Candle;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import lombok.extern.slf4j.Slf4j;
@@ -33,14 +34,14 @@ public class ReplayCandleSource {
         public MissingDataException(String message) { super(message); }
     }
 
-    private final CandleCsvService csvService;
+    private final CandleRepository candleRepository;
     private final IbkrService ibkrService;
 
     // ticker -> timeframe -> (timestamp -> candle)
     private final Map<String, Map<TimeFrame, NavigableMap<ZonedDateTime, Candle>>> cache = new ConcurrentHashMap<>();
 
-    public ReplayCandleSource(CandleCsvService csvService, IbkrService ibkrService) {
-        this.csvService = csvService;
+    public ReplayCandleSource(CandleRepository candleRepository, IbkrService ibkrService) {
+        this.candleRepository = candleRepository;
         this.ibkrService = ibkrService;
     }
 
@@ -58,7 +59,7 @@ public class ReplayCandleSource {
             Map<TimeFrame, NavigableMap<ZonedDateTime, Candle>> perTf = new ConcurrentHashMap<>();
 
             for (TimeFrame tf : timeframes) {
-                List<Candle> candles = csvService.loadFromCsv(ticker, tf);
+                List<Candle> candles = candleRepository.load(ticker, tf);
 
                 if (!coversDate(candles, date)) {
                     if (!ibkrService.isConnected()) {
@@ -67,7 +68,7 @@ public class ReplayCandleSource {
                     }
                     List<Candle> fresh = ibkrService.downloadHistoricalData(ticker, tf);
                     candles = merge(candles, fresh);
-                    csvService.saveToCsv(ticker, tf, candles);
+                    candleRepository.upsert(ticker, tf, candles);
                 }
 
                 NavigableMap<ZonedDateTime, Candle> indexed = new TreeMap<>();

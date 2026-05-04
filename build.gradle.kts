@@ -47,8 +47,13 @@ dependencies {
     // Protobuf code generation
     implementation("com.google.protobuf:protobuf-java-util:4.34.1")
 
-    // Guava (for RateLimiter)
-    implementation("com.google.guava:guava:33.4.8-jre")
+    // Guava (for RateLimiter and caches)
+    implementation("com.google.guava:guava:33.4.0-jre")
+
+    // SQLite persistence layer
+    implementation("org.xerial:sqlite-jdbc:3.47.0.0")
+    implementation("com.zaxxer:HikariCP:6.2.1")
+    implementation("org.springframework.boot:spring-boot-starter-jdbc")
 
     // Jackson for JSON serialization (used by BacktestCli)
     implementation(libs.jackson.databind)

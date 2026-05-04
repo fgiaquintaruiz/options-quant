@@ -5,7 +5,8 @@ import com.fgiaquinta.optionsquant.backtest.domain.BacktestReport;
 import com.fgiaquinta.optionsquant.backtest.engine.BacktestEngine;
 import com.fgiaquinta.optionsquant.domain.Candle;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
-import com.fgiaquinta.optionsquant.service.CandleCsvService;
+import com.fgiaquinta.optionsquant.candle.CandleRepository;
+import com.fgiaquinta.optionsquant.candle.csv.CsvCandleRepository;
 import com.fgiaquinta.optionsquant.service.IbkrService;
 import com.fgiaquinta.optionsquant.service.ReplayCandleSource;
 import com.fgiaquinta.optionsquant.service.TickerMemory;
@@ -67,7 +68,7 @@ class ReplayVsBacktestComparisonTest {
     @Mock
     private IbkrService ibkrService;
 
-    private CandleCsvService csvService;
+    private CandleRepository candleRepository;
 
     @BeforeEach
     void copyFixturesToTempDir() throws Exception {
@@ -83,8 +84,9 @@ class ReplayVsBacktestComparisonTest {
             }
         }
 
-        csvService = new CandleCsvService();
-        csvService.setDataDir(tempDataDir);
+        CsvCandleRepository csvRepo = new CsvCandleRepository();
+        csvRepo.setDataDir(tempDataDir);
+        this.candleRepository = csvRepo;
     }
 
     // =========================================================================
@@ -94,7 +96,7 @@ class ReplayVsBacktestComparisonTest {
     @Test
     @DisplayName("BacktestEngine processes all MIN_15 fixture candles for SPY without exceptions")
     void backtest_processesAllFixtureCandles() {
-        BacktestEngine engine = new BacktestEngine(csvService, tickerMemory, 1, false);
+        BacktestEngine engine = new BacktestEngine(candleRepository, tickerMemory, 1, false);
 
         BacktestConfig config = BacktestConfig.defaults(
                 List.of("SPY"),
@@ -120,7 +122,7 @@ class ReplayVsBacktestComparisonTest {
     void replay_exposesAllFixtureCandlesAtLastTimestamp() {
         // ibkrService.isConnected() is never called because the CSV already covers REPLAY_DATE.
         // ReplayCandleSource only contacts IBKR when the CSV is stale/missing for the target date.
-        ReplayCandleSource source = new ReplayCandleSource(csvService, ibkrService);
+        ReplayCandleSource source = new ReplayCandleSource(candleRepository, ibkrService);
         source.preload(REPLAY_DATE, Set.of("SPY"), List.of(TimeFrame.MIN_15));
 
         List<Candle> visible = source.getCandlesUntil("SPY", TimeFrame.MIN_15, LAST_CANDLE_TS);
@@ -138,15 +140,15 @@ class ReplayVsBacktestComparisonTest {
     @DisplayName("Backtest and Replay-mode load the same MIN_15 candle count for SPY")
     void backtestAndReplay_agreesOnCandleCount() {
         // --- Replay side ---
-        ReplayCandleSource source = new ReplayCandleSource(csvService, ibkrService);
+        ReplayCandleSource source = new ReplayCandleSource(candleRepository, ibkrService);
         source.preload(REPLAY_DATE, Set.of("SPY"), List.of(TimeFrame.MIN_15));
 
         List<Candle> replayCandles = source.getCandlesUntil("SPY", TimeFrame.MIN_15, LAST_CANDLE_TS);
 
         // --- Backtest side ---
-        // BacktestEngine loads via csvService.loadFromCsv then filters to [fromDate, toDate].
+        // BacktestEngine loads via candleRepository.load then filters to [fromDate, toDate].
         // We replicate that filter here to get the count the engine actually saw.
-        List<Candle> backtestCandles = csvService.loadFromCsv("SPY", TimeFrame.MIN_15)
+        List<Candle> backtestCandles = candleRepository.load("SPY", TimeFrame.MIN_15)
                 .stream()
                 .filter(c -> !c.timestamp().toLocalDate().isBefore(REPLAY_DATE)
                           && !c.timestamp().toLocalDate().isAfter(REPLAY_DATE))
@@ -171,7 +173,7 @@ class ReplayVsBacktestComparisonTest {
     @Test
     @DisplayName("ReplayCandleSource returns only candles up to virtualNow (partial window)")
     void replay_partialWindowReturnsSubset() {
-        ReplayCandleSource source = new ReplayCandleSource(csvService, ibkrService);
+        ReplayCandleSource source = new ReplayCandleSource(candleRepository, ibkrService);
         source.preload(REPLAY_DATE, Set.of("SPY"), List.of(TimeFrame.MIN_15));
 
         // virtualNow = 3rd bar (15:00), so only bars 1-3 should be visible
@@ -192,7 +194,7 @@ class ReplayVsBacktestComparisonTest {
     @Test
     @DisplayName("Replay candles are returned in chronological order (consistent processing order)")
     void replay_candlesAreChronologicallyOrdered() {
-        ReplayCandleSource source = new ReplayCandleSource(csvService, ibkrService);
+        ReplayCandleSource source = new ReplayCandleSource(candleRepository, ibkrService);
         source.preload(REPLAY_DATE, Set.of("SPY"), List.of(TimeFrame.MIN_15));
 
         List<Candle> candles = source.getCandlesUntil("SPY", TimeFrame.MIN_15, LAST_CANDLE_TS);

@@ -1,6 +1,7 @@
 package com.fgiaquinta.optionsquant.service;
 
 import com.google.common.util.concurrent.RateLimiter;
+import com.fgiaquinta.optionsquant.candle.CandleRepository;
 import com.fgiaquinta.optionsquant.config.IbkrProperties;
 import com.fgiaquinta.optionsquant.domain.NewsBias;
 import com.fgiaquinta.optionsquant.config.ScannerConcurrency;
@@ -60,7 +61,7 @@ public class StrategyScannerService {
     private final ReentrantLock scanAllExclusiveLock = new ReentrantLock(true);
     private final AtomicReference<String> scanOwnerThreadLabel = new AtomicReference<>("");
 
-    private final CandleCsvService csvService;
+    private final CandleRepository candleRepository;
     private final IbkrService ibkrService;
     private final IbkrProperties ibkrProperties;
     private final TickerService tickerService;
@@ -130,14 +131,14 @@ public class StrategyScannerService {
             TimeFrame.DAY_1, Duration.ofHours(26)
     );
 
-    public StrategyScannerService(CandleCsvService csvService, IbkrService ibkrService,
+    public StrategyScannerService(CandleRepository candleRepository, IbkrService ibkrService,
                                    IbkrProperties ibkrProperties, TickerService tickerService,
                                    TickerMemory tickerMemory, EarningsDateService earningsService,
                                    NewsBiasService newsBiasService,
                                    MarketCalendarService marketCalendar,
                                    ScannerProperties scannerProperties,
                                    ScanPrioritizationService scanPrioritizationService) {
-        this.csvService = csvService;
+        this.candleRepository = candleRepository;
         this.ibkrService = ibkrService;
         this.ibkrProperties = ibkrProperties;
         this.tickerService = tickerService;
@@ -569,7 +570,7 @@ public class StrategyScannerService {
                 if (!visible.isEmpty()) candlesByTimeframe.put(tf, visible);
             }
         } else for (TimeFrame tf : timeframesToLoad) {
-            List<Candle> cachedCandles = csvService.loadFromCsv(ticker, tf);
+            List<Candle> cachedCandles = candleRepository.load(ticker, tf);
 
             if (cachedCandles.isEmpty()) {
                 // Need full download - submit to parallel executor
@@ -592,7 +593,7 @@ public class StrategyScannerService {
 
                         List<Candle> freshData = downloadTimeframeDelta(ticker, tf, null);
                         if (!freshData.isEmpty()) {
-                            csvService.saveToCsv(ticker, tf, freshData);
+                            candleRepository.upsert(ticker, tf, freshData);
                             candlesByTimeframe.put(tf, freshData);
                             totalNewCandles.addAndGet(freshData.size());
                         }
@@ -639,7 +640,7 @@ public class StrategyScannerService {
 
                             if (!deltaData.isEmpty()) {
                                 List<Candle> mergedCandles = mergeCandles(cached, deltaData);
-                                csvService.saveToCsv(ticker, tf, mergedCandles);
+                                candleRepository.upsert(ticker, tf, mergedCandles);
                                 candlesByTimeframe.put(tf, mergedCandles);
                                 totalNewCandles.addAndGet(deltaData.size());
                                 downloadLog.info("✅ {} [{}] delta: +{} new candles (cached: {} → merged: {})",
@@ -930,9 +931,9 @@ public class StrategyScannerService {
      * Gets the last known price for a ticker from its latest 5m or 15m candle.
      */
     public double getLastKnownPrice(String ticker) {
-        List<Candle> candles = csvService.loadFromCsv(ticker, TimeFrame.MIN_5);
+        List<Candle> candles = candleRepository.load(ticker, TimeFrame.MIN_5);
         if (candles.isEmpty()) {
-            candles = csvService.loadFromCsv(ticker, TimeFrame.MIN_15);
+            candles = candleRepository.load(ticker, TimeFrame.MIN_15);
         }
         if (!candles.isEmpty()) {
             return candles.get(candles.size() - 1).close();

@@ -1,5 +1,6 @@
 package com.fgiaquinta.optionsquant.service;
 
+import com.fgiaquinta.optionsquant.candle.CandleRepository;
 import com.fgiaquinta.optionsquant.domain.Candle;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import jakarta.annotation.PostConstruct;
@@ -28,7 +29,7 @@ import java.util.List;
 @Service
 public class MacroEnvironmentFilter {
 
-    private final CandleCsvService csvService;
+    private final CandleRepository candleRepository;
 
     // Market regime based on SPY vs 50-SMA
     public enum MarketRegime {
@@ -67,8 +68,8 @@ public class MacroEnvironmentFilter {
     @Autowired(required = false)
     private TelegramService telegramService;
 
-    public MacroEnvironmentFilter(CandleCsvService csvService) {
-        this.csvService = csvService;
+    public MacroEnvironmentFilter(CandleRepository candleRepository) {
+        this.candleRepository = candleRepository;
     }
 
     /**
@@ -78,12 +79,6 @@ public class MacroEnvironmentFilter {
     public void init() {
         log.info("🌐 [Macro Filter] Initializing - multi-factor analysis (50-SMA + short-term momentum)...");
         updateMarketAnalysis();
-
-        // Telegram notification removed - only send during live trading, not backtesting
-        // if (telegramService != null && telegramService.isEnabled()) {
-        //     String trend = getAnalysisString();
-        //     telegramService.sendMacroStatus(trend);
-        // }
     }
 
     /**
@@ -177,7 +172,7 @@ public class MacroEnvironmentFilter {
     }
 
     /**
-     * Gets SPY daily candles with caching to avoid repeated CSV loads.
+     * Gets SPY daily candles with caching to avoid repeated repository loads.
      * Cache TTL is 24 hours since daily data doesn't change intraday.
      */
     private List<Candle> getSpyDailyCandles() {
@@ -185,7 +180,7 @@ public class MacroEnvironmentFilter {
         if (spyDailyCache == null || now - spyCacheTimestamp > SPY_CACHE_TTL_MS) {
             synchronized (this) {
                 if (spyDailyCache == null || now - spyCacheTimestamp > SPY_CACHE_TTL_MS) {
-                    spyDailyCache = csvService.loadFromCsv("SPY", TimeFrame.DAY_1);
+                    spyDailyCache = candleRepository.load("SPY", TimeFrame.DAY_1);
                     spyCacheTimestamp = now;
                 }
             }

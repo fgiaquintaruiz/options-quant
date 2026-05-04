@@ -6,7 +6,7 @@ import com.fgiaquinta.optionsquant.backtest.domain.FillResult;
 import com.fgiaquinta.optionsquant.backtest.domain.TradeRecord;
 import com.fgiaquinta.optionsquant.domain.Candle;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
-import com.fgiaquinta.optionsquant.service.CandleCsvService;
+import com.fgiaquinta.optionsquant.candle.CandleRepository;
 import com.fgiaquinta.optionsquant.service.TickerMemory;
 import com.fgiaquinta.optionsquant.service.TickerStrategyProfile;
 import com.fgiaquinta.optionsquant.strategy.TradingStrategy;
@@ -64,7 +64,7 @@ public class BacktestEngine {
     private static final Path CHECKPOINT_FILE = Path.of("backtest/checkpoint.txt");
 
     private final List<TradingStrategy> strategies;
-    private final CandleCsvService csvService;
+    private final CandleRepository candleRepository;
     private final TickerMemory tickerMemory;
     private final boolean generateTradeCharts;
 
@@ -72,11 +72,11 @@ public class BacktestEngine {
     private final AtomicInteger maxConcurrentScans;
 
     public BacktestEngine(
-            CandleCsvService csvService,
+            CandleRepository candleRepository,
             TickerMemory tickerMemory,
             @Value("${backtest.default-max-concurrent-scans:4}") int defaultMaxConcurrentScans,
             @Value("${backtest.generate-trade-charts:true}") boolean generateTradeCharts) {
-        this.csvService = csvService;
+        this.candleRepository = candleRepository;
         this.tickerMemory = tickerMemory;
         this.generateTradeCharts = generateTradeCharts;
         this.maxConcurrentScans = new AtomicInteger(
@@ -348,7 +348,7 @@ public class BacktestEngine {
                         // Load all timeframe data for this single ticker
                         Map<TimeFrame, List<Candle>> tickerData = new EnumMap<>(TimeFrame.class);
                         for (TimeFrame tf : TimeFrame.values()) {
-                            List<Candle> candles = csvService.loadFromCsv(ticker, tf);
+                            List<Candle> candles = candleRepository.load(ticker, tf);
                             List<Candle> filtered = candles.stream()
                                     .filter(c -> !c.timestamp().toLocalDate().isBefore(config.fromDate())
                                             && !c.timestamp().toLocalDate().isAfter(config.toDate()))
