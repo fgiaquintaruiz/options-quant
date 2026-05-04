@@ -55,7 +55,7 @@ ibkr:
   account-client-id: 999 # AccountManager (balance / portfolio)
   sync-timeout: 30
   auto-execute: true
-  account-id: "DUN598126"
+  account-id: "DUN598216"
   default-qty: 10
   risk-per-trade-pct: 0.02
   hot-ticker-count: 20  # Used when hot-tickers is empty: top N CSV names by market cap (see TickerService)
