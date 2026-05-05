@@ -3,6 +3,7 @@ package com.fgiaquinta.optionsquant.candle.backfill;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -17,8 +18,12 @@ import java.util.Optional;
  *
  * <p>Tracks the {@code last_chunk_end_ts} for each (ticker, timeframe) pair
  * so the backfill process can resume from where it left off.
+ *
+ * <p>Only active when {@code candles.store=sqlite} (default) — this bean is
+ * SQLite-specific and has no meaning when the CSV rollback mode is active.
  */
 @Component
+@ConditionalOnProperty(name = "candles.store", havingValue = "sqlite", matchIfMissing = true)
 public class BackfillCheckpoint {
 
     private static final Logger log = LoggerFactory.getLogger(BackfillCheckpoint.class);

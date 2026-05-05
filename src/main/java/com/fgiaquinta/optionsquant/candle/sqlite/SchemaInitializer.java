@@ -43,7 +43,7 @@ public class SchemaInitializer implements InitializingBean {
      * Test factory: creates an initializer directly from a pre-built JdbcTemplate,
      * bypassing Spring DI and bean qualification.
      */
-    static SchemaInitializer forTesting(JdbcTemplate jdbc) {
+    public static SchemaInitializer forTesting(JdbcTemplate jdbc) {
         return new SchemaInitializer(jdbc);
     }
 
