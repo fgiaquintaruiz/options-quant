@@ -12,9 +12,9 @@ _Last updated: 2026-05-04_
 - ✅ Spec — completado 2026-05-04
 - ✅ Design — completado 2026-05-04
 - ✅ Tasks — completado 2026-05-04
-- ❌ Apply — pendiente
-- ❌ Verify — pendiente
-- ❌ Archive — pendiente
+- ✅ Apply — completado 2026-05-05 (27/27 tasks, 441/441 tests GREEN)
+- ✅ Verify — completado 2026-05-05 (PASS, 0 CRITICAL)
+- ✅ Archive — completado 2026-05-05
 
 ### Scope confirmado
 - **Fuente**: TWS (IBKR)

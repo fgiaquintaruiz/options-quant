@@ -6,6 +6,7 @@ import com.fgiaquinta.optionsquant.domain.Candle;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -33,6 +34,7 @@ import java.util.stream.StreamSupport;
  *
  * <p>Active when {@code candles.store=sqlite} (default).
  */
+@Primary
 @Repository
 @ConditionalOnProperty(name = "candles.store", havingValue = "sqlite", matchIfMissing = true)
 public class SqliteCandleRepository implements CandleRepository {

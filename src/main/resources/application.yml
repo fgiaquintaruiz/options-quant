@@ -125,6 +125,7 @@ yahoo:
     rate-limit-per-second: 1.0
 
 candles:
+  store: sqlite
   backfill:
     rate-per-second: 0.1   # 1 TWS historical request per 10s (safe default within 60 req/10min limit)
     start-year: 2018        # Earliest year to backfill from
