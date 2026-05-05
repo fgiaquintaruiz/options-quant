@@ -1,6 +1,6 @@
 # Pending Work — options-quant
 
-_Last updated: 2026-05-04_
+_Last updated: 2026-05-05_
 
 ---
 
@@ -85,8 +85,31 @@ _Last updated: 2026-05-04_
   - Chart rendering (Recharts) no validado con curva real
   - Falta load test para runs concurrentes
 
-### Telegram ❌ PENDIENTE
-- Audit no realizado aún
+### Telegram ⚠️ EN PROGRESO
+- 3 test suites implementadas: `TelegramWebhookControllerTest`, `TelegramServiceSecurityTest`, `MarketScannerTelegramRoutingTest`
+- Features 1-22 cubiertas (webhook + security + routing)
+- Features 23-35 pendientes (notifications: sendSignal, sendAutoExecuteSignal, sendTradeConfirmation, etc.)
+- Dead code decision pendiente: `sendTradeExit`, `sendDailySummary`, `sendMacroStatus`, `testConnection` → ¿delete o wire up?
+
+---
+
+## SDD: yfinance Historical Fallback ✅ DONE
+
+### Estado
+- ✅ Explore, Propose, Spec, Design, Tasks — 2026-05-05
+- ✅ Apply — 2026-05-05 (13/13 tasks, 504/504 tests GREEN, commit `c31453e`)
+- ⏳ T12 manual: correr sidecar Python + backfill 1-2 tickers, verificar candles en SQLite con COMPLETE_YFINANCE
+
+### Scope
+- yfinance como fallback para DAY_1 chunks más viejos de `cutoff-years` (default 5)
+- TWS first → yfinance fallback para chunks recientes
+- ^VIX via yfinance-only path, alimenta `BacktestEngine.vixAtEntry`
+- Python sidecar: `GET /api/v1/historical/{ticker}?from=&to=&interval=1d`
+
+### Engram topic keys
+- `sdd/yfinance-historical-fallback/apply-progress` (#1158)
+- `sdd/yfinance-historical-fallback/design` (#1144)
+- `sdd/yfinance-historical-fallback/tasks` (#1145)
 
 ---
 
@@ -94,7 +117,8 @@ _Last updated: 2026-05-04_
 
 | Commit | Descripción |
 |--------|-------------|
-| `a619762` | fix(config): correct TWS account ID (DUN598126 → DUN598216) |
+| `c31453e` | feat(backfill): add yfinance fallback for historical data beyond TWS limits |
+| `6cf4165` | fix(telegram): generateSecureOrderId blank masterKey now stores orderId |
 | `43d961b` | fix(security): sanitize error responses in LiveModeController |
 | `b1492e1` | feat(security): add explicit SecurityFilterChain |
 | `17d4db1` | chore(security): bind server to 127.0.0.1 only |
@@ -107,5 +131,6 @@ Al iniciar sesión, leer este archivo primero:
 `docs/pending-work.md`
 
 Luego cargar contexto engram:
-- `mem_search("sdd/historical-candles-sqlite/scope")`
+- `mem_search("sdd/yfinance-historical-fallback/apply-progress")` — estado yfinance SDD
+- `mem_search("qa-audit/screen-coverage-status")` — estado QA
 - `mem_context` para sesiones recientes
