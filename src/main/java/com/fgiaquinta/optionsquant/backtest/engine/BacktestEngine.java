@@ -18,6 +18,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import com.fgiaquinta.optionsquant.candle.TickerCursor;
+
 import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -37,6 +39,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -345,15 +348,39 @@ public class BacktestEngine {
                             progressCallback.onProgress(ticker, "LOADING", "Loading candles...");
                         }
 
-                        // Load all timeframe data for this single ticker
+                        // Lazy-load all timeframe data via TickerCursor (stream instead of full list).
+                        // A PriorityQueue orders cursors by next candle timestamp; each cursor is
+                        // drained into its own timeframe bucket and closed when exhausted.
                         Map<TimeFrame, List<Candle>> tickerData = new EnumMap<>(TimeFrame.class);
+                        PriorityQueue<TickerCursor> cursorQueue = new PriorityQueue<>();
                         for (TimeFrame tf : TimeFrame.values()) {
-                            List<Candle> candles = candleRepository.load(ticker, tf);
-                            List<Candle> filtered = candles.stream()
-                                    .filter(c -> !c.timestamp().toLocalDate().isBefore(config.fromDate())
-                                            && !c.timestamp().toLocalDate().isAfter(config.toDate()))
-                                    .toList();
-                            tickerData.put(tf, filtered);
+                            TickerCursor cursor = new TickerCursor(ticker, tf,
+                                    candleRepository.stream(ticker, tf));
+                            cursorQueue.add(cursor);
+                            tickerData.put(tf, new ArrayList<>());
+                        }
+                        try {
+                            while (!cursorQueue.isEmpty()) {
+                                TickerCursor head = cursorQueue.poll();
+                                if (head.isExhausted()) {
+                                    head.close();
+                                    continue;
+                                }
+                                Candle c = head.next();
+                                if (!c.timestamp().toLocalDate().isBefore(config.fromDate())
+                                        && !c.timestamp().toLocalDate().isAfter(config.toDate())) {
+                                    tickerData.get(head.timeframe()).add(c);
+                                }
+                                if (!head.isExhausted()) {
+                                    cursorQueue.add(head);
+                                } else {
+                                    head.close();
+                                }
+                            }
+                        } finally {
+                            for (TickerCursor remaining : cursorQueue) {
+                                remaining.close();
+                            }
                         }
 
                         int candleCount = tickerData.getOrDefault(execTf, List.of()).size();

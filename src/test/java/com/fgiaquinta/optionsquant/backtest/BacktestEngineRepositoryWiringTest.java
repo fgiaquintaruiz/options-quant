@@ -20,6 +20,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -31,8 +32,8 @@ import static org.mockito.Mockito.when;
 /**
  * T15 — BacktestEngine wired to CandleRepository.
  *
- * Verifies that BacktestEngine delegates candle loading to CandleRepository.load()
- * and NOT to CandleCsvService.
+ * Verifies that BacktestEngine delegates candle loading to CandleRepository.stream()
+ * (lazy load, T20 upgrade) and NOT to CandleCsvService.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -50,7 +51,8 @@ class BacktestEngineRepositoryWiringTest {
 
     @BeforeEach
     void setUp() {
-        when(candleRepository.load(any(), any())).thenReturn(List.of());
+        // Each call must return a fresh stream — streams are single-use
+        when(candleRepository.stream(any(), any())).thenAnswer(inv -> Stream.empty());
         engine = new BacktestEngine(candleRepository, tickerMemory, 1, false);
     }
 
@@ -61,17 +63,17 @@ class BacktestEngineRepositoryWiringTest {
     }
 
     @Test
-    @DisplayName("T15: BacktestEngine delegates candle loading to CandleRepository.load()")
-    void backtestEngine_delegatesLoadToCandleRepository() {
+    @DisplayName("T15: BacktestEngine delegates candle loading to CandleRepository.stream()")
+    void backtestEngine_delegatesStreamToCandleRepository() {
         BacktestConfig config = BacktestConfig.defaults(List.of("SPY"), DATE, DATE);
 
         engine.run(config, false, null);
 
-        verify(candleRepository, atLeastOnce()).load(eq("SPY"), any(TimeFrame.class));
+        verify(candleRepository, atLeastOnce()).stream(eq("SPY"), any(TimeFrame.class));
     }
 
     @Test
-    @DisplayName("T15: BacktestEngine returns non-null report even when repository returns empty candles")
+    @DisplayName("T15: BacktestEngine returns non-null report even when repository returns empty streams")
     void backtestEngine_returnsReport_whenRepositoryIsEmpty() {
         BacktestConfig config = BacktestConfig.defaults(List.of("AAPL"), DATE, DATE);
 
@@ -83,23 +85,23 @@ class BacktestEngineRepositoryWiringTest {
     }
 
     @Test
-    @DisplayName("T15: BacktestEngine loads all 4 timeframes per ticker via CandleRepository")
-    void backtestEngine_loadsAllTimeframesPerTicker() {
+    @DisplayName("T15: BacktestEngine streams all 4 timeframes per ticker via CandleRepository")
+    void backtestEngine_streamsAllTimeframesPerTicker() {
         BacktestConfig config = BacktestConfig.defaults(List.of("TSLA"), DATE, DATE);
 
         engine.run(config, false, null);
 
         for (TimeFrame tf : TimeFrame.values()) {
-            verify(candleRepository, atLeastOnce()).load("TSLA", tf);
+            verify(candleRepository, atLeastOnce()).stream("TSLA", tf);
         }
     }
 
     @Test
-    @DisplayName("T15: BacktestEngine processes candles returned by CandleRepository")
+    @DisplayName("T15: BacktestEngine processes candles returned by CandleRepository.stream()")
     void backtestEngine_processesReturnedCandles() {
         ZonedDateTime ts = DATE.atTime(14, 30).atZone(ZoneOffset.UTC);
         Candle candle = new Candle(ts, 100.0, 105.0, 99.0, 103.0, 1000L);
-        when(candleRepository.load(any(), any())).thenReturn(List.of(candle));
+        when(candleRepository.stream(any(), any())).thenAnswer(inv -> Stream.of(candle));
 
         BacktestConfig config = BacktestConfig.defaults(List.of("MSFT"), DATE, DATE);
         BacktestReport report = engine.run(config, false, null);
