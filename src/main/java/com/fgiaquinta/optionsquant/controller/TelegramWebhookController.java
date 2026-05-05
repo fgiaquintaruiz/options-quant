@@ -76,7 +76,7 @@ public class TelegramWebhookController {
 
         } catch (Exception e) {
             log.error("❌ Webhook processing error: {}", e.getMessage(), e);
-            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+            return ResponseEntity.status(500).body(Map.of("error", "Webhook processing failed"));
         }
     }
 
