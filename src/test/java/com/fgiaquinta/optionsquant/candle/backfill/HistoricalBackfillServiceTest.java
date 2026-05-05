@@ -53,7 +53,11 @@ class HistoricalBackfillServiceTest {
                 ibkrService,
                 rateLimiter,
                 List.of("AAPL", "MSFT"),
-                BACKFILL_START
+                BACKFILL_START,
+                null,       // yfinanceClient — not tested here
+                List.of(),  // vixTickers
+                5,          // yfinanceCutoffYears
+                false       // yfinanceEnabled — disabled so no yfinance calls
         );
     }
 
@@ -132,7 +136,11 @@ class HistoricalBackfillServiceTest {
                 ibkrService,
                 rateLimiter,
                 List.of("AAPL"),
-                BACKFILL_START
+                BACKFILL_START,
+                null,
+                List.of(),
+                5,
+                false
         );
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(5);
@@ -148,7 +156,7 @@ class HistoricalBackfillServiceTest {
         service.run(args);
 
         verify(repository, atLeastOnce()).upsert(eq("AAPL"), eq(TimeFrame.DAY_1), anyList());
-        verify(checkpoint, atLeastOnce()).save(eq("AAPL"), eq(TimeFrame.DAY_1), any());
+        verify(checkpoint, atLeastOnce()).save(eq("AAPL"), eq(TimeFrame.DAY_1), any(), any(BackfillStatus.class));
     }
 
     // -------------------------------------------------------------------------
@@ -163,7 +171,11 @@ class HistoricalBackfillServiceTest {
                 ibkrService,
                 rateLimiter,
                 List.of("AAPL"),
-                BACKFILL_START
+                BACKFILL_START,
+                null,
+                List.of(),
+                5,
+                false
         );
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(5);
@@ -180,7 +192,7 @@ class HistoricalBackfillServiceTest {
         assertDoesNotThrow(() -> service.run(args));
 
         // Checkpoint must NOT be updated when download failed
-        verify(checkpoint, never()).save(eq("AAPL"), eq(TimeFrame.DAY_1), any());
+        verify(checkpoint, never()).save(eq("AAPL"), eq(TimeFrame.DAY_1), any(), any(BackfillStatus.class));
     }
 
     // -------------------------------------------------------------------------
@@ -195,7 +207,11 @@ class HistoricalBackfillServiceTest {
                 ibkrService,
                 rateLimiter,
                 List.of("AAPL"),
-                BACKFILL_START
+                BACKFILL_START,
+                null,
+                List.of(),
+                5,
+                false
         );
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(5);

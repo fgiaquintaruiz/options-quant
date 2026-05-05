@@ -59,6 +59,8 @@ ibkr:
   default-qty: 10
   risk-per-trade-pct: 0.02
   hot-ticker-count: 20  # Used when hot-tickers is empty: top N CSV names by market cap (see TickerService)
+  vix-tickers:
+    - "^VIX"
 
 # Telegram Bot Configuration
 telegram:
@@ -124,8 +126,16 @@ yahoo:
   finance:
     rate-limit-per-second: 1.0
 
+analytics:
+  service:
+    url: http://localhost:8001
+    rate-per-second: 2.0
+
 candles:
   store: sqlite
   backfill:
     rate-per-second: 0.1   # 1 TWS historical request per 10s (safe default within 60 req/10min limit)
     start-year: 2018        # Earliest year to backfill from
+    yfinance:
+      enabled: true
+      cutoff-years: 5

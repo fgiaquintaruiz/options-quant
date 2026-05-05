@@ -13,6 +13,7 @@ Communication with Java trading engine via REST HTTP.
 import json
 import os
 import logging
+from datetime import date
 from typing import List, Dict, Optional
 from contextlib import asynccontextmanager
 
@@ -78,6 +79,15 @@ class HealthResponse(BaseModel):
     service: str
     version: str
     java_grpc_connected: bool
+
+
+class HistoricalCandle(BaseModel):
+    ts_epoch: int
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: int
 
 
 # ================== FastAPI App ==================
@@ -374,6 +384,45 @@ async def get_ticker_info(ticker: str):
         }
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"yfinance error for {sym}: {str(e)}")
+
+
+# ================== Historical Candles (yfinance fallback) ==================
+
+@app.get("/api/v1/historical/{ticker}", response_model=List[HistoricalCandle])
+async def get_historical_candles(
+    ticker: str,
+    from_date: date = Query(..., alias="from", description="Start date YYYY-MM-DD"),
+    to_date: date = Query(..., alias="to", description="End date YYYY-MM-DD"),
+    interval: str = Query("1d", description="Candle interval (only 1d supported)"),
+):
+    if interval != "1d":
+        raise HTTPException(status_code=400, detail=f"Unsupported interval '{interval}'. Only '1d' is supported.")
+
+    sym = ticker.strip().upper()
+    try:
+        df = yf.download(sym, start=from_date, end=to_date, interval=interval, auto_adjust=True, progress=False)
+        if df.empty:
+            return []
+
+        # Flatten MultiIndex columns if yfinance returns them (multi-ticker download)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
+        candles = []
+        for ts, row in df.iterrows():
+            ts_utc = pd.Timestamp(ts).tz_localize("UTC") if ts.tzinfo is None else pd.Timestamp(ts).tz_convert("UTC")
+            candles.append(HistoricalCandle(
+                ts_epoch=int(ts_utc.timestamp()),
+                open=float(row["Open"]),
+                high=float(row["High"]),
+                low=float(row["Low"]),
+                close=float(row["Close"]),
+                volume=int(row["Volume"]) if not pd.isna(row["Volume"]) else 0,
+            ))
+        return candles
+    except Exception as e:
+        logger.error(f"yfinance error for {sym}: {e}")
+        raise HTTPException(status_code=502, detail=f"yfinance error: {str(e)}")
 
 
 # ================== Main Entry Point ==================

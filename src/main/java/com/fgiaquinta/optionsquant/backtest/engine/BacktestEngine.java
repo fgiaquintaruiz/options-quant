@@ -39,8 +39,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -73,6 +75,8 @@ public class BacktestEngine {
 
     // Runtime-configurable max concurrent tickers for backtest processing
     private final AtomicInteger maxConcurrentScans;
+
+    private volatile NavigableMap<LocalDate, Double> vixDailyMap = null;
 
     public BacktestEngine(
             CandleRepository candleRepository,
@@ -226,6 +230,18 @@ public class BacktestEngine {
         }
     }
 
+    private NavigableMap<LocalDate, Double> loadVixMap() {
+        if (!candleRepository.hasLocalData("^VIX", TimeFrame.DAY_1)) {
+            log.info("[backtest] No ^VIX data found — vixAtEntry will default to 0.0");
+            return Collections.emptyNavigableMap();
+        }
+        NavigableMap<LocalDate, Double> map = new TreeMap<>();
+        candleRepository.load("^VIX", TimeFrame.DAY_1).forEach(c ->
+            map.put(c.timestamp().toLocalDate(), c.close()));
+        log.info("[backtest] Loaded {} ^VIX rows", map.size());
+        return map;
+    }
+
     private BacktestReport runCore(BacktestConfig config, boolean resumeFromCheckpoint, AtomicBoolean stopRequested, ProgressCallback progressCallback) {
         log.info(">>> Backtest: tickers={}, {} to {}, capital=${}, risk={}%{}",
                 config.tickers().size(), config.fromDate(), config.toDate(),
@@ -317,6 +333,11 @@ public class BacktestEngine {
             progressCallback.onProgress("ALL", "TESTING", "Analyzing strategies across " + remainingTickers.size() + " tickers...");
         }
 
+        if (vixDailyMap == null) {
+            vixDailyMap = loadVixMap();
+        }
+        final NavigableMap<LocalDate, Double> vixMap = vixDailyMap;
+
         TimeFrame execTf = config.executionTimeframe();
         double capitalPerTicker = config.initialCapital() / config.tickers().size();
         Map<String, TickerResult> tickerResults = new ConcurrentHashMap<>();
@@ -395,7 +416,7 @@ public class BacktestEngine {
                         // Process this ticker using its own loaded data
                         Map<String, Map<TimeFrame, List<Candle>>> singleTickerData = Map.of(ticker, tickerData);
                         TickerResult result = processSingleTicker(
-                                ticker, config, singleTickerData, capitalPerTicker, tradeQueue);
+                                ticker, config, singleTickerData, capitalPerTicker, tradeQueue, vixMap);
 
                         tickerResults.put(ticker, result);
                         newlyProcessed.add(ticker);
@@ -560,7 +581,7 @@ public class BacktestEngine {
      */
     private TickerResult processSingleTicker(String ticker, BacktestConfig config,
             Map<String, Map<TimeFrame, List<Candle>>> allData, double initialCapital,
-            LinkedBlockingQueue<TradeRecord> tradeQueue) {
+            LinkedBlockingQueue<TradeRecord> tradeQueue, NavigableMap<LocalDate, Double> vixMap) {
 
         FillEngine fillEngine = new SimulatedFillEngine(config.slippagePct(), config.commissionPerContract());
         TimeFrame execTf = config.executionTimeframe();
@@ -635,7 +656,7 @@ public class BacktestEngine {
             if (openPositions.size() < config.maxConcurrentTrades()) {
                 ZonedDateTime nyTime = candleTime.withZoneSameInstant(NY);
                 runStrategies(ticker, data, nyTime, currentCandle, candleTime,
-                        config, equity, openPositions, fillEngine);
+                        config, equity, openPositions, fillEngine, vixMap);
             }
         }
 
@@ -941,7 +962,8 @@ public class BacktestEngine {
      */
     private void runStrategies(String ticker, StrategyData data, ZonedDateTime nyTime,
             Candle candle, ZonedDateTime time, BacktestConfig config, double equity,
-            List<OpenPosition> openPositions, FillEngine fillEngine) {
+            List<OpenPosition> openPositions, FillEngine fillEngine,
+            NavigableMap<LocalDate, Double> vixMap) {
 
         for (TradingStrategy strategy : strategies) {
             try {
@@ -966,10 +988,13 @@ public class BacktestEngine {
 
                 List<Candle> chartCandles = data.getCandles(config.executionTimeframe());
 
+                Map.Entry<LocalDate, Double> vixEntry = vixMap.floorEntry(time.toLocalDate());
+                double vixAtEntry = vixEntry != null ? vixEntry.getValue() : 0.0;
+
                 OpenPosition pos = new OpenPosition(
                         strategy.getName(), isCall ? "CALL" : "PUT", combinedPattern, qty,
                         entryFill.fillPrice(), plan.takeProfit, plan.stopLoss, time,
-                        plan.atr, chartCandles);
+                        plan.atr, vixAtEntry, chartCandles);
                 openPositions.add(pos);
 
                 // Fix #13: Chart generation deferred to on-demand only.
@@ -1111,7 +1136,7 @@ public class BacktestEngine {
 
         OpenPosition(String strategy, String direction, String pattern, int quantity, double entryPrice,
                      double tp, double sl, ZonedDateTime entryTime, double atrAtEntry,
-                     List<Candle> chartCandles) {
+                     double vixAtEntry, List<Candle> chartCandles) {
             this.strategy = strategy;
             this.direction = direction;
             this.pattern = pattern;
@@ -1122,7 +1147,7 @@ public class BacktestEngine {
             this.entryTime = entryTime;
             this.entryHour = entryTime.withZoneSameInstant(NY).getHour();
             this.atrAtEntry = atrAtEntry;
-            this.vixAtEntry = 0.0;
+            this.vixAtEntry = vixAtEntry;
             this.marketTrend = "neutral";
             this.isCall = direction.equalsIgnoreCase("CALL");
             this.chartCandles = chartCandles;

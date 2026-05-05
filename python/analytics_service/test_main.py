@@ -335,3 +335,64 @@ def test_java_get_candles_non_200(mock_client_cls):
     jc.connected = True
     jc.client = inst
     assert jc.get_candles("SPY") is None
+
+
+# ================== Historical Candles tests ==================
+
+def test_historical_happy_path(client):
+    import pandas as pd
+    from unittest.mock import patch
+    c, _ = client
+    idx = pd.DatetimeIndex(["2022-01-03", "2022-01-04", "2022-01-05"])
+    mock_df = pd.DataFrame({
+        "Open": [100.0, 101.0, 102.0],
+        "High": [105.0, 106.0, 107.0],
+        "Low": [99.0, 100.0, 101.0],
+        "Close": [104.0, 105.0, 106.0],
+        "Volume": [1000, 1100, 1200],
+    }, index=idx)
+    with patch("yfinance.download", return_value=mock_df):
+        response = c.get("/api/v1/historical/AAPL?from=2022-01-03&to=2022-01-06&interval=1d")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 3
+    assert "ts_epoch" in data[0]
+    assert data[0]["close"] == 104.0
+
+
+def test_historical_empty(client):
+    import pandas as pd
+    from unittest.mock import patch
+    c, _ = client
+    with patch("yfinance.download", return_value=pd.DataFrame()):
+        response = c.get("/api/v1/historical/AAPL?from=2022-01-03&to=2022-01-06&interval=1d")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_historical_unsupported_interval(client):
+    c, _ = client
+    response = c.get("/api/v1/historical/AAPL?from=2022-01-03&to=2022-01-06&interval=5m")
+    assert response.status_code == 400
+
+
+def test_historical_yfinance_exception(client):
+    from unittest.mock import patch
+    c, _ = client
+    with patch("yfinance.download", side_effect=Exception("network error")):
+        response = c.get("/api/v1/historical/AAPL?from=2022-01-03&to=2022-01-06&interval=1d")
+    assert response.status_code == 502
+
+
+def test_historical_vix_ticker(client):
+    import pandas as pd
+    from unittest.mock import patch
+    c, _ = client
+    idx = pd.DatetimeIndex(["2022-01-03"])
+    mock_df = pd.DataFrame({
+        "Open": [18.0], "High": [19.0], "Low": [17.0], "Close": [18.5], "Volume": [0],
+    }, index=idx)
+    with patch("yfinance.download", return_value=mock_df):
+        response = c.get("/api/v1/historical/%5EVIX?from=2022-01-03&to=2022-01-04&interval=1d")
+    assert response.status_code == 200
+    assert len(response.json()) == 1

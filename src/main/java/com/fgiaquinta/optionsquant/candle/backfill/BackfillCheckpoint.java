@@ -47,24 +47,25 @@ public class BackfillCheckpoint {
     }
 
     /**
-     * Saves or updates the download progress for a ticker+timeframe.
+     * Saves or updates the download progress for a ticker+timeframe with an explicit status.
      * Uses an UPSERT (REPLACE) strategy.
      */
-    public void save(String ticker, TimeFrame tf, ZonedDateTime lastChunkEndTs) {
+    public void save(String ticker, TimeFrame tf, ZonedDateTime lastChunkEndTs, BackfillStatus status) {
         long epochSeconds = lastChunkEndTs.toEpochSecond();
         long now = Instant.now().getEpochSecond();
-
-        log.debug("Saving checkpoint for {} {}: {}", ticker, tf, lastChunkEndTs);
-
+        log.debug("Saving checkpoint for {} {} ({}): {}", ticker, tf, status, lastChunkEndTs);
         jdbc.update("""
             INSERT OR REPLACE INTO download_progress (ticker, timeframe, last_chunk_end_ts, status, updated_at)
             VALUES (?, ?, ?, ?, ?)
             """,
-            ticker,
-            tf.name(),
-            epochSeconds,
-            "COMPLETE",
-            now
-        );
+            ticker, tf.name(), epochSeconds, status.name(), now);
+    }
+
+    /**
+     * @deprecated Use {@link #save(String, TimeFrame, ZonedDateTime, BackfillStatus)} instead.
+     */
+    @Deprecated
+    public void save(String ticker, TimeFrame tf, ZonedDateTime lastChunkEndTs) {
+        save(ticker, tf, lastChunkEndTs, BackfillStatus.COMPLETE_TWS);
     }
 }
