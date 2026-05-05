@@ -59,6 +59,9 @@ ibkr:
   default-qty: 10
   risk-per-trade-pct: 0.02
   hot-ticker-count: 20  # Used when hot-tickers is empty: top N CSV names by market cap (see TickerService)
+  tickers:
+    - "AAPL"
+    - "MSFT"
   vix-tickers:
     - "^VIX"
 
@@ -69,12 +72,6 @@ telegram:
   chat-id: "REDACTED_CHAT_ID"      # Replace with your chat ID
   webhook-secret: "REDACTED_WEBHOOK_SECRET"  # Secret to validate webhook requests (min 32 chars)
   master-key: "REDACTED_MASTER_KEY"  # Master key for secure order signatures (min 32 chars)
-
-# Local AI Configuration (Ollama)
-ollama:
-  enabled: true
-  url: http://localhost:11434
-  model: qwen2.5:7b
 
 # Live strategy scan: AUTO leaves CPU headroom for IDE/OS; HYBRID orders non-hot tickers by fundamentals + ticker memory
 scanner:
@@ -138,4 +135,4 @@ candles:
     start-year: 2018        # Earliest year to backfill from
     yfinance:
       enabled: true
-      cutoff-years: 5
+      cutoff-years: 0
