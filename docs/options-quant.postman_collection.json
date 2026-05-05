@@ -1,0 +1,1467 @@
+{
+  "info": {
+    "name": "Options Quant",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "options-quant-v1"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:9090",
+      "type": "string"
+    },
+    {
+      "key": "telegramWebhookSecret",
+      "value": "REDACTED_WEBHOOK_SECRET",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Candles",
+      "description": "REST API for candle (OHLCV) operations — download, query local data, and IBKR connection.",
+      "item": [
+        {
+          "name": "POST /api/candles/download",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/candles/download?ticker=AAPL&timeframe=MIN_15&saveToCsv=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "candles", "download"],
+              "query": [
+                { "key": "ticker", "value": "AAPL" },
+                { "key": "timeframe", "value": "MIN_15" },
+                { "key": "saveToCsv", "value": "true" }
+              ]
+            },
+            "description": "Download historical data for a single ticker and timeframe from IBKR TWS."
+          }
+        },
+        {
+          "name": "POST /api/candles/download-all",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/candles/download-all?ticker=AAPL&saveToCsv=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "candles", "download-all"],
+              "query": [
+                { "key": "ticker", "value": "AAPL" },
+                { "key": "saveToCsv", "value": "true" }
+              ]
+            },
+            "description": "Download all timeframes for a single ticker from IBKR TWS."
+          }
+        },
+        {
+          "name": "POST /api/candles/download-all-tickers",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/candles/download-all-tickers?saveToCsv=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "candles", "download-all-tickers"],
+              "query": [
+                { "key": "saveToCsv", "value": "true" }
+              ]
+            },
+            "description": "Download all timeframes for every configured ticker."
+          }
+        },
+        {
+          "name": "GET /api/candles/local",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/candles/local?ticker=AAPL&timeframe=MIN_15",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "candles", "local"],
+              "query": [
+                { "key": "ticker", "value": "AAPL" },
+                { "key": "timeframe", "value": "MIN_15" }
+              ]
+            },
+            "description": "Load candles from local CSV/SQLite storage for a given ticker and timeframe."
+          }
+        },
+        {
+          "name": "GET /api/candles/local/exists",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/candles/local/exists?ticker=AAPL&timeframe=MIN_15",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "candles", "local", "exists"],
+              "query": [
+                { "key": "ticker", "value": "AAPL" },
+                { "key": "timeframe", "value": "MIN_15" }
+              ]
+            },
+            "description": "Check whether local candle data exists for a given ticker and timeframe."
+          }
+        },
+        {
+          "name": "GET /api/candles/status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/candles/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "candles", "status"]
+            },
+            "description": "Returns IBKR TWS connection status for the data client."
+          }
+        },
+        {
+          "name": "POST /api/candles/connect",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/candles/connect",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "candles", "connect"]
+            },
+            "description": "Connect the IBKR data client to TWS."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Strategies",
+      "description": "REST API for strategy scanning — run signal detection across all or a single ticker.",
+      "item": [
+        {
+          "name": "POST /api/strategies/scan",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/strategies/scan?includeTradePlans=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "strategies", "scan"],
+              "query": [
+                { "key": "includeTradePlans", "value": "true" }
+              ]
+            },
+            "description": "Scan all configured tickers against all strategies and return signals."
+          }
+        },
+        {
+          "name": "POST /api/strategies/scan/:ticker",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/strategies/scan/AAPL?includeTradePlans=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "strategies", "scan", "AAPL"],
+              "query": [
+                { "key": "includeTradePlans", "value": "true" }
+              ]
+            },
+            "description": "Scan a single ticker against all strategies."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Trading",
+      "description": "REST API for manual trade execution and account management via IBKR TWS.",
+      "item": [
+        {
+          "name": "POST /api/trading/scan-and-execute",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/trading/scan-and-execute?autoExecute=false&qty=0&maxConcurrent=3",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "trading", "scan-and-execute"],
+              "query": [
+                { "key": "autoExecute", "value": "false" },
+                { "key": "qty", "value": "0" },
+                { "key": "maxConcurrent", "value": "3" }
+              ]
+            },
+            "description": "Scan all tickers and optionally auto-execute the resulting signals."
+          }
+        },
+        {
+          "name": "POST /api/trading/execute",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/trading/execute?ticker=AAPL&direction=CALL&qty=1&entryPrice=215.50&tp=217.50&sl=214.00",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "trading", "execute"],
+              "query": [
+                { "key": "ticker", "value": "AAPL" },
+                { "key": "direction", "value": "CALL" },
+                { "key": "qty", "value": "1" },
+                { "key": "entryPrice", "value": "215.50" },
+                { "key": "tp", "value": "217.50" },
+                { "key": "sl", "value": "214.00" }
+              ]
+            },
+            "description": "Manually execute a single option trade signal via IBKR."
+          }
+        },
+        {
+          "name": "GET /api/trading/check-options",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/trading/check-options?ticker=AAPL",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "trading", "check-options"],
+              "query": [
+                { "key": "ticker", "value": "AAPL" }
+              ]
+            },
+            "description": "Check whether a ticker has a valid option chain available in IBKR."
+          }
+        },
+        {
+          "name": "GET /api/trading/account-status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/trading/account-status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "trading", "account-status"]
+            },
+            "description": "Returns account balance, risk limit per trade, active trade count, and canTrade flag."
+          }
+        },
+        {
+          "name": "POST /api/trading/connect-account",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/trading/connect-account",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "trading", "connect-account"]
+            },
+            "description": "Connect to IBKR Account Manager to sync the account balance."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Backtest",
+      "description": "REST API for running backtests, learning loops, and strategy analysis.",
+      "item": [
+        {
+          "name": "POST /api/backtest/run",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/backtest/run?from=2025-01-01&to=2026-04-01&tickers=SPY,AAPL&initialCapital=50000&riskPct=0.02&slippagePct=0.005&commission=0.65&maxConcurrent=3&execTimeframe=MIN_15",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "backtest", "run"],
+              "query": [
+                { "key": "from", "value": "2025-01-01" },
+                { "key": "to", "value": "2026-04-01" },
+                { "key": "tickers", "value": "SPY,AAPL" },
+                { "key": "initialCapital", "value": "50000" },
+                { "key": "riskPct", "value": "0.02" },
+                { "key": "slippagePct", "value": "0.005" },
+                { "key": "commission", "value": "0.65" },
+                { "key": "maxConcurrent", "value": "3" },
+                { "key": "execTimeframe", "value": "MIN_15" }
+              ]
+            },
+            "description": "Run a backtest for specific tickers and date range. Omit 'tickers' to use all configured tickers."
+          }
+        },
+        {
+          "name": "POST /api/backtest/run-all",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/backtest/run-all?from=2025-01-01&to=2026-04-01&initialCapital=50000&riskPct=0.02",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "backtest", "run-all"],
+              "query": [
+                { "key": "from", "value": "2025-01-01" },
+                { "key": "to", "value": "2026-04-01" },
+                { "key": "initialCapital", "value": "50000" },
+                { "key": "riskPct", "value": "0.02" }
+              ]
+            },
+            "description": "Run a backtest using the full configured ticker list."
+          }
+        },
+        {
+          "name": "GET /api/backtest/learning-report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/backtest/learning-report",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "backtest", "learning-report"]
+            },
+            "description": "Get the current ticker memory learning report as a formatted string."
+          }
+        },
+        {
+          "name": "POST /api/backtest/ai-analysis",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/backtest/ai-analysis",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "backtest", "ai-analysis"]
+            },
+            "description": "Get AI-powered (Ollama) analysis of the current learning report."
+          }
+        },
+        {
+          "name": "POST /api/backtest/learn",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/backtest/learn?from=2025-01-01&to=2026-04-01&tickers=AMZN,NVDA,GOOGL&initialCapital=50000&riskPct=0.02&maxIterations=20&convergenceThreshold=0.02",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "backtest", "learn"],
+              "query": [
+                { "key": "from", "value": "2025-01-01" },
+                { "key": "to", "value": "2026-04-01" },
+                { "key": "tickers", "value": "AMZN,NVDA,GOOGL" },
+                { "key": "initialCapital", "value": "50000" },
+                { "key": "riskPct", "value": "0.02" },
+                { "key": "maxIterations", "value": "20" },
+                { "key": "convergenceThreshold", "value": "0.02" }
+              ]
+            },
+            "description": "Start the continuous learning loop (training mode). Runs asynchronously — returns 202 Accepted."
+          }
+        },
+        {
+          "name": "POST /api/backtest/learn/stop",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/backtest/learn/stop",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "backtest", "learn", "stop"]
+            },
+            "description": "Stop the currently running continuous learning loop."
+          }
+        },
+        {
+          "name": "GET /api/backtest/learn/status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/backtest/learn/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "backtest", "learn", "status"]
+            },
+            "description": "Check whether the learning loop is currently running."
+          }
+        },
+        {
+          "name": "POST /api/backtest/analyze",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/backtest/analyze",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "backtest", "analyze"]
+            },
+            "description": "Analyze the latest backtest results from backtest/trades.csv and get improvement suggestions."
+          }
+        },
+        {
+          "name": "GET /api/backtest/tickers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/backtest/tickers?highQuality=false&highGrowth=false",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "backtest", "tickers"],
+              "query": [
+                { "key": "sector", "value": "Technology", "disabled": true },
+                { "key": "minMarketCap", "value": "50", "disabled": true },
+                { "key": "maxMarketCap", "value": "500", "disabled": true },
+                { "key": "highQuality", "value": "false" },
+                { "key": "highGrowth", "value": "false" }
+              ]
+            },
+            "description": "Get ticker information, optionally filtered by sector, market cap range, or quality/growth flags."
+          }
+        },
+        {
+          "name": "GET /api/backtest/priority-tickers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/backtest/priority-tickers?refresh=false",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "backtest", "priority-tickers"],
+              "query": [
+                { "key": "refresh", "value": "false" }
+              ]
+            },
+            "description": "Get the list of priority tickers (top N by fundamentals). Set refresh=true to recompute."
+          }
+        },
+        {
+          "name": "GET /api/backtest/ticker-score/:ticker",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/backtest/ticker-score/AAPL",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "backtest", "ticker-score", "AAPL"]
+            },
+            "description": "Get detailed fundamental score breakdown for a specific ticker."
+          }
+        },
+        {
+          "name": "POST /api/backtest/screen",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/backtest/screen?count=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "backtest", "screen"],
+              "query": [
+                { "key": "count", "value": "10" }
+              ]
+            },
+            "description": "Run strategy screener across all tickers (stub in v1 — requires candle data integration)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Backtest Dashboard UI",
+      "description": "Web dashboard API for interactive backtest runs, SSE progress streaming, grid search, and strategy improvement.",
+      "item": [
+        {
+          "name": "GET /backtest-ui (redirect)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backtest-ui",
+              "host": ["{{baseUrl}}"],
+              "path": ["backtest-ui"]
+            },
+            "description": "Redirects to the React SPA at /."
+          }
+        },
+        {
+          "name": "GET /backtest-ui/stream (SSE)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "text/event-stream" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backtest-ui/stream",
+              "host": ["{{baseUrl}}"],
+              "path": ["backtest-ui", "stream"]
+            },
+            "description": "Server-Sent Events stream for real-time backtest progress (10 min timeout)."
+          }
+        },
+        {
+          "name": "POST /backtest-ui/run",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backtest-ui/run?initialCapital=50000&riskPct=0.02&tickerScope=ALL",
+              "host": ["{{baseUrl}}"],
+              "path": ["backtest-ui", "run"],
+              "query": [
+                { "key": "initialCapital", "value": "50000" },
+                { "key": "riskPct", "value": "0.02" },
+                { "key": "tickerFilter", "value": "", "disabled": true },
+                { "key": "tickerScope", "value": "ALL" }
+              ]
+            },
+            "description": "Start a synchronous backtest via the dashboard. Returns immediately if another is already running."
+          }
+        },
+        {
+          "name": "GET /backtest-ui/running",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backtest-ui/running",
+              "host": ["{{baseUrl}}"],
+              "path": ["backtest-ui", "running"]
+            },
+            "description": "Check whether a backtest is currently running and get scheduler status."
+          }
+        },
+        {
+          "name": "POST /backtest-ui/stop",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backtest-ui/stop",
+              "host": ["{{baseUrl}}"],
+              "path": ["backtest-ui", "stop"]
+            },
+            "description": "Stop the currently running backtest."
+          }
+        },
+        {
+          "name": "GET /backtest-ui/max-concurrent",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backtest-ui/max-concurrent",
+              "host": ["{{baseUrl}}"],
+              "path": ["backtest-ui", "max-concurrent"]
+            },
+            "description": "Get the current max concurrent scan setting for the backtest engine."
+          }
+        },
+        {
+          "name": "POST /backtest-ui/set-max-concurrent",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backtest-ui/set-max-concurrent?count=4",
+              "host": ["{{baseUrl}}"],
+              "path": ["backtest-ui", "set-max-concurrent"],
+              "query": [
+                { "key": "count", "value": "4" }
+              ]
+            },
+            "description": "Set the max concurrent scans for the backtest engine (1–16)."
+          }
+        },
+        {
+          "name": "GET /backtest-ui/checkpoint",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backtest-ui/checkpoint",
+              "host": ["{{baseUrl}}"],
+              "path": ["backtest-ui", "checkpoint"]
+            },
+            "description": "Check whether a resume checkpoint exists and list processed tickers."
+          }
+        },
+        {
+          "name": "POST /backtest-ui/checkpoint/clear",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backtest-ui/checkpoint/clear",
+              "host": ["{{baseUrl}}"],
+              "path": ["backtest-ui", "checkpoint", "clear"]
+            },
+            "description": "Clear the backtest resume checkpoint file."
+          }
+        },
+        {
+          "name": "GET /backtest-ui/resume (SSE)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "text/event-stream" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backtest-ui/resume?initialCapital=50000&riskPct=0.02",
+              "host": ["{{baseUrl}}"],
+              "path": ["backtest-ui", "resume"],
+              "query": [
+                { "key": "initialCapital", "value": "50000" },
+                { "key": "riskPct", "value": "0.02" }
+              ]
+            },
+            "description": "Resume a backtest from a saved checkpoint via SSE progress stream."
+          }
+        },
+        {
+          "name": "GET /backtest-ui/scheduler",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backtest-ui/scheduler",
+              "host": ["{{baseUrl}}"],
+              "path": ["backtest-ui", "scheduler"]
+            },
+            "description": "Get the current auto-run scheduler state and parameters."
+          }
+        },
+        {
+          "name": "POST /backtest-ui/scheduler",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": true,\n  \"initialCapital\": 50000,\n  \"riskPct\": 0.02,\n  \"tickerFilter\": \"\",\n  \"tickerScope\": \"ALL\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backtest-ui/scheduler",
+              "host": ["{{baseUrl}}"],
+              "path": ["backtest-ui", "scheduler"]
+            },
+            "description": "Enable/disable the auto-run scheduler and/or update its parameters."
+          }
+        },
+        {
+          "name": "POST /backtest-ui/improve/:strategyName",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backtest-ui/improve/C1%20Squeeze%20Breakout",
+              "host": ["{{baseUrl}}"],
+              "path": ["backtest-ui", "improve", "C1%20Squeeze%20Breakout"],
+              "query": [
+                { "key": "ticker", "value": "AAPL", "disabled": true }
+              ]
+            },
+            "description": "Analyze an underperforming strategy and get improvement recommendations. Optionally scope to a single ticker via ?ticker=AAPL."
+          }
+        },
+        {
+          "name": "POST /backtest-ui/retest/:strategyName",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backtest-ui/retest/C1%20Squeeze%20Breakout?initialCapital=50000&riskPct=0.02&matchLastRun=true&tpMultiplierDelta=0&slMultiplierDelta=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["backtest-ui", "retest", "C1%20Squeeze%20Breakout"],
+              "query": [
+                { "key": "initialCapital", "value": "50000" },
+                { "key": "riskPct", "value": "0.02" },
+                { "key": "matchLastRun", "value": "true" },
+                { "key": "tpMultiplierDelta", "value": "0" },
+                { "key": "slMultiplierDelta", "value": "0" },
+                { "key": "ticker", "value": "AAPL", "disabled": true }
+              ]
+            },
+            "description": "Retest a strategy with adjusted TP/SL multiplier deltas and compare against the previous run baseline."
+          }
+        },
+        {
+          "name": "POST /backtest-ui/grid-search",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tickers\": [\"AAPL\", \"SPY\"],\n  \"fromDate\": \"2025-01-01\",\n  \"toDate\": \"2026-04-01\",\n  \"initialCapital\": 50000,\n  \"riskPerTradePct\": 0.02,\n  \"slippagePct\": 0.005,\n  \"commissionPerContract\": 0.65,\n  \"maxConcurrentTrades\": 3,\n  \"executionTimeframe\": \"MIN_15\",\n  \"includeTradePlans\": true,\n  \"deterministicMode\": false,\n  \"axes\": [\n    { \"name\": \"tpMultiplierDelta\", \"values\": [-0.5, 0.0, 0.5, 1.0] },\n    { \"name\": \"slMultiplierDelta\", \"values\": [-0.3, 0.0, 0.3] }\n  ],\n  \"searchMode\": \"EXHAUSTIVE\",\n  \"randomSampleCount\": null,\n  \"randomSeed\": null,\n  \"constraintMinTrades\": 5,\n  \"constraintMaxDrawdownPct\": null,\n  \"primaryMetric\": \"TOTAL_PNL\",\n  \"walkForwardTrainDays\": null,\n  \"walkForwardTestDays\": null,\n  \"walkForwardStepDays\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backtest-ui/grid-search",
+              "host": ["{{baseUrl}}"],
+              "path": ["backtest-ui", "grid-search"]
+            },
+            "description": "Run exhaustive or random grid search over TP/SL multiplier deltas. Max cells controlled by grid-search.max-cells in yml. searchMode: EXHAUSTIVE or RANDOM."
+          }
+        },
+        {
+          "name": "POST /backtest-ui/promote-risk-params",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ticker\": \"AAPL\",\n  \"strategyName\": \"C1 Squeeze Breakout\",\n  \"isCall\": true,\n  \"tpMultiplierDelta\": 0.5,\n  \"slMultiplierDelta\": 0.3,\n  \"dryRun\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/backtest-ui/promote-risk-params",
+              "host": ["{{baseUrl}}"],
+              "path": ["backtest-ui", "promote-risk-params"]
+            },
+            "description": "Promote grid-search deltas to persisted ATR multiplier overrides in ticker memory. Set dryRun=true to preview."
+          }
+        },
+        {
+          "name": "GET /backtest-ui/ticker-memory-profiles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backtest-ui/ticker-memory-profiles",
+              "host": ["{{baseUrl}}"],
+              "path": ["backtest-ui", "ticker-memory-profiles"]
+            },
+            "description": "List all strategy profiles that have TP/SL ATR overrides stored in ticker memory."
+          }
+        },
+        {
+          "name": "DELETE /backtest-ui/ticker-memory-profile",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backtest-ui/ticker-memory-profile?ticker=AAPL&strategy=C1%20Squeeze%20Breakout",
+              "host": ["{{baseUrl}}"],
+              "path": ["backtest-ui", "ticker-memory-profile"],
+              "query": [
+                { "key": "ticker", "value": "AAPL" },
+                { "key": "strategy", "value": "C1%20Squeeze%20Breakout" }
+              ]
+            },
+            "description": "Remove TP/SL ATR overrides for one ticker+strategy from ticker memory."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Live Mode",
+      "description": "Live Mode dashboard API — market scanning, signal management, trade execution, and replay mode.",
+      "item": [
+        {
+          "name": "GET /live-ui (redirect)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui"]
+            },
+            "description": "Redirects to the React SPA at /."
+          }
+        },
+        {
+          "name": "GET /live-ui/status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "status"]
+            },
+            "description": "Get full live scan status: isScanning, tickers, scanner progress, settings, macro regime, etc."
+          }
+        },
+        {
+          "name": "GET /live-ui/signals",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/signals",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "signals"]
+            },
+            "description": "Get all current live signals, executed trades, closed trades, and signal counts."
+          }
+        },
+        {
+          "name": "GET /live-ui/scan-activity",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/scan-activity",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "scan-activity"]
+            },
+            "description": "Get the per-ticker scan activity feed (sorted by HOT priority)."
+          }
+        },
+        {
+          "name": "GET /live-ui/tickers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/tickers",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "tickers"]
+            },
+            "description": "Get all tickers and hot tickers in the current universe."
+          }
+        },
+        {
+          "name": "GET /live-ui/tws-status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/tws-status",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "tws-status"]
+            },
+            "description": "Get detailed TWS connection status (data, account, exec clients) and account balance."
+          }
+        },
+        {
+          "name": "GET /live-ui/market-status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/market-status",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "market-status"]
+            },
+            "description": "Get market session (REGULAR / OPEN EXT / CLOSED), current ET time, and countdown to next open."
+          }
+        },
+        {
+          "name": "GET /live-ui/scan-scores",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/scan-scores",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "scan-scores"]
+            },
+            "description": "Get the latest scan-score breakdown by ticker (scoresByTicker + scanStartedAt timestamp)."
+          }
+        },
+        {
+          "name": "GET /live-ui/account-mode",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/account-mode",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "account-mode"]
+            },
+            "description": "Returns whether the IBKR account is in PAPER or LIVE mode."
+          }
+        },
+        {
+          "name": "GET /live-ui/news-tickers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/news-tickers",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "news-tickers"]
+            },
+            "description": "Returns tickers with active news alerts (stub — empty list until TWS news integration)."
+          }
+        },
+        {
+          "name": "POST /live-ui/scan-now",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/scan-now",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "scan-now"]
+            },
+            "description": "Trigger a manual live scan. Blocked outside market hours (10:00–22:00 Spain, Mon–Fri) unless mock mode is on."
+          }
+        },
+        {
+          "name": "POST /live-ui/stop-scan",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/stop-scan",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "stop-scan"]
+            },
+            "description": "Request an orderly stop of the current scan and interrupt in-flight IBKR downloads."
+          }
+        },
+        {
+          "name": "POST /live-ui/force-stop",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/force-stop",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "force-stop"]
+            },
+            "description": "Force-stop any ongoing scan and reset all scanning state. Use after inconsistent restart."
+          }
+        },
+        {
+          "name": "POST /live-ui/execute-signal",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/execute-signal?ticker=AAPL&direction=CALL&price=215.50&strategy=C1%20Squeeze%20Breakout",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "execute-signal"],
+              "query": [
+                { "key": "ticker", "value": "AAPL" },
+                { "key": "direction", "value": "CALL" },
+                { "key": "price", "value": "215.50" },
+                { "key": "strategy", "value": "C1%20Squeeze%20Breakout" }
+              ]
+            },
+            "description": "Manually execute a live signal via IBKR TWS."
+          }
+        },
+        {
+          "name": "POST /live-ui/execute-trade",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/execute-trade?ticker=AAPL&direction=CALL&price=215.50&strategy=manual",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "execute-trade"],
+              "query": [
+                { "key": "ticker", "value": "AAPL" },
+                { "key": "direction", "value": "CALL" },
+                { "key": "price", "value": "215.50" },
+                { "key": "strategy", "value": "manual" }
+              ]
+            },
+            "description": "Execute a trade directly. Same behavior as execute-signal."
+          }
+        },
+        {
+          "name": "POST /live-ui/close-trade",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/close-trade?ticker=AAPL&price=216.00",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "close-trade"],
+              "query": [
+                { "key": "ticker", "value": "AAPL" },
+                { "key": "price", "value": "216.00" },
+                { "key": "tpOrderId", "value": "1001", "disabled": true },
+                { "key": "slOrderId", "value": "1002", "disabled": true }
+              ]
+            },
+            "description": "Close a trade: cancels TP/SL orders in TWS if IDs provided, otherwise marks as manually closed locally."
+          }
+        },
+        {
+          "name": "POST /live-ui/cancel-trade",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/cancel-trade?ticker=AAPL&orderId=1000",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "cancel-trade"],
+              "query": [
+                { "key": "ticker", "value": "AAPL" },
+                { "key": "orderId", "value": "1000" }
+              ]
+            },
+            "description": "Send a cancellation request to TWS for a given orderId."
+          }
+        },
+        {
+          "name": "DELETE /live-ui/signal",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/signal?ticker=AAPL",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "signal"],
+              "query": [
+                { "key": "ticker", "value": "AAPL" }
+              ]
+            },
+            "description": "Remove a live signal row from the grid. Blocked if the ticker has an open executed position."
+          }
+        },
+        {
+          "name": "POST /live-ui/signals/clear-stale",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/signals/clear-stale",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "signals", "clear-stale"]
+            },
+            "description": "Delete all signals older than 30 minutes that do not have an open position."
+          }
+        },
+        {
+          "name": "POST /live-ui/signals/batch-delete",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\"AAPL\", \"MSFT\", \"SPY\"]"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/signals/batch-delete",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "signals", "batch-delete"]
+            },
+            "description": "Delete multiple signal rows by ticker list. Skips tickers with open positions."
+          }
+        },
+        {
+          "name": "POST /live-ui/inject-mock-signal",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/inject-mock-signal?ticker=SPY",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "inject-mock-signal"],
+              "query": [
+                { "key": "ticker", "value": "SPY" },
+                { "key": "strategy", "value": "C1 Squeeze Breakout", "disabled": true },
+                { "key": "direction", "value": "CALL", "disabled": true }
+              ]
+            },
+            "description": "Inject a mock signal for testing. Cycles through all 12 strategies if strategy is omitted."
+          }
+        },
+        {
+          "name": "POST /live-ui/set-max-concurrent",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/set-max-concurrent?count=4",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "set-max-concurrent"],
+              "query": [
+                { "key": "count", "value": "4" }
+              ]
+            },
+            "description": "Set max concurrent scanner threads for the live scan (1–16)."
+          }
+        },
+        {
+          "name": "POST /live-ui/set-scan-filter",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/set-scan-filter?filter=AAPL,MSFT&scope=HOT",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "set-scan-filter"],
+              "query": [
+                { "key": "filter", "value": "AAPL,MSFT" },
+                { "key": "scope", "value": "HOT" }
+              ]
+            },
+            "description": "Set live ticker filter (comma-separated symbols) and scope (HOT or ALL)."
+          }
+        },
+        {
+          "name": "POST /live-ui/set-risk",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/set-risk?pct=2",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "set-risk"],
+              "query": [
+                { "key": "pct", "value": "2" }
+              ]
+            },
+            "description": "Override runtime risk percentage per trade (pct=2 means 2%)."
+          }
+        },
+        {
+          "name": "POST /live-ui/toggle-extended-hours",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/toggle-extended-hours",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "toggle-extended-hours"]
+            },
+            "description": "Toggle extended hours scanning on/off."
+          }
+        },
+        {
+          "name": "POST /live-ui/toggle-auto-execute",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/toggle-auto-execute",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "toggle-auto-execute"]
+            },
+            "description": "Toggle the runtime auto-execute flag for live signals."
+          }
+        },
+        {
+          "name": "POST /live-ui/toggle-macro-filter",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/toggle-macro-filter",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "toggle-macro-filter"]
+            },
+            "description": "Toggle the macro environment filter (VIX regime check) on/off."
+          }
+        },
+        {
+          "name": "POST /live-ui/toggle-scheduler",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/toggle-scheduler",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "toggle-scheduler"]
+            },
+            "description": "Toggle the market scanner auto-scheduler on/off."
+          }
+        },
+        {
+          "name": "POST /live-ui/toggle-mock-market",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/toggle-mock-market",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "toggle-mock-market"]
+            },
+            "description": "Toggle mock market-open mode (bypasses market hours check for testing)."
+          }
+        },
+        {
+          "name": "GET /live-ui/external-positions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/external-positions",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "external-positions"]
+            },
+            "description": "List TWS positions not opened by this application. Returns 503 if TWS disconnected."
+          }
+        },
+        {
+          "name": "POST /live-ui/external-positions/:ticker/close",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/external-positions/AAPL/close",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "external-positions", "AAPL", "close"]
+            },
+            "description": "Immediately close an external position with a market SELL order in TWS."
+          }
+        },
+        {
+          "name": "POST /live-ui/external-positions/:ticker/schedule-close-1450",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/external-positions/AAPL/schedule-close-1450",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "external-positions", "AAPL", "schedule-close-1450"]
+            },
+            "description": "Schedule a conditional market SELL at 14:50 ET for an external position. Idempotent — returns 409 if already scheduled."
+          }
+        },
+        {
+          "name": "POST /live-ui/replay/start",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/replay/start?date=2025-04-01&speed=60",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "replay", "start"],
+              "query": [
+                { "key": "date", "value": "2025-04-01" },
+                { "key": "speed", "value": "60" }
+              ]
+            },
+            "description": "Start live replay mode for a historical date at the given speed multiplier. Requires replay.enabled=true in yml."
+          }
+        },
+        {
+          "name": "POST /live-ui/replay/stop",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/replay/stop",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "replay", "stop"]
+            },
+            "description": "Stop live replay mode and clear replay signals."
+          }
+        },
+        {
+          "name": "PUT /live-ui/replay/speed",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/replay/speed?speed=120",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "replay", "speed"],
+              "query": [
+                { "key": "speed", "value": "120" }
+              ]
+            },
+            "description": "Change replay speed multiplier while replay is running."
+          }
+        },
+        {
+          "name": "GET /live-ui/replay/status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/live-ui/replay/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["live-ui", "replay", "status"]
+            },
+            "description": "Get current replay state: active, virtualNow, speed, runId, replay signal count."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ticker Config",
+      "description": "ABM API for ticker universe, HOT priority list, hot-ticker-count, and fundamental overrides.",
+      "item": [
+        {
+          "name": "GET /api/ticker-config",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/ticker-config",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ticker-config"]
+            },
+            "description": "Get the full runtime ticker configuration: universe, hot list, fundamentals, and file state flags."
+          }
+        },
+        {
+          "name": "PUT /api/ticker-config",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"universe\": [\"AAPL\", \"MSFT\", \"SPY\", \"NVDA\"],\n  \"hot\": [\"AAPL\", \"NVDA\"],\n  \"fundamentals\": {\n    \"AAPL\": {\n      \"companyName\": \"Apple Inc.\",\n      \"sector\": \"Technology\",\n      \"marketCapBillion\": 3000,\n      \"peRatio\": 30.5,\n      \"dividendYield\": 0.5,\n      \"beta\": 1.2,\n      \"epsGrowth\": 12.0,\n      \"revenueGrowth\": 8.5,\n      \"debtToEquity\": 1.8,\n      \"roic\": 35.0,\n      \"notes\": null\n    }\n  },\n  \"hotTickerCount\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ticker-config",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ticker-config"]
+            },
+            "description": "Replace the full runtime ticker configuration. Persists to data/ticker-runtime.json and triggers reload."
+          }
+        },
+        {
+          "name": "DELETE /api/ticker-config/symbol/:symbol",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/ticker-config/symbol/AAPL",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ticker-config", "symbol", "AAPL"]
+            },
+            "description": "Remove a symbol from the universe and fundamentals map in the runtime file."
+          }
+        },
+        {
+          "name": "GET /api/ticker-config/validate",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/ticker-config/validate?symbol=AAPL",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ticker-config", "validate"],
+              "query": [
+                { "key": "symbol", "value": "AAPL" }
+              ]
+            },
+            "description": "Validate a ticker symbol against IBKR TWS. Returns valid=false with a reason if TWS is not connected."
+          }
+        },
+        {
+          "name": "GET /api/ticker-config/hot-ticker-count",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/ticker-config/hot-ticker-count",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ticker-config", "hot-ticker-count"]
+            },
+            "description": "Get effective hot-ticker count: runtimeOverride, ymlDefault, and effectiveCount."
+          }
+        },
+        {
+          "name": "PUT /api/ticker-config/hot-ticker-count",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/ticker-config/hot-ticker-count?count=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ticker-config", "hot-ticker-count"],
+              "query": [
+                { "key": "count", "value": "20" }
+              ]
+            },
+            "description": "Persist a runtime override for hot-ticker-count (1–100). Returns 400 if out of range."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Backup",
+      "description": "Settings backup API — saves a raw settings snapshot to disk.",
+      "item": [
+        {
+          "name": "POST /api/backup",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"settingsSnapshot\": \"...\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/backup",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "backup"]
+            },
+            "description": "Save a settings snapshot. Body is passed as-is to BackupService and written to disk."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Charts",
+      "description": "Serves backtest chart HTML files from backtest/charts/ directory.",
+      "item": [
+        {
+          "name": "GET /charts/:filename",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/charts/AAPL_C1-Squeeze-Breakout_CALL_2025-04-01_10-30.html",
+              "host": ["{{baseUrl}}"],
+              "path": ["charts", "AAPL_C1-Squeeze-Breakout_CALL_2025-04-01_10-30.html"]
+            },
+            "description": "Serve a backtest chart HTML file. Handles timestamp format variations (HH-MM vs HH-MM-SS). Path traversal is blocked."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Telegram Webhook",
+      "description": "Webhook for Telegram callback queries and bot commands. Must include X-Telegram-Bot-Api-Secret-Token header.",
+      "item": [
+        {
+          "name": "POST /webhook (callback_query — trade execution)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Telegram-Bot-Api-Secret-Token", "value": "{{telegramWebhookSecret}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"callback_query\": {\n    \"id\": \"123456789\",\n    \"data\": \"E|AAPL|C1 Squeeze Breakout|215.50|CALL\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhook",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhook"]
+            },
+            "description": "Telegram callback_query webhook. data format: E|TICKER|STRATEGY|PRICE|DIRECTION. Requires valid secret token header."
+          }
+        },
+        {
+          "name": "POST /webhook (message — bot command)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Telegram-Bot-Api-Secret-Token", "value": "{{telegramWebhookSecret}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": {\n    \"text\": \"/status\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhook",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhook"]
+            },
+            "description": "Telegram bot command via message. Supported: /status, /help, /pause, /resume."
+          }
+        }
+      ]
+    }
+  ]
+}

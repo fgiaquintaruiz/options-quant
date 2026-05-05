@@ -89,7 +89,23 @@ _Last updated: 2026-05-05_
 - 3 test suites implementadas: `TelegramWebhookControllerTest`, `TelegramServiceSecurityTest`, `MarketScannerTelegramRoutingTest`
 - Features 1-22 cubiertas (webhook + security + routing)
 - Features 23-35 pendientes (notifications: sendSignal, sendAutoExecuteSignal, sendTradeConfirmation, etc.)
-- Dead code decision pendiente: `sendTradeExit`, `sendDailySummary`, `sendMacroStatus`, `testConnection` → ¿delete o wire up?
+- **Dead code — DECISIÓN TOMADA**:
+  - DELETE: `sendTradeExit`, `sendDailySummary`, `sendMacroStatus`, `testConnection` — features huérfanas, sin plan de uso
+  - WIRE UP: `validateWebhookRequest` → llamar desde `TelegramWebhookController` como segunda capa de validación (actualmente solo valida secret token, no parámetros de orden)
+
+---
+
+## SDD: Telegram Dead Code Cleanup ⏳ PENDIENTE
+
+### Scope
+- DELETE `sendTradeExit`, `sendDailySummary`, `sendMacroStatus`, `testConnection` de `TelegramService.java`
+- WIRE UP `validateWebhookRequest` en `TelegramWebhookController` como segunda capa de validación (actualmente solo valida secret token — no valida que parámetros de la orden coincidan con lo generado)
+- Actualizar `TelegramServiceSecurityTest` para reflejar que `validateWebhookRequest` es llamado desde el controller
+
+### Archivos afectados
+- `src/main/java/com/fgiaquinta/optionsquant/service/TelegramService.java` — delete 4 métodos
+- `src/main/java/com/fgiaquinta/optionsquant/controller/TelegramWebhookController.java` — wire up validateWebhookRequest
+- `src/test/java/com/fgiaquinta/optionsquant/service/TelegramServiceSecurityTest.java` — ajustar tests
 
 ---
 

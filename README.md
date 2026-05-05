@@ -39,6 +39,168 @@ npm run dev
 
 ---
 
+## Running the app
+
+### Prerequisites
+
+- **Java 25** in `PATH` (matches `build.gradle.kts` toolchain)
+- **Node.js 20+** (frontend build and dev server)
+- **Python 3.11+** with `pip install -r python/requirements.txt` (analytics sidecar — optional)
+- **TWS or IB Gateway** running and logged in; API port enabled in TWS settings
+
+### Backend only (Spring Boot on port 9090)
+
+```bash
+./gradlew bootRun
+```
+
+### Frontend dev server (Vite on port 5173)
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### Full dev stack — backend + frontend + Python analytics (Unix/macOS)
+
+```bash
+bash scripts/dev-up.sh
+```
+
+Skip the Python analytics sidecar:
+
+```bash
+bash scripts/dev-up.sh --no-python
+```
+
+Stop all services started by the script:
+
+```bash
+bash scripts/dev-up.sh --stop
+```
+
+### Full stack — Windows (PowerShell)
+
+Opens a separate console window per service (Spring Boot :9090, FastAPI :8001, Streamlit :8501):
+
+```powershell
+.\scripts\start-full-stack.ps1
+```
+
+Or via Gradle (builds frontend first, then opens windows):
+
+```bash
+./gradlew startFullStack
+```
+
+### Python analytics sidecar (FastAPI on port 8001)
+
+```bash
+cd python
+python -m uvicorn analytics_service.main:app --host 127.0.0.1 --port 8001
+```
+
+With environment variables pointing to the Java engine:
+
+```bash
+JAVA_API_HOST=127.0.0.1 JAVA_API_PORT=9090 \
+  python -m uvicorn analytics_service.main:app --host 127.0.0.1 --port 8001
+```
+
+### Backfill mode (historical candle back-fill from TWS + yfinance)
+
+Pass `--backfill` as a program argument. The backfill rate and start year are controlled by `candles.backfill` in `application.yml` (default: 0.1 req/s from 2018):
+
+```bash
+./gradlew bootRun --args='--backfill'
+```
+
+### Backtest CLI (interactive menu, no web server)
+
+```bash
+./gradlew bootRun --args='--backtest-cli.enabled=true --server.port=-1'
+```
+
+Run on a different port if the web server is already up:
+
+```bash
+./gradlew bootRun --args='--backtest-cli.enabled=true --server.port=9091'
+```
+
+### Trading CLI (general purpose)
+
+```bash
+./gradlew bootRun --args='--cli.enabled=true'
+```
+
+### Run tests
+
+Unit tests only (excludes slow, e2e, tws-paper):
+
+```bash
+./gradlew test
+```
+
+Full backtest / heavy HTTP tests (`@Tag("slow")`):
+
+```bash
+./gradlew slowTest
+```
+
+Playwright + Spring end-to-end tests (`@Tag("e2e")`):
+
+```bash
+./gradlew buildFrontend e2eTest
+```
+
+Real TWS/IB Gateway integration tests (`@Tag("tws-paper")`) — requires a logged-in paper session:
+
+```bash
+./gradlew twsTest -DrunTwsTests=true
+```
+
+Unit coverage report (JaCoCo HTML at `build/reports/jacoco-unit/html`):
+
+```bash
+./gradlew unitCoverageReport
+```
+
+Full-stack coverage (Java unit + Vitest + pytest-cov):
+
+```bash
+./gradlew fullStackCoverage
+```
+
+### Build production JAR (includes frontend)
+
+```bash
+./gradlew clean build
+```
+
+### Docker Compose
+
+Full stack (Java engine + Python analytics + Streamlit UI + Redis):
+
+```bash
+docker compose up
+```
+
+Java engine only:
+
+```bash
+docker compose up redis java-engine
+```
+
+### Verify the stack is up
+
+```bash
+curl http://localhost:9090/actuator/health
+curl http://localhost:8001/health
+```
+
+---
+
 ## 🏗️ Project Architecture
 
 ### Tech Stack
