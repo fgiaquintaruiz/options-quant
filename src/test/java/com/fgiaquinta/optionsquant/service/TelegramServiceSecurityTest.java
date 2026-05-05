@@ -61,6 +61,22 @@ class TelegramServiceSecurityTest {
         assertThat(orderId).isNotNull().isNotEmpty();
     }
 
+    @Test
+    @DisplayName("generateSecureOrderId with blank masterKey stores orderId in pendingOrders")
+    void generateSecureOrderId_blankMasterKey_storesInPendingOrders() throws Exception {
+        service.setMasterKey("");
+        String orderId = service.generateSecureOrderId("AAPL", "SMA", "CALL", 150.0);
+        assertThat(getPendingOrders().containsKey(orderId)).isTrue();
+    }
+
+    @Test
+    @DisplayName("generateSecureOrderId with null masterKey stores orderId in pendingOrders")
+    void generateSecureOrderId_nullMasterKey_storesInPendingOrders() throws Exception {
+        service.setMasterKey(null);
+        String orderId = service.generateSecureOrderId("AAPL", "SMA", "CALL", 150.0);
+        assertThat(getPendingOrders().containsKey(orderId)).isTrue();
+    }
+
     // --- validateWebhookRequest ---
 
     @Test

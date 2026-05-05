@@ -65,7 +65,10 @@ public class TelegramService {
             return orderId;
         } catch (Exception e) {
             log.error("Failed to generate secure order ID: {}", e.getMessage());
-            return String.valueOf(System.currentTimeMillis());
+            String fallbackId = String.valueOf(System.currentTimeMillis());
+            pendingOrders.put(fallbackId, new PendingOrder(ticker, strategy, direction, price, System.currentTimeMillis()));
+            cleanupOldOrders();
+            return fallbackId;
         }
     }
 
