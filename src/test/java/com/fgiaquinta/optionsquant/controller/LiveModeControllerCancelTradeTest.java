@@ -208,4 +208,64 @@ class LiveModeControllerCancelTradeTest {
         // Here we confirm the service was called exactly once (no double-cancel).
         verify(tradingService, times(1)).cancelTrade(10);
     }
+
+    // ── NOTE: missing-param tests are NOT applicable here ───────────────────
+    // This test class uses direct controller instantiation (not MockMvc / @WebMvcTest).
+    // Spring's DispatcherServlet and HandlerMethodArgumentResolver are never invoked,
+    // so @RequestParam required-validation does not run.
+    // Missing-param tests would require @WebMvcTest + MockMvc to cover the HTTP binding layer.
+    // The two alternative edge-case tests below cover boundary values instead.
+
+    // ── Edge: orderId = Integer.MAX_VALUE (boundary — no overflow in controller) ─
+
+    @Test
+    @DisplayName("cancelTrade with orderId=Integer.MAX_VALUE → forwarded to service exactly, no truncation")
+    void cancelTrade_orderIdMaxValue_forwardedExactlyToService() {
+        // Arrange
+        when(tradingService.cancelTrade(Integer.MAX_VALUE)).thenReturn(true);
+
+        // Act
+        ResponseEntity<Map<String, Object>> res = controller.cancelTrade("GOOG", Integer.MAX_VALUE);
+
+        // Assert — 200 OK with success=true
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(res.getBody()).isNotNull();
+        assertThat(res.getBody()).containsEntry("success", true);
+        // Verify the value was NOT truncated or wrapped before reaching the service
+        verify(tradingService).cancelTrade(Integer.MAX_VALUE);
+        verify(tradingService, never()).cancelTrade(intThat(id -> id != Integer.MAX_VALUE));
+    }
+
+    // ── Edge: duplicate cancel — second call for same orderId after first succeeded ─
+
+    @Test
+    @DisplayName("cancelTrade second call for same orderId → success=false, closedTrades still contains ticker from first call")
+    void cancelTrade_duplicateCancel_closedTradesNotCorrupted() {
+        // Arrange — first call succeeds, second call fails (already cancelled at TWS level)
+        when(tradingService.cancelTrade(55))
+                .thenReturn(true)   // first call
+                .thenReturn(false); // second call
+
+        // Act — first cancel
+        ResponseEntity<Map<String, Object>> firstRes = controller.cancelTrade("META", 55);
+
+        // Assert first call
+        assertThat(firstRes.getBody()).containsEntry("success", true);
+
+        // closedTrades must contain the ticker after the first success
+        assertThat(controller.getClosedTrades()).containsKey("META");
+
+        // Act — second cancel (same ticker + orderId, already cancelled at TWS)
+        ResponseEntity<Map<String, Object>> secondRes = controller.cancelTrade("META", 55);
+
+        // Assert second call returns false (TWS rejected — order no longer exists)
+        assertThat(secondRes.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(secondRes.getBody()).containsEntry("success", false);
+
+        // closedTrades must still hold the ticker from the first call — not removed or overwritten
+        assertThat(controller.getClosedTrades()).containsKey("META");
+
+        // Service was invoked exactly twice
+        verify(tradingService, times(2)).cancelTrade(55);
+    }
 }

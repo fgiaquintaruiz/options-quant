@@ -227,4 +227,163 @@ class LiveModeControllerExecuteSignalTest {
         assertThat(body).containsEntry("message", "Trade execution failed in IBKR service.");
         assertThat(body).doesNotContainKey("orderId");
     }
+
+    // ── P1: Signal age boundary — just inside 30-minute window ───────────────
+
+    @Test
+    @DisplayName("executeSignal with signal timestamp 29m59s old → NOT stale (boundary: < 30min is always fresh)")
+    void executeSignal_signalExactly30MinutesOld_notRejectedAsStale() {
+        // Arrange
+        // isLiveSignalOlderThanMaxAge uses: timestamp.isBefore(now - 30min)
+        // The boundary is exclusive: strictly > 30min is stale; <= 30min is not stale.
+        // Using now-30min+1s to avoid the inherent timing race of an exact boundary assertion —
+        // a signal 1 second inside the window is deterministically NOT stale under any realistic clock drift.
+        StrategyScannerService.Signal boundary = new StrategyScannerService.Signal(
+                "AMZN", "squeeze_strat", "CALL", 200.0,
+                ZonedDateTime.now().minus(30, ChronoUnit.MINUTES).plusSeconds(1), null);
+        controller.addLiveSignal(boundary);
+
+        OrderExecutionService.OrderResult orderResult = mock(OrderExecutionService.OrderResult.class);
+        when(orderResult.parentId()).thenReturn(55);
+        when(tradingService.executeManualTrade(eq("AMZN"), eq("squeeze_strat"), eq("CALL"), eq(200.0)))
+                .thenReturn(orderResult);
+
+        // Act
+        ResponseEntity<Map<String, Object>> res =
+                controller.executeSignal("AMZN", "CALL", 200.0, "squeeze_strat");
+
+        // Assert — signal just inside the 30-min window must NOT be rejected as stale
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<String, Object> body = res.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body).doesNotContainKey("stale");
+        assertThat(body).containsEntry("success", true);
+        verify(tradingService).executeManualTrade("AMZN", "squeeze_strat", "CALL", 200.0);
+    }
+
+    // ── P2: TWS reconnect succeeds → trade executes ───────────────────────────
+
+    @Test
+    @DisplayName("executeSignal: both connections fail, reconnect called, second check passes → trade executes")
+    void executeSignal_reconnectSucceeds_tradeExecutes() {
+        // Arrange
+        // First check: both disconnected — triggers connectAccountManager().
+        // After reconnect: accountManager becomes connected (ibkrService still false).
+        // The second guard: !ibkrService.isConnected() && !accountManager.isConnected()
+        // → false (accountManager is now connected) → proceeds to trade.
+        when(ibkrService.isConnected()).thenReturn(false);
+        when(accountManager.isConnected())
+                .thenReturn(false)   // first call: triggers reconnect
+                .thenReturn(true);   // second call: reconnect succeeded
+
+        OrderExecutionService.OrderResult orderResult = mock(OrderExecutionService.OrderResult.class);
+        when(orderResult.parentId()).thenReturn(99);
+        when(tradingService.executeManualTrade(eq("MSFT"), eq("manual"), eq("PUT"), eq(300.0)))
+                .thenReturn(orderResult);
+
+        // Act
+        ResponseEntity<Map<String, Object>> res =
+                controller.executeSignal("MSFT", "PUT", 300.0, "manual");
+
+        // Assert — reconnect path: connectAccountManager must be called and trade must execute
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<String, Object> body = res.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body).containsEntry("success", true);
+        assertThat(body).containsEntry("orderId", 99);
+        verify(tradingService).connectAccountManager();
+        verify(tradingService).executeManualTrade("MSFT", "manual", "PUT", 300.0);
+    }
+
+    // ── P3: Explicit request price takes precedence over signal price ─────────
+
+    @Test
+    @DisplayName("executeSignal: explicit price param used for trade, not the signal's currentPrice")
+    void executeSignal_explicitPriceTakesPrecedenceOverSignalPrice() {
+        // Arrange — signal has currentPrice=182.0, request sends price=180.0
+        StrategyScannerService.Signal signal = new StrategyScannerService.Signal(
+                "AAPL", "squeeze_strat", "CALL", 182.0,
+                ZonedDateTime.now().minus(1, ChronoUnit.MINUTES), null);
+        controller.addLiveSignal(signal);
+
+        OrderExecutionService.OrderResult orderResult = mock(OrderExecutionService.OrderResult.class);
+        when(orderResult.parentId()).thenReturn(77);
+        // Production code calls: executeManualTrade(ticker, strategy, direction, price)
+        // where price = request param (not signal.currentPrice()).
+        when(tradingService.executeManualTrade(eq("AAPL"), eq("squeeze_strat"), eq("CALL"), eq(180.0)))
+                .thenReturn(orderResult);
+
+        // Act — explicit price=180.0 in request
+        ResponseEntity<Map<String, Object>> res =
+                controller.executeSignal("AAPL", "CALL", 180.0, "squeeze_strat");
+
+        // Assert — trade must be placed with request price 180.0, not signal price 182.0
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(res.getBody()).containsEntry("success", true);
+        verify(tradingService).executeManualTrade("AAPL", "squeeze_strat", "CALL", 180.0);
+        verify(tradingService, never()).executeManualTrade(eq("AAPL"), eq("squeeze_strat"), eq("CALL"), eq(182.0));
+    }
+
+    // ── P4: Null strategy param matches any live signal ───────────────────────
+
+    @Test
+    @DisplayName("executeSignal: strategy=manual (default) matches any signal regardless of its strategy name")
+    void executeSignal_manualStrategyMatchesAnyLiveSignal() {
+        // Arrange — signal has a specific strategy; request sends strategy="manual" (the @RequestParam default)
+        // findLiveSignalForExecute: strategyParam == null || "manual".equalsIgnoreCase(strategyParam) → returns signal
+        StrategyScannerService.Signal signal = new StrategyScannerService.Signal(
+                "GOOG", "c1_squeeze_breakout", "CALL", 150.0,
+                ZonedDateTime.now().minus(3, ChronoUnit.MINUTES), null);
+        controller.addLiveSignal(signal);
+
+        OrderExecutionService.OrderResult orderResult = mock(OrderExecutionService.OrderResult.class);
+        when(orderResult.parentId()).thenReturn(33);
+        when(tradingService.executeManualTrade(eq("GOOG"), eq("manual"), eq("CALL"), eq(150.0)))
+                .thenReturn(orderResult);
+
+        // Act — strategy="manual" (default value) should match the "c1_squeeze_breakout" live signal
+        ResponseEntity<Map<String, Object>> res =
+                controller.executeSignal("GOOG", "CALL", 150.0, "manual");
+
+        // Assert — signal found (stale guard applied) and trade proceeds
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(res.getBody()).containsEntry("success", true);
+        // The strategy forwarded to tradingService is the REQUEST param ("manual"), not the signal's strategy
+        verify(tradingService).executeManualTrade("GOOG", "manual", "CALL", 150.0);
+    }
+
+    // ── P5: Duplicate execute — second call after first succeeds ─────────────
+
+    @Test
+    @DisplayName("executeSignal called twice for same ticker: signal stays in list, second call also executes")
+    void executeSignal_duplicateCall_secondCallAlsoExecutes() {
+        // Arrange — signal is NOT removed from liveSignals after first execution.
+        // Second call finds the same signal (still fresh), stale guard passes, trade executes again.
+        StrategyScannerService.Signal signal = new StrategyScannerService.Signal(
+                "SPY", "squeeze_strat", "CALL", 500.0,
+                ZonedDateTime.now().minus(1, ChronoUnit.MINUTES), null);
+        controller.addLiveSignal(signal);
+
+        OrderExecutionService.OrderResult firstResult = mock(OrderExecutionService.OrderResult.class);
+        when(firstResult.parentId()).thenReturn(101);
+        OrderExecutionService.OrderResult secondResult = mock(OrderExecutionService.OrderResult.class);
+        when(secondResult.parentId()).thenReturn(102);
+        when(tradingService.executeManualTrade(eq("SPY"), eq("squeeze_strat"), eq("CALL"), eq(500.0)))
+                .thenReturn(firstResult)
+                .thenReturn(secondResult);
+
+        // Act — first call
+        ResponseEntity<Map<String, Object>> res1 =
+                controller.executeSignal("SPY", "CALL", 500.0, "squeeze_strat");
+        // Act — second call (same ticker, same params)
+        ResponseEntity<Map<String, Object>> res2 =
+                controller.executeSignal("SPY", "CALL", 500.0, "squeeze_strat");
+
+        // Assert — both calls succeed; signal is not removed between calls
+        assertThat(res1.getBody()).containsEntry("success", true);
+        assertThat(res1.getBody()).containsEntry("orderId", 101);
+        assertThat(res2.getBody()).containsEntry("success", true);
+        assertThat(res2.getBody()).containsEntry("orderId", 102);
+        verify(tradingService, times(2)).executeManualTrade("SPY", "squeeze_strat", "CALL", 500.0);
+    }
 }
