@@ -95,7 +95,7 @@ _Last updated: 2026-05-05_
 
 ---
 
-## SDD: Telegram Dead Code Cleanup ⏳ PENDIENTE
+## SDD: Telegram Dead Code Cleanup 🔜 DEFERRED
 
 ### Scope
 - DELETE `sendTradeExit`, `sendDailySummary`, `sendMacroStatus`, `testConnection` de `TelegramService.java`
