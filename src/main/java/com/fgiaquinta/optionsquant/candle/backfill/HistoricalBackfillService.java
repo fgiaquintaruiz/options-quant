@@ -41,8 +41,6 @@ public class HistoricalBackfillService implements ApplicationRunner {
     private final ZonedDateTime backfillStart;
     private final YfinanceHistoricalClient yfinanceClient;
     private final List<String> vixTickers;
-    private final int yfinanceCutoffYears;
-    private final boolean yfinanceEnabled;
     private final List<BackfillPeriod> periods;
 
     @Autowired
@@ -55,8 +53,6 @@ public class HistoricalBackfillService implements ApplicationRunner {
             @Value("${candles.backfill.rate-per-second:0.1}") double ratePerSecond,
             @Autowired(required = false) YfinanceHistoricalClient yfinanceClient,
             @Value("${ibkr.vix-tickers:#{T(java.util.Collections).emptyList()}}") List<String> vixTickers,
-            @Value("${candles.backfill.yfinance.cutoff-years:5}") int yfinanceCutoffYears,
-            @Value("${candles.backfill.yfinance.enabled:true}") boolean yfinanceEnabled,
             BackfillProperties backfillProperties) {
 
         this.repository = repository;
@@ -67,8 +63,6 @@ public class HistoricalBackfillService implements ApplicationRunner {
         this.backfillStart = ZonedDateTime.of(startYear, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
         this.yfinanceClient = yfinanceClient;
         this.vixTickers = vixTickers;
-        this.yfinanceCutoffYears = yfinanceCutoffYears;
-        this.yfinanceEnabled = yfinanceEnabled;
         this.periods = backfillProperties.parsedPeriods();
 
         log.info("HistoricalBackfillService initialized: {} tickers, rate={} req/s, startYear={}, periods={}",
@@ -83,11 +77,9 @@ public class HistoricalBackfillService implements ApplicationRunner {
             List<String> tickers,
             ZonedDateTime backfillStart,
             YfinanceHistoricalClient yfinanceClient,
-            List<String> vixTickers,
-            int yfinanceCutoffYears,
-            boolean yfinanceEnabled) {
+            List<String> vixTickers) {
         this(repository, checkpoint, ibkrService, rateLimiter, tickers, backfillStart,
-                yfinanceClient, vixTickers, yfinanceCutoffYears, yfinanceEnabled, List.of());
+                yfinanceClient, vixTickers, List.of());
     }
 
     HistoricalBackfillService(
@@ -99,8 +91,6 @@ public class HistoricalBackfillService implements ApplicationRunner {
             ZonedDateTime backfillStart,
             YfinanceHistoricalClient yfinanceClient,
             List<String> vixTickers,
-            int yfinanceCutoffYears,
-            boolean yfinanceEnabled,
             List<BackfillPeriod> periods) {
 
         this.repository = repository;
@@ -111,8 +101,6 @@ public class HistoricalBackfillService implements ApplicationRunner {
         this.backfillStart = backfillStart;
         this.yfinanceClient = yfinanceClient;
         this.vixTickers = vixTickers;
-        this.yfinanceCutoffYears = yfinanceCutoffYears;
-        this.yfinanceEnabled = yfinanceEnabled;
         this.periods = periods != null ? periods : List.of();
     }
 
@@ -158,7 +146,6 @@ public class HistoricalBackfillService implements ApplicationRunner {
     private int backfillTickerTimeframe(String ticker, TimeFrame tf) {
         int stored = 0;
 
-        ZonedDateTime chunkSize = chunkEnd(backfillStart, tf);
         ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
 
         Optional<ZonedDateTime> lastDone = checkpoint.getLastDownloaded(ticker, tf);
@@ -198,18 +185,11 @@ public class HistoricalBackfillService implements ApplicationRunner {
                     waited, ticker, tf, from.toLocalDate());
         }
 
-        if (tf != TimeFrame.DAY_1) {
-            return downloadChunkTwsOnly(ticker, tf, from, to);
-        }
-
-        ZonedDateTime cutoff = ZonedDateTime.now(ZoneOffset.UTC).minusYears(yfinanceCutoffYears);
-        boolean preempt = yfinanceEnabled && yfinanceClient != null && to.isBefore(cutoff);
-
-        if (preempt) {
+        if (tf == TimeFrame.DAY_1) {
             return downloadChunkYfinance(ticker, from, to);
         }
 
-        return downloadChunkTwsWithFallback(ticker, tf, from, to);
+        return downloadChunkTwsOnly(ticker, tf, from, to);
     }
 
     private int downloadChunkTwsOnly(String ticker, TimeFrame tf, ZonedDateTime from, ZonedDateTime to) {
@@ -222,29 +202,6 @@ public class HistoricalBackfillService implements ApplicationRunner {
             log.error("  [backfill] TWS error for {} [{}] chunk {}: {}", ticker, tf, from.toLocalDate(), e.getMessage());
             return 0;
         }
-    }
-
-    private int downloadChunkTwsWithFallback(String ticker, TimeFrame tf, ZonedDateTime from, ZonedDateTime to) {
-        List<Candle> candles = null;
-        try {
-            candles = ibkrService.downloadHistoricalData(ticker, tf, to);
-        } catch (Exception e) {
-            log.warn("  [backfill] TWS failed for {} [{}] {}, trying yfinance: {}", ticker, tf, from.toLocalDate(), e.getMessage());
-        }
-
-        if (candles == null || candles.isEmpty()) {
-            if (yfinanceEnabled && yfinanceClient != null) {
-                return downloadChunkYfinance(ticker, from, to);
-            }
-            if (candles != null) {
-                checkpoint.save(ticker, tf, to, BackfillStatus.COMPLETE_EMPTY);
-            }
-            return 0;
-        }
-
-        repository.upsert(ticker, tf, candles);
-        checkpoint.save(ticker, tf, to, BackfillStatus.COMPLETE_TWS);
-        return candles.size();
     }
 
     private int downloadChunkYfinance(String ticker, ZonedDateTime from, ZonedDateTime to) {

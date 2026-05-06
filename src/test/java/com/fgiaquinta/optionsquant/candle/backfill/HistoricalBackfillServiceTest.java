@@ -40,6 +40,9 @@ class HistoricalBackfillServiceTest {
     @Mock
     private RateLimiter rateLimiter;
 
+    @Mock
+    private YfinanceHistoricalClient yfinanceClient;
+
     private HistoricalBackfillService service;
 
     private static final ZonedDateTime BACKFILL_START =
@@ -54,10 +57,8 @@ class HistoricalBackfillServiceTest {
                 rateLimiter,
                 List.of("AAPL", "MSFT"),
                 BACKFILL_START,
-                null,       // yfinanceClient — not tested here
-                List.of(),  // vixTickers
-                5,          // yfinanceCutoffYears
-                false       // yfinanceEnabled — disabled so no yfinance calls
+                yfinanceClient,
+                List.of()
         );
     }
 
@@ -76,6 +77,7 @@ class HistoricalBackfillServiceTest {
 
     // -------------------------------------------------------------------------
     // T21-2: --backfill flag present → iterates all configured tickers
+    // DAY_1 uses yfinance; non-DAY_1 use TWS
     // -------------------------------------------------------------------------
 
     @Test
@@ -83,13 +85,17 @@ class HistoricalBackfillServiceTest {
         when(checkpoint.getLastDownloaded(anyString(), any())).thenReturn(Optional.empty());
         when(ibkrService.downloadHistoricalData(anyString(), any(), any()))
                 .thenReturn(Collections.emptyList());
+        when(yfinanceClient.fetchDailyCandles(anyString(), any(), any()))
+                .thenReturn(Collections.emptyList());
 
         var args = new DefaultApplicationArguments("--backfill");
 
         service.run(args);
 
-        // 2 tickers × 4 timeframes = 8 chunks minimum (may vary by chunk size)
+        // 2 tickers × 3 non-DAY_1 timeframes = at least 2 TWS calls
         verify(ibkrService, atLeast(2)).downloadHistoricalData(anyString(), any(), any());
+        // DAY_1 chunks go to yfinance
+        verify(yfinanceClient, atLeast(2)).fetchDailyCandles(anyString(), any(), any());
     }
 
     // -------------------------------------------------------------------------
@@ -113,12 +119,13 @@ class HistoricalBackfillServiceTest {
 
         service.run(args);
 
-        // All chunks are already done — no TWS download should happen
+        // All chunks are already done — no downloads should happen
         verify(ibkrService, never()).downloadHistoricalData(anyString(), any(), any());
+        verify(yfinanceClient, never()).fetchDailyCandles(anyString(), any(), any());
     }
 
     // -------------------------------------------------------------------------
-    // T21-4: successful download → checkpoint updated after each chunk
+    // T21-4: successful DAY_1 download via yfinance → checkpoint updated
     // -------------------------------------------------------------------------
 
     @Test
@@ -129,7 +136,7 @@ class HistoricalBackfillServiceTest {
                         150.0, 155.0, 149.0, 153.0, 1000L)
         );
 
-        // One ticker, one timeframe to keep it focused
+        // One ticker, DAY_1 only
         service = new HistoricalBackfillService(
                 repository,
                 checkpoint,
@@ -137,18 +144,16 @@ class HistoricalBackfillServiceTest {
                 rateLimiter,
                 List.of("AAPL"),
                 BACKFILL_START,
-                null,
-                List.of(),
-                5,
-                false
+                yfinanceClient,
+                List.of()
         );
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(5);
         when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
                 .thenReturn(Optional.empty());
         when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
-                .thenReturn(Optional.of(future)); // skip other TFs
-        when(ibkrService.downloadHistoricalData(eq("AAPL"), eq(TimeFrame.DAY_1), any()))
+                .thenReturn(Optional.of(future));
+        when(yfinanceClient.fetchDailyCandles(eq("AAPL"), any(), any()))
                 .thenReturn(candles);
 
         var args = new DefaultApplicationArguments("--backfill");
@@ -160,7 +165,7 @@ class HistoricalBackfillServiceTest {
     }
 
     // -------------------------------------------------------------------------
-    // T21-5: TWS error on chunk → checkpoint NOT updated, continues with next chunk
+    // T21-5: TWS error on non-DAY_1 chunk → checkpoint NOT updated, continues
     // -------------------------------------------------------------------------
 
     @Test
@@ -172,18 +177,17 @@ class HistoricalBackfillServiceTest {
                 rateLimiter,
                 List.of("AAPL"),
                 BACKFILL_START,
-                null,
-                List.of(),
-                5,
-                false
+                yfinanceClient,
+                List.of()
         );
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(5);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+        // Only run MIN_5; skip DAY_1 and other TFs
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_5)))
                 .thenReturn(Optional.empty());
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_5)))
                 .thenReturn(Optional.of(future));
-        when(ibkrService.downloadHistoricalData(eq("AAPL"), eq(TimeFrame.DAY_1), any()))
+        when(ibkrService.downloadHistoricalData(eq("AAPL"), eq(TimeFrame.MIN_5), any()))
                 .thenThrow(new RuntimeException("TWS request pacing violation"));
 
         var args = new DefaultApplicationArguments("--backfill");
@@ -192,7 +196,7 @@ class HistoricalBackfillServiceTest {
         assertDoesNotThrow(() -> service.run(args));
 
         // Checkpoint must NOT be updated when download failed
-        verify(checkpoint, never()).save(eq("AAPL"), eq(TimeFrame.DAY_1), any(), any(BackfillStatus.class));
+        verify(checkpoint, never()).save(eq("AAPL"), eq(TimeFrame.MIN_5), any(), any(BackfillStatus.class));
     }
 
     // -------------------------------------------------------------------------
@@ -208,10 +212,8 @@ class HistoricalBackfillServiceTest {
                 rateLimiter,
                 List.of("AAPL"),
                 BACKFILL_START,
-                null,
-                List.of(),
-                5,
-                false
+                yfinanceClient,
+                List.of()
         );
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(5);
@@ -219,7 +221,7 @@ class HistoricalBackfillServiceTest {
                 .thenReturn(Optional.empty());
         when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
                 .thenReturn(Optional.of(future));
-        when(ibkrService.downloadHistoricalData(eq("AAPL"), eq(TimeFrame.DAY_1), any()))
+        when(yfinanceClient.fetchDailyCandles(eq("AAPL"), any(), any()))
                 .thenReturn(Collections.emptyList());
 
         var args = new DefaultApplicationArguments("--backfill");
