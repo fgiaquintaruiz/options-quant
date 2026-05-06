@@ -114,7 +114,9 @@ _Last updated: 2026-05-05_
 ### Estado
 - ✅ Explore, Propose, Spec, Design, Tasks — 2026-05-05
 - ✅ Apply — 2026-05-05 (13/13 tasks, 504/504 tests GREEN, commit `c31453e`)
-- ⏳ T12 manual: correr sidecar Python + backfill 1-2 tickers, verificar candles en SQLite con COMPLETE_YFINANCE
+- ✅ T12 manual: verificado — sidecar recibe requests trimmeados al período exacto, OUT_OF_RANGE en logs para chunks fuera de ventana
+- ✅ Period trimming: computeEffectiveRanges() — chunks trimmed to period intersection before yfinance call
+- ✅ start-year: 2007 — 2008-09 period reachable
 
 ### Scope
 - yfinance como fallback para DAY_1 chunks más viejos de `cutoff-years` (default 5)

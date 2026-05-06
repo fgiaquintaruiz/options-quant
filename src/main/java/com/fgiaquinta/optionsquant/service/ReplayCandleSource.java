@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
 public class ReplayCandleSource {
 
     public static class MissingDataException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
         public MissingDataException(String message) { super(message); }
     }
 

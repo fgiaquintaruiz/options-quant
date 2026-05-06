@@ -32,6 +32,7 @@ public class ReplayService {
     private static final LocalTime US_SESSION_OPEN_UTC = LocalTime.of(14, 30);
 
     public static class ReplayRejectedException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
         public ReplayRejectedException(String message) { super(message); }
         public ReplayRejectedException(String message, Throwable cause) { super(message, cause); }
     }

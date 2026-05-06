@@ -20,7 +20,7 @@ public record BacktestConfig(
         TimeFrame executionTimeframe,
         boolean includeTradePlans,
         boolean deterministicMode,
-        /** Added to TP/SL ATR multipliers for this run only (e.g. retest trial); applied in RiskCalculator across all workers. */
+        // Added to TP/SL ATR multipliers for this run only (e.g. retest trial); applied in RiskCalculator across all workers.
         double tpMultiplierDelta,
         double slMultiplierDelta
 ) {

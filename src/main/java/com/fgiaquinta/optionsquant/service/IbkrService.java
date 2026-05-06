@@ -44,6 +44,7 @@ public class IbkrService {
     private final Set<Integer> pendingRequests = ConcurrentHashMap.newKeySet();
     private final Set<Integer> cancelledRequests = ConcurrentHashMap.newKeySet();  // Track intentionally cancelled requests
 
+    @SuppressWarnings("this-escape")
     public IbkrService(IbkrProperties properties, MetricsService metrics) {
         this.properties = properties;
         this.metrics = metrics;
@@ -369,6 +370,12 @@ public class IbkrService {
             // Signal the connectionLatch to unblock any waiting connect() call
             connectionLatch.countDown();
             metrics.incrementIbkrError("error_" + event.code());
+            return;
+        }
+
+        // Error 2174: timezone format warning — IBKR still delivers the data, do NOT remove from pending
+        if (event.code() == 2174) {
+            log.info("    Ignoring non-fatal warning 2174 (timezone format) for request {}: {}", event.id(), event.message());
             return;
         }
 

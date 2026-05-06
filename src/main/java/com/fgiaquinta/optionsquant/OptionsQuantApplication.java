@@ -1,5 +1,6 @@
 package com.fgiaquinta.optionsquant;
 
+import com.fgiaquinta.optionsquant.candle.backfill.BackfillProperties;
 import com.fgiaquinta.optionsquant.config.GridSearchProperties;
 import com.fgiaquinta.optionsquant.config.IbkrProperties;
 import com.fgiaquinta.optionsquant.config.ScannerProperties;
@@ -8,7 +9,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 @SpringBootApplication
-@EnableConfigurationProperties({ IbkrProperties.class, ScannerProperties.class, GridSearchProperties.class })
+@EnableConfigurationProperties({ IbkrProperties.class, ScannerProperties.class, GridSearchProperties.class, BackfillProperties.class })
 public class OptionsQuantApplication {
 
     public static void main(String[] args) {

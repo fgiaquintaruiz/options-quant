@@ -126,6 +126,7 @@ public class LiveModeController {
     public record ClosedTradeInfo(String ticker, double closePrice, String closeTime, String exitReason) {}
     public record ExecutedTradeInfo(String ticker, String executeTime, boolean success, String message, Integer orderId, Integer tpOrderId, Integer slOrderId) {}
 
+    @SuppressWarnings("this-escape")
     public LiveModeController(StrategyScannerService scannerService,
                               IbkrProperties ibkrProperties,
                               TradingService tradingService,

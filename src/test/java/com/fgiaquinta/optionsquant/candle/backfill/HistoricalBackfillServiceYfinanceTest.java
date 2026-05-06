@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.DefaultApplicationArguments;
 
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.List;
@@ -240,6 +241,145 @@ class HistoricalBackfillServiceYfinanceTest {
 
         // yfinance must never be called for non-DAY_1 timeframes
         verify(yfinanceClient, never()).fetchDailyCandles(anyString(), any(), any());
+    }
+
+    // -------------------------------------------------------------------------
+    // T9-P1: period filter active, chunk inside a configured period → downloads
+    // -------------------------------------------------------------------------
+
+    @Test
+    void chunk_in_period_downloads() throws Exception {
+        HistoricalBackfillService.BackfillPeriod crisis2020 =
+                new HistoricalBackfillService.BackfillPeriod(
+                        LocalDate.of(2020, 2, 1), LocalDate.of(2020, 5, 31));
+
+        HistoricalBackfillService service = new HistoricalBackfillService(
+                repository,
+                checkpoint,
+                ibkrService,
+                noopRateLimiter,
+                List.of("AAPL"),
+                BACKFILL_START,
+                yfinanceClient,
+                List.of(),
+                5,
+                true,
+                List.of(crisis2020)
+        );
+
+        ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+                .thenReturn(Optional.of(future));
+        // Chunk: 2020-02-01 → 2020-02-01+365d, well inside crisis2020 period
+        ZonedDateTime chunkStart = ZonedDateTime.of(2020, 2, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+        ZonedDateTime afterChunk = chunkStart.plusDays(366);
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+                .thenReturn(Optional.of(chunkStart))
+                .thenReturn(Optional.of(afterChunk));
+
+        // yfinance is pre-empted (chunk is > 5yr ago), return a candle
+        when(yfinanceClient.fetchDailyCandles(eq("AAPL"), any(), any()))
+                .thenReturn(List.of(SAMPLE_CANDLE));
+        // Subsequent chunks fall outside the 2020 crisis period and are skipped — no TWS call needed
+
+        service.run(new DefaultApplicationArguments("--backfill"));
+
+        // At least one download must have happened for the in-period chunk
+        verify(yfinanceClient, atLeastOnce()).fetchDailyCandles(eq("AAPL"), any(), any());
+    }
+
+    // -------------------------------------------------------------------------
+    // T9-P2: period filter active, chunk entirely outside all configured periods → skipped
+    // -------------------------------------------------------------------------
+
+    @Test
+    void chunk_out_of_period_skips() throws Exception {
+        // Only 2020-02 to 2020-05 is allowed
+        HistoricalBackfillService.BackfillPeriod crisis2020 =
+                new HistoricalBackfillService.BackfillPeriod(
+                        LocalDate.of(2020, 2, 1), LocalDate.of(2020, 5, 31));
+
+        HistoricalBackfillService service = new HistoricalBackfillService(
+                repository,
+                checkpoint,
+                ibkrService,
+                noopRateLimiter,
+                List.of("AAPL"),
+                BACKFILL_START,
+                yfinanceClient,
+                List.of(),
+                5,
+                true,
+                List.of(crisis2020)
+        );
+
+        ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+                .thenReturn(Optional.of(future));
+        // Chunk: 2021-01-01 → 2022-01-01, completely outside the 2020 window
+        ZonedDateTime chunkStart = ZonedDateTime.of(2021, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+        ZonedDateTime afterChunk = chunkStart.plusDays(366);
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+                .thenReturn(Optional.of(chunkStart))
+                .thenReturn(Optional.of(afterChunk));
+
+        service.run(new DefaultApplicationArguments("--backfill"));
+
+        // The out-of-range chunk must be skipped: no download, no checkpoint write
+        verify(yfinanceClient, never()).fetchDailyCandles(anyString(), any(), any());
+        verify(ibkrService, never()).downloadHistoricalData(anyString(), any(), any());
+        verify(checkpoint, never()).save(anyString(), any(), any(), any());
+    }
+
+    // -------------------------------------------------------------------------
+    // T9-P3: chunk trimmed to period exact — yfinance called with intersection, not full chunk
+    // -------------------------------------------------------------------------
+
+    @Test
+    void chunk_trimmed_to_period_exact() throws Exception {
+        // Period: 2018-01 → 2018-03 (first day → last day of month = 2018-03-31)
+        HistoricalBackfillService.BackfillPeriod narrow =
+                new HistoricalBackfillService.BackfillPeriod(
+                        LocalDate.of(2018, 1, 1), LocalDate.of(2018, 3, 31));
+
+        // backfillStart = 2018-01-01; DAY_1 chunk size = 365 days → chunk 2018-01-01 → 2019-01-01
+        // Expected: yfinance called with 2018-01-01 → 2018-03-31, NOT 2019-01-01
+        HistoricalBackfillService service = new HistoricalBackfillService(
+                repository,
+                checkpoint,
+                ibkrService,
+                noopRateLimiter,
+                List.of("AAPL"),
+                BACKFILL_START,
+                yfinanceClient,
+                List.of(),
+                5,
+                true,
+                List.of(narrow)
+        );
+
+        ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+                .thenReturn(Optional.of(future));
+        // No checkpoint for DAY_1 → starts from backfillStart (2018-01-01).
+        // The while-loop will iterate all annual chunks from 2018 to now, but every chunk
+        // after 2018-03-31 is skipped by isChunkInAnyPeriod — only one yfinance call happens.
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+                .thenReturn(Optional.empty());
+
+        ArgumentCaptor<LocalDate> fromCaptor = ArgumentCaptor.forClass(LocalDate.class);
+        ArgumentCaptor<LocalDate> toCaptor = ArgumentCaptor.forClass(LocalDate.class);
+        when(yfinanceClient.fetchDailyCandles(eq("AAPL"), fromCaptor.capture(), toCaptor.capture()))
+                .thenReturn(List.of(SAMPLE_CANDLE));
+
+        service.run(new DefaultApplicationArguments("--backfill"));
+
+        verify(yfinanceClient, atLeastOnce()).fetchDailyCandles(eq("AAPL"), any(), any());
+
+        // The `to` date passed to yfinance must be 2018-03-31 (period end), NOT 2019-01-01 (chunk end)
+        assertThat(toCaptor.getAllValues()).allMatch(d -> !d.isAfter(LocalDate.of(2018, 3, 31)));
+        // The `from` date must be 2018-01-01 (max of chunkFrom and period.from, both equal here)
+        assertThat(fromCaptor.getAllValues()).allMatch(d -> !d.isBefore(LocalDate.of(2018, 1, 1)));
     }
 
     // -------------------------------------------------------------------------

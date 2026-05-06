@@ -74,7 +74,7 @@ public class OrderExecutionService {
         return new DefaultEWrapper() {
             @Override
             public void nextValidId(int orderId) {
-                service.log.info("OrderExecutionService connected. Next ID: {}", orderId);
+                OrderExecutionService.log.info("OrderExecutionService connected. Next ID: {}", orderId);
                 service.nextOrderId.set(orderId);
                 service.connectionLatch.countDown();
             }
@@ -86,9 +86,9 @@ public class OrderExecutionService {
                     int conId = contractDetails.contract().conid();
                     if (conId > 0) {
                         service.tickerToUnderlyingConId.merge(ticker, conId, Math::max);
-                        service.log.info("🎯 Resolved underlying conId for {}: {}", ticker, conId);
+                        OrderExecutionService.log.info("🎯 Resolved underlying conId for {}: {}", ticker, conId);
                     } else {
-                        service.log.warn("Contract details for {} returned conId=0 (reqId={})", ticker, reqId);
+                        OrderExecutionService.log.warn("Contract details for {} returned conId=0 (reqId={})", ticker, reqId);
                     }
                 }
             }
@@ -122,7 +122,7 @@ public class OrderExecutionService {
                             service.tickerToTradingClass.put(ticker, tradingClass);
                         }
 
-                        service.log.info("📅 Option chain loaded for {}: expiry={}, strikes={}, tradingClass={}",
+                        OrderExecutionService.log.info("📅 Option chain loaded for {}: expiry={}, strikes={}, tradingClass={}",
                                  ticker, bestExpiration, strikes.size(), tradingClass);
                     }
                     service.pendingMetadataRequests.remove(reqId);
@@ -134,7 +134,7 @@ public class OrderExecutionService {
                 if (errorCode == 2104 || errorCode == 2106 || errorCode == 2158) return;
                 
                 String context = service.requestTracker.getOrDefault(id, "Request " + id);
-                service.log.error("❌ IBKR {} Error: code={}, message={}", context, errorCode, errorMsg);
+                OrderExecutionService.log.error("❌ IBKR {} Error: code={}, message={}", context, errorCode, errorMsg);
                 
                 if (service.pendingMetadataRequests.contains(id)) {
                     service.pendingMetadataRequests.remove(id);

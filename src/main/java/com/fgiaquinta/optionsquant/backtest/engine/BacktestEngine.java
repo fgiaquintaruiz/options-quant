@@ -210,6 +210,7 @@ public class BacktestEngine {
     /**
      * Full execution loop with status callbacks.
      */
+    @SuppressWarnings("try")
     public BacktestReport run(BacktestConfig config, boolean resumeFromCheckpoint, AtomicBoolean stopRequested, ProgressCallback progressCallback) {
         try (RetestMultiplierScope ignored = new RetestMultiplierScope(config)) {
             return runCore(config, resumeFromCheckpoint, stopRequested, progressCallback);

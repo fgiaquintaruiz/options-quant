@@ -59,9 +59,7 @@ ibkr:
   default-qty: 10
   risk-per-trade-pct: 0.02
   hot-ticker-count: 20  # Used when hot-tickers is empty: top N CSV names by market cap (see TickerService)
-  tickers:
-    - "AAPL"
-    - "MSFT"
+  tickers: AAPL,MSFT
   vix-tickers:
     - "^VIX"
 
@@ -132,7 +130,18 @@ candles:
   store: sqlite
   backfill:
     rate-per-second: 0.1   # 1 TWS historical request per 10s (safe default within 60 req/10min limit)
-    start-year: 2018        # Earliest year to backfill from
+    start-year: 2007        # Earliest year to backfill from (2007 covers the Sep-2008 crisis period)
     yfinance:
       enabled: true
       cutoff-years: 0
+    periods:
+      - from: "2008-09"
+        to: "2009-03"
+      - from: "2018-01"
+        to: "2018-03"
+      - from: "2019-01"
+        to: "2019-12"
+      - from: "2020-02"
+        to: "2020-05"
+      - from: "2022-01"
+        to: "2022-11"

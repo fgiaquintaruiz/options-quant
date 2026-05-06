@@ -110,11 +110,17 @@ JAVA_API_HOST=127.0.0.1 JAVA_API_PORT=9090 \
 
 ### Backfill mode (historical candle back-fill from TWS + yfinance)
 
-Pass `--backfill` as a program argument. The backfill rate and start year are controlled by `candles.backfill` in `application.yml` (default: 0.1 req/s from 2018):
+Pass `--backfill` as a program argument. The backfill rate and start year are controlled by `candles.backfill` in `application.yml` (default: 0.1 req/s from 2007):
 
 ```bash
 ./gradlew bootRun --args='--backfill'
 ```
+
+#### Historical Backfill
+
+Downloads `DAY_1` candles for all configured tickers into SQLite. Uses TWS for recent data and a Python yfinance sidecar for older chunks. Only date windows configured under `candles.backfill.periods` are downloaded — everything else is skipped. Chunks sent to yfinance are trimmed to the exact period intersection before the request is made.
+
+-> See [docs/backfill.md](docs/backfill.md) for full configuration and troubleshooting.
 
 ### Backtest CLI (interactive menu, no web server)
 

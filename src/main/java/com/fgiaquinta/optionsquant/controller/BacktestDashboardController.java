@@ -147,10 +147,10 @@ public class BacktestDashboardController {
      */
     private void broadcastProgress(Map<String, Object> progress) {
         if (activeEmitters.isEmpty()) return;
-        
+
         String eventName = (String) progress.getOrDefault("type", "message");
         List<SseEmitter> deadEmitters = new ArrayList<>();
-        
+
         // Use a background task for broadcasting to avoid blocking the backtest engine
         CompletableFuture.runAsync(() -> {
             for (SseEmitter emitter : activeEmitters) {
@@ -198,7 +198,7 @@ public class BacktestDashboardController {
 
                 final BacktestReport[] finalReport = new BacktestReport[1];
                 final Exception[] backtestError = new Exception[1];
-                
+
                 stopRequested.set(false);
                 Thread backtestThread = new Thread(() -> {
                     try {
@@ -318,12 +318,12 @@ public class BacktestDashboardController {
                         }
                     }
                 }
-                
+
                 // Wait for backtest thread to fully complete
                 backtestThread.join(2000);
                 eventExecutor.shutdown();
                 eventExecutor.awaitTermination(3, java.util.concurrent.TimeUnit.SECONDS);
-                
+
                 log.info("Backtest thread finished, checking results...");
 
                 // Check for errors
@@ -1254,7 +1254,7 @@ public class BacktestDashboardController {
     /**
      * API: Retest with improved parameters (simulated).
      * POST /backtest-ui/retest/{strategyName}
-     * 
+     *
      * This runs a new backtest and compares the results with the previous one.
      * By default ({@code matchLastRun=true}) uses the same ticker list and date range as the last
      * successful UI/scheduled backtest — much faster than scanning the full symbol universe.
@@ -1596,7 +1596,7 @@ public class BacktestDashboardController {
                                 Default: Hot tickers first, 1 year history, $50k capital, 2% risk
                             </p>
                             <button class="btn btn-primary" onclick="runBacktest()" id="run-btn">Run Backtest</button>
-                            
+
                             <!-- Progress Bar -->
                             <div id="progress-section" style="display: none; margin-top: 15px;">
                                 <div style="background: #21262d; border-radius: 4px; height: 8px; overflow: hidden;">
@@ -1738,21 +1738,21 @@ public class BacktestDashboardController {
                             <div id="improve-results" style="display: none;">
                                 <h4>Performance Analysis</h4>
                                 <div id="improve-stats" class="stats" style="margin: 15px 0;"></div>
-                                
+
                                 <h4>Exit Reason Breakdown</h4>
                                 <div id="improve-exit-reasons" style="margin: 10px 0; font-size: 13px;"></div>
-                                
+
                                 <h4>Recommendations</h4>
                                 <ul id="improve-recommendations"></ul>
-                                
+
                                 <h4>Suggested Parameter Changes</h4>
                                 <ul id="improve-params"></ul>
-                                
+
                                 <div style="margin-top: 15px;">
                                     <button class="btn btn-warning" onclick="retestStrategy()" id="retest-btn">🔄 Retest & Compare</button>
                                     <button class="btn btn-secondary" onclick="closeModal()">Close</button>
                                 </div>
-                                
+
                                 <!-- Comparison Results -->
                                 <div id="comparison-section" style="display: none; margin-top: 20px; border-top: 1px solid #21262d; padding-top: 15px;">
                                     <h4>📊 Before vs After Comparison</h4>
@@ -1797,12 +1797,12 @@ public class BacktestDashboardController {
                                 line.style.marginBottom = '3px';
                                 line.innerHTML = `<span style="color: #8b949e;">[${timestamp}]</span> ${message}`;
                                 consoleOutput.appendChild(line);
-                                
+
                                 // Limit to 100 entries to prevent UI hanging
                                 while (consoleOutput.children.length > 100) {
                                     consoleOutput.removeChild(consoleOutput.firstChild);
                                 }
-                                
+
                                 consoleOutput.scrollTop = consoleOutput.scrollHeight;
                             }
 
@@ -1819,7 +1819,7 @@ public class BacktestDashboardController {
                             document.getElementById('chart-card').style.display = 'none';
                             document.getElementById('strategy-card').style.display = 'none';
                             document.getElementById('ticker-card').style.display = 'none';
-                            
+
                             // Reset running PnL footer
                             let cumulativePnl = 0;
                             let cumulativeTrades = 0;
@@ -1833,12 +1833,12 @@ public class BacktestDashboardController {
 
                             // Connect to SSE stream FIRST, then show console
                             const eventSource = new EventSource('/backtest-ui/stream');
-                            
+
                             // Show console immediately
                             consoleLog.style.display = 'block';
                             addConsoleLog('🚀 Iniciando backtest...', 'info');
                             addConsoleLog('⏳ Conectando al servidor...', 'info');
-                            
+
                             // Track cumulative equity
                             const equityPoints = [];
                             let allTrades = [];
@@ -1847,7 +1847,7 @@ public class BacktestDashboardController {
                             eventSource.onmessage = (e) => {
                                 try {
                                     const data = JSON.parse(e.data);
-                                    
+
                                     switch (data.type) {
                                         case 'start':
                                             progressText.textContent = `Cargando ${data.tickerCount} tickers (${data.hotTickers} hot + ${data.totalTickers - data.hotTickers} rest)...`;
@@ -1856,7 +1856,7 @@ public class BacktestDashboardController {
                                             addConsoleLog(`💵 Capital: $${data.capital.toLocaleString()} | Riesgo: 2%`, 'info');
                                             footerStatus.textContent = `📂 Cargando ${data.tickerCount} tickers...`;
                                             break;
-                                            
+
                                         case 'trades':
                                             // Show live trade log if we have trades
                                             if (data.trades && data.trades.length > 0) {
@@ -1864,15 +1864,15 @@ public class BacktestDashboardController {
                                                     liveTradeLog.style.display = 'block';
                                                     addConsoleLog('📊 Primeras señales detectadas', 'success');
                                                 }
-                                                
+
                                                 // Add new trades to the live table
                                                 data.trades.forEach(trade => {
                                                     const tr = document.createElement('tr');
                                                     const pnlClass = trade.netPnl >= 0 ? 'positive' : 'negative';
-                                                    const exitBadge = trade.exitReason === 'TP' ? 'badge-success' : 
+                                                    const exitBadge = trade.exitReason === 'TP' ? 'badge-success' :
                                                                      trade.exitReason === 'SL' ? 'badge-danger' : 'badge-warning';
                                                     const chartLink = trade.chartPath ? `<a href="/charts/${trade.chartPath}" target="_blank" style="color: #58a6ff; text-decoration: none;" title="Ver gráfico">📊</a>` : '';
-                                                    
+
                                                     tr.innerHTML = `
                                                         <td>${trade.entryTime.substring(5)}</td>
                                                         <td><strong>${trade.ticker}</strong></td>
@@ -1885,27 +1885,27 @@ public class BacktestDashboardController {
                                                     `;
                                                     liveTradesBody.insertBefore(tr, liveTradesBody.firstChild);
                                                 });
-                                                
+
                                                 allTrades.push(...data.trades);
-                                                
+
                                                 // Log new trades to console
                                                 data.trades.forEach(trade => {
                                                     const pnlEmoji = trade.netPnl >= 0 ? '✅' : '❌';
                                                     const pnlSign = trade.netPnl >= 0 ? '+' : '';
-                                                    addConsoleLog(`${pnlEmoji} ${trade.ticker} ${trade.strategy} ${trade.direction}: ${pnlSign}$${trade.netPnl.toFixed(2)} (${trade.exitReason})`, 
+                                                    addConsoleLog(`${pnlEmoji} ${trade.ticker} ${trade.strategy} ${trade.direction}: ${pnlSign}$${trade.netPnl.toFixed(2)} (${trade.exitReason})`,
                                                         trade.netPnl >= 0 ? 'success' : 'error');
                                                 });
-                                                
+
                                                 // Update cumulative PnL
                                                 cumulativePnl += data.recentPnl || 0;
                                                 cumulativeTrades += data.trades.length;
-                                                
+
                                                 // Update footer
                                                 footerPnl.textContent = '$' + cumulativePnl.toFixed(2);
                                                 footerPnl.className = cumulativePnl >= 0 ? 'positive' : 'negative';
                                                 footerTrades.textContent = cumulativeTrades + ' trades';
                                             }
-                                            
+
                                             // Update progress
                                             const totalTrades = data.totalTrades || 0;
                                             const elapsed = data.elapsedMs || 0;
@@ -1915,7 +1915,7 @@ public class BacktestDashboardController {
                                             footerTime.textContent = startTimeSec + 's';
                                             footerStatus.textContent = 'Escaneando...';
                                             break;
-                                            
+
                                         case 'progress_update':
                                             // Update every 10 seconds even without new trades
                                             const elapsedSec = data.elapsedSec || 0;
@@ -1923,7 +1923,7 @@ public class BacktestDashboardController {
                                             progressText.textContent = `Escaneando... ${tradesFound} trades encontrados (${elapsedSec}s)`;
                                             footerTime.textContent = elapsedSec + 's';
                                             footerStatus.textContent = `Escaneando...`;
-                                            
+
                                             // Show progress in console (every 30s to avoid flooding)
                                             if (elapsedSec > 0 && elapsedSec % 30 === 0) {
                                                 const min = Math.floor(elapsedSec / 60);
@@ -1932,11 +1932,11 @@ public class BacktestDashboardController {
                                                 addConsoleLog(`⏳ Progreso: ${timeStr}, ${tradesFound} trades encontrados`, 'info');
                                             }
                                             break;
-                                            
+
                                         case 'equity':
                                             equityPoints.push(data);
                                             break;
-                                            
+
                                         case 'complete':
                                             const totalTime = Math.round(data.elapsedMs / 1000);
                                             progressBar.style.width = '100%';
@@ -1944,7 +1944,7 @@ public class BacktestDashboardController {
                                             addConsoleLog(`🏁 Backtest completo: ${data.totalTrades} trades en ${totalTime}s`, 'success');
                                             addConsoleLog(`📊 PnL Final: $${data.totalPnl.toFixed(2)}`, data.totalPnl >= 0 ? 'success' : 'error');
                                             addConsoleLog(`📈 Win Rate: ${data.winRate.toFixed(1)}% | Profit Factor: ${data.profitFactor.toFixed(2)}`, 'info');
-                                            
+
                                             // Update final footer
                                             cumulativePnl = data.totalPnl;
                                             cumulativeTrades = data.totalTrades;
@@ -1953,20 +1953,20 @@ public class BacktestDashboardController {
                                             footerTrades.textContent = cumulativeTrades + ' trades';
                                             footerTime.textContent = totalTime + 's';
                                             footerStatus.textContent = '✅ Completo';
-                                            
+
                                             // Display final results
                                             displayResults(data);
-                                            
+
                                             // Clean up
                                             eventSource.close();
                                             btn.disabled = false;
-                                            
+
                                             // Hide progress after 3 seconds
                                             setTimeout(() => {
                                                 progressSection.style.display = 'none';
                                             }, 3000);
                                             break;
-                                            
+
                                         case 'error':
                                             addConsoleLog(`❌ Error: ${data.error}`, 'error');
                                             alert('Error: ' + (data.error || 'Error desconocido'));
@@ -1995,15 +1995,15 @@ public class BacktestDashboardController {
                             // Show results card
                             document.getElementById('results').style.display = 'block';
                             document.getElementById('total-trades').textContent = data.totalTrades;
-                            
+
                             const wr = data.winRate.toFixed(1) + '%';
                             document.getElementById('win-rate').textContent = wr;
                             document.getElementById('win-rate').className = 'stat-value ' + (data.winRate >= 50 ? 'positive' : 'negative');
-                            
+
                             const pnl = '$' + data.totalPnl.toFixed(2);
                             document.getElementById('total-pnl').textContent = pnl;
                             document.getElementById('total-pnl').className = 'stat-value ' + (data.totalPnl >= 0 ? 'positive' : 'negative');
-                            
+
                             document.getElementById('profit-factor').textContent = data.profitFactor.toFixed(2);
                             document.getElementById('max-dd').textContent = '$' + data.maxDrawdown.toFixed(2);
 
@@ -2028,7 +2028,7 @@ public class BacktestDashboardController {
 
                         function drawEquityChart(equityData) {
                             const ctx = document.getElementById('equity-chart').getContext('2d');
-                            
+
                             if (equityChart) {
                                 equityChart.destroy();
                             }
@@ -2136,7 +2136,7 @@ public class BacktestDashboardController {
                             const loading = document.getElementById('improve-loading');
                             const results = document.getElementById('improve-results');
                             const retestBtn = document.getElementById('retest-btn');
-                            
+
                             document.getElementById('improve-strategy-name').textContent = strategyName;
                             modal.classList.add('active');
                             loading.classList.add('active');
@@ -2147,7 +2147,7 @@ public class BacktestDashboardController {
                             try {
                                 const response = await fetch(`/backtest-ui/improve/${strategyName}`, { method: 'POST' });
                                 const data = await response.json();
-                                
+
                                 if (data.success) {
                                     // Stats
                                     const statsDiv = document.getElementById('improve-stats');
@@ -2158,7 +2158,7 @@ public class BacktestDashboardController {
                                         <div class="stat"><div class="stat-value">$${data.avgWin.toFixed(2)}</div><div class="stat-label">Avg Win</div></div>
                                         <div class="stat"><div class="stat-value">$${data.avgLoss.toFixed(2)}</div><div class="stat-label">Avg Loss</div></div>
                                     `;
-                                    
+
                                     // Exit reasons
                                     const exitDiv = document.getElementById('improve-exit-reasons');
                                     if (data.exitReasons) {
@@ -2166,15 +2166,15 @@ public class BacktestDashboardController {
                                             .map(([reason, count]) => `<span class="badge badge-${reason === 'TP' ? 'success' : reason === 'SL' ? 'danger' : 'warning'}" style="margin: 2px;">${reason}: ${count}</span>`)
                                             .join('');
                                     }
-                                    
+
                                     // Recommendations
                                     const recList = document.getElementById('improve-recommendations');
                                     recList.innerHTML = data.recommendations.map(r => `<li>${r}</li>`).join('');
-                                    
+
                                     // Params
                                     const paramList = document.getElementById('improve-params');
                                     paramList.innerHTML = data.suggestedParams.map(p => `<li>${p}</li>`).join('');
-                                    
+
                                     results.style.display = 'block';
                                     retestBtn.style.display = 'inline-block';
                                 } else {
@@ -2198,17 +2198,17 @@ public class BacktestDashboardController {
 
                                 if (data.success) {
                                     document.getElementById('comparison-section').style.display = 'block';
-                                    
+
                                     document.getElementById('comp-prev-trades').textContent = data.previous.trades;
                                     document.getElementById('comp-curr-trades').textContent = data.current.trades;
                                     document.getElementById('comp-trades-diff').textContent = (data.current.trades - data.previous.trades) > 0 ? '+' : '' + (data.current.trades - data.previous.trades);
-                                    
+
                                     document.getElementById('comp-prev-wr').textContent = data.previous.winRate.toFixed(1) + '%';
                                     document.getElementById('comp-curr-wr').textContent = data.current.winRate.toFixed(1) + '%';
                                     const wrDiff = data.improvement.winRateDiff;
                                     document.getElementById('comp-wr-diff').textContent = (wrDiff > 0 ? '+' : '') + wrDiff.toFixed(1) + '%';
                                     document.getElementById('comp-wr-diff').className = wrDiff >= 0 ? 'positive' : 'negative';
-                                    
+
                                     document.getElementById('comp-prev-pnl').textContent = '$' + data.previous.totalPnl.toFixed(2);
                                     document.getElementById('comp-curr-pnl').textContent = '$' + data.current.totalPnl.toFixed(2);
                                     const pnlDiff = data.improvement.pnlDiff;

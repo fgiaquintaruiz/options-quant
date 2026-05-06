@@ -15,8 +15,11 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,6 +31,8 @@ public class HistoricalBackfillService implements ApplicationRunner {
 
     private static final long THROTTLE_LOG_THRESHOLD_MS = 1_000;
 
+    record BackfillPeriod(LocalDate from, LocalDate to) {}
+
     private final CandleRepository repository;
     private final BackfillCheckpoint checkpoint;
     private final IbkrService ibkrService;
@@ -38,6 +43,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
     private final List<String> vixTickers;
     private final int yfinanceCutoffYears;
     private final boolean yfinanceEnabled;
+    private final List<BackfillPeriod> periods;
 
     @Autowired
     public HistoricalBackfillService(
@@ -50,7 +56,8 @@ public class HistoricalBackfillService implements ApplicationRunner {
             @Autowired(required = false) YfinanceHistoricalClient yfinanceClient,
             @Value("${ibkr.vix-tickers:#{T(java.util.Collections).emptyList()}}") List<String> vixTickers,
             @Value("${candles.backfill.yfinance.cutoff-years:5}") int yfinanceCutoffYears,
-            @Value("${candles.backfill.yfinance.enabled:true}") boolean yfinanceEnabled) {
+            @Value("${candles.backfill.yfinance.enabled:true}") boolean yfinanceEnabled,
+            BackfillProperties backfillProperties) {
 
         this.repository = repository;
         this.checkpoint = checkpoint;
@@ -62,9 +69,10 @@ public class HistoricalBackfillService implements ApplicationRunner {
         this.vixTickers = vixTickers;
         this.yfinanceCutoffYears = yfinanceCutoffYears;
         this.yfinanceEnabled = yfinanceEnabled;
+        this.periods = backfillProperties.parsedPeriods();
 
-        log.info("HistoricalBackfillService initialized: {} tickers, rate={} req/s, startYear={}",
-                tickers.size(), ratePerSecond, startYear);
+        log.info("HistoricalBackfillService initialized: {} tickers, rate={} req/s, startYear={}, periods={}",
+                tickers.size(), ratePerSecond, startYear, this.periods.size());
     }
 
     HistoricalBackfillService(
@@ -78,6 +86,22 @@ public class HistoricalBackfillService implements ApplicationRunner {
             List<String> vixTickers,
             int yfinanceCutoffYears,
             boolean yfinanceEnabled) {
+        this(repository, checkpoint, ibkrService, rateLimiter, tickers, backfillStart,
+                yfinanceClient, vixTickers, yfinanceCutoffYears, yfinanceEnabled, List.of());
+    }
+
+    HistoricalBackfillService(
+            CandleRepository repository,
+            BackfillCheckpoint checkpoint,
+            IbkrService ibkrService,
+            RateLimiter rateLimiter,
+            List<String> tickers,
+            ZonedDateTime backfillStart,
+            YfinanceHistoricalClient yfinanceClient,
+            List<String> vixTickers,
+            int yfinanceCutoffYears,
+            boolean yfinanceEnabled,
+            List<BackfillPeriod> periods) {
 
         this.repository = repository;
         this.checkpoint = checkpoint;
@@ -89,6 +113,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
         this.vixTickers = vixTickers;
         this.yfinanceCutoffYears = yfinanceCutoffYears;
         this.yfinanceEnabled = yfinanceEnabled;
+        this.periods = periods != null ? periods : List.of();
     }
 
     @Override
@@ -145,7 +170,18 @@ public class HistoricalBackfillService implements ApplicationRunner {
                 chunkTo = now;
             }
 
-            stored += downloadChunk(ticker, tf, chunkFrom, chunkTo);
+            if (!isChunkInAnyPeriod(chunkFrom, chunkTo)) {
+                log.info("  [backfill] Skipping {} [{}] {}–{}: OUT_OF_RANGE",
+                        ticker, tf, chunkFrom.toLocalDate(), chunkTo.toLocalDate());
+                chunkFrom = chunkTo;
+                continue;
+            }
+
+            for (BackfillPeriod effective : computeEffectiveRanges(chunkFrom, chunkTo)) {
+                ZonedDateTime effectiveFrom = effective.from().atStartOfDay(ZoneOffset.UTC);
+                ZonedDateTime effectiveTo = effective.to().atStartOfDay(ZoneOffset.UTC);
+                stored += downloadChunk(ticker, tf, effectiveFrom, effectiveTo);
+            }
 
             chunkFrom = chunkTo;
         }
@@ -229,10 +265,72 @@ public class HistoricalBackfillService implements ApplicationRunner {
         while (chunkFrom.isBefore(now)) {
             ZonedDateTime chunkTo = chunkFrom.plus(chunkDuration(TimeFrame.DAY_1));
             if (chunkTo.isAfter(now)) chunkTo = now;
-            stored += downloadChunkYfinance(vixTicker, chunkFrom, chunkTo);
+
+            if (!isChunkInAnyPeriod(chunkFrom, chunkTo)) {
+                log.info("  [backfill] Skipping {} [DAY_1] {}–{}: OUT_OF_RANGE",
+                        vixTicker, chunkFrom.toLocalDate(), chunkTo.toLocalDate());
+                chunkFrom = chunkTo;
+                continue;
+            }
+
+            for (BackfillPeriod effective : computeEffectiveRanges(chunkFrom, chunkTo)) {
+                ZonedDateTime effectiveFrom = effective.from().atStartOfDay(ZoneOffset.UTC);
+                ZonedDateTime effectiveTo = effective.to().atStartOfDay(ZoneOffset.UTC);
+                stored += downloadChunkYfinance(vixTicker, effectiveFrom, effectiveTo);
+            }
             chunkFrom = chunkTo;
         }
         return stored;
+    }
+
+    /**
+     * Returns the merged intersections of [chunkFrom, chunkTo) with all configured periods.
+     * Adjacent or overlapping intersections are merged into a single range.
+     * When periods is empty the full chunk is returned as-is (no trimming).
+     */
+    List<BackfillPeriod> computeEffectiveRanges(ZonedDateTime chunkFrom, ZonedDateTime chunkTo) {
+        if (periods.isEmpty()) {
+            return List.of(new BackfillPeriod(chunkFrom.toLocalDate(), chunkTo.toLocalDate()));
+        }
+
+        List<BackfillPeriod> intersections = new ArrayList<>();
+        LocalDate cFrom = chunkFrom.toLocalDate();
+        LocalDate cTo = chunkTo.toLocalDate();
+
+        for (BackfillPeriod p : periods) {
+            if (cFrom.isAfter(p.to()) || cTo.isBefore(p.from())) continue;
+            LocalDate iFrom = cFrom.isAfter(p.from()) ? cFrom : p.from();
+            LocalDate iTo = cTo.isBefore(p.to()) ? cTo : p.to();
+            intersections.add(new BackfillPeriod(iFrom, iTo));
+        }
+
+        if (intersections.isEmpty()) {
+            return List.of();
+        }
+
+        intersections.sort(Comparator.comparing(BackfillPeriod::from));
+        List<BackfillPeriod> merged = new ArrayList<>();
+        BackfillPeriod current = intersections.get(0);
+        for (int i = 1; i < intersections.size(); i++) {
+            BackfillPeriod next = intersections.get(i);
+            if (!next.from().isAfter(current.to().plusDays(1))) {
+                LocalDate mergedTo = current.to().isAfter(next.to()) ? current.to() : next.to();
+                current = new BackfillPeriod(current.from(), mergedTo);
+            } else {
+                merged.add(current);
+                current = next;
+            }
+        }
+        merged.add(current);
+        return merged;
+    }
+
+    private boolean isChunkInAnyPeriod(ZonedDateTime chunkFrom, ZonedDateTime chunkTo) {
+        if (periods.isEmpty()) return true;
+        LocalDate from = chunkFrom.toLocalDate();
+        LocalDate to = chunkTo.toLocalDate();
+        return periods.stream()
+                .anyMatch(p -> !from.isAfter(p.to()) && !to.isBefore(p.from()));
     }
 
     private Duration chunkDuration(TimeFrame tf) {
