@@ -2,6 +2,7 @@ package com.fgiaquinta.optionsquant.candle.backfill;
 
 import com.google.common.util.concurrent.RateLimiter;
 import com.fgiaquinta.optionsquant.candle.CandleRepository;
+import com.fgiaquinta.optionsquant.candle.RepositoryException;
 import com.fgiaquinta.optionsquant.domain.Candle;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.service.IbkrService;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -345,6 +347,102 @@ class HistoricalBackfillServiceYfinanceTest {
         assertThat(toCaptor.getAllValues()).allMatch(d -> !d.isAfter(LocalDate.of(2018, 3, 31)));
         // The `from` date must be 2018-01-01 (max of chunkFrom and period.from, both equal here)
         assertThat(fromCaptor.getAllValues()).allMatch(d -> !d.isBefore(LocalDate.of(2018, 1, 1)));
+    }
+
+    // -------------------------------------------------------------------------
+    // Gap 1: yfinanceClient.fetchDailyCandles() throws RuntimeException
+    //         → no try-catch in downloadChunkYfinance(), exception propagates
+    // -------------------------------------------------------------------------
+
+    @Test
+    void gap_yfinanceClientThrows_returnZero_upsertNeverCalled() {
+        HistoricalBackfillService service = buildService(List.of("AAPL"), List.of());
+
+        ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+                .thenReturn(Optional.of(future));
+        // One DAY_1 chunk starting 3 months ago
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+                .thenReturn(Optional.of(ZonedDateTime.now(ZoneOffset.UTC).minusMonths(3)));
+
+        when(yfinanceClient.fetchDailyCandles(eq("AAPL"), any(), any()))
+                .thenThrow(new RuntimeException("yfinance sidecar timeout"));
+
+        // downloadChunkYfinance() has try-catch → run() completes normally, returns 0
+        service.run(new DefaultApplicationArguments("--backfill"));
+
+        // upsert must never be called when yfinanceClient throws
+        verify(repository, never()).upsert(anyString(), any(), anyList());
+    }
+
+    // -------------------------------------------------------------------------
+    // Gap 2: repository.upsert() throws RepositoryException mid-batch
+    //         → no try-catch in downloadChunkYfinance(), exception propagates
+    // -------------------------------------------------------------------------
+
+    @Test
+    void gap_repositoryUpsertThrows_runCompletesNormally_checkpointNeverCalled() {
+        HistoricalBackfillService service = buildService(List.of("AAPL"), List.of());
+
+        ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+                .thenReturn(Optional.of(future));
+        // One DAY_1 chunk starting 3 months ago
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+                .thenReturn(Optional.of(ZonedDateTime.now(ZoneOffset.UTC).minusMonths(3)));
+
+        // yfinance returns valid candles so upsert() is reached
+        when(yfinanceClient.fetchDailyCandles(eq("AAPL"), any(), any()))
+                .thenReturn(List.of(SAMPLE_CANDLE));
+        doThrow(new RepositoryException("DB write failure"))
+                .when(repository).upsert(eq("AAPL"), eq(TimeFrame.DAY_1), anyList());
+
+        // downloadChunkYfinance() has try-catch → RepositoryException is caught, run() completes normally
+        service.run(new DefaultApplicationArguments("--backfill"));
+
+        // checkpoint.save() must NOT be called because upsert() blew up before it
+        verify(checkpoint, never()).save(eq("AAPL"), eq(TimeFrame.DAY_1), any(), any());
+    }
+
+    // -------------------------------------------------------------------------
+    // Gap 3: BackfillProperties with empty periods list
+    //         → isChunkInAnyPeriod() returns true for all chunks (no filtering),
+    //           every chunk proceeds to yfinance download normally
+    // -------------------------------------------------------------------------
+
+    @Test
+    void gap_emptyPeriodsList_allChunksDownloadedWithNoFiltering() {
+        // periods = List.of() → the 5-arg constructor stores an empty list.
+        // isChunkInAnyPeriod() returns true when periods is empty (line 286 in production code),
+        // so no chunk is ever skipped.
+        HistoricalBackfillService service = new HistoricalBackfillService(
+                repository,
+                checkpoint,
+                ibkrService,
+                noopRateLimiter,
+                List.of("AAPL"),
+                BACKFILL_START,
+                yfinanceClient,
+                List.of(),
+                List.of()   // ← empty periods
+        );
+
+        ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+                .thenReturn(Optional.of(future));
+        // One DAY_1 chunk starting 3 months ago
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+                .thenReturn(Optional.of(ZonedDateTime.now(ZoneOffset.UTC).minusMonths(3)));
+
+        when(yfinanceClient.fetchDailyCandles(eq("AAPL"), any(), any()))
+                .thenReturn(List.of(SAMPLE_CANDLE));
+
+        service.run(new DefaultApplicationArguments("--backfill"));
+
+        // With empty periods no chunk is filtered → yfinance IS called
+        verify(yfinanceClient, atLeastOnce()).fetchDailyCandles(eq("AAPL"), any(), any());
+        // And candles are persisted
+        verify(repository, atLeastOnce()).upsert(eq("AAPL"), eq(TimeFrame.DAY_1), anyList());
     }
 
     // -------------------------------------------------------------------------

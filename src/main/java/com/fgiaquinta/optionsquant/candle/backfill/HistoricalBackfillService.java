@@ -205,13 +205,18 @@ public class HistoricalBackfillService implements ApplicationRunner {
     }
 
     private int downloadChunkYfinance(String ticker, ZonedDateTime from, ZonedDateTime to) {
-        List<Candle> candles = yfinanceClient.fetchDailyCandles(ticker, from.toLocalDate(), to.toLocalDate());
-        if (!candles.isEmpty()) repository.upsert(ticker, TimeFrame.DAY_1, candles);
-        checkpoint.save(ticker, TimeFrame.DAY_1, to,
-                candles.isEmpty() ? BackfillStatus.COMPLETE_EMPTY : BackfillStatus.COMPLETE_YFINANCE);
-        log.debug("  [backfill] yfinance {} {} → {} — {} candles",
-                ticker, from.toLocalDate(), to.toLocalDate(), candles.size());
-        return candles.size();
+        try {
+            List<Candle> candles = yfinanceClient.fetchDailyCandles(ticker, from.toLocalDate(), to.toLocalDate());
+            if (!candles.isEmpty()) repository.upsert(ticker, TimeFrame.DAY_1, candles);
+            checkpoint.save(ticker, TimeFrame.DAY_1, to,
+                    candles.isEmpty() ? BackfillStatus.COMPLETE_EMPTY : BackfillStatus.COMPLETE_YFINANCE);
+            log.debug("  [backfill] yfinance {} {} → {} — {} candles",
+                    ticker, from.toLocalDate(), to.toLocalDate(), candles.size());
+            return candles.size();
+        } catch (Exception e) {
+            log.warn("[backfill] yfinance error for {} [{}/{}]: {}", ticker, from.toLocalDate(), to.toLocalDate(), e.getMessage());
+            return 0;
+        }
     }
 
     private int backfillTickerYfinanceOnly(String vixTicker) {
