@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
@@ -37,6 +38,10 @@ import static org.mockito.Mockito.when;
  * <p>No {@code @Tag("tws-paper")} — these tests run in normal CI without TWS.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = OptionsQuantApplication.class)
+@TestPropertySource(properties = {
+    "candles.store=sqlite",
+    "candles.sqlite.path=:memory:"
+})
 class ExternalPositionsIntegrationTest {
 
     @LocalServerPort

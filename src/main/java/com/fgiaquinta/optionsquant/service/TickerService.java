@@ -1,10 +1,14 @@
 package com.fgiaquinta.optionsquant.service;
 
+import com.fgiaquinta.optionsquant.candle.sqlite.SqliteTickerRepository;
 import com.fgiaquinta.optionsquant.config.IbkrProperties;
 import com.fgiaquinta.optionsquant.domain.TickerInfo;
 import com.fgiaquinta.optionsquant.dto.TickerFundamentalPayload;
 import com.fgiaquinta.optionsquant.dto.TickerRuntimeConfigPayload;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
@@ -31,28 +35,102 @@ import java.util.stream.Collectors;
 @Service
 public class TickerService {
 
-    private static final String TICKERS_CSV_PATH = "data/tickers.csv";
-
     private final IbkrProperties ibkrProperties;
     private final TickerRuntimeConfigStore runtimeConfigStore;
+    /** Null in CSV mode ({@code candles.store=csv}) — all SQLite calls are guarded. */
+    private final SqliteTickerRepository sqliteTickerRepository;
+    private final String tickersCsvPath;
 
     /** Raw symbols from CSV + merged fundamentals (may be larger than active universe). */
     private final Map<String, TickerInfo> tickerMap = new ConcurrentHashMap<>();
     private volatile boolean loaded = false;
     private boolean hasActiveColumn = false;
 
-    public TickerService(IbkrProperties ibkrProperties, TickerRuntimeConfigStore runtimeConfigStore) {
+    /**
+     * Primary Spring constructor. {@code sqliteTickerRepository} is supplied via
+     * {@link ObjectProvider} so Spring does not fail when the bean is absent
+     * (e.g. {@code candles.store=csv} mode). In that case the provider resolves to
+     * {@code null} and all SQLite paths in this service are skipped.
+     */
+    @Autowired
+    public TickerService(
+            IbkrProperties ibkrProperties,
+            TickerRuntimeConfigStore runtimeConfigStore,
+            ObjectProvider<SqliteTickerRepository> sqliteTickerRepositoryProvider,
+            @Value("${tickers.csv.path:data/tickers.csv}") String tickersCsvPath) {
         this.ibkrProperties = ibkrProperties;
         this.runtimeConfigStore = runtimeConfigStore;
+        this.sqliteTickerRepository = sqliteTickerRepositoryProvider.getIfAvailable();
+        this.tickersCsvPath = tickersCsvPath;
+    }
+
+    /**
+     * Test constructor — accepts a concrete (possibly null) repository instance directly,
+     * bypassing Spring DI and ObjectProvider.
+     */
+    TickerService(
+            IbkrProperties ibkrProperties,
+            TickerRuntimeConfigStore runtimeConfigStore,
+            SqliteTickerRepository sqliteTickerRepository,
+            String tickersCsvPath) {
+        this.ibkrProperties = ibkrProperties;
+        this.runtimeConfigStore = runtimeConfigStore;
+        this.sqliteTickerRepository = sqliteTickerRepository;
+        this.tickersCsvPath = tickersCsvPath;
     }
 
     /**
      * Reloads CSV + runtime config (call after saving ABM / ticker-runtime.json).
+     * Always re-reads CSV (bypasses the warm SQLite path), then refreshes SQLite.
      */
     public synchronized void reload() {
         loaded = false;
         tickerMap.clear();
-        loadTickers();
+        loadFromFiles();
+        if (sqliteTickerRepository != null) {
+            sqliteTickerRepository.upsertAll(new ArrayList<>(tickerMap.values()));
+            log.info("Reloaded {} tickers, SQLite refreshed (source=csv-reload)", tickerMap.size());
+        }
+        loaded = true;
+    }
+
+    /**
+     * Cold-path only: reads CSV + merges runtime JSON, populates tickerMap.
+     * Does NOT touch SQLite and does NOT set {@code loaded}. Callers must do both.
+     */
+    private void loadFromFiles() {
+        Path csvPath = Path.of(tickersCsvPath);
+        if (!Files.exists(csvPath)) {
+            log.warn("Tickers CSV not found at {}.", csvPath.toAbsolutePath());
+        } else {
+            try (BufferedReader reader = new BufferedReader(new FileReader(csvPath.toFile()))) {
+                String headerLine = reader.readLine();
+                if (headerLine == null) {
+                    log.warn("Empty tickers CSV file");
+                } else {
+                    int loadedCount = 0;
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        try {
+                            TickerInfo info = parseLine(line);
+                            if (info != null) {
+                                tickerMap.put(info.ticker().toUpperCase(Locale.ROOT), info);
+                                loadedCount++;
+                            }
+                        } catch (Exception e) {
+                            log.debug("Failed to parse ticker line: {} - {}", line, e.getMessage());
+                        }
+                    }
+                    log.info("Loaded {} tickers from CSV (source=csv-reload)", loadedCount);
+                }
+            } catch (IOException e) {
+                log.error("Failed to load tickers from CSV: {}", e.getMessage());
+            }
+        }
+
+        Optional<TickerRuntimeConfigPayload> rt = runtimeConfigStore.load();
+        rt.ifPresent(payload -> mergeRuntimeFundamentals(payload.fundamentals()));
+        ensureUniverseStubs(resolveUniverseSymbols(rt.orElse(null)));
     }
 
     public void loadTickers() {
@@ -62,39 +140,57 @@ public class TickerService {
         synchronized (this) {
             if (loaded) return;
 
-            Path csvPath = Path.of(TICKERS_CSV_PATH);
-            if (!Files.exists(csvPath)) {
-                log.warn("Tickers CSV not found at {}.", csvPath.toAbsolutePath());
+            long count = sqliteTickerRepository != null ? sqliteTickerRepository.countAll() : 0L;
+            if (count > 0) {
+                // WARM START: load from SQLite
+                sqliteTickerRepository.findAll().forEach(t -> tickerMap.put(t.ticker(), t));
+                // Still apply runtime overlays (hot list stays JSON-driven)
+                Optional<TickerRuntimeConfigPayload> rt = runtimeConfigStore.load();
+                rt.ifPresent(p -> mergeRuntimeFundamentals(p.fundamentals()));
+                ensureUniverseStubs(resolveUniverseSymbols(rt.orElse(null)));
+                log.info("Loaded {} tickers from SQLite (source=sqlite)", tickerMap.size());
             } else {
-                try (BufferedReader reader = new BufferedReader(new FileReader(csvPath.toFile()))) {
-                    String headerLine = reader.readLine();
-                    if (headerLine == null) {
-                        log.warn("Empty tickers CSV file");
-                    } else {
-                        int loadedCount = 0;
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            try {
-                                TickerInfo info = parseLine(line);
-                                if (info != null) {
-                                    tickerMap.put(info.ticker().toUpperCase(Locale.ROOT), info);
-                                    loadedCount++;
+                // COLD START: existing CSV + JSON logic, then optionally populate SQLite
+                Path csvPath = Path.of(tickersCsvPath);
+                if (!Files.exists(csvPath)) {
+                    log.warn("Tickers CSV not found at {}.", csvPath.toAbsolutePath());
+                } else {
+                    try (BufferedReader reader = new BufferedReader(new FileReader(csvPath.toFile()))) {
+                        String headerLine = reader.readLine();
+                        if (headerLine == null) {
+                            log.warn("Empty tickers CSV file");
+                        } else {
+                            int loadedCount = 0;
+                            String line;
+                            while ((line = reader.readLine()) != null) {
+                                try {
+                                    TickerInfo info = parseLine(line);
+                                    if (info != null) {
+                                        tickerMap.put(info.ticker().toUpperCase(Locale.ROOT), info);
+                                        loadedCount++;
+                                    }
+                                } catch (Exception e) {
+                                    log.debug("Failed to parse ticker line: {} - {}", line, e.getMessage());
                                 }
-                            } catch (Exception e) {
-                                log.debug("Failed to parse ticker line: {} - {}", line, e.getMessage());
                             }
+                            log.info("Loaded {} tickers from CSV", loadedCount);
                         }
-                        log.info("Loaded {} tickers from CSV", loadedCount);
+                    } catch (IOException e) {
+                        log.error("Failed to load tickers from CSV: {}", e.getMessage());
                     }
-                } catch (IOException e) {
-                    log.error("Failed to load tickers from CSV: {}", e.getMessage());
+                }
+
+                Optional<TickerRuntimeConfigPayload> rt = runtimeConfigStore.load();
+                rt.ifPresent(payload -> mergeRuntimeFundamentals(payload.fundamentals()));
+
+                ensureUniverseStubs(resolveUniverseSymbols(rt.orElse(null)));
+
+                // Populate SQLite after cold start (only in sqlite mode)
+                if (sqliteTickerRepository != null) {
+                    sqliteTickerRepository.upsertAll(new ArrayList<>(tickerMap.values()));
+                    log.info("Bootstrapped {} tickers into SQLite (source=csv-bootstrap)", tickerMap.size());
                 }
             }
-
-            Optional<TickerRuntimeConfigPayload> rt = runtimeConfigStore.load();
-            rt.ifPresent(payload -> mergeRuntimeFundamentals(payload.fundamentals()));
-
-            ensureUniverseStubs(resolveUniverseSymbols(rt.orElse(null)));
 
             loaded = true;
             log.info("Ticker universe: {} symbols active", getTickerSymbols().size());

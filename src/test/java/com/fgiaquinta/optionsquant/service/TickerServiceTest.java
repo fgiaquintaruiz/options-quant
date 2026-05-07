@@ -1,5 +1,6 @@
 package com.fgiaquinta.optionsquant.service;
 
+import com.fgiaquinta.optionsquant.candle.sqlite.SqliteTickerRepository;
 import com.fgiaquinta.optionsquant.config.IbkrProperties;
 import com.fgiaquinta.optionsquant.dto.TickerRuntimeConfigPayload;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,14 +27,19 @@ class TickerServiceTest {
 
     private IbkrProperties ibkrProperties;
     private TickerRuntimeConfigStore runtimeConfigStore;
+    private SqliteTickerRepository sqliteTickerRepository;
     private TickerService tickerService;
 
     @BeforeEach
     void setUp() {
         ibkrProperties = mock(IbkrProperties.class);
         runtimeConfigStore = mock(TickerRuntimeConfigStore.class);
-        tickerService = new TickerService(ibkrProperties, runtimeConfigStore);
-        // Mark as loaded so loadTickers() is a no-op
+        sqliteTickerRepository = mock(SqliteTickerRepository.class);
+        // countAll() = 0 → cold start path; CSV not found → no tickers loaded; that is fine for HOT tests
+        when(sqliteTickerRepository.countAll()).thenReturn(0L);
+        when(runtimeConfigStore.load()).thenReturn(Optional.empty());
+        tickerService = new TickerService(ibkrProperties, runtimeConfigStore, sqliteTickerRepository, "data/tickers.csv");
+        // Trigger load so the service is marked loaded
         tickerService.loadTickers();
     }
 

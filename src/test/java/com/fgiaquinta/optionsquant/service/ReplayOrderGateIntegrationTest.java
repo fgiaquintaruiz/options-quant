@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.fgiaquinta.optionsquant.OptionsQuantApplication;
@@ -27,6 +28,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("integration")
 @SpringBootTest(classes = OptionsQuantApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@TestPropertySource(properties = {
+    "candles.store=sqlite",
+    "candles.sqlite.path=:memory:"
+})
 class ReplayOrderGateIntegrationTest {
 
     // ── Mock every bean that would open a real socket / external connection ──
