@@ -57,7 +57,7 @@ public class YfinanceHistoricalClient {
 
     public List<Candle> fetchDailyCandles(String ticker, LocalDate from, LocalDate to) {
         String url = String.format("%s/api/v1/historical/%s?from=%s&to=%s&interval=1d",
-                baseUrl, ticker, from, to);
+                baseUrl, ticker, from, to.plusDays(1));
         rateLimiter.acquire();
         try {
             HttpResponse<String> response = sendWithRetry(url);

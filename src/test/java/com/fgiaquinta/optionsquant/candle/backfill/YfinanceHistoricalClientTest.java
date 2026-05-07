@@ -4,10 +4,12 @@ import com.fgiaquinta.optionsquant.domain.Candle;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.LocalDate;
 import java.util.List;
@@ -124,5 +126,35 @@ class YfinanceHistoricalClientTest {
         assertThat(result).isEmpty();
         // 404 is < 500 → exits retry loop on first attempt, no retries
         verify(httpClient, times(1)).send(any(), any());
+    }
+
+    // -------------------------------------------------------------------------
+    // T8-6: yfinance `end` is exclusive — URL must contain to.plusDays(1)
+    //        Domain: from=2018-01-01, to=2018-03-31 (inclusive)
+    //        Expected URL param: to=2018-04-01
+    // -------------------------------------------------------------------------
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void day1_effectiveTo_passedToYfinanceAsExclusiveEnd_plusOneDay() throws Exception {
+        HttpResponse<String> mockResponse = mock(HttpResponse.class);
+        when(mockResponse.statusCode()).thenReturn(200);
+        when(mockResponse.body()).thenReturn("[]");
+
+        ArgumentCaptor<HttpRequest> requestCaptor = ArgumentCaptor.forClass(HttpRequest.class);
+        doReturn(mockResponse).when(httpClient).send(requestCaptor.capture(), any());
+
+        client.fetchDailyCandles("AAPL",
+                LocalDate.of(2018, 1, 1), LocalDate.of(2018, 3, 31));
+
+        String uri = requestCaptor.getValue().uri().toString();
+        // yfinance treats `end` as exclusive, so the inclusive domain `to` (2018-03-31)
+        // must be sent as 2018-04-01 to ensure that day's candle is included.
+        assertThat(uri)
+                .as("URL must contain to=2018-04-01 (exclusive end) not 2018-03-31")
+                .contains("to=2018-04-01");
+        assertThat(uri)
+                .as("URL must not contain the bare inclusive end date as the to param")
+                .doesNotContain("to=2018-03-31");
     }
 }

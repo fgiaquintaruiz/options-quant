@@ -446,6 +446,147 @@ class HistoricalBackfillServiceYfinanceTest {
     }
 
     // -------------------------------------------------------------------------
+    // Gap 1: computeEffectiveRanges() — chunk spanning 3 non-adjacent periods
+    //         → 3 separate intersections, no merging
+    // -------------------------------------------------------------------------
+
+    @Test
+    void computeEffectiveRanges_chunkSpansThreePeriods_returnsThreeSeparateRanges() {
+        HistoricalBackfillService.BackfillPeriod p1 =
+                new HistoricalBackfillService.BackfillPeriod(
+                        LocalDate.of(2018, 1, 1), LocalDate.of(2018, 3, 31));
+        HistoricalBackfillService.BackfillPeriod p2 =
+                new HistoricalBackfillService.BackfillPeriod(
+                        LocalDate.of(2019, 1, 1), LocalDate.of(2019, 12, 31));
+        HistoricalBackfillService.BackfillPeriod p3 =
+                new HistoricalBackfillService.BackfillPeriod(
+                        LocalDate.of(2020, 2, 1), LocalDate.of(2020, 5, 31));
+
+        HistoricalBackfillService service = new HistoricalBackfillService(
+                repository, checkpoint, ibkrService, noopRateLimiter,
+                List.of("AAPL"), BACKFILL_START, yfinanceClient, List.of(),
+                List.of(p1, p2, p3)
+        );
+
+        ZonedDateTime chunkFrom = ZonedDateTime.of(2018, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+        ZonedDateTime chunkTo   = ZonedDateTime.of(2020, 12, 31, 0, 0, 0, 0, ZoneOffset.UTC);
+
+        List<HistoricalBackfillService.BackfillPeriod> ranges =
+                service.computeEffectiveRanges(chunkFrom, chunkTo);
+
+        assertThat(ranges).hasSize(3);
+        assertThat(ranges.get(0).from()).isEqualTo(LocalDate.of(2018, 1, 1));
+        assertThat(ranges.get(0).to()).isEqualTo(LocalDate.of(2018, 3, 31));
+        assertThat(ranges.get(1).from()).isEqualTo(LocalDate.of(2019, 1, 1));
+        assertThat(ranges.get(1).to()).isEqualTo(LocalDate.of(2019, 12, 31));
+        assertThat(ranges.get(2).from()).isEqualTo(LocalDate.of(2020, 2, 1));
+        assertThat(ranges.get(2).to()).isEqualTo(LocalDate.of(2020, 5, 31));
+    }
+
+    // -------------------------------------------------------------------------
+    // Gap 1b: computeEffectiveRanges() — two adjacent periods (gap = 0 days)
+    //          plusDays(1) merge logic → single merged range
+    // -------------------------------------------------------------------------
+
+    @Test
+    void computeEffectiveRanges_adjacentPeriods_mergedIntoSingleRange() {
+        // nextFrom (2019-07-01) <= currentTo.plusDays(1) (2019-07-01) → merge fires
+        HistoricalBackfillService.BackfillPeriod firstHalf =
+                new HistoricalBackfillService.BackfillPeriod(
+                        LocalDate.of(2019, 1, 1), LocalDate.of(2019, 6, 30));
+        HistoricalBackfillService.BackfillPeriod secondHalf =
+                new HistoricalBackfillService.BackfillPeriod(
+                        LocalDate.of(2019, 7, 1), LocalDate.of(2019, 12, 31));
+
+        HistoricalBackfillService service = new HistoricalBackfillService(
+                repository, checkpoint, ibkrService, noopRateLimiter,
+                List.of("AAPL"), BACKFILL_START, yfinanceClient, List.of(),
+                List.of(firstHalf, secondHalf)
+        );
+
+        ZonedDateTime chunkFrom = ZonedDateTime.of(2019, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+        ZonedDateTime chunkTo   = ZonedDateTime.of(2019, 12, 31, 0, 0, 0, 0, ZoneOffset.UTC);
+
+        List<HistoricalBackfillService.BackfillPeriod> ranges =
+                service.computeEffectiveRanges(chunkFrom, chunkTo);
+
+        assertThat(ranges).hasSize(1);
+        assertThat(ranges.get(0).from()).isEqualTo(LocalDate.of(2019, 1, 1));
+        assertThat(ranges.get(0).to()).isEqualTo(LocalDate.of(2019, 12, 31));
+    }
+
+    // -------------------------------------------------------------------------
+    // Gap 2A: MIN_5 chunk inside a configured period → TWS called, yfinance never called
+    // -------------------------------------------------------------------------
+
+    @Test
+    void subDaily_min5_chunkInsidePeriod_twsCalled_yfinanceNeverCalled() throws Exception {
+        HistoricalBackfillService.BackfillPeriod volatility2022 =
+                new HistoricalBackfillService.BackfillPeriod(
+                        LocalDate.of(2022, 1, 1), LocalDate.of(2022, 11, 30));
+
+        HistoricalBackfillService service = new HistoricalBackfillService(
+                repository, checkpoint, ibkrService, noopRateLimiter,
+                List.of("AAPL"), BACKFILL_START, yfinanceClient, List.of(),
+                List.of(volatility2022)
+        );
+
+        ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
+        // Skip all timeframes except MIN_5
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_5)))
+                .thenReturn(Optional.of(future));
+        // MIN_5 chunk starts 2022-02-01: inside volatility2022 period
+        ZonedDateTime chunkStart = ZonedDateTime.of(2022, 2, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+        ZonedDateTime afterChunk = chunkStart.plusDays(30).plusDays(1);
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_5)))
+                .thenReturn(Optional.of(chunkStart))
+                .thenReturn(Optional.of(afterChunk));
+
+        when(ibkrService.downloadHistoricalData(eq("AAPL"), eq(TimeFrame.MIN_5), any()))
+                .thenReturn(List.of(SAMPLE_CANDLE));
+
+        service.run(new DefaultApplicationArguments("--backfill"));
+
+        verify(ibkrService, atLeastOnce()).downloadHistoricalData(eq("AAPL"), eq(TimeFrame.MIN_5), any());
+        verify(yfinanceClient, never()).fetchDailyCandles(anyString(), any(), any());
+    }
+
+    // -------------------------------------------------------------------------
+    // Gap 2B: MIN_5 chunk outside all configured periods → skipped entirely
+    //          no TWS call, no checkpoint write
+    // -------------------------------------------------------------------------
+
+    @Test
+    void subDaily_min5_chunkOutsideAllPeriods_skippedNoTwsNoCheckpoint() throws Exception {
+        // Period is entirely in the past (2021-01); backfillStart is 2021-02-01 so every
+        // MIN_5 chunk starts after the period end → all chunks are OUT_OF_RANGE.
+        HistoricalBackfillService.BackfillPeriod narrowPast =
+                new HistoricalBackfillService.BackfillPeriod(
+                        LocalDate.of(2021, 1, 1), LocalDate.of(2021, 1, 31));
+
+        ZonedDateTime afterPeriodEnd = ZonedDateTime.of(2021, 2, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+
+        HistoricalBackfillService service = new HistoricalBackfillService(
+                repository, checkpoint, ibkrService, noopRateLimiter,
+                List.of("AAPL"), afterPeriodEnd, yfinanceClient, List.of(),
+                List.of(narrowPast)
+        );
+
+        ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_5)))
+                .thenReturn(Optional.of(future));
+        // No MIN_5 checkpoint → loop starts from afterPeriodEnd (2021-02-01), already past narrowPast
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_5)))
+                .thenReturn(Optional.empty());
+
+        service.run(new DefaultApplicationArguments("--backfill"));
+
+        verify(ibkrService, never()).downloadHistoricalData(anyString(), any(), any());
+        verify(yfinanceClient, never()).fetchDailyCandles(anyString(), any(), any());
+        verify(checkpoint, never()).save(anyString(), any(), any(), any());
+    }
+
+    // -------------------------------------------------------------------------
     // T9-6: vixTicker in vixTickers list → iterated yfinance-only, TWS never called
     // -------------------------------------------------------------------------
 
