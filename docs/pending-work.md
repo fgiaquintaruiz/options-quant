@@ -1,6 +1,6 @@
 # Pending Work — options-quant
 
-_Last updated: 2026-05-05_
+_Last updated: 2026-05-07_
 
 ---
 
@@ -88,10 +88,22 @@ _Last updated: 2026-05-05_
 ### Telegram ⚠️ EN PROGRESO
 - 3 test suites implementadas: `TelegramWebhookControllerTest`, `TelegramServiceSecurityTest`, `MarketScannerTelegramRoutingTest`
 - Features 1-22 cubiertas (webhook + security + routing)
-- Features 23-35 pendientes (notifications: sendSignal, sendAutoExecuteSignal, sendTradeConfirmation, etc.)
+- Features 23-35 → **DEFERRED** (ver sección DEFERRED abajo)
 - **Dead code — DECISIÓN TOMADA**:
   - DELETE: `sendTradeExit`, `sendDailySummary`, `sendMacroStatus`, `testConnection` — features huérfanas, sin plan de uso
   - WIRE UP: `validateWebhookRequest` → llamar desde `TelegramWebhookController` como segunda capa de validación (actualmente solo valida secret token, no parámetros de orden)
+
+---
+
+## DEFERRED
+
+### Telegram QA — Features 23-35 (notifications) 🔜 DEFERRED
+
+> **Motivo**: Dead code cleanup SDD debe completarse primero (eliminar `sendTradeExit`, `sendDailySummary`, `sendMacroStatus`, `testConnection`). Escribir tests sobre código que se va a borrar es trabajo desperdiciado.
+
+- **Scope**: notifications — `sendSignal`, `sendAutoExecuteSignal`, `sendTradeConfirmation`, y métodos restantes de `TelegramService`
+- **Prerequisito**: completar SDD Telegram Dead Code Cleanup (ver abajo)
+- **Retomar cuando**: dead code eliminado y `validateWebhookRequest` wired up en controller
 
 ---
 

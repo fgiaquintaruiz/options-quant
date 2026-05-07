@@ -109,12 +109,15 @@ GET /api/v1/historical/{ticker}?from=YYYY-MM-DD&to=YYYY-MM-DD&interval=1d
 
 The `to` date must match the **period end**, not the chunk end. If you see `to` dates that extend beyond the configured period boundary, trimming is broken.
 
+> **⚠️ Sidecar URL es INTERNO**: `GET /api/v1/historical/{ticker}` que aparece en los logs del sidecar es llamado por Java internamente. No lo llames directamente desde Postman.
+> Para consultar candles históricos desde SQLite, usá el endpoint Java: `GET /api/v1/historical/{ticker}?from=YYYY-MM-DD&to=YYYY-MM-DD&interval=1d`
+
 ### SQLite
 
 Query the download progress table:
 ```bash
 sqlite3 data/candles.db \
-  "SELECT ticker, timeframe, datetime(last_chunk_end_ts/1000, 'unixepoch') as last_end, status
+  "SELECT ticker, timeframe, datetime(last_chunk_end_ts, 'unixepoch') as last_end, status
    FROM download_progress
    ORDER BY ticker, timeframe"
 ```
@@ -156,3 +159,146 @@ The `start-year` was set too high (e.g., `2018`). Set `start-year: 2007` to gene
 **Sidecar returns 422 or date errors**
 
 The `to` date sent to yfinance is outside the valid range or in the future. Check that the configured period `to` values are in the past and in `YYYY-MM` format.
+
+---
+
+## Clientes SQLite
+
+Para inspeccionar `data/candles.db` localmente:
+
+1. **DB Browser for SQLite (DB4S)** — GUI, gratis, cero config. Recomendado.
+   - Descarga: https://sqlitebrowser.org
+   - Conectar: File → Open Database → `data/candles.db`
+
+2. **DBeaver Community** — SQL editor completo + soporte multi-DB. Más pesado, útil si ya lo tenés instalado.
+   - Conectar: New Connection → SQLite → seleccionar `data/candles.db`
+
+3. **SQLiteOnline.com** — browser, sin instalar, drag & drop del `.db`. Para consultas rápidas sin instalar nada.
+
+> **Nota**: el archivo `data/candles.db` está en el directorio raíz del proyecto. Si corrés la app desde IntelliJ, el working directory apunta ahí por defecto.
+
+---
+
+## Consultas útiles (SQLite)
+
+Ejecutar en DB Browser for SQLite o cualquier cliente SQLite conectado a `data/candles.db`.
+
+> **Nota sobre timestamps**: `last_chunk_end_ts`, `updated_at` y `ts_epoch` están almacenados en **epoch seconds** (no milliseconds). Usar `datetime(col, 'unixepoch')` directamente, sin dividir por 1000.
+
+### Schema de referencia
+
+```sql
+-- candles: datos OHLCV
+-- PRIMARY KEY (ticker, timeframe, ts_epoch)
+CREATE TABLE candles (
+    ticker      TEXT    NOT NULL,
+    timeframe   TEXT    NOT NULL,
+    ts_epoch    INTEGER NOT NULL,  -- epoch seconds
+    open        REAL    NOT NULL,
+    high        REAL    NOT NULL,
+    low         REAL    NOT NULL,
+    close       REAL    NOT NULL,
+    volume      INTEGER NOT NULL
+);
+
+-- download_progress: checkpoint por (ticker, timeframe)
+-- PRIMARY KEY (ticker, timeframe)
+CREATE TABLE download_progress (
+    ticker            TEXT    NOT NULL,
+    timeframe         TEXT    NOT NULL,
+    last_chunk_end_ts INTEGER NOT NULL,  -- epoch seconds
+    status            TEXT    NOT NULL,  -- COMPLETE_TWS | COMPLETE_YFINANCE | COMPLETE_EMPTY
+    updated_at        INTEGER NOT NULL   -- epoch seconds
+);
+```
+
+### View: timestamps legibles
+
+Ejecutar una sola vez para crear la view:
+
+```sql
+CREATE VIEW IF NOT EXISTS download_progress_readable AS
+SELECT
+    ticker,
+    timeframe,
+    status,
+    datetime(last_chunk_end_ts, 'unixepoch', 'localtime') AS last_chunk_end,
+    datetime(updated_at,        'unixepoch', 'localtime') AS updated_at_readable
+FROM download_progress;
+```
+
+Luego consultar:
+
+```sql
+SELECT * FROM download_progress_readable
+ORDER BY ticker, timeframe;
+```
+
+### View: candles con fecha legible
+
+```sql
+CREATE VIEW IF NOT EXISTS candles_readable AS
+SELECT
+    ticker,
+    timeframe,
+    datetime(ts_epoch, 'unixepoch', 'localtime') AS date_local,
+    date(ts_epoch, 'unixepoch')                  AS date_only,
+    open, high, low, close, volume
+FROM candles;
+```
+
+Ejemplo de uso:
+```sql
+-- Candles AAPL DAY_1 en período 2008 crisis
+SELECT date_only, open, high, low, close, volume
+FROM candles_readable
+WHERE ticker = 'AAPL'
+  AND timeframe = 'DAY_1'
+  AND date_only BETWEEN '2008-09-01' AND '2009-03-31'
+ORDER BY date_only;
+```
+
+### Verificar datos de un ticker en un período
+
+```sql
+-- Verificar datos en candles
+SELECT COUNT(*)              AS total_candles,
+       datetime(MIN(ts_epoch), 'unixepoch', 'localtime') AS desde,
+       datetime(MAX(ts_epoch), 'unixepoch', 'localtime') AS hasta
+FROM candles
+WHERE ticker    = 'AAPL'
+  AND timeframe = 'DAY_1'
+  AND ts_epoch BETWEEN strftime('%s', '2008-09-01')
+                   AND strftime('%s', '2009-03-31');
+```
+
+Resultado:
+- `total_candles > 0` → datos presentes
+- `total_candles = 0` + status `COMPLETE_EMPTY` en download_progress → yfinance procesó el chunk pero no había datos
+- `total_candles = 0` + sin fila en download_progress → chunk nunca fue procesado
+
+### Ver estado de descarga por ticker
+
+```sql
+-- Verificar estado de checkpoint
+SELECT ticker,
+       timeframe,
+       status,
+       datetime(last_chunk_end_ts, 'unixepoch', 'localtime') AS last_chunk_end
+FROM download_progress
+WHERE ticker    = 'AAPL'
+  AND timeframe = 'DAY_1'
+ORDER BY last_chunk_end_ts;
+```
+
+### Encontrar chunks vacíos (COMPLETE_EMPTY)
+
+```sql
+-- Chunks que yfinance procesó pero devolvió vacío
+SELECT ticker,
+       timeframe,
+       datetime(last_chunk_end_ts, 'unixepoch', 'localtime') AS chunk_end
+FROM download_progress
+WHERE status = 'COMPLETE_EMPTY'
+ORDER BY ticker, timeframe, last_chunk_end_ts;
+```

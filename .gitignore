@@ -59,3 +59,4 @@ tasks.md
 *.stackdump
 # Runtime logs (untracked from 2026-04-30)
 other_logs.txt
+docs/log.txt

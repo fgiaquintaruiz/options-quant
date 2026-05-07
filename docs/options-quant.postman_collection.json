@@ -107,6 +107,24 @@
           }
         },
         {
+          "name": "GET Historical Candles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/historical/AAPL?from=2022-01-01&to=2022-03-31&interval=1d",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "historical", "AAPL"],
+              "query": [
+                { "key": "from", "value": "2022-01-01" },
+                { "key": "to", "value": "2022-03-31" },
+                { "key": "interval", "value": "1d" }
+              ]
+            },
+            "description": "Reads candles from SQLite. interval: 1d | 1h | 15m | 5m. Response: [{ticker, date, open, high, low, close, volume}]. NOTE: this is the Java endpoint — the sidecar GET /api/v1/historical/{ticker} is INTERNAL (called by Java, not by the user)."
+          }
+        },
+        {
           "name": "GET /api/candles/status",
           "request": {
             "method": "GET",
