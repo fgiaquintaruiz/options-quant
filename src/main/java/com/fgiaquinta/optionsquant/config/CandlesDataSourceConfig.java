@@ -42,7 +42,7 @@ public class CandlesDataSourceConfig {
         cfg.setPoolName("candles-write");
         // Apply WAL + performance pragmas on every new connection
         cfg.setConnectionInitSql(
-            "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;");
+            "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=30000;");
 
         return new HikariDataSource(cfg);
     }
@@ -67,7 +67,7 @@ public class CandlesDataSourceConfig {
         cfg.setMaximumPoolSize(8);
         cfg.setMinimumIdle(1);
         cfg.setPoolName("candles-read");
-        cfg.setConnectionInitSql("PRAGMA busy_timeout=5000;");
+        cfg.setConnectionInitSql("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=30000;");
 
         return new HikariDataSource(cfg);
     }
