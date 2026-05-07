@@ -5,6 +5,7 @@ import com.fgiaquinta.optionsquant.candle.CandleRepository;
 import com.fgiaquinta.optionsquant.domain.Candle;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.service.IbkrService;
+import com.fgiaquinta.optionsquant.service.TickerService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -42,6 +43,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
     private final YfinanceHistoricalClient yfinanceClient;
     private final List<String> vixTickers;
     private final List<BackfillPeriod> periods;
+    private final TickerService tickerService;
 
     @Autowired
     public HistoricalBackfillService(
@@ -53,7 +55,8 @@ public class HistoricalBackfillService implements ApplicationRunner {
             @Value("${candles.backfill.rate-per-second:0.1}") double ratePerSecond,
             @Autowired(required = false) YfinanceHistoricalClient yfinanceClient,
             @Value("${ibkr.vix-tickers:#{T(java.util.Collections).emptyList()}}") List<String> vixTickers,
-            BackfillProperties backfillProperties) {
+            BackfillProperties backfillProperties,
+            @Autowired(required = false) TickerService tickerService) {
 
         this.repository = repository;
         this.checkpoint = checkpoint;
@@ -64,6 +67,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
         this.yfinanceClient = yfinanceClient;
         this.vixTickers = vixTickers;
         this.periods = backfillProperties.parsedPeriods();
+        this.tickerService = tickerService;
 
         log.info("HistoricalBackfillService initialized: {} tickers, rate={} req/s, startYear={}, periods={}",
                 tickers.size(), ratePerSecond, startYear, this.periods.size());
@@ -79,7 +83,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
             YfinanceHistoricalClient yfinanceClient,
             List<String> vixTickers) {
         this(repository, checkpoint, ibkrService, rateLimiter, tickers, backfillStart,
-                yfinanceClient, vixTickers, List.of());
+                yfinanceClient, vixTickers, List.of(), null);
     }
 
     HistoricalBackfillService(
@@ -92,6 +96,21 @@ public class HistoricalBackfillService implements ApplicationRunner {
             YfinanceHistoricalClient yfinanceClient,
             List<String> vixTickers,
             List<BackfillPeriod> periods) {
+        this(repository, checkpoint, ibkrService, rateLimiter, tickers, backfillStart,
+                yfinanceClient, vixTickers, periods, null);
+    }
+
+    HistoricalBackfillService(
+            CandleRepository repository,
+            BackfillCheckpoint checkpoint,
+            IbkrService ibkrService,
+            RateLimiter rateLimiter,
+            List<String> tickers,
+            ZonedDateTime backfillStart,
+            YfinanceHistoricalClient yfinanceClient,
+            List<String> vixTickers,
+            List<BackfillPeriod> periods,
+            TickerService tickerService) {
 
         this.repository = repository;
         this.checkpoint = checkpoint;
@@ -102,6 +121,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
         this.yfinanceClient = yfinanceClient;
         this.vixTickers = vixTickers;
         this.periods = periods != null ? periods : List.of();
+        this.tickerService = tickerService;
     }
 
     @Override
@@ -111,14 +131,16 @@ public class HistoricalBackfillService implements ApplicationRunner {
             return;
         }
 
+        List<String> effectiveTickers = resolveTickerList(args);
+
         log.info("=== Historical Backfill START — {} tickers, from {} ===",
-                tickers.size(), backfillStart.toLocalDate());
+                effectiveTickers.size(), backfillStart.toLocalDate());
 
         long wallStart = System.currentTimeMillis();
         int totalCandles = 0;
         int tickersDone = 0;
 
-        for (String ticker : tickers) {
+        for (String ticker : effectiveTickers) {
             int candlesForTicker = 0;
             for (TimeFrame tf : TimeFrame.values()) {
                 candlesForTicker += backfillTickerTimeframe(ticker, tf);
@@ -126,7 +148,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
             totalCandles += candlesForTicker;
             tickersDone++;
             log.info("  [backfill] {} complete — {} candles (ticker {}/{})",
-                    ticker, candlesForTicker, tickersDone, tickers.size());
+                    ticker, candlesForTicker, tickersDone, effectiveTickers.size());
         }
 
         for (String vixTicker : vixTickers) {
@@ -142,6 +164,23 @@ public class HistoricalBackfillService implements ApplicationRunner {
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
+
+    private List<String> resolveTickerList(ApplicationArguments args) {
+        if (args.containsOption("backfill-all-tickers")) {
+            if (tickerService == null) {
+                throw new IllegalStateException(
+                        "--backfill-all-tickers requires TickerService but none was injected");
+            }
+            List<String> all = tickerService.getTickerSymbols();
+            if (all.isEmpty()) {
+                log.warn("[backfill] --backfill-all-tickers: universe is empty — skipping");
+            }
+            log.info("[backfill] Mode: ALL_TICKERS ({} symbols)", all.size());
+            return all;
+        }
+        log.info("[backfill] Mode: CONFIGURED_TICKERS ({} symbols)", this.tickers.size());
+        return this.tickers;
+    }
 
     private int backfillTickerTimeframe(String ticker, TimeFrame tf) {
         int stored = 0;
