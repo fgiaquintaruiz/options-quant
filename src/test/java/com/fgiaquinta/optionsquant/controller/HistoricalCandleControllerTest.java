@@ -4,6 +4,7 @@ import com.fgiaquinta.optionsquant.candle.CandleRepository;
 import com.fgiaquinta.optionsquant.domain.Candle;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.infrastructure.MetricsService;
+import com.fgiaquinta.optionsquant.service.TickerService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +38,9 @@ class HistoricalCandleControllerTest {
 
     @MockitoBean
     private MetricsService metricsService;
+
+    @MockitoBean
+    private TickerService tickerService;
 
     private static final String BASE = "/api/v1/historical";
 

@@ -2,10 +2,15 @@ package com.fgiaquinta.optionsquant.controller;
 
 import com.fgiaquinta.optionsquant.candle.CandleRepository;
 import com.fgiaquinta.optionsquant.controller.dto.CandleResponse;
+import com.fgiaquinta.optionsquant.controller.dto.CandleWithFundamentalsResponse;
+import com.fgiaquinta.optionsquant.controller.dto.TickerInfoDto;
 import com.fgiaquinta.optionsquant.domain.Candle;
+import com.fgiaquinta.optionsquant.domain.TickerInfo;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
+import com.fgiaquinta.optionsquant.service.TickerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -33,6 +38,7 @@ public class HistoricalCandleController {
     );
 
     private final CandleRepository candleRepository;
+    private final TickerService tickerService;
 
     @GetMapping("/{ticker}")
     public ResponseEntity<?> getCandles(
@@ -73,5 +79,52 @@ public class HistoricalCandleController {
 
         log.info("<<< GET /api/v1/historical/{} - {} candles", ticker, response.size());
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{ticker}/with-fundamentals")
+    public ResponseEntity<?> getCandlesWithFundamentals(
+            @PathVariable String ticker,
+            @RequestParam LocalDate from,
+            @RequestParam LocalDate to,
+            @RequestParam(defaultValue = "1d") String interval) {
+
+        String upper = ticker.toUpperCase();
+        log.info(">>> GET /api/v1/historical/{}/with-fundamentals from={} to={} interval={}", upper, from, to, interval);
+
+        TickerInfo info = tickerService.getTickerInfo(upper).orElse(null);
+        if (info == null) {
+            log.info("<<< GET /api/v1/historical/{}/with-fundamentals - ticker not found", upper);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "ticker not found", "ticker", upper));
+        }
+
+        TimeFrame tf = INTERVAL_MAP.get(interval);
+        if (tf == null) {
+            return ResponseEntity.badRequest()
+                    .body(new CandleApiResponses.ErrorResponse("Unknown interval. Use: 1d, 1h, 15m, 5m"));
+        }
+
+        if (from.isAfter(to)) {
+            return ResponseEntity.badRequest()
+                    .body(new CandleApiResponses.ErrorResponse("'from' must not be after 'to'"));
+        }
+
+        ZonedDateTime fromZ = from.atStartOfDay(ZoneOffset.UTC);
+        ZonedDateTime toZ   = to.plusDays(1).atStartOfDay(ZoneOffset.UTC);
+
+        List<CandleResponse> candles = candleRepository.loadRange(upper, tf, fromZ, toZ)
+                .stream()
+                .map(c -> new CandleResponse(
+                        upper,
+                        c.timestamp().toLocalDate().toString(),
+                        c.open(),
+                        c.high(),
+                        c.low(),
+                        c.close(),
+                        c.volume()))
+                .toList();
+
+        log.info("<<< GET /api/v1/historical/{}/with-fundamentals - {} candles", upper, candles.size());
+        return ResponseEntity.ok(new CandleWithFundamentalsResponse(TickerInfoDto.from(info), candles));
     }
 }
