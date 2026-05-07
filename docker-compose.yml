@@ -27,7 +27,7 @@ services:
       dockerfile: Dockerfile.java
     container_name: options-quant-engine
     ports:
-      - "8080:8080"     # Spring Boot REST API
+      - "${JAVA_API_PORT:-8080}:8080"     # Spring Boot REST API
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - REDIS_HOST=redis
@@ -52,7 +52,7 @@ services:
       - "8001:8001"
     environment:
       - JAVA_API_HOST=java-engine
-      - JAVA_API_PORT=8080
+      - JAVA_API_PORT=${JAVA_API_PORT:-8080}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - API_HOST=0.0.0.0
