@@ -55,6 +55,8 @@ public class SchemaInitializer implements InitializingBean {
         createIngestLogTable();
         createSchemaMetaTable();
         createDownloadProgressTable();
+        createTickersTable();
+        createTickersIndexes();
         log.info("SQLite candle schema ready.");
     }
 
@@ -118,5 +120,31 @@ public class SchemaInitializer implements InitializingBean {
                 PRIMARY KEY (ticker, timeframe)
             ) WITHOUT ROWID
             """);
+    }
+
+    private void createTickersTable() {
+        jdbc.execute("""
+            CREATE TABLE IF NOT EXISTS tickers (
+                ticker              TEXT PRIMARY KEY,
+                company_name        TEXT,
+                sector              TEXT,
+                market_cap_billion  INTEGER,
+                pe_ratio            REAL,
+                dividend_yield      REAL,
+                beta                REAL,
+                eps_growth          REAL,
+                revenue_growth      REAL,
+                debt_to_equity      REAL,
+                roic                REAL,
+                notes               TEXT,
+                active              INTEGER NOT NULL DEFAULT 1,
+                updated_at          INTEGER NOT NULL
+            ) WITHOUT ROWID
+            """);
+    }
+
+    private void createTickersIndexes() {
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_tickers_active ON tickers(active)");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_tickers_sector ON tickers(sector)");
     }
 }
