@@ -4,8 +4,10 @@ import com.fgiaquinta.optionsquant.infrastructure.MetricsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.io.UncheckedIOException;
 
@@ -19,6 +21,20 @@ import java.io.UncheckedIOException;
 public class GlobalExceptionHandler {
 
     private final MetricsService metrics;
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<CandleApiResponses.ErrorResponse> handleMissingParam(MissingServletRequestParameterException ex) {
+        log.debug(">>> Missing required parameter: {}", ex.getParameterName());
+        return ResponseEntity.badRequest()
+                .body(new CandleApiResponses.ErrorResponse("Missing required parameter: " + ex.getParameterName()));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<CandleApiResponses.ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        log.debug(">>> Type mismatch for parameter '{}': {}", ex.getName(), ex.getMessage());
+        return ResponseEntity.badRequest()
+                .body(new CandleApiResponses.ErrorResponse("Invalid value for parameter: " + ex.getName()));
+    }
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<CandleApiResponses.ErrorResponse> handleIllegalState(IllegalStateException ex) {
