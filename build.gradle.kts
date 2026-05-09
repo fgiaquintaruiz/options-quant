@@ -55,6 +55,9 @@ dependencies {
     implementation("com.zaxxer:HikariCP:6.2.1")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
 
+    // Environment variables from .env file
+    implementation("me.paulschwarz:spring-dotenv:4.0.0")
+
     // Jackson for JSON serialization (used by BacktestCli)
     implementation(libs.jackson.databind)
     implementation(libs.jackson.yaml)
@@ -84,6 +87,8 @@ tasks.test {
         // tws-paper: real TWS/Gateway session (run: ./gradlew twsTest -DrunTwsTests=true)
         excludeTags("slow", "e2e", "tws-paper")
     }
+    // Forward the prod-reconcile guard so gated runners (ReconcileProdRunner) can opt in.
+    System.getProperty("reconcileProd")?.let { systemProperty("reconcileProd", it) }
     testLogging {
         events("passed", "skipped", "failed")
         showStandardStreams = true

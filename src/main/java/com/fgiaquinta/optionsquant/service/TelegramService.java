@@ -1,8 +1,10 @@
 package com.fgiaquinta.optionsquant.service;
 
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 import java.net.URI;
@@ -122,11 +124,18 @@ public class TelegramService {
         return sb.toString();
     }
 
+    @PostConstruct
+    void warnIfMisconfigured() {
+        if (enabled && !StringUtils.hasText(botToken)) {
+            log.warn("[Telegram] Bot is enabled but TELEGRAM_BOT_TOKEN is not set — Telegram notifications disabled. Set it in .env");
+        }
+    }
+
     /**
      * Answers a callback query to stop the loading animation in Telegram.
      */
     public void answerCallbackQuery(String callbackQueryId, String message) {
-        if (!enabled || botToken == null) return;
+        if (!enabled || !StringUtils.hasText(botToken)) return;
 
         try {
             String url = TELEGRAM_API + botToken + "/answerCallbackQuery";
@@ -156,7 +165,7 @@ public class TelegramService {
      * Sends a trading signal notification with secure callback button.
      */
     public void sendSignal(String ticker, String strategy, String direction, double price, double tp, double sl, String orderId) {
-        if (!enabled || botToken == null || chatId == null) return;
+        if (!enabled || !StringUtils.hasText(botToken) || chatId == null) return;
 
         String emoji = direction.equals("CALL") ? "📈" : "📉";
         boolean isCall = direction.equals("CALL");
@@ -216,7 +225,7 @@ public class TelegramService {
      * Sends a signal when auto-execute is enabled (info-only, no execute button).
      */
     public void sendAutoExecuteSignal(String ticker, String strategy, String direction, double price, double tp, double sl) {
-        if (!enabled || botToken == null || chatId == null) return;
+        if (!enabled || !StringUtils.hasText(botToken) || chatId == null) return;
 
         String emoji = direction.equals("CALL") ? "📈" : "📉";
         boolean isCall = direction.equals("CALL");
@@ -368,7 +377,7 @@ public class TelegramService {
      * Sends a message with optional parse mode.
      */
     private void sendMessage(String text, String parseMode) {
-        if (!enabled || botToken == null || chatId == null) return;
+        if (!enabled || !StringUtils.hasText(botToken) || chatId == null) return;
 
         try {
             String url = TELEGRAM_API + botToken + "/sendMessage";
@@ -402,7 +411,7 @@ public class TelegramService {
      * Tests the Telegram connection and validates master key.
      */
     public boolean testConnection() {
-        if (!enabled || botToken == null) {
+        if (!enabled || !StringUtils.hasText(botToken)) {
             log.warn("⚠️ Telegram not configured or disabled");
             return false;
         }

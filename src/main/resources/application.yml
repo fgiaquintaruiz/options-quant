@@ -66,7 +66,7 @@ ibkr:
 # Telegram Bot Configuration
 telegram:
   enabled: true
-  bot-token: "REDACTED_TELEGRAM_BOT_TOKEN"  # Replace with your bot token from @BotFather
+  bot-token: ${TELEGRAM_BOT_TOKEN:}
   chat-id: "REDACTED_CHAT_ID"      # Replace with your chat ID
   webhook-secret: "REDACTED_WEBHOOK_SECRET"  # Secret to validate webhook requests (min 32 chars)
   master-key: "REDACTED_MASTER_KEY"  # Master key for secure order signatures (min 32 chars)

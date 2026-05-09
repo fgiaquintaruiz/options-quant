@@ -60,3 +60,6 @@ tasks.md
 # Runtime logs (untracked from 2026-04-30)
 other_logs.txt
 docs/log.txt
+
+# Local environment secrets (never commit)
+.env
