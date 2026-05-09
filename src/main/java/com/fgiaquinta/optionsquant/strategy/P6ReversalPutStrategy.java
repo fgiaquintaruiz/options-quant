@@ -10,9 +10,15 @@ import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
-public class P6ReversalPutStrategy implements TradingStrategy {
+public class P6ReversalPutStrategy implements TradingStrategy, TimeframeRequirements {
     private final Map<String, ZonedDateTime> lastTriggerMap = new HashMap<>();
+
+    @Override
+    public Set<TimeFrame> requiredTimeframes() {
+        return Set.of(TimeFrame.MIN_15, TimeFrame.HOUR_1, TimeFrame.DAY_1);
+    }
 
     @Override
     public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {

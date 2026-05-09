@@ -7,8 +7,14 @@ import org.ta4j.core.BarSeries;
 
 import java.time.ZonedDateTime;
 import java.time.ZoneId;
+import java.util.Set;
 
-public class P4OpeningPutStrategy implements TradingStrategy {
+public class P4OpeningPutStrategy implements TradingStrategy, TimeframeRequirements {
+
+    @Override
+    public Set<TimeFrame> requiredTimeframes() {
+        return Set.of(TimeFrame.MIN_5, TimeFrame.MIN_15);
+    }
 
     @Override
     public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {

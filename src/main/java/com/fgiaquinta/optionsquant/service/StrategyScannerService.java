@@ -700,8 +700,14 @@ public class StrategyScannerService {
         }
 
         StrategyData data = new StrategyData(candlesByTimeframe);
-        if (!data.hasAllTimeframes()) {
-            log.debug("Incomplete data for ticker {} (have {}, need 4 timeframes)", ticker, candlesByTimeframe.keySet());
+
+        // Per-strategy gating: keep strategies whose required timeframes are loaded.
+        // We no longer reject the whole ticker just because ONE timeframe is missing —
+        // some strategies (e.g., Squeeze C1/P1) only need MIN_15+HOUR_1 and can still run.
+        List<TradingStrategy> applicable = applicableStrategies(data, getAllStrategies());
+        if (applicable.isEmpty()) {
+            log.debug("No strategy can run for ticker {} — required timeframes not loaded (have {})",
+                    ticker, candlesByTimeframe.keySet());
             return Collections.emptyList();
         }
 
@@ -713,11 +719,8 @@ public class StrategyScannerService {
         ZonedDateTime nyTime = currentTime.withZoneSameInstant(ZoneId.of("America/New_York"));
 
         List<Signal> signals = new ArrayList<>();
-        List<TradingStrategy> allStrategies = new ArrayList<>();
-        allStrategies.addAll(callStrategies);
-        allStrategies.addAll(putStrategies);
 
-        for (TradingStrategy strategy : allStrategies) {
+        for (TradingStrategy strategy : applicable) {
             try {
                 boolean triggered = strategy.isTriggered(ticker, data, nyTime);
                 if (!triggered) continue;
@@ -919,6 +922,40 @@ public class StrategyScannerService {
     }
 
     // ---- Response Records ----
+
+    /**
+     * Returns the union of call + put strategies in scan order.
+     * Package-private for testing the per-strategy timeframe gating logic.
+     */
+    List<TradingStrategy> getAllStrategies() {
+        List<TradingStrategy> all = new ArrayList<>(callStrategies.size() + putStrategies.size());
+        all.addAll(callStrategies);
+        all.addAll(putStrategies);
+        return all;
+    }
+
+    /**
+     * Filters strategies down to those whose required timeframes are all loaded
+     * in the given {@link StrategyData}. Strategies that don't implement
+     * {@link TimeframeRequirements} run unconditionally (backward compatible).
+     * Package-private for testing.
+     */
+    List<TradingStrategy> applicableStrategies(StrategyData data, List<TradingStrategy> strategies) {
+        List<TradingStrategy> applicable = new ArrayList<>(strategies.size());
+        for (TradingStrategy s : strategies) {
+            if (s instanceof TimeframeRequirements tr) {
+                if (data.hasAvailableTimeframes(tr.requiredTimeframes())) {
+                    applicable.add(s);
+                } else {
+                    log.debug("Skipping strategy {} — required timeframes {} not available",
+                            s.getName(), tr.requiredTimeframes());
+                }
+            } else {
+                applicable.add(s);
+            }
+        }
+        return applicable;
+    }
 
     /** Returns how many tickers have been scanned so far in the current scan */
     public int getScannedCount() { return scannedCount.get(); }

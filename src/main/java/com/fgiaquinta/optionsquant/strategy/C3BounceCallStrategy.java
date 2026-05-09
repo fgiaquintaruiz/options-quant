@@ -12,11 +12,17 @@ import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
-public class C3BounceCallStrategy implements TradingStrategy {
+public class C3BounceCallStrategy implements TradingStrategy, TimeframeRequirements {
 
     // ANTI-MACHINE-GUN: 2-hour cooldown
     private final Map<String, ZonedDateTime> lastTriggerMap = new HashMap<>();
+
+    @Override
+    public Set<TimeFrame> requiredTimeframes() {
+        return Set.of(TimeFrame.MIN_15, TimeFrame.HOUR_1, TimeFrame.DAY_1);
+    }
 
     @Override
     public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {

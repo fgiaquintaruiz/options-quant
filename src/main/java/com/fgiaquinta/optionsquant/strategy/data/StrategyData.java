@@ -8,6 +8,7 @@ import org.ta4j.core.BaseBarSeriesBuilder;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -50,6 +51,23 @@ public class StrategyData {
                 && builtSeries.containsKey(TimeFrame.MIN_15)
                 && builtSeries.containsKey(TimeFrame.HOUR_1)
                 && builtSeries.containsKey(TimeFrame.DAY_1);
+    }
+
+    /**
+     * True iff every requested timeframe has a non-empty candle list loaded.
+     *
+     * <p>Used by the scanner to gate per-strategy execution: a strategy whose
+     * {@link com.fgiaquinta.optionsquant.strategy.TimeframeRequirements#requiredTimeframes()}
+     * are all available is allowed to run; missing ones cause the strategy
+     * to be skipped (but other strategies can still run on the same ticker).
+     */
+    public boolean hasAvailableTimeframes(Set<TimeFrame> required) {
+        if (required == null || required.isEmpty()) return true;
+        for (TimeFrame tf : required) {
+            List<Candle> candles = candlesByTimeframe.get(tf);
+            if (candles == null || candles.isEmpty()) return false;
+        }
+        return true;
     }
 
     public int getIndexForTime(BarSeries series, ZonedDateTime time) {

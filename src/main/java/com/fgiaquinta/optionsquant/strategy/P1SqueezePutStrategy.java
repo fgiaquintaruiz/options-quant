@@ -9,8 +9,14 @@ import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
 
 import java.time.ZonedDateTime;
+import java.util.Set;
 
-public class P1SqueezePutStrategy implements TradingStrategy {
+public class P1SqueezePutStrategy implements TradingStrategy, TimeframeRequirements {
+
+    @Override
+    public Set<TimeFrame> requiredTimeframes() {
+        return Set.of(TimeFrame.MIN_15, TimeFrame.HOUR_1);
+    }
 
     @Override
     public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {

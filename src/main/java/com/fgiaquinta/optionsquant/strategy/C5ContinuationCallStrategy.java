@@ -10,6 +10,7 @@ import org.ta4j.core.indicators.helpers.*;
 
 import java.time.ZonedDateTime;
 import java.time.ZoneId;
+import java.util.Set;
 
 /**
  * C5 - EFECTO IMÁN (Magnet Effect) - CALL version
@@ -24,7 +25,12 @@ import java.time.ZoneId;
  *
  * Time window: 9:45 AM - 9:55 AM NY (after the first 15m candle closes)
  */
-public class C5ContinuationCallStrategy implements TradingStrategy {
+public class C5ContinuationCallStrategy implements TradingStrategy, TimeframeRequirements {
+
+    @Override
+    public Set<TimeFrame> requiredTimeframes() {
+        return Set.of(TimeFrame.MIN_15, TimeFrame.HOUR_1, TimeFrame.DAY_1);
+    }
 
     private final WordenStochasticIndicator wordenStochastic;
 
