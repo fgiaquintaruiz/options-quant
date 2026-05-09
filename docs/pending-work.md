@@ -143,6 +143,10 @@ _Last updated: 2026-05-07_
 
 ---
 
+## Tech debt
+
+- **M10 — Schema migrations**: introducir Flyway o Liquibase para versionar el schema SQLite. Hoy el schema se crea de forma idempotente vía `SchemaInitializer.java` con `CREATE TABLE IF NOT EXISTS` y `ALTER TABLE` envuelto en try/catch para columnas (ej. `chunk_origin` agregada en DEL1 live-tail fix). Cada nueva columna requiere ese patrón manual; con Flyway dejaríamos un trail versionado y auditable. Bloqueado por sprint corto previo al paper trading; programar fuera del path crítico.
+
 ## Fixes recientes
 
 | Commit | Descripción |
