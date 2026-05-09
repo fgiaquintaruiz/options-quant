@@ -32,6 +32,25 @@ public class HistoricalBackfillService implements ApplicationRunner {
 
     private static final long THROTTLE_LOG_THRESHOLD_MS = 1_000;
 
+    /**
+     * Timeframe processing priority for backfill.
+     *
+     * <p>The outer loop iterates this list, and for each timeframe the inner loop
+     * walks every ticker. This guarantees:
+     * <ul>
+     *   <li>DAY_1 (yfinance, fast, highest signal) completes for ALL tickers first.</li>
+     *   <li>HOUR_1, then MIN_15, are processed across the full ticker universe.</li>
+     *   <li>MIN_5 (slowest, lowest marginal value, highest TWS pacing risk) runs LAST,
+     *       so an interrupted run never sacrifices broader-timeframe coverage.</li>
+     * </ul>
+     */
+    static final List<TimeFrame> BACKFILL_PRIORITY_ORDER = List.of(
+            TimeFrame.DAY_1,
+            TimeFrame.HOUR_1,
+            TimeFrame.MIN_15,
+            TimeFrame.MIN_5
+    );
+
     record BackfillPeriod(LocalDate from, LocalDate to) {}
 
     private final CandleRepository repository;
@@ -138,27 +157,42 @@ public class HistoricalBackfillService implements ApplicationRunner {
 
         long wallStart = System.currentTimeMillis();
         int totalCandles = 0;
-        int tickersDone = 0;
 
-        for (String ticker : effectiveTickers) {
-            int candlesForTicker = 0;
-            for (TimeFrame tf : TimeFrame.values()) {
-                candlesForTicker += backfillTickerTimeframe(ticker, tf);
+        // Outer loop: timeframe priority (DAY_1 → HOUR_1 → MIN_15 → MIN_5).
+        // Inner loop: every ticker. This ensures the most-valuable, fastest data
+        // is captured for the entire universe before moving to slower timeframes.
+        for (TimeFrame tf : BACKFILL_PRIORITY_ORDER) {
+            log.info("=== Backfill phase START — timeframe {} ({} tickers) ===",
+                    tf, effectiveTickers.size());
+
+            int phaseCandles = 0;
+            int tickersDone = 0;
+
+            for (String ticker : effectiveTickers) {
+                int candles = backfillTickerTimeframe(ticker, tf);
+                phaseCandles += candles;
+                tickersDone++;
+                log.info("  [backfill] {} [{}] complete — {} candles (ticker {}/{})",
+                        ticker, tf, candles, tickersDone, effectiveTickers.size());
             }
-            totalCandles += candlesForTicker;
-            tickersDone++;
-            log.info("  [backfill] {} complete — {} candles (ticker {}/{})",
-                    ticker, candlesForTicker, tickersDone, effectiveTickers.size());
-        }
 
-        for (String vixTicker : vixTickers) {
-            int candlesForVix = backfillTickerYfinanceOnly(vixTicker);
-            log.info("  [backfill] {} (VIX) complete — {} candles", vixTicker, candlesForVix);
+            // VIX tickers are yfinance-only and have only DAY_1 data. Process them
+            // alongside the DAY_1 phase so a partial run still captures them.
+            if (tf == TimeFrame.DAY_1) {
+                for (String vixTicker : vixTickers) {
+                    int candlesForVix = backfillTickerYfinanceOnly(vixTicker);
+                    phaseCandles += candlesForVix;
+                    log.info("  [backfill] {} (VIX) complete — {} candles", vixTicker, candlesForVix);
+                }
+            }
+
+            totalCandles += phaseCandles;
+            log.info("=== Backfill phase DONE — timeframe {}, {} candles ===", tf, phaseCandles);
         }
 
         long elapsed = System.currentTimeMillis() - wallStart;
         log.info("=== Historical Backfill DONE — {} tickers, {} candles total, {}s ===",
-                tickersDone, totalCandles, elapsed / 1000);
+                effectiveTickers.size(), totalCandles, elapsed / 1000);
     }
 
     // -------------------------------------------------------------------------
