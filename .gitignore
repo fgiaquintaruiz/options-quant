@@ -63,3 +63,5 @@ docs/log.txt
 
 # Local environment secrets (never commit)
 .env
+cobertura.csv
+tickers.csv
