@@ -48,17 +48,27 @@ public class BackfillCheckpoint {
 
     /**
      * Saves or updates the download progress for a ticker+timeframe with an explicit status.
-     * Uses an UPSERT (REPLACE) strategy.
+     * Uses an UPSERT (REPLACE) strategy. Defaults {@code chunk_origin} to {@link ChunkOrigin#HISTORICAL}.
      */
     public void save(String ticker, TimeFrame tf, ZonedDateTime lastChunkEndTs, BackfillStatus status) {
+        save(ticker, tf, lastChunkEndTs, status, ChunkOrigin.HISTORICAL);
+    }
+
+    /**
+     * Saves or updates the download progress with explicit status and chunk origin.
+     * The {@code chunk_origin} column distinguishes HISTORICAL chunks (inside hardcoded
+     * critical periods) from LIVE_TAIL chunks (dynamic [last_period+1, today] window).
+     */
+    public void save(String ticker, TimeFrame tf, ZonedDateTime lastChunkEndTs,
+                     BackfillStatus status, ChunkOrigin origin) {
         long epochSeconds = lastChunkEndTs.toEpochSecond();
         long now = Instant.now().getEpochSecond();
-        log.debug("Saving checkpoint for {} {} ({}): {}", ticker, tf, status, lastChunkEndTs);
+        log.debug("Saving checkpoint for {} {} ({}, origin={}): {}", ticker, tf, status, origin, lastChunkEndTs);
         jdbc.update("""
-            INSERT OR REPLACE INTO download_progress (ticker, timeframe, last_chunk_end_ts, status, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO download_progress (ticker, timeframe, last_chunk_end_ts, status, updated_at, chunk_origin)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            ticker, tf.name(), epochSeconds, status.name(), now);
+            ticker, tf.name(), epochSeconds, status.name(), now, origin.name());
     }
 
     /**

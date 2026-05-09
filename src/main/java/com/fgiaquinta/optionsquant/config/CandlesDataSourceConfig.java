@@ -36,11 +36,14 @@ public class CandlesDataSourceConfig {
 
         HikariConfig cfg = new HikariConfig();
         cfg.setDriverClassName("org.sqlite.JDBC");
-        cfg.setJdbcUrl("jdbc:sqlite:" + dbPath);
+        // busy_timeout in the URL is applied by the JDBC driver at connection-open time,
+        // BEFORE any PRAGMA runs. This prevents SQLITE_BUSY during concurrent pool init
+        // (e.g. read pool WAL switch racing with write pool DDL on startup).
+        cfg.setJdbcUrl("jdbc:sqlite:" + dbPath + "?busy_timeout=30000");
         cfg.setMaximumPoolSize(1);
         cfg.setMinimumIdle(1);
         cfg.setPoolName("candles-write");
-        // Apply WAL + performance pragmas on every new connection
+        // Also apply via PRAGMA so the timeout is set on every warm connection from the pool
         cfg.setConnectionInitSql(
             "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=30000;");
 
@@ -63,7 +66,9 @@ public class CandlesDataSourceConfig {
         // is enforced at the SQL level (only SELECT queries on this pool).
         HikariConfig cfg = new HikariConfig();
         cfg.setDriverClassName("org.sqlite.JDBC");
-        cfg.setJdbcUrl("jdbc:sqlite:" + dbPath);
+        // busy_timeout in the URL is applied by the JDBC driver at connection-open time,
+        // BEFORE any PRAGMA runs. This prevents SQLITE_BUSY during concurrent pool init.
+        cfg.setJdbcUrl("jdbc:sqlite:" + dbPath + "?busy_timeout=30000");
         cfg.setMaximumPoolSize(8);
         cfg.setMinimumIdle(1);
         cfg.setPoolName("candles-read");

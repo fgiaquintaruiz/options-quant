@@ -62,6 +62,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
     private final YfinanceHistoricalClient yfinanceClient;
     private final List<String> vixTickers;
     private final List<BackfillPeriod> periods;
+    private final BackfillPeriod liveTailPeriod;
     private final TickerService tickerService;
 
     @Autowired
@@ -85,11 +86,13 @@ public class HistoricalBackfillService implements ApplicationRunner {
         this.backfillStart = ZonedDateTime.of(startYear, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
         this.yfinanceClient = yfinanceClient;
         this.vixTickers = vixTickers;
-        this.periods = backfillProperties.parsedPeriods();
+        this.periods = backfillProperties.parsedPeriodsWithLiveTail();
+        this.liveTailPeriod = backfillProperties.livetailPeriod();
         this.tickerService = tickerService;
 
-        log.info("HistoricalBackfillService initialized: {} tickers, rate={} req/s, startYear={}, periods={}",
-                tickers.size(), ratePerSecond, startYear, this.periods.size());
+        log.info("HistoricalBackfillService initialized: {} tickers, rate={} req/s, startYear={}, periods={} (live_tail={})",
+                tickers.size(), ratePerSecond, startYear, this.periods.size(),
+                this.liveTailPeriod == null ? "none" : this.liveTailPeriod.from() + "→" + this.liveTailPeriod.to());
     }
 
     HistoricalBackfillService(
@@ -140,7 +143,20 @@ public class HistoricalBackfillService implements ApplicationRunner {
         this.yfinanceClient = yfinanceClient;
         this.vixTickers = vixTickers;
         this.periods = periods != null ? periods : List.of();
+        // Test-path: derive live_tail as the period whose `to` equals today (the dynamic one).
+        // Production wires liveTailPeriod via the BackfillProperties-aware constructor.
+        this.liveTailPeriod = deriveLiveTailFromPeriods(this.periods);
         this.tickerService = tickerService;
+    }
+
+    private static BackfillPeriod deriveLiveTailFromPeriods(List<BackfillPeriod> periods) {
+        if (periods.isEmpty()) return null;
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        // The live_tail is, by construction, the unique period whose `to` equals today.
+        return periods.stream()
+                .filter(p -> p.to().equals(today))
+                .findFirst()
+                .orElse(null);
     }
 
     @Override
@@ -237,10 +253,15 @@ public class HistoricalBackfillService implements ApplicationRunner {
                 continue;
             }
 
+            ChunkOrigin origin = isChunkInLiveTail(chunkFrom, chunkTo) ? ChunkOrigin.LIVE_TAIL : ChunkOrigin.HISTORICAL;
+            String originTag = origin == ChunkOrigin.LIVE_TAIL ? "[live_tail]" : "[historical]";
+            log.info("  [backfill] {} {} [{}] {}–{}: downloading", originTag,
+                    ticker, tf, chunkFrom.toLocalDate(), chunkTo.toLocalDate());
+
             for (BackfillPeriod effective : computeEffectiveRanges(chunkFrom, chunkTo)) {
                 ZonedDateTime effectiveFrom = effective.from().atStartOfDay(ZoneOffset.UTC);
                 ZonedDateTime effectiveTo = effective.to().atStartOfDay(ZoneOffset.UTC);
-                stored += downloadChunk(ticker, tf, effectiveFrom, effectiveTo);
+                stored += downloadChunk(ticker, tf, effectiveFrom, effectiveTo, origin);
             }
 
             chunkFrom = chunkTo;
@@ -249,7 +270,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
         return stored;
     }
 
-    private int downloadChunk(String ticker, TimeFrame tf, ZonedDateTime from, ZonedDateTime to) {
+    private int downloadChunk(String ticker, TimeFrame tf, ZonedDateTime from, ZonedDateTime to, ChunkOrigin origin) {
         long throttleStart = System.currentTimeMillis();
         rateLimiter.acquire();
         long waited = System.currentTimeMillis() - throttleStart;
@@ -259,17 +280,17 @@ public class HistoricalBackfillService implements ApplicationRunner {
         }
 
         if (tf == TimeFrame.DAY_1) {
-            return downloadChunkYfinance(ticker, from, to);
+            return downloadChunkYfinance(ticker, from, to, origin);
         }
 
-        return downloadChunkTwsOnly(ticker, tf, from, to);
+        return downloadChunkTwsOnly(ticker, tf, from, to, origin);
     }
 
-    private int downloadChunkTwsOnly(String ticker, TimeFrame tf, ZonedDateTime from, ZonedDateTime to) {
+    private int downloadChunkTwsOnly(String ticker, TimeFrame tf, ZonedDateTime from, ZonedDateTime to, ChunkOrigin origin) {
         try {
             List<Candle> candles = ibkrService.downloadHistoricalData(ticker, tf, to);
             if (!candles.isEmpty()) repository.upsert(ticker, tf, candles);
-            checkpoint.save(ticker, tf, to, BackfillStatus.COMPLETE_TWS);
+            persistCheckpoint(ticker, tf, to, BackfillStatus.COMPLETE_TWS, origin);
             return candles.size();
         } catch (Exception e) {
             log.error("  [backfill] TWS error for {} [{}] chunk {}: {}", ticker, tf, from.toLocalDate(), e.getMessage());
@@ -277,18 +298,35 @@ public class HistoricalBackfillService implements ApplicationRunner {
         }
     }
 
-    private int downloadChunkYfinance(String ticker, ZonedDateTime from, ZonedDateTime to) {
+    private int downloadChunkYfinance(String ticker, ZonedDateTime from, ZonedDateTime to, ChunkOrigin origin) {
         try {
             List<Candle> candles = yfinanceClient.fetchDailyCandles(ticker, from.toLocalDate(), to.toLocalDate());
             if (!candles.isEmpty()) repository.upsert(ticker, TimeFrame.DAY_1, candles);
-            checkpoint.save(ticker, TimeFrame.DAY_1, to,
-                    candles.isEmpty() ? BackfillStatus.COMPLETE_EMPTY : BackfillStatus.COMPLETE_YFINANCE);
+            persistCheckpoint(ticker, TimeFrame.DAY_1, to,
+                    candles.isEmpty() ? BackfillStatus.COMPLETE_EMPTY : BackfillStatus.COMPLETE_YFINANCE, origin);
             log.debug("  [backfill] yfinance {} {} → {} — {} candles",
                     ticker, from.toLocalDate(), to.toLocalDate(), candles.size());
             return candles.size();
         } catch (Exception e) {
             log.warn("[backfill] yfinance error for {} [{}/{}]: {}", ticker, from.toLocalDate(), to.toLocalDate(), e.getMessage());
             return 0;
+        }
+    }
+
+    /**
+     * Routes checkpoint persistence to the right BackfillCheckpoint overload.
+     *
+     * <p>HISTORICAL chunks use the legacy 4-arg {@code save} signature (which itself
+     * delegates to the 5-arg overload with {@code chunk_origin = 'HISTORICAL'}).
+     * LIVE_TAIL chunks call the 5-arg overload directly so {@code chunk_origin = 'LIVE_TAIL'}
+     * is persisted.
+     */
+    private void persistCheckpoint(String ticker, TimeFrame tf, ZonedDateTime to,
+                                   BackfillStatus status, ChunkOrigin origin) {
+        if (origin == ChunkOrigin.LIVE_TAIL) {
+            checkpoint.save(ticker, tf, to, status, origin);
+        } else {
+            checkpoint.save(ticker, tf, to, status);
         }
     }
 
@@ -308,10 +346,15 @@ public class HistoricalBackfillService implements ApplicationRunner {
                 continue;
             }
 
+            ChunkOrigin origin = isChunkInLiveTail(chunkFrom, chunkTo) ? ChunkOrigin.LIVE_TAIL : ChunkOrigin.HISTORICAL;
+            String originTag = origin == ChunkOrigin.LIVE_TAIL ? "[live_tail]" : "[historical]";
+            log.info("  [backfill] {} {} (VIX) [DAY_1] {}–{}: downloading", originTag,
+                    vixTicker, chunkFrom.toLocalDate(), chunkTo.toLocalDate());
+
             for (BackfillPeriod effective : computeEffectiveRanges(chunkFrom, chunkTo)) {
                 ZonedDateTime effectiveFrom = effective.from().atStartOfDay(ZoneOffset.UTC);
                 ZonedDateTime effectiveTo = effective.to().atStartOfDay(ZoneOffset.UTC);
-                stored += downloadChunkYfinance(vixTicker, effectiveFrom, effectiveTo);
+                stored += downloadChunkYfinance(vixTicker, effectiveFrom, effectiveTo, origin);
             }
             chunkFrom = chunkTo;
         }
@@ -360,12 +403,23 @@ public class HistoricalBackfillService implements ApplicationRunner {
         return merged;
     }
 
-    private boolean isChunkInAnyPeriod(ZonedDateTime chunkFrom, ZonedDateTime chunkTo) {
+    boolean isChunkInAnyPeriod(ZonedDateTime chunkFrom, ZonedDateTime chunkTo) {
         if (periods.isEmpty()) return true;
         LocalDate from = chunkFrom.toLocalDate();
         LocalDate to = chunkTo.toLocalDate();
         return periods.stream()
                 .anyMatch(p -> !from.isAfter(p.to()) && !to.isBefore(p.from()));
+    }
+
+    /**
+     * @return true when the [chunkFrom, chunkTo) range intersects the dynamic live-tail period.
+     * False when no live-tail is configured (e.g. periods is empty or last period covers today).
+     */
+    boolean isChunkInLiveTail(ZonedDateTime chunkFrom, ZonedDateTime chunkTo) {
+        if (liveTailPeriod == null) return false;
+        LocalDate from = chunkFrom.toLocalDate();
+        LocalDate to = chunkTo.toLocalDate();
+        return !from.isAfter(liveTailPeriod.to()) && !to.isBefore(liveTailPeriod.from());
     }
 
     private Duration chunkDuration(TimeFrame tf) {

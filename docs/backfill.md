@@ -302,3 +302,107 @@ FROM download_progress
 WHERE status = 'COMPLETE_EMPTY'
 ORDER BY ticker, timeframe, last_chunk_end_ts;
 ```
+
+---
+
+## Consultar datos (SQLite CLI)
+
+> **Requisito**: cerrá DB Browser for SQLite antes de correr cualquier query — ver [Acceso concurrente](#acceso-concurrente).
+
+### Tickers y timeframes disponibles
+
+```bash
+# Tickers únicos en la base
+sqlite3 data/candles.db "SELECT DISTINCT ticker FROM candles ORDER BY ticker;"
+
+# Conteo por ticker + timeframe
+sqlite3 data/candles.db "SELECT ticker, timeframe, COUNT(*) as total FROM candles GROUP BY ticker, timeframe ORDER BY ticker, timeframe;"
+```
+
+### Últimas N velas de un ticker
+
+```bash
+sqlite3 -column -header data/candles.db "
+SELECT datetime(ts_epoch, 'unixepoch') as fecha, open, high, low, close, volume
+FROM candles
+WHERE ticker = 'AAPL' AND timeframe = 'DAY_1'
+ORDER BY ts_epoch DESC LIMIT 20;"
+```
+
+Valores válidos para `timeframe`: `MIN_5` | `MIN_15` | `HOUR_1` | `DAY_1`
+
+### Filtro por ticker + timeframe + rango de fechas
+
+```bash
+sqlite3 -column -header data/candles.db "
+SELECT datetime(ts_epoch, 'unixepoch') as fecha, open, high, low, close, volume
+FROM candles
+WHERE ticker = 'AAPL'
+  AND timeframe = 'MIN_5'
+  AND ts_epoch BETWEEN strftime('%s','2020-03-01') AND strftime('%s','2020-03-31')
+ORDER BY ts_epoch;"
+```
+
+### Filtro con fecha y hora exacta
+
+```bash
+sqlite3 -column -header data/candles.db "
+SELECT datetime(ts_epoch, 'unixepoch') as fecha, open, high, low, close, volume
+FROM candles
+WHERE ticker = 'AAPL'
+  AND timeframe = 'HOUR_1'
+  AND ts_epoch >= strftime('%s','2020-03-16 09:30:00')
+  AND ts_epoch <= strftime('%s','2020-03-16 16:00:00')
+ORDER BY ts_epoch;"
+```
+
+### Estado del checkpoint por ticker
+
+```bash
+sqlite3 -column -header data/candles.db "
+SELECT ticker, timeframe, status,
+       datetime(last_chunk_end_ts, 'unixepoch') as ultimo_chunk,
+       datetime(updated_at, 'unixepoch') as actualizado
+FROM download_progress
+WHERE ticker = 'AAPL'
+ORDER BY timeframe;"
+```
+
+### Exportar a CSV
+
+```bash
+sqlite3 -csv -header data/candles.db "
+SELECT datetime(ts_epoch,'unixepoch') as fecha, open, high, low, close, volume
+FROM candles WHERE ticker='AAPL' AND timeframe='DAY_1'
+ORDER BY ts_epoch;" > aapl_daily.csv
+```
+
+---
+
+## Acceso concurrente
+
+SQLite es una base de datos **file-based con un solo writer a la vez**. El archivo `data/candles.db` no puede ser abierto por dos procesos simultáneamente si alguno necesita escribir.
+
+### Regla
+
+| Situación | Resultado |
+|-----------|-----------|
+| App corriendo + DB Browser abierto | `SQLITE_BUSY` — la app no arranca |
+| App corriendo + `sqlite3` CLI (read-only) | ✅ OK en WAL mode |
+| App corriendo sola | ✅ OK |
+| DB Browser solo | ✅ OK |
+
+**Siempre cerrá DB Browser before de correr `bootRun` o cualquier tarea de backfill.**
+
+### Si la app no arranca con SQLITE_BUSY
+
+1. Cerrá DB Browser (o cualquier herramienta con el archivo abierto)
+2. Limpiá el WAL huérfano:
+   ```bash
+   sqlite3 data/candles.db "PRAGMA wal_checkpoint(TRUNCATE);"
+   ```
+3. Reintentá `./gradlew bootRun --args='--backfill'`
+
+### Por qué ocurre
+
+Cuando DB Browser (u otra herramienta) abre `candles.db`, mantiene una conexión activa con lock a nivel OS. Spring Boot + HikariCP trata de conectarse al mismo archivo y SQLite retorna `SQLITE_BUSY` (error code 5) inmediatamente, antes de que el `busy_timeout` configurado pueda ayudar.

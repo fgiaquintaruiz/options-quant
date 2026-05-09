@@ -14,6 +14,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -64,6 +65,49 @@ class SchemaInitializerTest {
     }
 
     /**
+     * Verifies that the {@code download_progress} table includes the {@code chunk_origin}
+     * column with DEFAULT 'HISTORICAL'. This column distinguishes hardcoded-period chunks
+     * from dynamic live-tail chunks (DEL1 fix for OUT_OF_RANGE bug).
+     */
+    @Test
+    void downloadProgress_hasChunkOriginColumn_withHistoricalDefault() throws Exception {
+        initializer.afterPropertiesSet();
+
+        boolean found = false;
+        String defaultValue = null;
+        try (Connection conn = dataSource.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("PRAGMA table_info(download_progress)")) {
+            while (rs.next()) {
+                if ("chunk_origin".equals(rs.getString("name"))) {
+                    found = true;
+                    defaultValue = rs.getString("dflt_value");
+                    break;
+                }
+            }
+        }
+        assertTrue(found, "Expected 'chunk_origin' column in download_progress");
+        assertNotNull(defaultValue, "chunk_origin must have a non-null DEFAULT");
+        // SQLite stores defaults including the surrounding quotes for TEXT
+        assertTrue(defaultValue.replace("'", "").equals("HISTORICAL"),
+            "Expected DEFAULT 'HISTORICAL' for chunk_origin, got: " + defaultValue);
+
+        // Insert a row WITHOUT chunk_origin to confirm DEFAULT is applied at write time
+        try (Connection conn = dataSource.getConnection();
+             Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate(
+                "INSERT INTO download_progress (ticker, timeframe, last_chunk_end_ts, status, updated_at) " +
+                "VALUES ('AAPL', 'DAY_1', 0, 'COMPLETE_YFINANCE', 0)");
+            try (ResultSet rs = stmt.executeQuery(
+                    "SELECT chunk_origin FROM download_progress WHERE ticker='AAPL' AND timeframe='DAY_1'")) {
+                assertTrue(rs.next(), "Inserted row should be readable");
+                assertEquals("HISTORICAL", rs.getString("chunk_origin"),
+                    "DEFAULT 'HISTORICAL' must apply when chunk_origin is omitted on INSERT");
+            }
+        }
+    }
+
+    /**
      * WAL mode cannot be enabled on :memory: databases — SQLite always reports "memory" for them.
      * This test uses a real file to verify WAL activation works as expected on the write pool.
      */
@@ -98,6 +142,50 @@ class SchemaInitializerTest {
             assertTrue(rs.next(), "Expected index 'idx_candles_tf_ts' to exist in sqlite_master");
             assertEquals("idx_candles_tf_ts", rs.getString("name"));
         }
+    }
+
+    /**
+     * Verifies that SchemaInitializer retries up to 3 times when a DDL statement throws
+     * SQLITE_BUSY (error code 5), and succeeds on the third attempt.
+     *
+     * <p>Note: real SQLite locking cannot be reproduced with jdbc:sqlite::memory: —
+     * the retry is tested via a spy JdbcTemplate that throws on the first two invocations
+     * and delegates to the real template on the third.
+     */
+    @Test
+    void afterPropertiesSet_retriesDdl_whenSqliteBusyOnFirstTwoAttempts() {
+        AtomicInteger callCount = new AtomicInteger(0);
+
+        // Real in-memory template for successful execution
+        JdbcTemplate realJdbc = new JdbcTemplate(dataSource);
+
+        // Spy: fail first two calls with SQLITE_BUSY (error code 5), succeed on the third
+        JdbcTemplate spyJdbc = new JdbcTemplate(dataSource) {
+            @Override
+            public void execute(String sql) {
+                int attempt = callCount.incrementAndGet();
+                if (attempt <= 2) {
+                    // SQLite BUSY error code is 5 — wrap in a Spring UncategorizedSQLException
+                    // the same way Spring's JdbcTemplate would surface it from the JDBC driver
+                    throw new org.springframework.jdbc.UncategorizedSQLException(
+                        "StatementCallback", sql,
+                        new java.sql.SQLException(
+                            "The database file is locked (database is locked)",
+                            "SQLITE_BUSY", 5));
+                }
+                realJdbc.execute(sql);
+            }
+        };
+
+        SchemaInitializer retryInitializer = SchemaInitializer.forTesting(spyJdbc);
+
+        // Must succeed after retries — must NOT throw
+        assertDoesNotThrow(() -> retryInitializer.afterPropertiesSet(),
+            "SchemaInitializer must succeed after retrying on SQLITE_BUSY");
+
+        // First DDL (createCandlesTable) must have been attempted at least 3 times before success
+        assertTrue(callCount.get() >= 3,
+            "Expected at least 3 execute() calls (2 failures + 1 success), got: " + callCount.get());
     }
 
     // -------------------------------------------------------------------------
