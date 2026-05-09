@@ -307,6 +307,11 @@ public class HistoricalBackfillService implements ApplicationRunner {
             log.debug("  [backfill] yfinance {} {} → {} — {} candles",
                     ticker, from.toLocalDate(), to.toLocalDate(), candles.size());
             return candles.size();
+        } catch (YfinanceFetchException e) {
+            // Fetch failed — do NOT write a checkpoint; ticker stays NEEDS_RESUME for retry
+            log.warn("[backfill] yfinance fetch failed for {} [{}/{}] — skipping checkpoint: {}",
+                    ticker, from.toLocalDate(), to.toLocalDate(), e.getMessage());
+            return 0;
         } catch (Exception e) {
             log.warn("[backfill] yfinance error for {} [{}/{}]: {}", ticker, from.toLocalDate(), to.toLocalDate(), e.getMessage());
             return 0;

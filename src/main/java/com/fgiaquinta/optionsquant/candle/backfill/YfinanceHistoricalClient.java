@@ -62,14 +62,18 @@ public class YfinanceHistoricalClient {
         try {
             HttpResponse<String> response = sendWithRetry(url);
             if (response == null || response.statusCode() >= 400) {
-                log.warn("[yfinance] Non-success response for {} ({}-{}): status={}",
-                        ticker, from, to, response == null ? "null" : response.statusCode());
-                return List.of();
+                throw new YfinanceFetchException(
+                        String.format("[yfinance] Non-success response for %s (%s-%s): status=%s",
+                                ticker, from, to, response == null ? "null" : response.statusCode()));
             }
             return parseCandles(response.body());
+        } catch (YfinanceFetchException e) {
+            log.warn(e.getMessage());
+            throw e;
         } catch (Exception e) {
             log.warn("[yfinance] fetchDailyCandles failed for {} ({}-{}): {}", ticker, from, to, e.getMessage());
-            return List.of();
+            throw new YfinanceFetchException(
+                    String.format("[yfinance] fetchDailyCandles failed for %s (%s-%s): %s", ticker, from, to, e.getMessage()), e);
         }
     }
 
