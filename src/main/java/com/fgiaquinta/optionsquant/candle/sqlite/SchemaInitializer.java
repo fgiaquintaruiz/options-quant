@@ -159,6 +159,7 @@ public class SchemaInitializer implements InitializingBean {
                 status            TEXT    NOT NULL,
                 updated_at        INTEGER NOT NULL,
                 chunk_origin      TEXT    NOT NULL DEFAULT 'HISTORICAL',
+                skip_error_code   INTEGER,
                 PRIMARY KEY (ticker, timeframe)
             ) WITHOUT ROWID
             """, 3, 500);
@@ -173,6 +174,18 @@ public class SchemaInitializer implements InitializingBean {
             String msg = ex.getMessage() != null ? ex.getMessage().toLowerCase() : "";
             if (msg.contains("duplicate column name") || msg.contains("already exists")) {
                 log.debug("download_progress.chunk_origin already present — skipping ALTER.");
+            } else {
+                throw ex;
+            }
+        }
+
+        try {
+            jdbc.execute("ALTER TABLE download_progress ADD COLUMN skip_error_code INTEGER");
+            log.info("Added 'skip_error_code' column to existing download_progress table.");
+        } catch (DataAccessException ex) {
+            String msg = ex.getMessage() != null ? ex.getMessage().toLowerCase() : "";
+            if (msg.contains("duplicate column name") || msg.contains("already exists")) {
+                log.debug("download_progress.skip_error_code already present — skipping ALTER.");
             } else {
                 throw ex;
             }

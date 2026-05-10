@@ -226,6 +226,61 @@ class ProgressBackfillReconcilerPartialRerunTest extends SqliteTestBase {
     }
 
     // -------------------------------------------------------------------------
+    // f) SKIPPED_PERMANENT — reconciler must NOT modify the row
+    // -------------------------------------------------------------------------
+
+    @Test
+    void whenTickerIsSkippedPermanent_reconcilerDoesNotModifyRow() {
+        // Insert a candle so the reconciler would normally recalc this row
+        insertCandle("DELISTED", TimeFrame.HOUR_1, 9999L);
+
+        // Pre-existing progress with SKIPPED_PERMANENT status and skip_error_code=200
+        long preExistingUpdatedAt = 500L;
+        long staleTs = 1L;
+        jdbc.update("""
+                INSERT INTO download_progress (ticker, timeframe, last_chunk_end_ts, status, updated_at, skip_error_code)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                "DELISTED", TimeFrame.HOUR_1.name(), staleTs,
+                BackfillStatus.SKIPPED_PERMANENT.name(), preExistingUpdatedAt, 200);
+
+        reconciler.reconcile();
+
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT last_chunk_end_ts, status, updated_at, skip_error_code FROM download_progress WHERE ticker = ? AND timeframe = ?",
+                "DELISTED", TimeFrame.HOUR_1.name());
+
+        assertEquals(BackfillStatus.SKIPPED_PERMANENT.name(), row.get("status"),
+                "SKIPPED_PERMANENT status must be preserved");
+        assertEquals(staleTs, ((Number) row.get("last_chunk_end_ts")).longValue(),
+                "last_chunk_end_ts must NOT be recalculated for SKIPPED_PERMANENT rows");
+        assertEquals(preExistingUpdatedAt, ((Number) row.get("updated_at")).longValue(),
+                "updated_at must NOT be bumped for SKIPPED_PERMANENT rows");
+        assertEquals(200, ((Number) row.get("skip_error_code")).intValue(),
+                "skip_error_code must be preserved (200)");
+    }
+
+    // -------------------------------------------------------------------------
+    // g) SKIPPED_PERMANENT is counted in preserved stats
+    // -------------------------------------------------------------------------
+
+    @Test
+    void reconcileWithStats_skippedPermanentCountedInPreserved() {
+        insertCandle("SKIP1", TimeFrame.HOUR_1, 9999L);
+        jdbc.update("""
+                INSERT INTO download_progress (ticker, timeframe, last_chunk_end_ts, status, updated_at, skip_error_code)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                "SKIP1", TimeFrame.HOUR_1.name(), 1L,
+                BackfillStatus.SKIPPED_PERMANENT.name(), 500L, 200);
+
+        ProgressBackfillReconciler.ReconcileResult result = reconciler.reconcileWithStats();
+
+        assertTrue(result.preserved() >= 1,
+                "SKIPPED_PERMANENT rows must be counted in preserved (got " + result.preserved() + ")");
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 

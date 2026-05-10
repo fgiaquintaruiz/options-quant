@@ -222,20 +222,40 @@ public class HistoricalBackfillService implements ApplicationRunner {
     // -------------------------------------------------------------------------
 
     private List<String> resolveTickerList(ApplicationArguments args) {
+        List<String> candidates;
         if (args.containsOption("backfill-all-tickers")) {
             if (tickerService == null) {
                 throw new IllegalStateException(
                         "--backfill-all-tickers requires TickerService but none was injected");
             }
-            List<String> all = tickerService.getTickerSymbols();
-            if (all.isEmpty()) {
+            candidates = tickerService.getTickerSymbols();
+            if (candidates.isEmpty()) {
                 log.warn("[backfill] --backfill-all-tickers: universe is empty — skipping");
             }
-            log.info("[backfill] Mode: ALL_TICKERS ({} symbols)", all.size());
-            return all;
+            log.info("[backfill] Mode: ALL_TICKERS ({} symbols)", candidates.size());
+        } else {
+            candidates = this.tickers;
+            log.info("[backfill] Mode: CONFIGURED_TICKERS ({} symbols)", candidates.size());
         }
-        log.info("[backfill] Mode: CONFIGURED_TICKERS ({} symbols)", this.tickers.size());
-        return this.tickers;
+
+        boolean retryPermanentSkips = args.containsOption("retry-permanent-skips");
+        if (retryPermanentSkips) {
+            log.info("[backfill] --retry-permanent-skips: including SKIPPED_PERMANENT tickers");
+            return candidates;
+        }
+
+        // Exclude tickers where ALL timeframes have SKIPPED_PERMANENT status.
+        // These tickers never existed on TWS (error 200) and would loop forever.
+        List<String> effective = candidates.stream()
+                .filter(ticker -> !checkpoint.isAllTimeframesPermanentlySkipped(ticker))
+                .toList();
+
+        int excluded = candidates.size() - effective.size();
+        if (excluded > 0) {
+            log.info("[backfill] Excluded {} SKIPPED_PERMANENT tickers (pass --retry-permanent-skips to override)",
+                    excluded);
+        }
+        return effective;
     }
 
     private int backfillTickerTimeframe(String ticker, TimeFrame tf) {
@@ -292,6 +312,8 @@ public class HistoricalBackfillService implements ApplicationRunner {
         return downloadChunkTwsOnly(ticker, tf, from, to, origin);
     }
 
+    private static final int TWS_ERROR_NO_SECURITY_DEFINITION = 200;
+
     private int downloadChunkTwsOnly(String ticker, TimeFrame tf, ZonedDateTime from, ZonedDateTime to, ChunkOrigin origin) {
         try {
             List<Candle> candles = ibkrService.downloadHistoricalData(ticker, tf, to);
@@ -299,16 +321,34 @@ public class HistoricalBackfillService implements ApplicationRunner {
             persistCheckpoint(ticker, tf, to, BackfillStatus.COMPLETE_TWS, origin);
             return candles.size();
         } catch (IbkrHistoricalDataException e) {
-            // TWS rejected the request (e.g. code 200: no security definition).
-            // Do NOT write a checkpoint — the ticker must remain eligible for retry.
-            log.warn("  [backfill] TWS rejected {} [{}] chunk {} with error {}: {} — skipping checkpoint",
-                    ticker, tf, from.toLocalDate(), e.getErrorCode(), e.getMessage());
-            progressTracker.recordError();
+            if (e.getErrorCode() == TWS_ERROR_NO_SECURITY_DEFINITION) {
+                // Permanent failure: security never existed or is not available via TWS.
+                // Write SKIPPED_PERMANENT so this ticker is excluded from future runs.
+                log.warn("  [backfill] TWS error 200 for {} [{}] chunk {} — SKIPPED_PERMANENT: {}",
+                        ticker, tf, from.toLocalDate(), e.getMessage());
+                persistCheckpointWithSkip(ticker, tf, to, BackfillStatus.SKIPPED_PERMANENT, origin,
+                        TWS_ERROR_NO_SECURITY_DEFINITION);
+                progressTracker.recordError();
+            } else {
+                // Transient error (e.g. 162=pacing, 321=unknown) — leave NEEDS_RESUME for retry.
+                log.warn("  [backfill] TWS error {} for {} [{}] chunk {} — leaving NEEDS_RESUME: {}",
+                        e.getErrorCode(), ticker, tf, from.toLocalDate(), e.getMessage());
+                progressTracker.recordError();
+            }
             return 0;
         } catch (Exception e) {
             log.error("  [backfill] TWS error for {} [{}] chunk {}: {}", ticker, tf, from.toLocalDate(), e.getMessage());
             return 0;
         }
+    }
+
+    /**
+     * Persists a SKIPPED_PERMANENT checkpoint with an audit error code.
+     */
+    private void persistCheckpointWithSkip(String ticker, TimeFrame tf, ZonedDateTime to,
+                                           BackfillStatus status, ChunkOrigin origin,
+                                           Integer skipErrorCode) {
+        checkpoint.save(ticker, tf, to, status, origin, skipErrorCode);
     }
 
     private int downloadChunkYfinance(String ticker, ZonedDateTime from, ZonedDateTime to, ChunkOrigin origin) {

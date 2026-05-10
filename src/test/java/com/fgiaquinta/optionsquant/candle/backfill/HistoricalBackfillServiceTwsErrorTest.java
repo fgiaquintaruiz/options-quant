@@ -20,6 +20,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.verify;
 
 /**
  * Tests for TWS error handling in downloadChunkTwsOnly (T2, T6, T7).
@@ -63,11 +64,89 @@ class HistoricalBackfillServiceTwsErrorTest {
     }
 
     // -------------------------------------------------------------------------
-    // T2: IbkrHistoricalDataException(200) → no checkpoint written, continues, returns 0
+    // New T1: TWS error 200 → writes SKIPPED_PERMANENT checkpoint with errorCode=200
     // -------------------------------------------------------------------------
 
     @Test
-    void whenIbkrHistoricalDataExceptionThrown_noCheckpointWrittenAndContinues() throws Exception {
+    void whenTwsError200_writesSkippedPermanentCheckpointWithErrorCode() throws Exception {
+        ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(5);
+
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_15)))
+                .thenReturn(Optional.empty());
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_15)))
+                .thenReturn(Optional.of(future));
+
+        when(ibkrService.downloadHistoricalData(eq("AAPL"), eq(TimeFrame.MIN_15), any()))
+                .thenThrow(new IbkrHistoricalDataException(200, "No security definition has been found"));
+
+        assertDoesNotThrow(() -> service.run(new DefaultApplicationArguments("--backfill")));
+
+        // Checkpoint MUST be written with SKIPPED_PERMANENT and skipErrorCode=200
+        verify(checkpoint, atLeastOnce()).save(
+                eq("AAPL"), eq(TimeFrame.MIN_15), any(ZonedDateTime.class),
+                eq(BackfillStatus.SKIPPED_PERMANENT), any(ChunkOrigin.class), eq(200));
+    }
+
+    // -------------------------------------------------------------------------
+    // New T2: TWS error 162 (pacing) → NO checkpoint written, ticker stays NEEDS_RESUME
+    // -------------------------------------------------------------------------
+
+    @Test
+    void whenTwsError162_noCheckpointWritten_tickerStaysNeedsResume() throws Exception {
+        ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(5);
+
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_15)))
+                .thenReturn(Optional.empty());
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_15)))
+                .thenReturn(Optional.of(future));
+
+        when(ibkrService.downloadHistoricalData(eq("AAPL"), eq(TimeFrame.MIN_15), any()))
+                .thenThrow(new IbkrHistoricalDataException(162, "HMDS query returned no data"));
+
+        assertDoesNotThrow(() -> service.run(new DefaultApplicationArguments("--backfill")));
+
+        // NO checkpoint must be written for transient error 162
+        verify(checkpoint, never()).save(eq("AAPL"), eq(TimeFrame.MIN_15), any(ZonedDateTime.class),
+                eq(BackfillStatus.SKIPPED_PERMANENT), any(ChunkOrigin.class), anyInt());
+        verify(checkpoint, never()).save(eq("AAPL"), eq(TimeFrame.MIN_15), any(ZonedDateTime.class),
+                any(BackfillStatus.class));
+        verify(checkpoint, never()).save(eq("AAPL"), eq(TimeFrame.MIN_15), any(ZonedDateTime.class),
+                any(BackfillStatus.class), any(ChunkOrigin.class));
+    }
+
+    // -------------------------------------------------------------------------
+    // New T3: TWS error 321 (unknown) → NO checkpoint written
+    // -------------------------------------------------------------------------
+
+    @Test
+    void whenTwsErrorUnknown321_noCheckpointWritten() throws Exception {
+        ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(5);
+
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_15)))
+                .thenReturn(Optional.empty());
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_15)))
+                .thenReturn(Optional.of(future));
+
+        when(ibkrService.downloadHistoricalData(eq("AAPL"), eq(TimeFrame.MIN_15), any()))
+                .thenThrow(new IbkrHistoricalDataException(321, "Error validating request"));
+
+        assertDoesNotThrow(() -> service.run(new DefaultApplicationArguments("--backfill")));
+
+        // NO checkpoint must be written for unknown error
+        verify(checkpoint, never()).save(eq("AAPL"), eq(TimeFrame.MIN_15), any(ZonedDateTime.class),
+                eq(BackfillStatus.SKIPPED_PERMANENT), any(ChunkOrigin.class), anyInt());
+        verify(checkpoint, never()).save(eq("AAPL"), eq(TimeFrame.MIN_15), any(ZonedDateTime.class),
+                any(BackfillStatus.class));
+    }
+
+    // -------------------------------------------------------------------------
+    // T2: IbkrHistoricalDataException(200) → SKIPPED_PERMANENT checkpoint written, no throw
+    //     Updated from original: error 200 now writes a SKIPPED_PERMANENT checkpoint
+    //     (covered in detail by New T1 above; this test confirms no exception propagation)
+    // -------------------------------------------------------------------------
+
+    @Test
+    void whenIbkrHistoricalDataExceptionThrown_doesNotThrow() throws Exception {
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(5);
 
         // Only process MIN_15 for AAPL (skip all other timeframes)
@@ -80,11 +159,8 @@ class HistoricalBackfillServiceTwsErrorTest {
         when(ibkrService.downloadHistoricalData(eq("AAPL"), eq(TimeFrame.MIN_15), any()))
                 .thenThrow(new IbkrHistoricalDataException(200, "No security definition has been found"));
 
-        // Must NOT throw — error is absorbed
+        // Must NOT throw — error is absorbed gracefully
         assertDoesNotThrow(() -> service.run(new DefaultApplicationArguments("--backfill")));
-
-        // Checkpoint MUST NOT be written for MIN_15 when IbkrHistoricalDataException is thrown
-        verify(checkpoint, never()).save(eq("AAPL"), eq(TimeFrame.MIN_15), any(), any(BackfillStatus.class));
     }
 
     // -------------------------------------------------------------------------

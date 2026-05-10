@@ -24,7 +24,8 @@ import java.time.Instant;
  *
  * <p>Per (ticker, timeframe) pair that has candles, the reconciliation policy is:
  * <ul>
- *   <li>Status IN ({@link BackfillStatus#NEEDS_RESUME}, {@link BackfillStatus#COMPLETE_EMPTY})
+ *   <li>Status IN ({@link BackfillStatus#NEEDS_RESUME}, {@link BackfillStatus#COMPLETE_EMPTY},
+ *       {@link BackfillStatus#SKIPPED_PERMANENT})
  *       → preserve as-is (do not recalc, do not bump {@code updated_at}).</li>
  *   <li>Row exists and {@code last_chunk_end_ts == max(candles.ts_epoch)} → no-op.</li>
  *   <li>Row exists and {@code last_chunk_end_ts != max(candles.ts_epoch)} →
@@ -62,7 +63,7 @@ public class ProgressBackfillReconciler {
     public void onApplicationReady() {
         try {
             ReconcileResult result = reconcileWithStats();
-            log.info("ProgressBackfillReconciler: inserted={}, updated={} (stale rows), preserved={} (NEEDS_RESUME/COMPLETE_EMPTY).",
+            log.info("ProgressBackfillReconciler: inserted={}, updated={} (stale rows), preserved={} (NEEDS_RESUME/COMPLETE_EMPTY/SKIPPED_PERMANENT).",
                     result.inserted(), result.updated(), result.preserved());
         } catch (Exception e) {
             log.error("ProgressBackfillReconciler: failed to reconcile progress, continuing startup.", e);
@@ -124,7 +125,7 @@ public class ProgressBackfillReconciler {
         int inserted = jdbc.update(insertSql, now);
 
         // -- UPDATE: existing rows whose last_chunk_end_ts drifted from the candle
-        //    truth, EXCLUDING protected statuses (NEEDS_RESUME, COMPLETE_EMPTY).
+        //    truth, EXCLUDING protected statuses (NEEDS_RESUME, COMPLETE_EMPTY, SKIPPED_PERMANENT).
         //    Status is preserved on update — only the timestamp and updated_at change.
         String updateSql = """
                 UPDATE download_progress
@@ -135,7 +136,7 @@ public class ProgressBackfillReconciler {
                           AND c.timeframe = download_progress.timeframe
                     ),
                     updated_at = ?
-                WHERE status NOT IN (?, ?)
+                WHERE status NOT IN (?, ?, ?)
                   AND EXISTS (
                         SELECT 1 FROM candles c
                         WHERE c.ticker = download_progress.ticker
@@ -152,14 +153,16 @@ public class ProgressBackfillReconciler {
         int updated = jdbc.update(updateSql,
                 now,
                 BackfillStatus.NEEDS_RESUME.name(),
-                BackfillStatus.COMPLETE_EMPTY.name());
+                BackfillStatus.COMPLETE_EMPTY.name(),
+                BackfillStatus.SKIPPED_PERMANENT.name());
 
         // -- Stats only: how many protected rows we left alone (for logging). ----
         Integer preserved = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM download_progress WHERE status IN (?, ?)",
+                "SELECT COUNT(*) FROM download_progress WHERE status IN (?, ?, ?)",
                 Integer.class,
                 BackfillStatus.NEEDS_RESUME.name(),
-                BackfillStatus.COMPLETE_EMPTY.name());
+                BackfillStatus.COMPLETE_EMPTY.name(),
+                BackfillStatus.SKIPPED_PERMANENT.name());
 
         return new ReconcileResult(inserted, updated, preserved == null ? 0 : preserved);
     }

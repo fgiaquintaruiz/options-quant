@@ -79,6 +79,119 @@ class BackfillCheckpointTest extends SqliteTestBase {
     }
 
     // -------------------------------------------------------------------------
+    // T13-5: save with skipErrorCode=200 → skip_error_code persisted correctly
+    // -------------------------------------------------------------------------
+
+    @Test
+    void saveWithSkipErrorCode_persistsCorrectly() {
+        ZonedDateTime ts = ZonedDateTime.of(2024, 6, 15, 10, 30, 0, 0, ZoneOffset.UTC);
+
+        checkpoint.save("DELISTED", TimeFrame.HOUR_1, ts,
+                BackfillStatus.SKIPPED_PERMANENT, ChunkOrigin.HISTORICAL, 200);
+
+        // Verify status in DB
+        String status = jdbc.queryForObject(
+                "SELECT status FROM download_progress WHERE ticker = ? AND timeframe = ?",
+                String.class, "DELISTED", TimeFrame.HOUR_1.name());
+        assertEquals(BackfillStatus.SKIPPED_PERMANENT.name(), status,
+                "Status must be SKIPPED_PERMANENT");
+
+        // Verify skip_error_code in DB
+        Integer errorCode = jdbc.queryForObject(
+                "SELECT skip_error_code FROM download_progress WHERE ticker = ? AND timeframe = ?",
+                Integer.class, "DELISTED", TimeFrame.HOUR_1.name());
+        assertNotNull(errorCode, "skip_error_code must not be null");
+        assertEquals(200, errorCode.intValue(), "skip_error_code must be 200");
+    }
+
+    // -------------------------------------------------------------------------
+    // T13-6: save without skipErrorCode → skip_error_code is NULL in DB
+    // -------------------------------------------------------------------------
+
+    @Test
+    void saveWithoutSkipErrorCode_skipErrorCodeIsNull() {
+        ZonedDateTime ts = ZonedDateTime.of(2024, 6, 15, 10, 30, 0, 0, ZoneOffset.UTC);
+
+        // Call the existing 4-arg overload (no skipErrorCode)
+        checkpoint.save("AAPL", TimeFrame.MIN_5, ts, BackfillStatus.COMPLETE_TWS);
+
+        // skip_error_code must be NULL
+        Object errorCode = jdbc.queryForMap(
+                "SELECT skip_error_code FROM download_progress WHERE ticker = ? AND timeframe = ?",
+                "AAPL", TimeFrame.MIN_5.name()).get("skip_error_code");
+        assertNull(errorCode, "skip_error_code must be NULL when not provided");
+    }
+
+    // -------------------------------------------------------------------------
+    // T13-7: upsert with skipErrorCode — existing SKIPPED_PERMANENT row retains code
+    // -------------------------------------------------------------------------
+
+    @Test
+    void upsertSkippedPermanent_doesNotEraseErrorCode() {
+        ZonedDateTime ts = ZonedDateTime.of(2024, 6, 15, 10, 30, 0, 0, ZoneOffset.UTC);
+
+        // Save SKIPPED_PERMANENT with code 200 once
+        checkpoint.save("BADTICKER", TimeFrame.HOUR_1, ts,
+                BackfillStatus.SKIPPED_PERMANENT, ChunkOrigin.HISTORICAL, 200);
+
+        // Save again (upsert) with the same overload — code must be preserved
+        checkpoint.save("BADTICKER", TimeFrame.HOUR_1, ts.plusDays(1),
+                BackfillStatus.SKIPPED_PERMANENT, ChunkOrigin.HISTORICAL, 200);
+
+        Integer errorCode = jdbc.queryForObject(
+                "SELECT skip_error_code FROM download_progress WHERE ticker = ? AND timeframe = ?",
+                Integer.class, "BADTICKER", TimeFrame.HOUR_1.name());
+        assertEquals(200, errorCode.intValue(), "skip_error_code must be preserved on upsert");
+
+        Long rowCount = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM download_progress WHERE ticker = ?",
+                Long.class, "BADTICKER");
+        assertEquals(1L, rowCount, "upsert must keep exactly one row");
+    }
+
+    // -------------------------------------------------------------------------
+    // T13-8: isAllTimeframesPermanentlySkipped — all SKIPPED_PERMANENT → true
+    // -------------------------------------------------------------------------
+
+    @Test
+    void isAllTimeframesPermanentlySkipped_allSkipped_returnsTrue() {
+        ZonedDateTime ts = ZonedDateTime.of(2024, 6, 15, 10, 30, 0, 0, ZoneOffset.UTC);
+        // Save SKIPPED_PERMANENT for all timeframes
+        for (TimeFrame tf : TimeFrame.values()) {
+            checkpoint.save("DEAD", tf, ts, BackfillStatus.SKIPPED_PERMANENT, ChunkOrigin.HISTORICAL, 200);
+        }
+
+        assertTrue(checkpoint.isAllTimeframesPermanentlySkipped("DEAD"),
+                "Must return true when ALL timeframes have SKIPPED_PERMANENT");
+    }
+
+    // -------------------------------------------------------------------------
+    // T13-9: isAllTimeframesPermanentlySkipped — one active timeframe → false
+    // -------------------------------------------------------------------------
+
+    @Test
+    void isAllTimeframesPermanentlySkipped_oneActiveTimeframe_returnsFalse() {
+        ZonedDateTime ts = ZonedDateTime.of(2024, 6, 15, 10, 30, 0, 0, ZoneOffset.UTC);
+        checkpoint.save("PARTIAL", TimeFrame.HOUR_1, ts,
+                BackfillStatus.SKIPPED_PERMANENT, ChunkOrigin.HISTORICAL, 200);
+        checkpoint.save("PARTIAL", TimeFrame.MIN_15, ts,
+                BackfillStatus.COMPLETE_TWS, ChunkOrigin.HISTORICAL, null);
+
+        assertFalse(checkpoint.isAllTimeframesPermanentlySkipped("PARTIAL"),
+                "Must return false when at least one timeframe is not SKIPPED_PERMANENT");
+    }
+
+    // -------------------------------------------------------------------------
+    // T13-10: isAllTimeframesPermanentlySkipped — no rows → false (never attempted)
+    // -------------------------------------------------------------------------
+
+    @Test
+    void isAllTimeframesPermanentlySkipped_noRows_returnsFalse() {
+        assertFalse(checkpoint.isAllTimeframesPermanentlySkipped("NEVER_ATTEMPTED"),
+                "Must return false when no rows exist (ticker has not been attempted)");
+    }
+
+    // -------------------------------------------------------------------------
     // T13-4: ticker not found → empty, no exception
     // -------------------------------------------------------------------------
 
