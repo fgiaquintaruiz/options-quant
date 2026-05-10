@@ -64,6 +64,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
     private final List<BackfillPeriod> periods;
     private final BackfillPeriod liveTailPeriod;
     private final TickerService tickerService;
+    private final BackfillProgressTracker progressTracker;
 
     @Autowired
     public HistoricalBackfillService(
@@ -76,7 +77,8 @@ public class HistoricalBackfillService implements ApplicationRunner {
             @Autowired(required = false) YfinanceHistoricalClient yfinanceClient,
             @Value("${ibkr.vix-tickers:#{T(java.util.Collections).emptyList()}}") List<String> vixTickers,
             BackfillProperties backfillProperties,
-            @Autowired(required = false) TickerService tickerService) {
+            @Autowired(required = false) TickerService tickerService,
+            BackfillProgressTracker progressTracker) {
 
         this.repository = repository;
         this.checkpoint = checkpoint;
@@ -89,6 +91,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
         this.periods = backfillProperties.parsedPeriodsWithLiveTail();
         this.liveTailPeriod = backfillProperties.livetailPeriod();
         this.tickerService = tickerService;
+        this.progressTracker = progressTracker;
 
         log.info("HistoricalBackfillService initialized: {} tickers, rate={} req/s, startYear={}, periods={} (live_tail={})",
                 tickers.size(), ratePerSecond, startYear, this.periods.size(),
@@ -147,6 +150,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
         // Production wires liveTailPeriod via the BackfillProperties-aware constructor.
         this.liveTailPeriod = deriveLiveTailFromPeriods(this.periods);
         this.tickerService = tickerService;
+        this.progressTracker = new BackfillProgressTracker(10);
     }
 
     private static BackfillPeriod deriveLiveTailFromPeriods(List<BackfillPeriod> periods) {
@@ -180,6 +184,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
         for (TimeFrame tf : BACKFILL_PRIORITY_ORDER) {
             log.info("=== Backfill phase START — timeframe {} ({} tickers) ===",
                     tf, effectiveTickers.size());
+            progressTracker.startPhase(tf.name(), effectiveTickers.size());
 
             int phaseCandles = 0;
             int tickersDone = 0;
@@ -188,6 +193,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
                 int candles = backfillTickerTimeframe(ticker, tf);
                 phaseCandles += candles;
                 tickersDone++;
+                progressTracker.recordTicker();
                 log.info("  [backfill] {} [{}] complete — {} candles (ticker {}/{})",
                         ticker, tf, candles, tickersDone, effectiveTickers.size());
             }
@@ -297,6 +303,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
             // Do NOT write a checkpoint — the ticker must remain eligible for retry.
             log.warn("  [backfill] TWS rejected {} [{}] chunk {} with error {}: {} — skipping checkpoint",
                     ticker, tf, from.toLocalDate(), e.getErrorCode(), e.getMessage());
+            progressTracker.recordError();
             return 0;
         } catch (Exception e) {
             log.error("  [backfill] TWS error for {} [{}] chunk {}: {}", ticker, tf, from.toLocalDate(), e.getMessage());
@@ -317,6 +324,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
             // Fetch failed — do NOT write a checkpoint; ticker stays NEEDS_RESUME for retry
             log.warn("[backfill] yfinance fetch failed for {} [{}/{}] — skipping checkpoint: {}",
                     ticker, from.toLocalDate(), to.toLocalDate(), e.getMessage());
+            progressTracker.recordError();
             return 0;
         } catch (Exception e) {
             log.warn("[backfill] yfinance error for {} [{}/{}]: {}", ticker, from.toLocalDate(), to.toLocalDate(), e.getMessage());

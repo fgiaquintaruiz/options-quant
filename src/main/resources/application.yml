@@ -131,6 +131,7 @@ candles:
   backfill:
     rate-per-second: 0.1   # 1 TWS historical request per 10s (safe default within 60 req/10min limit)
     start-year: 2007        # Earliest year to backfill from (2007 covers the Sep-2008 crisis period)
+    progress-log-every-n-tickers: 10  # Emit a progress log line every N tickers per timeframe phase (R2.1)
     yfinance:
       enabled: true
       cutoff-years: 0   
