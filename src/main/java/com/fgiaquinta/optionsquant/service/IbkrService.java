@@ -1,6 +1,7 @@
 package com.fgiaquinta.optionsquant.service;
 
 import com.ib.client.*;
+import com.fgiaquinta.optionsquant.candle.backfill.IbkrHistoricalDataException;
 import com.fgiaquinta.optionsquant.config.IbkrProperties;
 import com.fgiaquinta.optionsquant.domain.Candle;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
@@ -43,6 +44,8 @@ public class IbkrService {
     private final Map<String, List<Candle>> receivedData = new ConcurrentHashMap<>();
     private final Set<Integer> pendingRequests = ConcurrentHashMap.newKeySet();
     private final Set<Integer> cancelledRequests = ConcurrentHashMap.newKeySet();  // Track intentionally cancelled requests
+    /** Maps reqId → TWS error code for requests that TWS rejected with an error callback. */
+    private final Map<Integer, Integer> failedRequests = new ConcurrentHashMap<>();
 
     @SuppressWarnings("this-escape")
     public IbkrService(IbkrProperties properties, MetricsService metrics) {
@@ -229,7 +232,17 @@ public class IbkrService {
                 );
 
                 waitForRequestCompletion(reqId, ticker, timeframe);
+
+                // Check if TWS signalled an error for this request (e.g. code 200: no security found)
+                Integer errorCode = failedRequests.remove(reqId);
                 cleanupRequest(reqId);
+
+                if (errorCode != null) {
+                    String errMsg = "TWS error " + errorCode + " for " + ticker + " [" + timeframe + "]";
+                    ibkrLog.warn("<<< [IBKR] {} — throwing IbkrHistoricalDataException", errMsg);
+                    metrics.incrementIbkrError("tws_rejected_" + errorCode);
+                    throw new IbkrHistoricalDataException(errorCode, errMsg);
+                }
 
                 long elapsed = System.currentTimeMillis() - startTime;
                 ibkrLog.info("<<< [IBKR] downloadHistoricalData(ticker={}, timeframe={}) - {} candles in {}ms",
@@ -382,6 +395,7 @@ public class IbkrService {
         log.warn("    Error received: id={}, code={}, message={}", event.id(), event.code(), event.message());
         if (pendingRequests.contains(event.id())) {
             log.warn("    Removing failed request {} from pending list (error {})", event.id(), event.code());
+            failedRequests.put(event.id(), event.code());
             pendingRequests.remove(event.id());
             metrics.incrementIbkrError("error_" + event.code());
         }
@@ -433,5 +447,67 @@ public class IbkrService {
         requestTimeframeMap.remove(reqId);
         pendingRequests.remove(reqId);
         cancelledRequests.remove(reqId);  // Clean up cancelled tracking
+    }
+
+    // ===== Package-private test hooks =====
+    // These methods allow unit tests to exercise the TWS error-propagation state machine
+    // without a real TWS connection. They bypass the connection guard and reqHistoricalData call,
+    // directly exercising the waitForRequestCompletion → failedRequests → throw path.
+    //
+    // Pattern: test calls simulatePendingRequest() to register a reqId (mimicking what
+    // downloadHistoricalData would have done after sending the wire request), then fires
+    // simulateTwsError() or simulateTwsRequestComplete() from another thread to unblock it.
+
+    /**
+     * Registers a pending request as if TWS had acknowledged the reqHistoricalData call.
+     * Returns the reqId that was registered.
+     *
+     * <p>For use in tests only — not part of the production API.
+     */
+    int simulatePendingRequest(String ticker, TimeFrame tf) {
+        String cacheKey = tf.toCacheKey(ticker);
+        List<Candle> candles = Collections.synchronizedList(new ArrayList<>());
+        receivedData.put(cacheKey, candles);
+        int reqId = nextOrderId.getAndIncrement();
+        registerRequest(reqId, ticker, tf);
+        return reqId;
+    }
+
+    /**
+     * Waits for the given pending request to complete (mimicking the wait inside
+     * downloadHistoricalData) and returns the candle list if successful, or throws
+     * {@link IbkrHistoricalDataException} if TWS signalled an error.
+     *
+     * <p>For use in tests only — not part of the production API.
+     */
+    List<Candle> simulateWaitForResult(int reqId, String ticker, TimeFrame tf) {
+        String cacheKey = tf.toCacheKey(ticker);
+        List<Candle> candles = receivedData.get(cacheKey);
+        waitForRequestCompletion(reqId, ticker, tf);
+        Integer errorCode = failedRequests.remove(reqId);
+        cleanupRequest(reqId);
+        if (errorCode != null) {
+            throw new IbkrHistoricalDataException(errorCode,
+                    "TWS error " + errorCode + " for " + ticker + " [" + tf + "]");
+        }
+        return new ArrayList<>(candles);
+    }
+
+    /**
+     * Simulates a TWS error callback for the given reqId.
+     *
+     * <p>For use in tests only — not part of the production API.
+     */
+    void simulateTwsError(int reqId, int errorCode, String errorMsg) {
+        onErrorReceived(new IbkrCallbackHandler.ErrorEvent(reqId, errorCode, errorMsg));
+    }
+
+    /**
+     * Simulates a TWS {@code historicalDataEnd} callback for the given reqId.
+     *
+     * <p>For use in tests only — not part of the production API.
+     */
+    void simulateTwsRequestComplete(int reqId) {
+        onRequestComplete(new IbkrCallbackHandler.RequestCompleteEvent(reqId, "", ""));
     }
 }

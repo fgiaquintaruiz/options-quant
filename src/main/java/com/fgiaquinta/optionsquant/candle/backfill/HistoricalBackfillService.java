@@ -292,6 +292,12 @@ public class HistoricalBackfillService implements ApplicationRunner {
             if (!candles.isEmpty()) repository.upsert(ticker, tf, candles);
             persistCheckpoint(ticker, tf, to, BackfillStatus.COMPLETE_TWS, origin);
             return candles.size();
+        } catch (IbkrHistoricalDataException e) {
+            // TWS rejected the request (e.g. code 200: no security definition).
+            // Do NOT write a checkpoint — the ticker must remain eligible for retry.
+            log.warn("  [backfill] TWS rejected {} [{}] chunk {} with error {}: {} — skipping checkpoint",
+                    ticker, tf, from.toLocalDate(), e.getErrorCode(), e.getMessage());
+            return 0;
         } catch (Exception e) {
             log.error("  [backfill] TWS error for {} [{}] chunk {}: {}", ticker, tf, from.toLocalDate(), e.getMessage());
             return 0;
