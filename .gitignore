@@ -65,3 +65,6 @@ docs/log.txt
 .env
 cobertura.csv
 tickers.csv
+
+# Agent tooling (local only)
+.atl/

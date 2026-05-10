@@ -145,6 +145,25 @@ _Last updated: 2026-05-07_
 
 ## Tech debt
 
+### A1.1 — Startup health check para servicios externos
+**Severidad**: ALTA | **Esfuerzo**: S (1 día)
+
+Al startup, detectar y advertir si servicios externos requeridos no están disponibles:
+- Analytics service Python (`:8001`) → `WARN` visible si no responde en healthcheck
+- TWS/IBKR (paper o live) → `WARN` visible si no hay conexión activa
+
+**Problema actual**: la app levanta sin warning si estos servicios están caídos.
+Los bugs aparecen en runtime durante operaciones reales (ej: backfill marca
+`COMPLETE_EMPTY` porque `analytics_service` no responde — bug detectado 2026-05-09).
+
+**Relacionado con**: A1 del audit original (Custom Health Indicators con Spring Boot Actuator).
+
+**Implementación sugerida**: `ApplicationReadyEvent` listener o `HealthIndicator` custom
+que intente `GET /health` en `:8001` y `isConnected()` en `IbkrService` al startup,
+loguee `WARN` con mensaje claro si alguno falla.
+
+---
+
 - **M10 — Schema migrations**: introducir Flyway o Liquibase para versionar el schema SQLite. Hoy el schema se crea de forma idempotente vía `SchemaInitializer.java` con `CREATE TABLE IF NOT EXISTS` y `ALTER TABLE` envuelto en try/catch para columnas (ej. `chunk_origin` agregada en DEL1 live-tail fix). Cada nueva columna requiere ese patrón manual; con Flyway dejaríamos un trail versionado y auditable. Bloqueado por sprint corto previo al paper trading; programar fuera del path crítico.
 
 ## Fixes recientes
