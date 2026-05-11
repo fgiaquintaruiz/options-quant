@@ -162,7 +162,7 @@ public class BackfillProgressTracker {
         double eta = calculateEta(done, total, velocity);
         int errs = errors.get();
 
-        log.info("[backfill] {} — {}/{} tickers ({}) % | {} t/min | ETA: {} min | errors: {}",
+        log.info("[backfill] {} | {}/{} tickers ({}) % | {} t/min | ETA: {} min | errors: {}",
                 currentTimeframe, done, total,
                 String.format("%.1f", progress),
                 String.format("%.1f", velocity),
