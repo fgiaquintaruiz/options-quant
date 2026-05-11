@@ -78,7 +78,7 @@ class HealthResponse(BaseModel):
     status: str
     service: str
     version: str
-    java_grpc_connected: bool
+    java_rest_connected: bool
 
 
 class HistoricalCandle(BaseModel):
@@ -98,8 +98,10 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Analytics Service...")
     logger.info(f"Java REST API: {JAVA_API_HOST}:{JAVA_API_PORT}")
     logger.info(f"Redis: {REDIS_HOST}:{REDIS_PORT}")
+    java_client.connect()
     logger.info("Analytics Service started")
     yield
+    java_client.close()
     logger.info("Shutting down Analytics Service...")
 
 
@@ -172,13 +174,8 @@ class JavaApiClient:
         return None
 
 
-# Initialize REST client
+# Initialize REST client (connect happens in lifespan hook, not at import time)
 java_client = JavaApiClient()
-# Try to connect on startup (non-blocking; environment-dependent — not asserted in unit tests)
-try:  # pragma: no cover
-    java_client.connect()
-except Exception as e:  # pragma: no cover
-    logger.warning(f"Could not connect to Java REST API: {e}")
 
 
 # ================== Analytics Engine ==================
@@ -201,7 +198,7 @@ async def health():
         status="healthy",
         service="analytics",
         version="1.0.0",
-        java_grpc_connected=java_client.connected
+        java_rest_connected=java_client.connected
     )
 
 
