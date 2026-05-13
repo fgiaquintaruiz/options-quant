@@ -1,13 +1,31 @@
 import React from 'react'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi } from 'vitest'
 import ScanEngineControls from './ScanEngineControls'
 
 /**
  * Tests for ScanEngineControls — toolbar row 2 of LiveDashboard.
- * Validates: rendering, button states, handler wiring (start/stop/forceStop/scheduler/auto-execute/macro-filter/concurrent/risk/mock-market/inject-mock-signal).
+ * Advanced controls (concurrent, risk, mock market, inject signal) are now
+ * delegated to AdvancedScanControls (tested separately).
+ * This suite validates: force-stop, auto-scan group, auto-execute, macro-filter,
+ * and prop pass-through to AdvancedScanControls (via mock).
  */
+
+// Mock AdvancedScanControls — it has its own test suite
+vi.mock('./AdvancedScanControls', () => ({
+  default: ({ onRiskAdjust, onMaxConcurrentChange, onInjectMockSignal, onToggleMockMarket, mockMarketOpen }) => (
+    <div data-testid="advanced-scan-controls-mock">
+      <button data-testid="live-risk-up"             onClick={() => onRiskAdjust(1.0)}>+</button>
+      <button data-testid="live-risk-down"           onClick={() => onRiskAdjust(-1.0)}>-</button>
+      <input  type="number" min="1" max="16"         onChange={(e) => onMaxConcurrentChange(e.target.value)} />
+      <button data-testid="live-toggle-mock-market"  onClick={onToggleMockMarket}>{mockMarketOpen ? 'Mock Mkt' : 'Real Mkt'}</button>
+      {mockMarketOpen && (
+        <button data-testid="live-inject-mock-signal" onClick={onInjectMockSignal}>Mock Signal</button>
+      )}
+    </div>
+  ),
+}))
 
 const baseProps = {
   scanning: false,
@@ -79,12 +97,6 @@ describe('ScanEngineControls', () => {
     expect(btn.disabled).toBe(true)
   })
 
-  it('shows MockMarket swap button in active state when mockMarketOpen=true', () => {
-    render(<ScanEngineControls {...baseProps} mockMarketOpen={true} />)
-    const btn = screen.getByTestId('live-toggle-mock-market')
-    expect(btn.textContent).toContain('Mock Mkt')
-  })
-
   it('renders countdown when schedulerEnabled=true and nextScanSecs provided', () => {
     render(
       <ScanEngineControls
@@ -133,30 +145,33 @@ describe('ScanEngineControls', () => {
     expect(onToggleMacroFilter).toHaveBeenCalledOnce()
   })
 
-  it('calls onMaxConcurrentChange when concurrent input value changes', () => {
-    const onMaxConcurrentChange = vi.fn()
-    const { container } = render(<ScanEngineControls {...baseProps} onMaxConcurrentChange={onMaxConcurrentChange} />)
-    const input = container.querySelector('input[type="number"][min="1"][max="16"]')
-    fireEvent.change(input, { target: { value: '8' } })
-    expect(onMaxConcurrentChange).toHaveBeenCalledOnce()
-    expect(onMaxConcurrentChange).toHaveBeenLastCalledWith('8')
+  it('renders AdvancedScanControls and passes handlers through', () => {
+    render(<ScanEngineControls {...baseProps} />)
+    expect(screen.getByTestId('advanced-scan-controls-mock')).toBeInTheDocument()
   })
 
-  it('calls onRiskAdjust(1.0) when chevron-up button is clicked', async () => {
+  // Proxy tests — verify props flow from ScanEngineControls → AdvancedScanControls mock
+
+  it('passes onRiskAdjust(1.0) through AdvancedScanControls', async () => {
     const onRiskAdjust = vi.fn()
     render(<ScanEngineControls {...baseProps} onRiskAdjust={onRiskAdjust} />)
     await userEvent.click(screen.getByTestId('live-risk-up'))
     expect(onRiskAdjust).toHaveBeenCalledWith(1.0)
   })
 
-  it('calls onRiskAdjust(-1.0) when chevron-down button is clicked', async () => {
+  it('passes onRiskAdjust(-1.0) through AdvancedScanControls', async () => {
     const onRiskAdjust = vi.fn()
     render(<ScanEngineControls {...baseProps} onRiskAdjust={onRiskAdjust} />)
     await userEvent.click(screen.getByTestId('live-risk-down'))
     expect(onRiskAdjust).toHaveBeenCalledWith(-1.0)
   })
 
-  it('calls onInjectMockSignal once when Mock Signal button is clicked with mockMarketOpen=true', async () => {
+  it('shows mock signal button in AdvancedScanControls when mockMarketOpen=true', () => {
+    render(<ScanEngineControls {...baseProps} mockMarketOpen={true} />)
+    expect(screen.getByTestId('live-inject-mock-signal')).toBeInTheDocument()
+  })
+
+  it('passes onInjectMockSignal through AdvancedScanControls', async () => {
     const onInjectMockSignal = vi.fn()
     render(<ScanEngineControls {...baseProps} mockMarketOpen={true} onInjectMockSignal={onInjectMockSignal} />)
     await userEvent.click(screen.getByTestId('live-inject-mock-signal'))

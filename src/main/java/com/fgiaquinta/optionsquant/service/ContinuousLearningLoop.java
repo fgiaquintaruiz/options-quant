@@ -96,9 +96,12 @@ public class ContinuousLearningLoop {
                 // Step 1: Run backtest
                 BacktestConfig config = new BacktestConfig(
                         tickers, fromDate, toDate,
-                        initialCapital, riskPct, 0.005, 0.65,
+                        initialCapital, riskPct, 0.0008, 0.65,
                         3, TimeFrame.MIN_15, true, false,
-                        0.0, 0.0
+                        0.0, 0.0, null,
+                        java.time.LocalTime.of(9, 45),
+                        java.time.LocalTime.of(10, 30),
+                        java.time.LocalTime.of(13, 0)
                 );
 
                 log.info("📊 Running backtest...");

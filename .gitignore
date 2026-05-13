@@ -68,3 +68,9 @@ tickers.csv
 
 # Agent tooling (local only)
 .atl/
+
+# Backtest outputs
+backtest-*.csv
+backtesting.db
+data/backtest-exports/
+*.log

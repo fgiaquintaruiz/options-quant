@@ -1,7 +1,7 @@
 import React from 'react'
-import { Play, Square, Zap, ChevronUp, ChevronDown, Monitor, Cpu, ShieldCheck, ShieldAlert, OctagonAlert } from 'lucide-react'
-import ReplayControls from './ReplayControls'
+import { Play, Square, Monitor, Cpu, OctagonAlert } from 'lucide-react'
 import SwapButton from './SwapButton'
+import AdvancedScanControls from './AdvancedScanControls'
 import { formatMinSec } from '../utils/liveSignalUtils'
 
 /**
@@ -100,42 +100,19 @@ export default function ScanEngineControls({
 
         <div className="divider-v ld-divider" />
 
-        <div className="flex-align-center gap-4">
-          <span className="stat-label-sm color-muted">Concurrent:</span>
-          <input type="number" min="1" max="16" value={maxConcurrent}
-            onChange={(e) => onMaxConcurrentChange(e.target.value)} disabled={scanning}
-            className="ld-concurrent-input" />
-        </div>
-
-        <div className="divider-v ld-divider" />
-
-        <div className="flex-align-center gap-4">
-          <span className="stat-label-sm color-muted">Risk%:</span>
-          <strong className="color-text ld-risk-val">{riskInput}</strong>
-          <div className="flex-col gap-0">
-            <button type="button" data-testid="live-risk-up" className="btn-icon color-muted" onClick={() => onRiskAdjust(1.0)}><ChevronUp size={12} /></button>
-            <button type="button" data-testid="live-risk-down" className="btn-icon color-muted" onClick={() => onRiskAdjust(-1.0)}><ChevronDown size={12} /></button>
-          </div>
-        </div>
-
-        <div className="divider-v ld-divider" />
-
-        <SwapButton active={mockMarketOpen} onText="Mock Mkt" offText="Real Mkt" onClick={onToggleMockMarket}
-          activeColor="#f0883e" offColor="#3fb950" icon={mockMarketOpen ? ShieldAlert : ShieldCheck} testId="live-toggle-mock-market" />
-
-        {mockMarketOpen && (
-          <>
-            <button className="btn ld-mock-btn" onClick={onInjectMockSignal} data-testid="live-inject-mock-signal">
-              <Zap size={14}/> Mock Signal
-            </button>
-            <div className="divider-v ld-divider"/>
-            <ReplayControls
-              marketOpen={marketOpen}
-              onActiveChange={onReplayActiveChange}
-              onError={onError}
-            />
-          </>
-        )}
+        <AdvancedScanControls
+          scanning={scanning}
+          mockMarketOpen={mockMarketOpen}
+          maxConcurrent={maxConcurrent}
+          riskInput={riskInput}
+          marketOpen={marketOpen}
+          onMaxConcurrentChange={onMaxConcurrentChange}
+          onRiskAdjust={onRiskAdjust}
+          onToggleMockMarket={onToggleMockMarket}
+          onInjectMockSignal={onInjectMockSignal}
+          onReplayActiveChange={onReplayActiveChange}
+          onError={onError}
+        />
 
       </div>
     </div>

@@ -191,9 +191,12 @@ public class BacktestDashboardController {
                 LocalDate fromDate = toDate.minusYears(1);
                 BacktestConfig config = new BacktestConfig(
                         tickers, fromDate, toDate,
-                        initialCapital, riskPct, 0.005, 0.65,
+                        initialCapital, riskPct, 0.0008, 0.65,
                         3, com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15, true, false,
-                        0.0, 0.0
+                        0.0, 0.0, null,
+                        java.time.LocalTime.of(9, 45),
+                        java.time.LocalTime.of(10, 30),
+                        java.time.LocalTime.of(13, 0)
                 );
 
                 final BacktestReport[] finalReport = new BacktestReport[1];
@@ -541,9 +544,12 @@ public class BacktestDashboardController {
 
             BacktestConfig config = new BacktestConfig(
                     tickers, fromDate, toDate,
-                    initialCapital, riskPct, 0.005, 0.65,
+                    initialCapital, riskPct, 0.0008, 0.65,
                     3, com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15, true, false,
-                    0.0, 0.0
+                    0.0, 0.0, null,
+                    java.time.LocalTime.of(9, 45),
+                    java.time.LocalTime.of(10, 30),
+                    java.time.LocalTime.of(13, 0)
             );
 
             final BacktestReport[] reportHolder = new BacktestReport[1];
@@ -996,9 +1002,12 @@ public class BacktestDashboardController {
 
                 BacktestConfig config = new BacktestConfig(
                         remainingTickers, fromDate, toDate,
-                        initialCapital, riskPct, 0.005, 0.65,
+                        initialCapital, riskPct, 0.0008, 0.65,
                         3, com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15, true, false,
-                        0.0, 0.0
+                        0.0, 0.0, null,
+                        java.time.LocalTime.of(9, 45),
+                        java.time.LocalTime.of(10, 30),
+                        java.time.LocalTime.of(13, 0)
                 );
 
                 final BacktestReport[] reportHolder = new BacktestReport[1];
@@ -1333,9 +1342,12 @@ public class BacktestDashboardController {
 
             BacktestConfig config = new BacktestConfig(
                     tickers, fromDate, toDate,
-                    initialCapital, riskPct, 0.005, 0.65,
+                    initialCapital, riskPct, 0.0008, 0.65,
                     3, com.fgiaquinta.optionsquant.domain.TimeFrame.MIN_15, true, false,
-                    tpMultiplierDelta, slMultiplierDelta
+                    tpMultiplierDelta, slMultiplierDelta, null,
+                    java.time.LocalTime.of(9, 45),
+                    java.time.LocalTime.of(10, 30),
+                    java.time.LocalTime.of(13, 0)
             );
 
             BacktestReport report = backtestEngine.run(config);

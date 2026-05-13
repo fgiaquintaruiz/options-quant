@@ -1,13 +1,14 @@
 import { NavLink, useLocation, Routes, Route, Navigate } from 'react-router-dom'
-import { Activity, BarChart3, HeartPulse, Settings, ChevronUp, ChevronDown } from 'lucide-react'
+import { Activity, BarChart3, HeartPulse, Settings, History } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
-import { liveApi } from './api'
+import { liveApi, accountApi } from './api'
 import { LS } from './utils/storage'
 import LiveDashboard from './pages/LiveDashboard'
 import BacktestDashboard from './pages/BacktestDashboard'
+import BacktestHistoryPage from './pages/BacktestHistoryPage'
 import HealthPage from './pages/HealthPage'
 import SettingsPage from './pages/SettingsPage'
-import AccountModeChip from './components/AccountModeChip'
+import AccountMenuDropdown from './components/AccountMenuDropdown'
 import { useStorageBackup } from './hooks/useStorageBackup'
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
   const [macroRegime, setMacroRegime]     = useState(null)
   const [macroMomentum, setMacroMomentum] = useState(null)
   const [macroSummary, setMacroSummary]   = useState(null)
+  const [accountMode, setAccountMode]     = useState(null)
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000)
@@ -63,6 +65,12 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    accountApi.getMode()
+      .then((data) => setAccountMode(data?.mode ?? null))
+      .catch(() => { /* silent */ })
+  }, [])
+
+  useEffect(() => {
     if (marketCountdown == null || marketCountdown <= 0) return
     const id = setInterval(() => setMarketCountdown((p) => (p == null ? null : Math.max(0, p - 1))), 1000)
     return () => clearInterval(id)
@@ -100,6 +108,7 @@ export default function App() {
           <div className="nav-compact">
             <NavLink to="/live"     className={({ isActive }) => isActive ? 'active' : ''}><Activity size={14} /> Loving Mode</NavLink>
             <NavLink to="/backtest" className={({ isActive }) => isActive ? 'active' : ''}><BarChart3 size={14} /> Loved Mode</NavLink>
+            <NavLink to="/backtest-history" className={({ isActive }) => isActive ? 'active' : ''}><History size={14} /> History</NavLink>
             <NavLink to="/settings" className={({ isActive }) => isActive ? 'active' : ''}><Settings size={14} /> Config</NavLink>
             <NavLink to="/health"   className={({ isActive }) => isActive ? 'active' : ''}><HeartPulse size={14} /> Health</NavLink>
           </div>
@@ -122,19 +131,13 @@ export default function App() {
             </span>
           )}
 
-          {isLive && twsStatus?.accountId && (
-            <>
-              <strong className="pill pill-info hdr-account-id">{twsStatus.accountId}</strong>
-              <AccountModeChip />
-              {twsStatus.balance > 0 && (
-                <strong className="color-success hdr-balance">${Number(twsStatus.balance).toLocaleString()}</strong>
-              )}
-            </>
+          {isLive && (
+            <AccountMenuDropdown
+              twsStatus={twsStatus}
+              accountMode={accountMode}
+              now={now}
+            />
           )}
-
-          <span className={`badge ${twsStatus?.connected ? 'badge-success' : 'badge-error'}`}>
-            {twsStatus?.connected ? '🔌 TWS' : '🔐 TWS'}
-          </span>
 
           <span className="color-muted hdr-clock">
             {now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
@@ -146,6 +149,7 @@ export default function App() {
         <Route path="/"        element={<Navigate to="/live" replace />} />
         <Route path="/live"    element={<LiveDashboard twsStatus={twsStatus} marketOpen={marketOpen} />} />
         <Route path="/backtest" element={<BacktestDashboard />} />
+        <Route path="/backtest-history" element={<BacktestHistoryPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/health"  element={<HealthPage />} />
         <Route path="*"        element={<Navigate to="/live" replace />} />

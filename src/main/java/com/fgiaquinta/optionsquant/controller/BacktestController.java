@@ -48,7 +48,7 @@ public class BacktestController {
             @RequestParam(required = false) String tickers,
             @RequestParam(defaultValue = "50000") double initialCapital,
             @RequestParam(defaultValue = "0.02") double riskPct,
-            @RequestParam(defaultValue = "0.005") double slippagePct,
+            @RequestParam(defaultValue = "0.0008") double slippagePct,
             @RequestParam(defaultValue = "0.65") double commission,
             @RequestParam(defaultValue = "3") int maxConcurrent,
             @RequestParam(defaultValue = "MIN_15") TimeFrame execTimeframe
@@ -66,7 +66,10 @@ public class BacktestController {
                 tickerList, fromDate, toDate,
                 initialCapital, riskPct, slippagePct, commission,
                 maxConcurrent, execTimeframe, true, false,
-                0.0, 0.0
+                0.0, 0.0, null,
+                java.time.LocalTime.of(9, 45),
+                java.time.LocalTime.of(10, 30),
+                java.time.LocalTime.of(13, 0)
         );
 
         BacktestReport report = backtestEngine.run(config);

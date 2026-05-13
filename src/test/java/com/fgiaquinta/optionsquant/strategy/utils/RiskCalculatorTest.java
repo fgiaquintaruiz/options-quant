@@ -9,12 +9,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.BaseBarSeries;
-import org.ta4j.core.num.DoubleNum;
 
 import java.time.ZonedDateTime;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -54,78 +50,31 @@ class RiskCalculatorTest {
     }
 
     @Test
-    @DisplayName("Should use default multipliers when strategy is unknown or null")
-    void shouldUseCaseDefaultMultipliers() {
-        // ATR should be 2. Entry 1000. Cap = 15.
-        // TP = 1000 + 2.5 * 2 = 1005
-        // SL = 1000 - 2.0 * 2 = 996
-        TradePlan plan = RiskCalculator.generatePlan(mockData, "AAPL", now, true, 1000.0, null);
-        
-        assertThat(plan.takeProfit).isEqualTo(1005.0);
-        assertThat(plan.stopLoss).isEqualTo(996.0);
+    @DisplayName("Fixed-pct targets are independent of strategy name")
+    void fixedPctTargets_areIndependentOfStrategyName() {
+        TradePlan withStrategy = RiskCalculator.generatePlan(mockData, "AAPL", now, true, 1000.0, "c1squeezecall");
+        TradePlan withNull     = RiskCalculator.generatePlan(mockData, "AAPL", now, true, 1000.0, (String) null);
+
+        assertThat(withStrategy.takeProfit).isEqualTo(withNull.takeProfit);
+        assertThat(withStrategy.stopLoss).isEqualTo(withNull.stopLoss);
     }
 
     @Test
-    @DisplayName("Should cap Take Profit distance at MAX_TARGET_PCT")
-    void shouldCapTargetAtMaxPct() {
-        // High volatility bars (TR=50)
-        for (int i = 0; i < 20; i++) {
-            series1h.addBar(now.plusHours(i + 1), 100, 150, 50, 100, 1000);
-        }
-        ZonedDateTime future = now.plusHours(20);
-        when(mockData.getIndexForTime(series1h, future)).thenReturn(series1h.getEndIndex());
-
-        double entryPrice = 100.0;
-        TradePlan plan = RiskCalculator.generatePlan(mockData, "AAPL", future, true, entryPrice);
-        
-        // 1.5% cap on 100 is 1.5
-        assertThat(plan.takeProfit).isEqualTo(101.5);
-    }
-
-    @Test
-    @DisplayName("Should apply strategy-specific multipliers for C1 Squeeze Call")
-    void shouldApplyC1SpecificMultipliers() {
-        // ATR = 2. Entry 1000. Cap = 15.
-        // C1 TP = 3.5 * 2 = 7. TP = 1007.
-        // C1 SL = 2.5 * 2 = 5. SL = 995.
-        TradePlan plan = RiskCalculator.generatePlan(mockData, "AAPL", now, true, 1000.0, "c1squeezecall");
-        
-        assertThat(plan.takeProfit).isEqualTo(1007.0);
-        assertThat(plan.stopLoss).isEqualTo(995.0);
-    }
-
-    @Test
-    @DisplayName("resolveMultiplierMapKey maps spaced getName() to suffixed static map keys")
-    void resolveMultiplierMapKeyMapsSpacedNames() {
-        assertThat(RiskCalculator.resolveMultiplierMapKey("p5 continuation", false)).isEqualTo("p5continuationput");
-        assertThat(RiskCalculator.resolveMultiplierMapKey("c1 squeeze", true)).isEqualTo("c1squeezecall");
-    }
-
-    @Test
-    @DisplayName("Spaced strategy name matches same multipliers as compact map key")
-    void spacedNameMatchesCompactKey() {
-        TradePlan spaced = RiskCalculator.generatePlan(mockData, "AAPL", now, false, 1000.0, "p5 continuation");
-        TradePlan compact = RiskCalculator.generatePlan(mockData, "AAPL", now, false, 1000.0, "p5continuationput");
-        assertThat(spaced.takeProfit).isEqualTo(compact.takeProfit);
-        assertThat(spaced.stopLoss).isEqualTo(compact.stopLoss);
-    }
-
-    @Test
-    @DisplayName("Per-ticker profile overrides replace global map multipliers")
-    void profileOverridesBeatGlobalMaps() {
-        TradePlan fromMap = RiskCalculator.generatePlan(mockData, "AAPL", now, true, 1000.0, "c1squeezecall", null);
+    @DisplayName("Fixed-pct targets are independent of TickerStrategyProfile")
+    void fixedPctTargets_areIndependentOfProfile() {
+        TradePlan noProfile = RiskCalculator.generatePlan(mockData, "AAPL", now, true, 1000.0, "c1squeezecall", null);
 
         TickerStrategyProfile profile = new TickerStrategyProfile("AAPL", "c1 squeeze call");
         profile.tpAtrMultOverride = 9.0;
         profile.slAtrMultOverride = 8.0;
 
-        TradePlan overridden = RiskCalculator.generatePlan(mockData, "AAPL", now, true, 1000.0, "c1squeezecall", profile);
-        assertThat(overridden.takeProfit).isNotEqualTo(fromMap.takeProfit);
-        assertThat(overridden.stopLoss).isNotEqualTo(fromMap.stopLoss);
+        TradePlan withProfile = RiskCalculator.generatePlan(mockData, "AAPL", now, true, 1000.0, "c1squeezecall", profile);
+        assertThat(withProfile.takeProfit).isEqualTo(noProfile.takeProfit);
+        assertThat(withProfile.stopLoss).isEqualTo(noProfile.stopLoss);
     }
 
     @Test
-    @DisplayName("Null profile matches explicit null — same as global maps only")
+    @DisplayName("Null profile matches explicit null — fixed-pct produces same targets")
     void nullProfileMatchesOmittedProfile() {
         TradePlan a = RiskCalculator.generatePlan(mockData, "AAPL", now, true, 1000.0, "c1squeezecall", null);
         TradePlan b = RiskCalculator.generatePlan(mockData, "AAPL", now, true, 1000.0, "c1squeezecall");
@@ -134,15 +83,82 @@ class RiskCalculatorTest {
     }
 
     @Test
-    @DisplayName("Retest SL delta widens stop for calls")
-    void retestSlDeltaWidensCallStop() {
+    @DisplayName("setRetestMultiplierDeltas is a no-op — targets remain fixed")
+    void retestMultiplierDeltas_areNoOp() {
         TradePlan baseline = RiskCalculator.generatePlan(mockData, "AAPL", now, true, 1000.0, null);
         RiskCalculator.setRetestMultiplierDeltas(0, 0.5);
         try {
             TradePlan trial = RiskCalculator.generatePlan(mockData, "AAPL", now, true, 1000.0, null);
-            assertThat(trial.stopLoss).isLessThan(baseline.stopLoss);
+            assertThat(trial.stopLoss).isEqualTo(baseline.stopLoss);
+            assertThat(trial.takeProfit).isEqualTo(baseline.takeProfit);
         } finally {
             RiskCalculator.clearRetestMultiplierDeltas();
         }
+    }
+
+    // ── Fixed-percentage TP/SL tests (new business rule) ──────────────────────
+
+    @Test
+    @DisplayName("calculateTargets_forCall_tpIs067pctAboveEntry")
+    void calculateTargets_forCall_tpIs067pctAboveEntry() {
+        double entryPrice = 100.0;
+        TradePlan plan = RiskCalculator.generatePlan(mockData, "AAPL", now, true, entryPrice);
+
+        double expectedTp = Math.round(entryPrice * (1 + 0.0067) * 100.0) / 100.0;
+        assertThat(plan.takeProfit).isEqualTo(expectedTp);
+    }
+
+    @Test
+    @DisplayName("calculateTargets_forPut_tpIs067pctBelowEntry")
+    void calculateTargets_forPut_tpIs067pctBelowEntry() {
+        double entryPrice = 100.0;
+        TradePlan plan = RiskCalculator.generatePlan(mockData, "AAPL", now, false, entryPrice);
+
+        double expectedTp = Math.round(entryPrice * (1 - 0.0067) * 100.0) / 100.0;
+        assertThat(plan.takeProfit).isEqualTo(expectedTp);
+    }
+
+    @Test
+    @DisplayName("calculateTargets_forCall_slIs033pctBelowEntry")
+    void calculateTargets_forCall_slIs033pctBelowEntry() {
+        double entryPrice = 100.0;
+        TradePlan plan = RiskCalculator.generatePlan(mockData, "AAPL", now, true, entryPrice);
+
+        double expectedSl = Math.round(entryPrice * (1 - 0.0033) * 100.0) / 100.0;
+        assertThat(plan.stopLoss).isEqualTo(expectedSl);
+    }
+
+    @Test
+    @DisplayName("calculateTargets_forPut_slIs033pctAboveEntry")
+    void calculateTargets_forPut_slIs033pctAboveEntry() {
+        double entryPrice = 100.0;
+        TradePlan plan = RiskCalculator.generatePlan(mockData, "AAPL", now, false, entryPrice);
+
+        double expectedSl = Math.round(entryPrice * (1 + 0.0033) * 100.0) / 100.0;
+        assertThat(plan.stopLoss).isEqualTo(expectedSl);
+    }
+
+    @Test
+    @DisplayName("calculateTargets_callAndPut_sameTpPctDistanceFromEntry")
+    void calculateTargets_callAndPut_sameTpPctDistanceFromEntry() {
+        double entryPrice = 100.0;
+        TradePlan callPlan = RiskCalculator.generatePlan(mockData, "AAPL", now, true, entryPrice);
+        TradePlan putPlan  = RiskCalculator.generatePlan(mockData, "AAPL", now, false, entryPrice);
+
+        double callTpPct = (callPlan.takeProfit - entryPrice) / entryPrice;
+        double putTpPct  = (entryPrice - putPlan.takeProfit) / entryPrice;
+        assertThat(callTpPct).isEqualTo(putTpPct, org.assertj.core.api.Assertions.within(1e-9));
+    }
+
+    @Test
+    @DisplayName("calculateTargets_callAndPut_sameSlPctDistanceFromEntry")
+    void calculateTargets_callAndPut_sameSlPctDistanceFromEntry() {
+        double entryPrice = 100.0;
+        TradePlan callPlan = RiskCalculator.generatePlan(mockData, "AAPL", now, true, entryPrice);
+        TradePlan putPlan  = RiskCalculator.generatePlan(mockData, "AAPL", now, false, entryPrice);
+
+        double callSlPct = (entryPrice - callPlan.stopLoss) / entryPrice;
+        double putSlPct  = (putPlan.stopLoss - entryPrice) / entryPrice;
+        assertThat(callSlPct).isEqualTo(putSlPct, org.assertj.core.api.Assertions.within(1e-9));
     }
 }

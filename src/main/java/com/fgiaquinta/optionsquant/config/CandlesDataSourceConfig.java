@@ -61,15 +61,21 @@ public class CandlesDataSourceConfig {
 
         // NOTE: SQLite JDBC (3.x) rejects Connection.setReadOnly() after connection creation.
         // HikariCP's setReadOnly(true) triggers this call and will fail. Instead, we use a
-        // larger pool (8 connections) for read-heavy workloads without enforcing JDBC-level
-        // read-only. In WAL mode, concurrent readers don't block writers; read-only discipline
+        // larger pool for read-heavy workloads without enforcing JDBC-level read-only.
+        // In WAL mode, concurrent readers don't block writers; read-only discipline
         // is enforced at the SQL level (only SELECT queries on this pool).
+        //
+        // Pool sizing rationale for --backtest-all:
+        //   BacktestEngine opens one JDBC connection per TimeFrame (4) per worker thread.
+        //   default-max-concurrent-scans = 4 workers → 4 workers × 4 TimeFrames = 16
+        //   simultaneous open connections in the worst case. Pool = 16 + 4 buffer = 20.
+        //   Previous value of 8 caused exhaustion: active=8, waiting=3 under full load.
         HikariConfig cfg = new HikariConfig();
         cfg.setDriverClassName("org.sqlite.JDBC");
         // busy_timeout in the URL is applied by the JDBC driver at connection-open time,
         // BEFORE any PRAGMA runs. This prevents SQLITE_BUSY during concurrent pool init.
         cfg.setJdbcUrl("jdbc:sqlite:" + dbPath + "?busy_timeout=30000");
-        cfg.setMaximumPoolSize(8);
+        cfg.setMaximumPoolSize(20);
         cfg.setMinimumIdle(1);
         cfg.setPoolName("candles-read");
         cfg.setConnectionInitSql("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=30000;");

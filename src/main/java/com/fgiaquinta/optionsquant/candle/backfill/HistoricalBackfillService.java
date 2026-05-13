@@ -5,6 +5,7 @@ import com.fgiaquinta.optionsquant.candle.CandleRepository;
 import com.fgiaquinta.optionsquant.domain.Candle;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.service.IbkrService;
+import com.fgiaquinta.optionsquant.service.MarketCalendarService;
 import com.fgiaquinta.optionsquant.service.TickerService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
@@ -65,6 +67,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
     private final BackfillPeriod liveTailPeriod;
     private final TickerService tickerService;
     private final BackfillProgressTracker progressTracker;
+    private final MarketCalendarService marketCalendarService;
 
     @Autowired
     public HistoricalBackfillService(
@@ -78,7 +81,8 @@ public class HistoricalBackfillService implements ApplicationRunner {
             @Value("${ibkr.vix-tickers:#{T(java.util.Collections).emptyList()}}") List<String> vixTickers,
             BackfillProperties backfillProperties,
             @Autowired(required = false) TickerService tickerService,
-            BackfillProgressTracker progressTracker) {
+            BackfillProgressTracker progressTracker,
+            MarketCalendarService marketCalendarService) {
 
         this.repository = repository;
         this.checkpoint = checkpoint;
@@ -92,6 +96,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
         this.liveTailPeriod = backfillProperties.livetailPeriod();
         this.tickerService = tickerService;
         this.progressTracker = progressTracker;
+        this.marketCalendarService = marketCalendarService;
 
         log.info("HistoricalBackfillService initialized: {} tickers, rate={} req/s, startYear={}, periods={} (live_tail={})",
                 tickers.size(), ratePerSecond, startYear, this.periods.size(),
@@ -108,7 +113,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
             YfinanceHistoricalClient yfinanceClient,
             List<String> vixTickers) {
         this(repository, checkpoint, ibkrService, rateLimiter, tickers, backfillStart,
-                yfinanceClient, vixTickers, List.of(), null);
+                yfinanceClient, vixTickers, List.of(), null, null);
     }
 
     HistoricalBackfillService(
@@ -122,7 +127,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
             List<String> vixTickers,
             List<BackfillPeriod> periods) {
         this(repository, checkpoint, ibkrService, rateLimiter, tickers, backfillStart,
-                yfinanceClient, vixTickers, periods, null);
+                yfinanceClient, vixTickers, periods, null, null);
     }
 
     HistoricalBackfillService(
@@ -136,6 +141,22 @@ public class HistoricalBackfillService implements ApplicationRunner {
             List<String> vixTickers,
             List<BackfillPeriod> periods,
             TickerService tickerService) {
+        this(repository, checkpoint, ibkrService, rateLimiter, tickers, backfillStart,
+                yfinanceClient, vixTickers, periods, tickerService, null);
+    }
+
+    HistoricalBackfillService(
+            CandleRepository repository,
+            BackfillCheckpoint checkpoint,
+            IbkrService ibkrService,
+            RateLimiter rateLimiter,
+            List<String> tickers,
+            ZonedDateTime backfillStart,
+            YfinanceHistoricalClient yfinanceClient,
+            List<String> vixTickers,
+            List<BackfillPeriod> periods,
+            TickerService tickerService,
+            MarketCalendarService marketCalendarService) {
 
         this.repository = repository;
         this.checkpoint = checkpoint;
@@ -151,6 +172,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
         this.liveTailPeriod = deriveLiveTailFromPeriods(this.periods);
         this.tickerService = tickerService;
         this.progressTracker = new BackfillProgressTracker(10);
+        this.marketCalendarService = marketCalendarService;
     }
 
     private static BackfillPeriod deriveLiveTailFromPeriods(List<BackfillPeriod> periods) {
@@ -175,6 +197,10 @@ public class HistoricalBackfillService implements ApplicationRunner {
         log.info("=== Historical Backfill START — {} tickers, from {} ===",
                 effectiveTickers.size(), backfillStart.toLocalDate());
 
+        // Check market open status ONCE before processing any live_tail chunks.
+        // Historical chunks are always downloaded regardless of market hours.
+        boolean marketOpen = isLiveTailMarketOpen(effectiveTickers);
+
         long wallStart = System.currentTimeMillis();
         int totalCandles = 0;
 
@@ -190,7 +216,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
             int tickersDone = 0;
 
             for (String ticker : effectiveTickers) {
-                int candles = backfillTickerTimeframe(ticker, tf);
+                int candles = backfillTickerTimeframe(ticker, tf, marketOpen);
                 phaseCandles += candles;
                 tickersDone++;
                 progressTracker.recordTicker();
@@ -202,7 +228,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
             // alongside the DAY_1 phase so a partial run still captures them.
             if (tf == TimeFrame.DAY_1) {
                 for (String vixTicker : vixTickers) {
-                    int candlesForVix = backfillTickerYfinanceOnly(vixTicker);
+                    int candlesForVix = backfillTickerYfinanceOnly(vixTicker, marketOpen);
                     phaseCandles += candlesForVix;
                     log.info("  [backfill] {} (VIX) complete — {} candles", vixTicker, candlesForVix);
                 }
@@ -215,6 +241,25 @@ public class HistoricalBackfillService implements ApplicationRunner {
         long elapsed = System.currentTimeMillis() - wallStart;
         log.info("=== Historical Backfill DONE — {} tickers, {} candles total, {}s ===",
                 effectiveTickers.size(), totalCandles, elapsed / 1000);
+    }
+
+    /**
+     * Returns true when the US equity market is currently in regular hours (9:30–16:00 ET,
+     * Mon–Fri, excluding NYSE holidays). Consulted ONCE per run, before any live_tail chunk
+     * is processed. Returns true unconditionally when no live_tail period is configured or
+     * when {@link MarketCalendarService} is not wired (e.g. in some test setups).
+     */
+    private boolean isLiveTailMarketOpen(List<String> effectiveTickers) {
+        if (liveTailPeriod == null || marketCalendarService == null) {
+            return true;
+        }
+        ZonedDateTime nowEt = ZonedDateTime.now(ZoneId.of("America/New_York"));
+        boolean open = marketCalendarService.isRegularMarketHours(nowEt);
+        if (!open) {
+            log.info("[live_tail] Market closed — skipping live_tail phase ({} tickers × {} timeframes)",
+                    effectiveTickers.size(), BACKFILL_PRIORITY_ORDER.size());
+        }
+        return open;
     }
 
     // -------------------------------------------------------------------------
@@ -258,7 +303,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
         return effective;
     }
 
-    private int backfillTickerTimeframe(String ticker, TimeFrame tf) {
+    private int backfillTickerTimeframe(String ticker, TimeFrame tf, boolean marketOpen) {
         int stored = 0;
 
         ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
@@ -280,6 +325,14 @@ public class HistoricalBackfillService implements ApplicationRunner {
             }
 
             ChunkOrigin origin = isChunkInLiveTail(chunkFrom, chunkTo) ? ChunkOrigin.LIVE_TAIL : ChunkOrigin.HISTORICAL;
+
+            if (origin == ChunkOrigin.LIVE_TAIL && !marketOpen) {
+                log.debug("  [live_tail] Skipping {} [{}] {}–{}: market closed",
+                        ticker, tf, chunkFrom.toLocalDate(), chunkTo.toLocalDate());
+                chunkFrom = chunkTo;
+                continue;
+            }
+
             String originTag = origin == ChunkOrigin.LIVE_TAIL ? "[live_tail]" : "[historical]";
             log.info("  [backfill] {} {} [{}] {}–{}: downloading", originTag,
                     ticker, tf, chunkFrom.toLocalDate(), chunkTo.toLocalDate());
@@ -389,7 +442,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
         }
     }
 
-    private int backfillTickerYfinanceOnly(String vixTicker) {
+    private int backfillTickerYfinanceOnly(String vixTicker, boolean marketOpen) {
         int stored = 0;
         ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
         Optional<ZonedDateTime> lastDone = checkpoint.getLastDownloaded(vixTicker, TimeFrame.DAY_1);
@@ -406,6 +459,14 @@ public class HistoricalBackfillService implements ApplicationRunner {
             }
 
             ChunkOrigin origin = isChunkInLiveTail(chunkFrom, chunkTo) ? ChunkOrigin.LIVE_TAIL : ChunkOrigin.HISTORICAL;
+
+            if (origin == ChunkOrigin.LIVE_TAIL && !marketOpen) {
+                log.debug("  [live_tail] Skipping {} (VIX) [DAY_1] {}–{}: market closed",
+                        vixTicker, chunkFrom.toLocalDate(), chunkTo.toLocalDate());
+                chunkFrom = chunkTo;
+                continue;
+            }
+
             String originTag = origin == ChunkOrigin.LIVE_TAIL ? "[live_tail]" : "[historical]";
             log.info("  [backfill] {} {} (VIX) [DAY_1] {}–{}: downloading", originTag,
                     vixTicker, chunkFrom.toLocalDate(), chunkTo.toLocalDate());

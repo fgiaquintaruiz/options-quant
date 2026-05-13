@@ -72,8 +72,21 @@ public record TradeRecord(
 
         /**
          * Returns true if this trade was a winner.
+         *
+         * <p>Win/loss is determined by whether the trade hit its directional target (TP)
+         * rather than by net PnL. This correctly handles the case where slippage costs
+         * reduce net PnL below zero even on a TP exit — the trade still reached its target.
+         *
+         * <p>Exit reason mapping:
+         * <ul>
+         *   <li>{@code "TP"} → win (price reached the take-profit target)</li>
+         *   <li>{@code "SL"} → loss (price hit the stop-loss)</li>
+         *   <li>{@code "EOS"} or anything else → determined by net PnL sign (time-based exit)</li>
+         * </ul>
          */
         public boolean isWin() {
+                if ("TP".equals(exitReason)) return true;
+                if ("SL".equals(exitReason)) return false;
                 return netPnl > 0;
         }
 }

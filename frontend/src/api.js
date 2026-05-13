@@ -158,6 +158,18 @@ export const externalPositionsApi = {
     post(`/live-ui/external-positions/${encodeURIComponent(ticker)}/schedule-close-1450`),
 }
 
+// ===== Backtest History API =====
+
+export const backtestHistoryApi = {
+  listRuns: () => get('/api/backtest/runs'),
+  getRunSummary: (runId) => get(`/api/backtest/runs/${encodeURIComponent(runId)}/summary`),
+  getTrades: (runId, params = {}) => {
+    const q = new URLSearchParams(params).toString()
+    return get(`/api/backtest/runs/${encodeURIComponent(runId)}/trades${q ? '?' + q : ''}`)
+  },
+  getLossesAnalysis: (runId) => get(`/api/backtest/runs/${encodeURIComponent(runId)}/losses-analysis`),
+}
+
 // ===== Health API =====
 
 export const healthApi = {

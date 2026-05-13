@@ -252,7 +252,11 @@ public class GridSearchService {
                         request.includeTradePlans(),
                         request.deterministicMode(),
                         tpDelta,
-                        slDelta
+                        slDelta,
+                        null,
+                        java.time.LocalTime.of(9, 45),
+                        java.time.LocalTime.of(10, 30),
+                        java.time.LocalTime.of(13, 0)
                 );
                 long t0 = System.currentTimeMillis();
                 BacktestReport oosRep = backtestEngine.run(oosCfg, false, null);
@@ -400,7 +404,11 @@ public class GridSearchService {
                         request.includeTradePlans(),
                         request.deterministicMode(),
                         tp,
-                        sl
+                        sl,
+                        null,
+                        java.time.LocalTime.of(9, 45),
+                        java.time.LocalTime.of(10, 30),
+                        java.time.LocalTime.of(13, 0)
                 );
 
                 long t0 = System.currentTimeMillis();

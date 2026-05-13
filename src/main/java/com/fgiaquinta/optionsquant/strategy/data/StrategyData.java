@@ -72,12 +72,16 @@ public class StrategyData {
 
     public int getIndexForTime(BarSeries series, ZonedDateTime time) {
         if (series == null || series.isEmpty()) return -1;
-        int endIdx = series.getEndIndex();
-        for (int i = endIdx; i >= Math.max(0, endIdx - 500); i--) {
-            if (!series.getBar(i).getEndTime().isAfter(time)) {
-                return i;
+        int left = 0, right = series.getEndIndex(), result = -1;
+        while (left <= right) {
+            int mid = (left + right) / 2;
+            if (!series.getBar(mid).getEndTime().isAfter(time)) {
+                result = mid;
+                left = mid + 1;
+            } else {
+                right = mid - 1;
             }
         }
-        return -1;
+        return result;
     }
 }

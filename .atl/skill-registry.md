@@ -2,7 +2,7 @@
 
 **Delegator use only.** Reads this registry to resolve compact rules, then injects them directly into sub-agent prompts. Sub-agents do NOT read this registry or individual SKILL.md files.
 
-_Last updated: 2026-05-09_
+_Last updated: 2026-05-13_
 
 ## User Skills
 
@@ -43,6 +43,7 @@ _Last updated: 2026-05-09_
 | Writing Go tests, Bubbletea TUI testing, table-driven tests, golden files | go-testing | `C:\Users\FGIAQUINTA\.claude\skills\go-testing\SKILL.md` |
 | Extract design language from a website URL, design tokens, colors, typography | extract-design | `C:\Users\FGIAQUINTA\.claude\skills\extract-design\SKILL.md` |
 | Language/tone for Rioplatense Spanish, voseo, warm energy English, Gentleman persona | gentleman-language | `C:\Users\FGIAQUINTA\.claude\skills\gentleman-language\SKILL.md` |
+| Configure Claude Desktop project to use claude-bridge, bridge-add setup, filesystem MCP system prompt wiring | bridge-project-setup | `C:\Users\FGIAQUINTA\.claude\skills\bridge-project-setup\SKILL.md` |
 
 ## Compact Rules
 
@@ -335,6 +336,15 @@ _(see security-coder block above — inject that block when touching security-se
 - When correcting: (1) validate the question makes sense, (2) explain WHY technically, (3) show the correct way.
 - CAPS for emphasis. Rhetorical questions to lead explanations.
 - AC always third person: GIVEN/WHEN/THEN/AND. User stories: AS A / I WANT TO / SO THAT.
+
+### bridge-project-setup
+- Filesystem MCP server MUST point to `C:\Users\FGIAQUINTA\claude-bridge` — without it, bridge cannot work.
+- File contract: write prompt → `to-cli.md`; read response ← `from-cli.md`; poll completion → `status.json`.
+- Risk levels: LOW (read-only), MEDIUM (create/write/fix), HIGH (delete/drop/git push/prod/database/migrate).
+- HIGH risk: write to `to-cli.md`, poll `pending-confirm.md`, wait for human `bridge-confirm` before any further action.
+- MCP pre-flight: attempt `write_file` on `mcp-test.tmp` before EVERY real write — abort and warn if it fails.
+- Output: two blocks — Block 1: ready-to-paste system prompt substituting `{PROJECT_NAME}`; Block 2: where to paste.
+- Never execute actions directly — always route through bridge files. Never modify files outside `BRIDGE_DIR`.
 
 ## Project Conventions
 

@@ -75,30 +75,15 @@ class RiskCalculatorTest {
     }
 
     @Test
-    @DisplayName("generatePlan should cap TP distance at MAX_TARGET_PCT of entry")
-    void tpCap() {
-        // Deterministic extreme swings → high ATR so raw TP would exceed cap
-        List<Candle> volatileHour = new ArrayList<>();
-        ZonedDateTime base = ZonedDateTime.of(2026, 4, 9, 9, 30, 0, 0, NY);
-        for (int i = 0; i < 30; i++) {
-            double swing = 10.0 + (i % 5) * 2.0;
-            double open = 500.0 + swing;
-            double close = 500.0 - swing;
-            volatileHour.add(new Candle(base.plusHours(i), open, open + 2, close - 2, close, 1000000));
-        }
+    @DisplayName("generatePlan should use fixed TP_PCT regardless of volatility")
+    void tpIsFixedPct() {
+        StrategyData data = createTestData();
+        ZonedDateTime entryTime = ZonedDateTime.of(2026, 4, 9, 15, 30, 0, 0, NY);
+        double entryPrice = 500.0;
 
-        Map<TimeFrame, List<Candle>> data = new EnumMap<>(TimeFrame.class);
-        data.put(TimeFrame.HOUR_1, volatileHour);
-        List<Candle> filler = List.of(new Candle(base, 500, 501, 499, 500.5, 1000000));
-        data.put(TimeFrame.MIN_5, filler);
-        data.put(TimeFrame.MIN_15, filler);
-        data.put(TimeFrame.DAY_1, filler);
+        TradePlan plan = RiskCalculator.generatePlan(data, "SPY", entryTime, true, entryPrice);
 
-        StrategyData sd = new StrategyData(data);
-        TradePlan plan = RiskCalculator.generatePlan(sd, "SPY", base, true, 500.0);
-
-        // Must match RiskCalculator.MAX_TARGET_PCT (currently 1.5% → $7.50 on $500 entry)
-        double maxTpDist = 500.0 * 0.015;
-        assertThat(plan.takeProfit - plan.entryPrice).isLessThanOrEqualTo(maxTpDist + 0.05);
+        double expectedTpDist = Math.round(entryPrice * RiskCalculator.TP_PCT * 100.0) / 100.0;
+        assertThat(plan.takeProfit - plan.entryPrice).isEqualTo(expectedTpDist, org.assertj.core.api.Assertions.within(0.01));
     }
 }

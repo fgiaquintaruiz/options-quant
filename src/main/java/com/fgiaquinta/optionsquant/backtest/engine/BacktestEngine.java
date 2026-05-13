@@ -15,6 +15,7 @@ import com.fgiaquinta.optionsquant.strategy.model.TradePlan;
 import com.fgiaquinta.optionsquant.strategy.utils.CandlestickPatternDetector;
 import com.fgiaquinta.optionsquant.strategy.utils.RiskCalculator;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -25,6 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -78,6 +80,7 @@ public class BacktestEngine {
 
     private volatile NavigableMap<LocalDate, Double> vixDailyMap = null;
 
+    @Autowired
     public BacktestEngine(
             CandleRepository candleRepository,
             TickerMemory tickerMemory,
@@ -102,6 +105,22 @@ public class BacktestEngine {
                 new com.fgiaquinta.optionsquant.strategy.P5ContinuationPutStrategy(),
                 new com.fgiaquinta.optionsquant.strategy.P6ReversalPutStrategy()
         );
+    }
+
+    /**
+     * Package-private constructor for unit tests.
+     * Allows injecting a controlled strategy list without Spring context.
+     */
+    BacktestEngine(CandleRepository candleRepository,
+                   TickerMemory tickerMemory,
+                   int maxConcurrentScans,
+                   boolean generateTradeCharts,
+                   List<TradingStrategy> strategies) {
+        this.candleRepository = candleRepository;
+        this.tickerMemory = tickerMemory;
+        this.generateTradeCharts = generateTradeCharts;
+        this.maxConcurrentScans = new AtomicInteger(Math.max(1, maxConcurrentScans));
+        this.strategies = List.copyOf(strategies);
     }
 
     /**
@@ -416,11 +435,23 @@ public class BacktestEngine {
 
                         // Process this ticker using its own loaded data
                         Map<String, Map<TimeFrame, List<Candle>>> singleTickerData = Map.of(ticker, tickerData);
+                        long tickerStart = System.currentTimeMillis();
                         TickerResult result = processSingleTicker(
                                 ticker, config, singleTickerData, capitalPerTicker, tradeQueue, vixMap);
+                        long tickerDuration = System.currentTimeMillis() - tickerStart;
 
                         tickerResults.put(ticker, result);
                         newlyProcessed.add(ticker);
+
+                        // Invoke per-ticker callback (for mid-run persistence) if registered.
+                        // Called from worker thread — callback implementation must be thread-safe.
+                        if (config.onTickerComplete() != null) {
+                            try {
+                                config.onTickerComplete().accept(ticker, result.trades);
+                            } catch (Exception callbackEx) {
+                                log.error("onTickerComplete callback failed for {}: {}", ticker, callbackEx.getMessage(), callbackEx);
+                            }
+                        }
 
                         if (progressCallback != null) {
                             progressCallback.onProgress(ticker, "OK", "Completed with " + result.trades.size() + " trades");
@@ -433,9 +464,8 @@ public class BacktestEngine {
                             saveCheckpoint(new ArrayList<>(allProcessedNow));
                         }
 
-                        log.info("[{}/{}] Completed ticker: {} - {} trades, PnL=${}",
-                                idx, totalRemaining, ticker, result.trades.size(),
-                                String.format("%.2f", result.trades.stream().mapToDouble(TradeRecord::netPnl).sum()));
+                        log.info("[{}/{}] DONE {} — 12 strategies, {} trades, {}ms",
+                                idx, totalRemaining, ticker, result.trades.size(), tickerDuration);
                     } catch (Exception e) {
                         log.error("Failed to process ticker {}: {}", ticker, e.getMessage(), e);
                         tickerResults.put(ticker, new TickerResult(List.of(), List.of(), 0));
@@ -653,9 +683,33 @@ public class BacktestEngine {
                 equityCurve.add(new BacktestReport.EquityPoint(candleTime, equity));
             }
 
-            // Run strategies if we have room
-            if (openPositions.size() < config.maxConcurrentTrades()) {
-                ZonedDateTime nyTime = candleTime.withZoneSameInstant(NY);
+            // ---------------------------------------------------------------
+            // FORCED CLOSE — the course author's method: close all positions at 1:00 PM ET
+            // Evaluated BEFORE new entries: a candle at exactly 13:00 closes
+            // existing positions but also prevents new ones (window already closed).
+            // ---------------------------------------------------------------
+            ZonedDateTime nyTime = candleTime.withZoneSameInstant(NY);
+            LocalTime etTime = nyTime.toLocalTime();
+            if (!etTime.isBefore(config.forcedCloseTime()) && !openPositions.isEmpty()) {
+                Iterator<OpenPosition> forceIt = openPositions.iterator();
+                while (forceIt.hasNext()) {
+                    OpenPosition pos = forceIt.next();
+                    TradeRecord trade = closePosition(ticker, pos, currentCandle.close(), candleTime, "FORCED", fillEngine);
+                    trades.add(trade);
+                    tradeQueue.offer(trade);
+                    forceIt.remove();
+                }
+            }
+
+            // ---------------------------------------------------------------
+            // ENTRY WINDOW FILTER — the course author's method: only enter 9:45–10:30 AM ET
+            // The window is [entryWindowStart, entryWindowEnd) — inclusive start, exclusive end.
+            // C4/P4 (9:30–9:35 ET) and C5/P5 (9:45–9:55 ET) keep their own internal
+            // sniper filters unchanged — they are more restrictive than this global gate.
+            // ---------------------------------------------------------------
+            if (openPositions.size() < config.maxConcurrentTrades()
+                    && !etTime.isBefore(config.entryWindowStart())
+                    && etTime.isBefore(config.entryWindowEnd())) {
                 runStrategies(ticker, data, nyTime, currentCandle, candleTime,
                         config, equity, openPositions, fillEngine, vixMap);
             }
@@ -976,10 +1030,14 @@ public class BacktestEngine {
                 TickerStrategyProfile profile = tickerMemory.getStrategyProfile(ticker, strategy.getName());
                 TradePlan plan = RiskCalculator.generatePlan(data, ticker, time, isCall, entryPrice, strategy.getName(), profile);
                 double riskPerContract = Math.abs(entryPrice - plan.stopLoss) * 100;
-                double maxRisk = equity * config.riskPerTradePct();
+                // Use fixed total capital (not dynamic per-ticker equity) to keep maxRisk
+                // constant at $50k × 2% = $1,000 per trade regardless of equity fluctuation.
+                double maxRisk = config.initialCapital() * config.riskPerTradePct();
 
                 int qty = riskPerContract > 0 ? (int) Math.floor(maxRisk / riskPerContract) : 0;
-                qty = Math.max(1, Math.min(qty, 10));
+                qty = Math.min(qty, 10);
+                // Skip signal if risk budget is too small to afford even 1 contract.
+                if (qty <= 0) continue;
 
                 FillResult entryFill = fillEngine.fillEntry(ticker, isCall ? "CALL" : "PUT", qty, plan, time);
 
