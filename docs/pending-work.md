@@ -178,6 +178,24 @@ loguee `WARN` con mensaje claro si alguno falla.
 
 ---
 
+## Universe Expansion — Tickers Stooq extra 🔜 DEFERRED
+
+### Contexto
+El import de Stooq DAY_1 (2026-05-15) trajo ~11,881 tickers a `candles.db`.
+`load_tickers` en `massive_import.py` filtra a los ~510 tickers configurados (MIN_5/HOUR_1).
+Quedan ~11,371 tickers adicionales con datos DAY_1 históricos (desde 1984) sin MIN_5/MIN_15.
+
+### Pendiente
+Evaluar precio por ticker y potencial ganancia antes de expandir el universo de descarga.
+Si la evaluación es positiva: cambiar `load_tickers` para incluir tickers DAY_1-only,
+luego correr `massive_import.py` con el universo completo (~11,881 tickers, ~28,500 requests, ~95 horas).
+
+### Prerequisito
+- Análisis de viabilidad: ¿qué % de los 11,371 tickers extra tienen liquidez/volumen suficiente?
+- Decisión de si vale la tarifa de Massive (actualmente free plan = 5 req/min)
+
+---
+
 ## Instrucción para próxima sesión
 
 Al iniciar sesión, leer este archivo primero:
