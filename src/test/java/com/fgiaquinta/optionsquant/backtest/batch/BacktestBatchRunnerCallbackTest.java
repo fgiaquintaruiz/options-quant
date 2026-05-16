@@ -86,7 +86,10 @@ class BacktestBatchRunnerCallbackTest {
     void setUp() {
         runner = new BacktestBatchRunner(
                 backtestEngine, csvWriter, readJdbc,
-                persistenceService, lineReader);
+                persistenceService, lineReader) {
+            @Override
+            protected void exit(int code) { /* no-op: prevent System.exit in tests */ }
+        };
     }
 
     // -------------------------------------------------------------------------

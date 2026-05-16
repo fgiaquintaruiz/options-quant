@@ -153,6 +153,57 @@ public class BacktestPersistenceService {
     }
 
     /**
+     * Counts and then deletes all rows from backtest_trades and backtest_progress,
+     * then runs VACUUM to reclaim disk space.
+     *
+     * <p>Row counts are queried BEFORE the deletes so the log line reflects real data.
+     * If a table doesn't exist the operation is skipped for that table (logs a warning).
+     * VACUUM failure is non-fatal — logged as a warning and execution continues.
+     *
+     * @return a {@link DeleteResult} with the row counts deleted from each table
+     * @throws RuntimeException if either DELETE fails (caller should abort the backtest)
+     */
+    public DeleteResult deleteAllData() {
+        int trades = 0;
+        int progress = 0;
+
+        try {
+            Integer t = writeJdbc.queryForObject("SELECT COUNT(*) FROM backtest_trades", Integer.class);
+            trades = t != null ? t : 0;
+        } catch (Exception e) {
+            log.warn("[backtest-persistence] backtest_trades not found, skipping delete");
+            return new DeleteResult(0, 0);
+        }
+
+        try {
+            Integer p = writeJdbc.queryForObject("SELECT COUNT(*) FROM backtest_progress", Integer.class);
+            progress = p != null ? p : 0;
+        } catch (Exception e) {
+            log.warn("[backtest-persistence] backtest_progress not found, skipping delete");
+        }
+
+        writeJdbc.execute("DELETE FROM backtest_trades");
+        writeJdbc.execute("DELETE FROM backtest_progress");
+
+        try {
+            writeJdbc.execute("VACUUM");
+            log.info("[backtest] VACUUM completed");
+        } catch (Exception e) {
+            log.warn("[backtest] VACUUM failed: {} — continuing", e.getMessage());
+        }
+
+        return new DeleteResult(trades, progress);
+    }
+
+    /**
+     * Row counts from a {@link #deleteAllData()} operation.
+     *
+     * @param trades   rows deleted from backtest_trades
+     * @param progress rows deleted from backtest_progress
+     */
+    public record DeleteResult(int trades, int progress) {}
+
+    /**
      * Persists all trades for one ticker + marks its progress as COMPLETE — in a single transaction.
      *
      * <p>If the transaction fails, no partial data is committed.

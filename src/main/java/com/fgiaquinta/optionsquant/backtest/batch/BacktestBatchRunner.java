@@ -17,6 +17,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -126,6 +128,14 @@ public class BacktestBatchRunner implements ApplicationRunner {
         this.lineReader = () -> "n";
     }
 
+    /**
+     * Wraps {@link System#exit} so tests can subclass and intercept without
+     * actually terminating the JVM.
+     */
+    protected void exit(int code) {
+        System.exit(code);
+    }
+
     @Override
     public void run(ApplicationArguments args) {
         if (!args.containsOption("backtest-all")) {
@@ -133,7 +143,41 @@ public class BacktestBatchRunner implements ApplicationRunner {
             return;
         }
 
+        // --backtest-fresh / --backtest-fresh-force: wipe DB before running
+        if (persistenceService != null
+                && (args.containsOption("backtest-fresh") || args.containsOption("backtest-fresh-force"))) {
+            boolean force = args.containsOption("backtest-fresh-force");
+            log.info("[backtest] --backtest-fresh{} detected", force ? "-force" : "");
+
+            if (!force) {
+                String answer = readConfirmation();
+                if (answer == null) {
+                    // No interactive console and no force flag
+                    log.error("[backtest] No interactive console. Use --backtest-fresh-force for non-interactive environments.");
+                    exit(1);
+                    return;
+                }
+                if (!"yes".equals(answer)) {
+                    log.info("[backtest] Aborted by user.");
+                    exit(1);
+                    return;
+                }
+            }
+
+            log.info("[backtest] Cleaning previous data...");
+            try {
+                BacktestPersistenceService.DeleteResult result = persistenceService.deleteAllData();
+                log.info("[backtest] Deleted {} trades and {} progress entries",
+                        result.trades(), result.progress());
+            } catch (Exception e) {
+                log.error("[backtest] Failed to delete backtest data: {} — aborting.", e.getMessage(), e);
+                exit(1);
+                return;
+            }
+        }
+
         log.info("[backtest] === Batch backtest START (--backtest-all) ===");
+        Instant startTime = Instant.now();
 
         // Phase 2: initialize schema
         if (persistenceService != null) {
@@ -172,8 +216,8 @@ public class BacktestBatchRunner implements ApplicationRunner {
                     log.info("[backtest] [--backtest-resume] No incomplete run found — starting fresh {} — {} tickers",
                             runId, tickers.size());
                 }
-            } else if (args.containsOption("backtest-fresh")) {
-                // --backtest-fresh flag: always start fresh without prompting stdin
+            } else if (args.containsOption("backtest-fresh") || args.containsOption("backtest-fresh-force")) {
+                // --backtest-fresh / --backtest-fresh-force: DB was already wiped above; always start a new run
                 runId = newRunId();
                 tickers = new ArrayList<>(allTickers);
                 log.info("[backtest] [--backtest-fresh] Starting fresh run {} — {} tickers", runId, tickers.size());
@@ -233,16 +277,111 @@ public class BacktestBatchRunner implements ApplicationRunner {
         log.info("[backtest] DONE — {} tickers, {} trades, elapsed: {}m {}s",
                 tickers.size(), report != null ? report.totalTrades() : 0, minutes, seconds);
         csvWriter.write(results);
+
+        Instant endTime = Instant.now();
+        Duration runtime = Duration.between(startTime, endTime);
+        RunMetrics metrics = queryRunMetrics(runId);
+
+        double runtimeSecs = runtime.toSeconds() > 0 ? runtime.toSeconds() : 1;
+        double tradesPerSec = metrics.totalTradesLong() / runtimeSecs;
+        double tickersPerMin = tickers.size() / (runtimeSecs / 60.0);
+
         log.info("[backtest] === Batch backtest END ===");
+        log.info("[backtest] Runtime: {}", formatDuration(runtime));
+        log.info("[backtest] Tickers processed: {}", tickers.size());
+        log.info("[backtest] Trades generated: {}", metrics.totalTrades());
+        log.info("[backtest] Throughput: {} trades/sec, {} tickers/min",
+                String.format("%.2f", tradesPerSec),
+                String.format("%.2f", tickersPerMin));
+        log.info("[backtest] Run ID: {}", runId);
+        log.info("[backtest] Total PnL: ${}", metrics.totalPnl());
+
         if (exportService != null) {
             exportService.exportRunToCSV(runId);
         }
-        System.exit(0);
+        exit(0);
     }
+
+    // -------------------------------------------------------------------------
+    // Runtime metrics
+    // -------------------------------------------------------------------------
+
+    /**
+     * Formats a {@link Duration} as "Xm Ys" — always whole minutes and seconds,
+     * never decimal minutes (e.g. "0m 45s", not "0.75m").
+     */
+    static String formatDuration(Duration d) {
+        return d.toMinutesPart() + "m " + d.toSecondsPart() + "s";
+    }
+
+    /**
+     * Queries backtest_trades for aggregate metrics of the given run.
+     * Each query is wrapped in a separate try-catch so a failure in one
+     * does not suppress the other — both degrade gracefully to "N/A".
+     */
+    RunMetrics queryRunMetrics(String runId) {
+        String totalTrades;
+        long totalTradesLong = 0;
+        try {
+            Long count = readJdbc.queryForObject(
+                    "SELECT COUNT(*) FROM backtest_trades WHERE run_id = ?",
+                    Long.class, runId);
+            totalTradesLong = count != null ? count : 0L;
+            totalTrades = String.valueOf(totalTradesLong);
+        } catch (Exception e) {
+            log.warn("[backtest] Could not query totalTrades for run {}: {}", runId, e.getMessage());
+            totalTrades = "N/A";
+        }
+
+        String totalPnl;
+        try {
+            Double pnl = readJdbc.queryForObject(
+                    "SELECT SUM(pnl) FROM backtest_trades WHERE run_id = ?",
+                    Double.class, runId);
+            totalPnl = String.format("%.2f", pnl != null ? pnl : 0.0);
+        } catch (Exception e) {
+            log.warn("[backtest] Could not query totalPnl for run {}: {}", runId, e.getMessage());
+            totalPnl = "N/A";
+        }
+
+        return new RunMetrics(totalTrades, totalTradesLong, totalPnl);
+    }
+
+    /**
+     * Aggregate metrics for a completed backtest run.
+     *
+     * @param totalTrades    string representation ("N/A" on query failure)
+     * @param totalTradesLong numeric value for throughput calculation (0 on failure)
+     * @param totalPnl       formatted PnL string ("N/A" on query failure)
+     */
+    record RunMetrics(String totalTrades, long totalTradesLong, String totalPnl) {}
 
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
+
+    /**
+     * Prompts the user for confirmation before wiping backtest data.
+     *
+     * <p>Tries {@link System#console()} first (interactive terminal); falls back to
+     * {@link #lineReader} for test injection. Returns {@code null} when no interactive
+     * channel is available, signalling the caller to abort with a clear message.
+     *
+     * @return the trimmed answer string, or {@code null} if no console is available
+     */
+    private String readConfirmation() {
+        System.out.println("About to DELETE all backtest data. Type 'yes' to continue:");
+        java.io.Console console = System.console();
+        if (console != null) {
+            String line = console.readLine();
+            return line != null ? line.trim() : "";
+        }
+        try {
+            return lineReader.get().trim();
+        } catch (Exception e) {
+            return null;
+        }
+    }
 
     private String newRunId() {
         return LocalDateTime.now().format(RUN_ID_FMT);
