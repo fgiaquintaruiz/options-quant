@@ -12,7 +12,7 @@ spring:
       poll-interval: 3s
       additional-exclude: "data/**,logs/**,backtest/**"
     livereload:
-      enabled: false  # Not needed - frontend uses Vite HMR
+      enabled: false # Not needed - frontend uses Vite HMR
 
 server:
   port: 9090
@@ -21,7 +21,6 @@ server:
     accesslog:
       enabled: true
       pattern: '%h %l %u %t "%r" %s %b %D'
-
 
 # Micrometer / Actuator
 management:
@@ -50,15 +49,15 @@ ibkr:
   host: 127.0.0.1
   port: 7497 #live is 7496
   # Each value MUST be unique in TWS → Configure → API → Settings (see "Trusted IPs" and client id collisions).
-  data-client-id: 1      # IbkrService (historical / market data requests)
-  orders-client-id: 3   # OrderExecutionService (orders + option chain) — was 2; change if another app uses 3
+  data-client-id: 1 # IbkrService (historical / market data requests)
+  orders-client-id: 3 # OrderExecutionService (orders + option chain) — was 2; change if another app uses 3
   account-client-id: 999 # AccountManager (balance / portfolio)
   sync-timeout: 30
   auto-execute: true
   account-id: "DUN598216"
   default-qty: 10
   risk-per-trade-pct: 0.02
-  hot-ticker-count: 20  # Used when hot-tickers is empty: top N CSV names by market cap (see TickerService)
+  hot-ticker-count: 20 # Used when hot-tickers is empty: top N CSV names by market cap (see TickerService)
   tickers: AAPL,MSFT
   vix-tickers:
     - "^VIX"
@@ -67,9 +66,9 @@ ibkr:
 telegram:
   enabled: true
   bot-token: ${TELEGRAM_BOT_TOKEN:}
-  chat-id: "REDACTED_CHAT_ID"      # Replace with your chat ID
-  webhook-secret: "REDACTED_WEBHOOK_SECRET"  # Secret to validate webhook requests (min 32 chars)
-  master-key: "REDACTED_MASTER_KEY"  # Master key for secure order signatures (min 32 chars)
+  chat-id: "REDACTED_CHAT_ID" # Replace with your chat ID
+  webhook-secret: "REDACTED_WEBHOOK_SECRET" # Secret to validate webhook requests (min 32 chars)
+  master-key: "REDACTED_MASTER_KEY" # Master key for secure order signatures (min 32 chars)
 
 # Live strategy scan: AUTO leaves CPU headroom for IDE/OS; HYBRID orders non-hot tickers by fundamentals + ticker memory
 scanner:
@@ -82,8 +81,8 @@ scanner:
   hybrid-fundamental-weight: 0.65
   hybrid-memory-weight: 0.35
   # Exclusive IBKR scan lock: only one scanAll at a time (see StrategyScannerService)
-  exclusive-scan-scheduler-lock-wait-ms: 5000   # Startup/cron tryLock; skip scan if busy after this
-  live-preempt-wait-ms: 60000                 # Live manual scan: max wait for other scan to release lock after stopDownloads
+  exclusive-scan-scheduler-lock-wait-ms: 5000 # Startup/cron tryLock; skip scan if busy after this
+  live-preempt-wait-ms: 60000 # Live manual scan: max wait for other scan to release lock after stopDownloads
 
 backtest:
   default-max-concurrent-scans: 4
@@ -106,7 +105,7 @@ ticker:
 
 # Backtest CLI Configuration
 backtest-cli:
-  enabled: false  # Enable interactive backtest analysis menu (disabled by default - use for manual analysis only)
+  enabled: false # Enable interactive backtest analysis menu (disabled by default - use for manual analysis only)
 
 # Live Replay Mode: historical candle replay through the live scanner pipeline.
 # Purpose: tune E2E detection outside US market hours. Orders DO fire to TWS paper.
@@ -115,7 +114,7 @@ replay:
   max-orders-per-minute: 10
   jitter-ms-min: 100
   jitter-ms-max: 800
-  signals-file-pattern: "data/replay-signals-%s-%s.jsonl"  # %s %s = date, runId
+  signals-file-pattern: "data/replay-signals-%s-%s.jsonl" # %s %s = date, runId
 
 yahoo:
   finance:
@@ -129,20 +128,22 @@ analytics:
 candles:
   store: sqlite
   backfill:
-    rate-per-second: 0.1   # 1 TWS historical request per 10s (safe default within 60 req/10min limit)
-    start-year: 2007        # Earliest year to backfill from (2007 covers the Sep-2008 crisis period)
-    progress-log-every-n-tickers: 10  # Emit a progress log line every N tickers per timeframe phase (R2.1)
+    rate-per-second: 0.1 # 1 TWS historical request per 10s (safe default within 60 req/10min limit)
+    start-year: 2023 # Earliest year to backfill from (2007 covers the Sep-2008 crisis period)
+    progress-log-every-n-tickers: 10 # Emit a progress log line every N tickers per timeframe phase (R2.1)
     yfinance:
       enabled: true
-      cutoff-years: 0   
+      cutoff-years: 0
     periods:
-      - from: "2008-09"
-        to: "2009-03"
-      - from: "2018-01"
-        to: "2018-03"
-      - from: "2019-01"
-        to: "2019-12"
-      - from: "2020-02"
-        to: "2020-05"
-      - from: "2022-01"
-        to: "2022-11"
+      - from: "2023-01"
+        to: "2024-05"
+      #- from: "2008-09"
+      #  to: "2009-03"
+      #- from: "2018-01"
+      #  to: "2018-03"
+      #- from: "2019-01"
+      #  to: "2019-12"
+      #- from: "2020-02"
+      #  to: "2020-05"
+      #- from: "2022-01"
+      #  to: "2022-11"
