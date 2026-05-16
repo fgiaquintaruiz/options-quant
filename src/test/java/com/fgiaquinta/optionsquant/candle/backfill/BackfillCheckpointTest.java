@@ -31,7 +31,7 @@ class BackfillCheckpointTest extends SqliteTestBase {
 
     @Test
     void getLastDownloaded_noRow_returnsEmpty() {
-        Optional<ZonedDateTime> result = checkpoint.getLastDownloaded("AAPL", TimeFrame.MIN_5);
+        Optional<ZonedDateTime> result = checkpoint.getLastDownloaded("AAPL", TimeFrame.MIN_5, ChunkOrigin.HISTORICAL);
 
         assertTrue(result.isEmpty(),
                 "getLastDownloaded must return empty when no row exists for (ticker, tf)");
@@ -46,7 +46,7 @@ class BackfillCheckpointTest extends SqliteTestBase {
         ZonedDateTime ts = ZonedDateTime.of(2024, 6, 15, 10, 30, 0, 0, ZoneOffset.UTC);
 
         checkpoint.save("AAPL", TimeFrame.MIN_5, ts);
-        Optional<ZonedDateTime> result = checkpoint.getLastDownloaded("AAPL", TimeFrame.MIN_5);
+        Optional<ZonedDateTime> result = checkpoint.getLastDownloaded("AAPL", TimeFrame.MIN_5, ChunkOrigin.HISTORICAL);
 
         assertTrue(result.isPresent(), "getLastDownloaded must return a value after save");
         assertEquals(ts.toEpochSecond(), result.get().toEpochSecond(),
@@ -65,7 +65,7 @@ class BackfillCheckpointTest extends SqliteTestBase {
         checkpoint.save("MSFT", TimeFrame.DAY_1, first);
         checkpoint.save("MSFT", TimeFrame.DAY_1, second);
 
-        Optional<ZonedDateTime> result = checkpoint.getLastDownloaded("MSFT", TimeFrame.DAY_1);
+        Optional<ZonedDateTime> result = checkpoint.getLastDownloaded("MSFT", TimeFrame.DAY_1, ChunkOrigin.HISTORICAL);
 
         assertTrue(result.isPresent(), "getLastDownloaded must be present after two saves");
         assertEquals(second.toEpochSecond(), result.get().toEpochSecond(),
@@ -201,7 +201,7 @@ class BackfillCheckpointTest extends SqliteTestBase {
         ZonedDateTime ts = ZonedDateTime.of(2024, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
         checkpoint.save("KNOWN", TimeFrame.HOUR_1, ts);
 
-        Optional<ZonedDateTime> result = checkpoint.getLastDownloaded("UNKNOWN", TimeFrame.HOUR_1);
+        Optional<ZonedDateTime> result = checkpoint.getLastDownloaded("UNKNOWN", TimeFrame.HOUR_1, ChunkOrigin.HISTORICAL);
 
         assertFalse(result.isPresent(),
                 "getLastDownloaded must return empty for a ticker with no saved checkpoint");

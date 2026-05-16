@@ -65,16 +65,16 @@ public class BackfillCheckpoint {
     }
 
     /**
-     * Retrieves the last successfully downloaded timestamp for a ticker+timeframe.
+     * Retrieves the last successfully downloaded timestamp for a ticker+timeframe+origin.
      *
      * @return Optional containing the ZonedDateTime in UTC, or empty if no progress exists.
      */
-    public Optional<ZonedDateTime> getLastDownloaded(String ticker, TimeFrame tf) {
-        String sql = "SELECT last_chunk_end_ts FROM download_progress WHERE ticker = ? AND timeframe = ?";
+    public Optional<ZonedDateTime> getLastDownloaded(String ticker, TimeFrame tf, ChunkOrigin origin) {
+        String sql = "SELECT last_chunk_end_ts FROM download_progress WHERE ticker = ? AND timeframe = ? AND chunk_origin = ?";
         return jdbc.query(sql, (rs, rowNum) -> {
             long epochSeconds = rs.getLong("last_chunk_end_ts");
             return ZonedDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds), ZoneOffset.UTC);
-        }, ticker, tf.name()).stream().findFirst();
+        }, ticker, tf.name(), origin.name()).stream().findFirst();
     }
 
     /**

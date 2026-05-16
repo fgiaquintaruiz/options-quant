@@ -154,9 +154,9 @@ class HistoricalBackfillServiceLiveTailTest {
         // Drive an actual chunk download for AAPL DAY_1 starting near the live_tail
         // so the service emits the live_tail-tagged log line.
         ZonedDateTime nowMinusEpsilon = ZonedDateTime.now(ZoneOffset.UTC).minusDays(2);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(nowMinusEpsilon));
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(ZonedDateTime.now(ZoneOffset.UTC).plusYears(5)));
         when(yfinanceClient.fetchDailyCandles(anyString(), any(), any()))
                 .thenReturn(Collections.emptyList());

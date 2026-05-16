@@ -105,9 +105,9 @@ class HistoricalBackfillServiceMarketClosedTest {
         when(marketCalendarService.isRegularMarketHours(any())).thenReturn(false);
 
         // All historical chunks already done; only the live_tail chunk remains
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(ZonedDateTime.now(ZoneOffset.UTC).minusDays(2)));
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(FUTURE));
 
         HistoricalBackfillService service = buildService(PERIODS_WITH_LIVE_TAIL, marketCalendarService);
@@ -128,9 +128,9 @@ class HistoricalBackfillServiceMarketClosedTest {
         when(marketCalendarService.isRegularMarketHours(any())).thenReturn(false);
 
         // All historical chunks already done; only the live_tail chunk remains
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(ZonedDateTime.now(ZoneOffset.UTC).minusDays(2)));
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(FUTURE));
 
         HistoricalBackfillService service = buildService(PERIODS_WITH_LIVE_TAIL, marketCalendarService);
@@ -157,9 +157,9 @@ class HistoricalBackfillServiceMarketClosedTest {
                 .thenReturn(Collections.emptyList());
 
         // All historical chunks already done; only the live_tail chunk remains
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(ZonedDateTime.now(ZoneOffset.UTC).minusDays(2)));
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(FUTURE));
 
         HistoricalBackfillService service = buildService(PERIODS_WITH_LIVE_TAIL, marketCalendarService);
@@ -178,9 +178,9 @@ class HistoricalBackfillServiceMarketClosedTest {
     void marketCheck_isCalledOncePerRun() throws Exception {
         when(marketCalendarService.isRegularMarketHours(any())).thenReturn(false);
 
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(ZonedDateTime.now(ZoneOffset.UTC).minusDays(2)));
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(FUTURE));
 
         HistoricalBackfillService service = buildService(PERIODS_WITH_LIVE_TAIL, marketCalendarService);
@@ -203,7 +203,7 @@ class HistoricalBackfillServiceMarketClosedTest {
                         LocalDate.of(2022, 1, 1), LocalDate.of(2022, 11, 30))
         );
 
-        when(checkpoint.getLastDownloaded(anyString(), any())).thenReturn(Optional.of(FUTURE));
+        when(checkpoint.getLastDownloaded(anyString(), any(), any(ChunkOrigin.class))).thenReturn(Optional.of(FUTURE));
 
         HistoricalBackfillService service = buildService(periodsNoLiveTail, marketCalendarService);
 

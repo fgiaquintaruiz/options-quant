@@ -72,7 +72,7 @@ class HistoricalBackfillServiceSkipPermanentFilterTest {
         // AAPL is normal
         when(checkpoint.isAllTimeframesPermanentlySkipped("AAPL")).thenReturn(false);
         // All already-done
-        when(checkpoint.getLastDownloaded(anyString(), any())).thenReturn(Optional.of(FUTURE));
+        when(checkpoint.getLastDownloaded(anyString(), any(), any(ChunkOrigin.class))).thenReturn(Optional.of(FUTURE));
 
         HistoricalBackfillService service = new HistoricalBackfillService(
                 repository, checkpoint, ibkrService, noopRateLimiter,
@@ -83,9 +83,9 @@ class HistoricalBackfillServiceSkipPermanentFilterTest {
         service.run(new DefaultApplicationArguments("--backfill"));
 
         // AAPL must be processed
-        verify(checkpoint, atLeastOnce()).getLastDownloaded(eq("AAPL"), any());
+        verify(checkpoint, atLeastOnce()).getLastDownloaded(eq("AAPL"), any(), any(ChunkOrigin.class));
         // DELISTED must NOT be processed (excluded from ticker list)
-        verify(checkpoint, never()).getLastDownloaded(eq("DELISTED"), any());
+        verify(checkpoint, never()).getLastDownloaded(eq("DELISTED"), any(), any(ChunkOrigin.class));
     }
 
     // -------------------------------------------------------------------------
@@ -97,7 +97,7 @@ class HistoricalBackfillServiceSkipPermanentFilterTest {
         // DELISTED has all timeframes permanently skipped
         when(checkpoint.isAllTimeframesPermanentlySkipped("DELISTED")).thenReturn(true);
         // All already-done
-        when(checkpoint.getLastDownloaded(anyString(), any())).thenReturn(Optional.of(FUTURE));
+        when(checkpoint.getLastDownloaded(anyString(), any(), any(ChunkOrigin.class))).thenReturn(Optional.of(FUTURE));
 
         HistoricalBackfillService service = new HistoricalBackfillService(
                 repository, checkpoint, ibkrService, noopRateLimiter,
@@ -108,7 +108,7 @@ class HistoricalBackfillServiceSkipPermanentFilterTest {
         service.run(new DefaultApplicationArguments("--backfill", "--retry-permanent-skips"));
 
         // With --retry-permanent-skips, DELISTED MUST be included and processed
-        verify(checkpoint, atLeastOnce()).getLastDownloaded(eq("DELISTED"), any());
+        verify(checkpoint, atLeastOnce()).getLastDownloaded(eq("DELISTED"), any(), any(ChunkOrigin.class));
     }
 
     // -------------------------------------------------------------------------
@@ -120,7 +120,7 @@ class HistoricalBackfillServiceSkipPermanentFilterTest {
         // PARTIAL is not all-timeframes-skipped
         when(checkpoint.isAllTimeframesPermanentlySkipped("PARTIAL")).thenReturn(false);
         // All already-done
-        when(checkpoint.getLastDownloaded(anyString(), any())).thenReturn(Optional.of(FUTURE));
+        when(checkpoint.getLastDownloaded(anyString(), any(), any(ChunkOrigin.class))).thenReturn(Optional.of(FUTURE));
 
         HistoricalBackfillService service = new HistoricalBackfillService(
                 repository, checkpoint, ibkrService, noopRateLimiter,
@@ -131,6 +131,6 @@ class HistoricalBackfillServiceSkipPermanentFilterTest {
         service.run(new DefaultApplicationArguments("--backfill"));
 
         // PARTIAL must still be processed — it has at least one active timeframe
-        verify(checkpoint, atLeastOnce()).getLastDownloaded(eq("PARTIAL"), any());
+        verify(checkpoint, atLeastOnce()).getLastDownloaded(eq("PARTIAL"), any(), any(ChunkOrigin.class));
     }
 }

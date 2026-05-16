@@ -71,9 +71,9 @@ class HistoricalBackfillServiceTwsErrorTest {
     void whenTwsError200_writesSkippedPermanentCheckpointWithErrorCode() throws Exception {
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(5);
 
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_15)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_15), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.empty());
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_15)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_15), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
 
         when(ibkrService.downloadHistoricalData(eq("AAPL"), eq(TimeFrame.MIN_15), any()))
@@ -95,9 +95,9 @@ class HistoricalBackfillServiceTwsErrorTest {
     void whenTwsError162_noCheckpointWritten_tickerStaysNeedsResume() throws Exception {
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(5);
 
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_15)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_15), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.empty());
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_15)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_15), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
 
         when(ibkrService.downloadHistoricalData(eq("AAPL"), eq(TimeFrame.MIN_15), any()))
@@ -122,9 +122,9 @@ class HistoricalBackfillServiceTwsErrorTest {
     void whenTwsErrorUnknown321_noCheckpointWritten() throws Exception {
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(5);
 
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_15)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_15), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.empty());
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_15)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_15), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
 
         when(ibkrService.downloadHistoricalData(eq("AAPL"), eq(TimeFrame.MIN_15), any()))
@@ -150,9 +150,9 @@ class HistoricalBackfillServiceTwsErrorTest {
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(5);
 
         // Only process MIN_15 for AAPL (skip all other timeframes)
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_15)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_15), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.empty());
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_15)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_15), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
 
         // ibkrService throws IbkrHistoricalDataException (error code 200)
@@ -171,9 +171,9 @@ class HistoricalBackfillServiceTwsErrorTest {
     void whenTwsDeliversNCandles_checkpointWrittenAsCompleteTws() throws Exception {
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(5);
 
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_15)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_15), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.empty());
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_15)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_15), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
 
         List<Candle> candles = List.of(SAMPLE_CANDLE);
@@ -195,9 +195,9 @@ class HistoricalBackfillServiceTwsErrorTest {
     void whenTwsDeliversNCandles_upsertCalledAndCheckpointSaved() throws Exception {
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(5);
 
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.HOUR_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.HOUR_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.empty());
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.HOUR_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.HOUR_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
 
         List<Candle> candles = List.of(SAMPLE_CANDLE, SAMPLE_CANDLE);

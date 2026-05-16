@@ -82,7 +82,7 @@ class HistoricalBackfillServiceTest {
 
     @Test
     void run_withBackfillFlag_iteratesAllConfiguredTickers() throws Exception {
-        when(checkpoint.getLastDownloaded(anyString(), any())).thenReturn(Optional.empty());
+        when(checkpoint.getLastDownloaded(anyString(), any(), any(ChunkOrigin.class))).thenReturn(Optional.empty());
         when(ibkrService.downloadHistoricalData(anyString(), any(), any()))
                 .thenReturn(Collections.emptyList());
         when(yfinanceClient.fetchDailyCandles(anyString(), any(), any()))
@@ -108,11 +108,11 @@ class HistoricalBackfillServiceTest {
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(5);
 
         // Return a future date as last downloaded → no chunks remain
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
-        when(checkpoint.getLastDownloaded(eq("MSFT"), any()))
+        when(checkpoint.getLastDownloaded(eq("MSFT"), any(), any(ChunkOrigin.class)))
                 .thenReturn(Optional.of(future));
 
         var args = new DefaultApplicationArguments("--backfill");
@@ -149,9 +149,9 @@ class HistoricalBackfillServiceTest {
         );
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(5);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.empty());
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
         when(yfinanceClient.fetchDailyCandles(eq("AAPL"), any(), any()))
                 .thenReturn(candles);
@@ -183,9 +183,9 @@ class HistoricalBackfillServiceTest {
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(5);
         // Only run MIN_5; skip DAY_1 and other TFs
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_5)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_5), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.empty());
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_5)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_5), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
         when(ibkrService.downloadHistoricalData(eq("AAPL"), eq(TimeFrame.MIN_5), any()))
                 .thenThrow(new RuntimeException("TWS request pacing violation"));
@@ -217,9 +217,9 @@ class HistoricalBackfillServiceTest {
         );
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(5);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.empty());
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
         when(yfinanceClient.fetchDailyCandles(eq("AAPL"), any(), any()))
                 .thenReturn(Collections.emptyList());

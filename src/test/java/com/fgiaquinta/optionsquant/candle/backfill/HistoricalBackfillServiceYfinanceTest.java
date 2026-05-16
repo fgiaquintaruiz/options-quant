@@ -90,9 +90,9 @@ class HistoricalBackfillServiceYfinanceTest {
         );
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(ZonedDateTime.now(ZoneOffset.UTC).minusYears(6).minusDays(1)));
 
         when(yfinanceClient.fetchDailyCandles(eq("AAPL"), any(), any()))
@@ -117,10 +117,10 @@ class HistoricalBackfillServiceYfinanceTest {
         HistoricalBackfillService service = buildService(List.of("AAPL"), List.of());
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
         ZonedDateTime recentStart = ZonedDateTime.now(ZoneOffset.UTC).minusMonths(3);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(recentStart));
 
         when(yfinanceClient.fetchDailyCandles(eq("AAPL"), any(), any()))
@@ -145,10 +145,10 @@ class HistoricalBackfillServiceYfinanceTest {
         HistoricalBackfillService service = buildService(List.of("AAPL"), List.of());
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
         ZonedDateTime recentStart = ZonedDateTime.now(ZoneOffset.UTC).minusMonths(3);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(recentStart));
 
         when(yfinanceClient.fetchDailyCandles(eq("AAPL"), any(), any()))
@@ -172,10 +172,10 @@ class HistoricalBackfillServiceYfinanceTest {
         HistoricalBackfillService service = buildService(List.of("AAPL"), List.of());
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
         ZonedDateTime recentStart = ZonedDateTime.now(ZoneOffset.UTC).minusMonths(3);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(recentStart));
 
         when(yfinanceClient.fetchDailyCandles(eq("AAPL"), any(), any()))
@@ -200,11 +200,11 @@ class HistoricalBackfillServiceYfinanceTest {
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
         // Skip all TFs except MIN_5
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_5)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_5), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
         // MIN_5 starts from just under 30 days ago (one chunk)
         ZonedDateTime recentStart = ZonedDateTime.now(ZoneOffset.UTC).minusDays(15);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_5)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_5), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(recentStart));
 
         when(ibkrService.downloadHistoricalData(eq("AAPL"), eq(TimeFrame.MIN_5), any()))
@@ -239,12 +239,12 @@ class HistoricalBackfillServiceYfinanceTest {
         );
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
         // Chunk: 2020-02-01 → 2020-02-01+365d, well inside crisis2020 period
         ZonedDateTime chunkStart = ZonedDateTime.of(2020, 2, 1, 0, 0, 0, 0, ZoneOffset.UTC);
         ZonedDateTime afterChunk = chunkStart.plusDays(366);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(chunkStart))
                 .thenReturn(Optional.of(afterChunk));
 
@@ -283,12 +283,12 @@ class HistoricalBackfillServiceYfinanceTest {
         );
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
         // Chunk: 2021-01-01 → 2022-01-01, completely outside the 2020 window
         ZonedDateTime chunkStart = ZonedDateTime.of(2021, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
         ZonedDateTime afterChunk = chunkStart.plusDays(366);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(chunkStart))
                 .thenReturn(Optional.of(afterChunk));
 
@@ -326,12 +326,12 @@ class HistoricalBackfillServiceYfinanceTest {
         );
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
         // No checkpoint for DAY_1 → starts from backfillStart (2018-01-01).
         // The while-loop will iterate all annual chunks from 2018 to now, but every chunk
         // after 2018-03-31 is skipped by isChunkInAnyPeriod — only one yfinance call happens.
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.empty());
 
         ArgumentCaptor<LocalDate> fromCaptor = ArgumentCaptor.forClass(LocalDate.class);
@@ -359,10 +359,10 @@ class HistoricalBackfillServiceYfinanceTest {
         HistoricalBackfillService service = buildService(List.of("AAPL"), List.of());
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
         // One DAY_1 chunk starting 3 months ago
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(ZonedDateTime.now(ZoneOffset.UTC).minusMonths(3)));
 
         when(yfinanceClient.fetchDailyCandles(eq("AAPL"), any(), any()))
@@ -385,10 +385,10 @@ class HistoricalBackfillServiceYfinanceTest {
         HistoricalBackfillService service = buildService(List.of("AAPL"), List.of());
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
         // One DAY_1 chunk starting 3 months ago
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(ZonedDateTime.now(ZoneOffset.UTC).minusMonths(3)));
 
         // yfinance returns valid candles so upsert() is reached
@@ -428,10 +428,10 @@ class HistoricalBackfillServiceYfinanceTest {
         );
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
         // One DAY_1 chunk starting 3 months ago
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(ZonedDateTime.now(ZoneOffset.UTC).minusMonths(3)));
 
         when(yfinanceClient.fetchDailyCandles(eq("AAPL"), any(), any()))
@@ -533,12 +533,12 @@ class HistoricalBackfillServiceYfinanceTest {
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
         // Skip all timeframes except MIN_5
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_5)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_5), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
         // MIN_5 chunk starts 2022-02-01: inside volatility2022 period
         ZonedDateTime chunkStart = ZonedDateTime.of(2022, 2, 1, 0, 0, 0, 0, ZoneOffset.UTC);
         ZonedDateTime afterChunk = chunkStart.plusDays(30).plusDays(1);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_5)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_5), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(chunkStart))
                 .thenReturn(Optional.of(afterChunk));
 
@@ -573,10 +573,10 @@ class HistoricalBackfillServiceYfinanceTest {
         );
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_5)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.MIN_5), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(future));
         // No MIN_5 checkpoint → loop starts from afterPeriodEnd (2021-02-01), already past narrowPast
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_5)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.MIN_5), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.empty());
 
         service.run(new DefaultApplicationArguments("--backfill"));
@@ -596,7 +596,7 @@ class HistoricalBackfillServiceYfinanceTest {
         HistoricalBackfillService service = buildService(List.of(), List.of("^VIX"));
 
         // Checkpoint: VIX was last downloaded 2 days ago
-        when(checkpoint.getLastDownloaded(eq("^VIX"), eq(TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("^VIX"), eq(TimeFrame.DAY_1), eq(ChunkOrigin.HISTORICAL)))
                 .thenReturn(Optional.of(ZonedDateTime.now(ZoneOffset.UTC).minusDays(2)));
 
         when(yfinanceClient.fetchDailyCandles(eq("^VIX"), any(), any()))

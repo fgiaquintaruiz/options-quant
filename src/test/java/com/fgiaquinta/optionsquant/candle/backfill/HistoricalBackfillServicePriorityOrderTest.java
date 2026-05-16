@@ -86,7 +86,7 @@ class HistoricalBackfillServicePriorityOrderTest {
     void backfill_processesDay1ForAllTickersBeforeOtherTimeframes() throws Exception {
         HistoricalBackfillService service = newService(List.of("AAPL", "MSFT"), List.of());
 
-        when(checkpoint.getLastDownloaded(anyString(), any())).thenReturn(Optional.empty());
+        when(checkpoint.getLastDownloaded(anyString(), any(), any(ChunkOrigin.class))).thenReturn(Optional.empty());
         when(ibkrService.downloadHistoricalData(anyString(), any(), any()))
                 .thenReturn(Collections.emptyList());
         when(yfinanceClient.fetchDailyCandles(anyString(), any(), any()))
@@ -110,7 +110,7 @@ class HistoricalBackfillServicePriorityOrderTest {
     void backfill_processesMin5LastAcrossAllTickers() throws Exception {
         HistoricalBackfillService service = newService(List.of("AAPL", "MSFT"), List.of());
 
-        when(checkpoint.getLastDownloaded(anyString(), any())).thenReturn(Optional.empty());
+        when(checkpoint.getLastDownloaded(anyString(), any(), any(ChunkOrigin.class))).thenReturn(Optional.empty());
         when(ibkrService.downloadHistoricalData(anyString(), any(), any()))
                 .thenReturn(Collections.emptyList());
         when(yfinanceClient.fetchDailyCandles(anyString(), any(), any()))
@@ -139,7 +139,7 @@ class HistoricalBackfillServicePriorityOrderTest {
     void backfill_handlesVixTickerInDay1PhaseOnly() throws Exception {
         HistoricalBackfillService service = newService(List.of("AAPL"), List.of("VIX"));
 
-        when(checkpoint.getLastDownloaded(anyString(), any())).thenReturn(Optional.empty());
+        when(checkpoint.getLastDownloaded(anyString(), any(), any(ChunkOrigin.class))).thenReturn(Optional.empty());
         when(ibkrService.downloadHistoricalData(anyString(), any(), any()))
                 .thenReturn(Collections.emptyList());
         when(yfinanceClient.fetchDailyCandles(anyString(), any(), any()))
@@ -162,7 +162,7 @@ class HistoricalBackfillServicePriorityOrderTest {
         HistoricalBackfillService service = newService(List.of("AAPL", "MSFT"), List.of());
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
-        when(checkpoint.getLastDownloaded(anyString(), any())).thenReturn(Optional.of(future));
+        when(checkpoint.getLastDownloaded(anyString(), any(), any(ChunkOrigin.class))).thenReturn(Optional.of(future));
 
         service.run(new DefaultApplicationArguments("--backfill"));
 
@@ -181,11 +181,11 @@ class HistoricalBackfillServicePriorityOrderTest {
 
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
         // AAPL DAY_1 already done; everything else pending
-        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), eq(TimeFrame.DAY_1), any(ChunkOrigin.class)))
                 .thenReturn(Optional.of(future));
-        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1)))
+        when(checkpoint.getLastDownloaded(eq("AAPL"), argThat(tf -> tf != TimeFrame.DAY_1), any(ChunkOrigin.class)))
                 .thenReturn(Optional.empty());
-        when(checkpoint.getLastDownloaded(eq("MSFT"), any())).thenReturn(Optional.empty());
+        when(checkpoint.getLastDownloaded(eq("MSFT"), any(), any(ChunkOrigin.class))).thenReturn(Optional.empty());
 
         when(ibkrService.downloadHistoricalData(anyString(), any(), any()))
                 .thenReturn(Collections.emptyList());

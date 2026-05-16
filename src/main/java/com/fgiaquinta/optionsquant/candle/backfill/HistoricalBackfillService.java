@@ -308,7 +308,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
 
         ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
 
-        Optional<ZonedDateTime> lastDone = checkpoint.getLastDownloaded(ticker, tf);
+        Optional<ZonedDateTime> lastDone = checkpoint.getLastDownloaded(ticker, tf, ChunkOrigin.HISTORICAL);
         ZonedDateTime chunkFrom = lastDone.orElse(backfillStart);
 
         while (chunkFrom.isBefore(now)) {
@@ -445,7 +445,7 @@ public class HistoricalBackfillService implements ApplicationRunner {
     private int backfillTickerYfinanceOnly(String vixTicker, boolean marketOpen) {
         int stored = 0;
         ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
-        Optional<ZonedDateTime> lastDone = checkpoint.getLastDownloaded(vixTicker, TimeFrame.DAY_1);
+        Optional<ZonedDateTime> lastDone = checkpoint.getLastDownloaded(vixTicker, TimeFrame.DAY_1, ChunkOrigin.HISTORICAL);
         ZonedDateTime chunkFrom = lastDone.orElse(backfillStart);
         while (chunkFrom.isBefore(now)) {
             ZonedDateTime chunkTo = chunkFrom.plus(chunkDuration(TimeFrame.DAY_1));

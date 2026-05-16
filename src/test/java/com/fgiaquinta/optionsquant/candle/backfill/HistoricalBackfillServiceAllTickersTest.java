@@ -74,14 +74,14 @@ class HistoricalBackfillServiceAllTickersTest {
 
         // Make every chunk look already-done so we only care about ticker resolution
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
-        when(checkpoint.getLastDownloaded(anyString(), any())).thenReturn(Optional.of(future));
+        when(checkpoint.getLastDownloaded(anyString(), any(), any(ChunkOrigin.class))).thenReturn(Optional.of(future));
 
         service.run(new DefaultApplicationArguments("--backfill", "--backfill-all-tickers"));
 
         // The service must have consulted TickerService for the full universe
         verify(tickerService, atLeastOnce()).getTickerSymbols();
         // SHOULD_NOT_BE_USED must never be touched
-        verify(checkpoint, never()).getLastDownloaded(eq("SHOULD_NOT_BE_USED"), any());
+        verify(checkpoint, never()).getLastDownloaded(eq("SHOULD_NOT_BE_USED"), any(), any(ChunkOrigin.class));
     }
 
     // -------------------------------------------------------------------------
@@ -105,15 +105,15 @@ class HistoricalBackfillServiceAllTickersTest {
 
         // All already-done
         ZonedDateTime future = ZonedDateTime.now(ZoneOffset.UTC).plusYears(10);
-        when(checkpoint.getLastDownloaded(anyString(), any())).thenReturn(Optional.of(future));
+        when(checkpoint.getLastDownloaded(anyString(), any(), any(ChunkOrigin.class))).thenReturn(Optional.of(future));
 
         service.run(new DefaultApplicationArguments("--backfill"));
 
         // TickerService must NOT be consulted when the flag is absent
         verify(tickerService, never()).getTickerSymbols();
         // The @Value tickers ARE consulted via checkpoint
-        verify(checkpoint, atLeastOnce()).getLastDownloaded(eq("AAPL"), any());
-        verify(checkpoint, atLeastOnce()).getLastDownloaded(eq("MSFT"), any());
+        verify(checkpoint, atLeastOnce()).getLastDownloaded(eq("AAPL"), any(), any(ChunkOrigin.class));
+        verify(checkpoint, atLeastOnce()).getLastDownloaded(eq("MSFT"), any(), any(ChunkOrigin.class));
     }
 
     // -------------------------------------------------------------------------
@@ -141,7 +141,7 @@ class HistoricalBackfillServiceAllTickersTest {
         service.run(new DefaultApplicationArguments("--backfill", "--backfill-all-tickers"));
 
         // Empty universe → no backfill iterations → no interactions with checkpoint, ibkr, yfinance
-        verify(checkpoint, never()).getLastDownloaded(anyString(), any());
+        verify(checkpoint, never()).getLastDownloaded(anyString(), any(), any(ChunkOrigin.class));
         verify(ibkrService, never()).downloadHistoricalData(anyString(), any(), any());
         verify(yfinanceClient, never()).fetchDailyCandles(anyString(), any(), any());
     }
