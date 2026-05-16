@@ -1251,6 +1251,20 @@ The old code (strategies, backtester, etc.) is still in the project but excluded
 
 ---
 
+## Data Sources
+
+| Source | Timeframes | Tickers | Period | Status |
+|--------|-----------|---------|--------|--------|
+| Polygon.io (massive_import.py) | MIN_5, MIN_15, HOUR_1 | 510 activos | 2024-05 → present | Active — note: free tier limits cause ~7-24 day lag in MIN_5 coverage |
+| TWS/IBKR (Java backfill) | DAY_1, HOUR_1, MIN_15, MIN_5 | 511 | 2023-01 → present | Active |
+| yfinance (sidecar) | DAY_1 | 511 | historical | Complete |
+| Stooq DAY_1 | DAY_1 | ~8000-10000 | historical | Pending migration to candles_stooq |
+| Stooq MIN_5 | MIN_5 | 4570 files | 2025-12 → 2026-05 | Pending import |
+
+> Note: Polygon and Java overlap May 15-31, 2024 (~16 days). Idempotent upsert handles duplicates.
+
+---
+
 ## 📝 Changelog
 
 Consulta [`CHANGELOG.md`](CHANGELOG.md) para el historial completo de versiones y cambios.

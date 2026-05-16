@@ -1,3 +1,20 @@
+[1.3.31] - 2026-05-16 (Polygon Pagination, Backtest Refactor, C1/P1 Squeeze)
+Added
+massive_import.py: pagination support added (commit ec430d8). NOTE: Polygon free tier appears to enforce delayed-data limits that pagination cannot bypass — full cohort resolution pending P0 diagnostic.
+massive_explore.py: diagnostic script for import state analysis (commit c6edc82)
+BacktestBatchRunner refactor: --backtest-fresh / --backtest-fresh-force flags (DB wipe with VACUUM via BacktestPersistenceService.deleteAllData + interactive confirmation), runtime metrics (RunMetrics + throughput), and seam fix (protected exit() wrapper replaces System.exit() to enable test interception).
+C1SqueezeCallStrategy / P1SqueezePutStrategy: breakout buffer (0.3% default), directional coherence body filter on MIN_15, BB width expansion check vs 20-bar avg.
+
+Fixed
+P1 squeeze strategy fixture: bodyPct/threshold alignment in StrategyUnitTest
+
+Changed
+BackfillCheckpoint: Opción 3 chunk_origin filter implementation
+HistoricalBackfillService: chunk_origin filtering logic
+application.yml: backfill period adjusted 2023-01 → 2024-05 for Polygon handoff
+
+---
+
 [1.3.30] - 2026-04-10 (Spring Boot 4, Advanced CLIs & Strategy Tuning)
 Added
 Spring Boot 4.0.4 Migration: Actualizado de Spring Boot 3.5.0 a 4.0.4 (última versión estable). Incluye JUnit 6 vía spring-boot-starter-test y Gradle 9.3.0 con Version Catalog (gradle/libs.versions.toml).

@@ -1,6 +1,6 @@
 # Pending Work — options-quant
 
-_Last updated: 2026-05-07_
+_Last updated: 2026-05-16_
 
 ---
 
@@ -205,3 +205,47 @@ Luego cargar contexto engram:
 - `mem_search("sdd/yfinance-historical-fallback/apply-progress")` — estado yfinance SDD
 - `mem_search("qa-audit/screen-coverage-status")` — estado QA
 - `mem_context` para sesiones recientes
+
+---
+
+## Estado al 2026-05-16
+
+### Pipelines activos
+
+**Polygon massive_import.py** — RE-RUN EJECUTADO (2026-05-16 06:36) — DONE=252, ERROR=0, SKIP=1278
+- Paginación implementada (commit ec430d8) — evita truncación >50000 bars
+- ATENCIÓN — paginación instalada pero NO resuelve el lag:
+  - ~258 tickers MIN_5 hasta ~2026-05-08 (7 días lag)
+  - 252 tickers MIN_5 hasta ~2026-04-21 (24 días lag)
+  Causa probable: límite de delayed data del plan free de Polygon. Verificar con análisis pendiente (P0).
+
+**Java TWS backfill (PID 56872)** — EN CURSO
+- DAY_1: completo (511 LIVE_TAIL + 1 HISTORICAL — blind spot checkpoint)
+- HOUR_1: 100% completo
+- MIN_15 y MIN_5 históricos en progreso al cierre de sesión. Ver tabla `candles` para conteo actualizado.
+
+### P1 — Commits Java pendientes (sin commitear)
+- fix P1 squeeze fixture — StrategyUnitTest.java
+- Opción 3: filtro chunk_origin — BackfillCheckpoint.java + HistoricalBackfillService.java
+- seam fix BacktestBatchRunner — 4 test files
+- ajuste YAML period 2023-01 → 2024-05 — application.yml
+
+### P1 — Blind spot checkpoint live-tail
+Walker escribe `chunk_origin=LIVE_TAIL` pero lee como `HISTORICAL`.
+Fix: BackfillCheckpoint.java — `getLastDownloaded()`, ~línea 72.
+
+### P2 — Migración candles_stooq (PRÓXIMO)
+- Crear tabla `candles_stooq` (DAY_1 tickers no activos, ~8000-10000 Stooq histórico)
+- Importar 4570 MIN_5 desde `data/stooq/5_min/nasdaq stocks`
+- CET/CEST → usar zoneinfo/pytz, NO aritmética fija
+- Ticker sufijo `.US` → stripear
+- `volume` Stooq es float — candles.volume es INTEGER (decidir redondear vs cambiar tipo)
+- Esperar que terminen massive_import.py Y backfill Java antes de ejecutar
+
+### P2 — Tests pendientes de arreglar (3)
+1. `BacktestBatchRunnerResumeTest.whenBacktestFreshFlagPresent_startsFreshWithoutPrompt`
+2. `RollbackConfigTest$CsvActiveTest`
+3. `TestMainSkipLogic.test_no_fetch_when_all_done`
+
+### P3 — IntelliJ ghost process
+JVM huérfana compite por puerto 9090/TWS/candles.db. Correr `netstat -ano | findstr :9090` antes de arrancar.
