@@ -70,6 +70,11 @@ public class BacktestBatchRunner implements ApplicationRunner {
             ORDER BY ticker
             """;
 
+    private static final String COMPLETE_TICKERS_SQL =
+            "SELECT ticker FROM ticker_stats " +
+            "WHERE active = 1 AND has_all_4_tfs = 1 AND bars_total >= 80000 " +
+            "ORDER BY ticker";
+
     private final BacktestEngine backtestEngine;
     private final BacktestCsvWriter csvWriter;
     private final JdbcTemplate readJdbc;
@@ -184,7 +189,8 @@ public class BacktestBatchRunner implements ApplicationRunner {
             persistenceService.initSchema();
         }
 
-        List<String> allTickers = resolveValidTickers();
+        boolean completeTickers = args.containsOption("complete-tickers");
+        List<String> allTickers = completeTickers ? resolveCompleteTickers() : resolveValidTickers();
 
         if (allTickers.isEmpty()) {
             log.warn("[backtest] No tickers with valid candles found. Skipping.");
@@ -403,6 +409,15 @@ public class BacktestBatchRunner implements ApplicationRunner {
             );
         } catch (Exception e) {
             log.error("[backtest] Failed to query valid tickers from download_progress: {}", e.getMessage(), e);
+            return List.of();
+        }
+    }
+
+    private List<String> resolveCompleteTickers() {
+        try {
+            return readJdbc.queryForList(COMPLETE_TICKERS_SQL, String.class);
+        } catch (Exception e) {
+            log.error("[backtest] Failed to query complete tickers from ticker_stats: {}", e.getMessage(), e);
             return List.of();
         }
     }

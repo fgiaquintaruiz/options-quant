@@ -141,4 +141,54 @@ class BacktestBatchRunnerTest {
 
         verify(csvWriter).write(any());
     }
+
+    // -------------------------------------------------------------------------
+    // T6 — --complete-tickers queries ticker_stats, not download_progress
+    // -------------------------------------------------------------------------
+
+    @Test
+    void whenCompleteTickersFlagPresent_queriesTickerStats() {
+        var args = new DefaultApplicationArguments("--backtest-all", "--complete-tickers");
+        when(readJdbc.queryForList(contains("ticker_stats"), eq(String.class)))
+                .thenReturn(List.of("AAPL", "MSFT"));
+        when(backtestEngine.run(any(BacktestConfig.class))).thenReturn(EMPTY_REPORT);
+
+        runner.run(args);
+
+        verify(readJdbc).queryForList(contains("ticker_stats"), eq(String.class));
+        verify(readJdbc, never()).queryForList(contains("download_progress"), eq(String.class), any());
+    }
+
+    // -------------------------------------------------------------------------
+    // T7 — --complete-tickers: backtest runs with tickers from ticker_stats
+    // -------------------------------------------------------------------------
+
+    @Test
+    void whenCompleteTickersFlagPresent_backtestRunsWithCompleteTickersOnly() throws Exception {
+        var args = new DefaultApplicationArguments("--backtest-all", "--complete-tickers");
+        when(readJdbc.queryForList(contains("ticker_stats"), eq(String.class)))
+                .thenReturn(List.of("GOOG", "NVDA"));
+        when(backtestEngine.run(any(BacktestConfig.class))).thenReturn(EMPTY_REPORT);
+
+        runner.run(args);
+
+        ArgumentCaptor<BacktestConfig> captor = ArgumentCaptor.forClass(BacktestConfig.class);
+        verify(backtestEngine, atLeastOnce()).run(captor.capture());
+        assertThat(captor.getValue().tickers()).containsExactlyInAnyOrder("GOOG", "NVDA");
+    }
+
+    // -------------------------------------------------------------------------
+    // T8 — --complete-tickers with empty ticker_stats: backtest not called
+    // -------------------------------------------------------------------------
+
+    @Test
+    void whenCompleteTickersFlagAndNoQualifyingTickers_backtestNotCalled() {
+        var args = new DefaultApplicationArguments("--backtest-all", "--complete-tickers");
+        when(readJdbc.queryForList(contains("ticker_stats"), eq(String.class)))
+                .thenReturn(List.of());
+
+        runner.run(args);
+
+        verifyNoInteractions(backtestEngine);
+    }
 }
