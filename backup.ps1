@@ -144,7 +144,7 @@ if (-not (Copy-SingleFile "$dataDir\candles.db" "$dataRemote/candles.db")) {
     $errors++
 }
 
-if (-not (Copy-Directory $dataDir $dataRemote @('--include', '*.csv'))) {
+if (-not (Copy-Directory $dataDir $dataRemote @('--exclude', 'data/stooq/**', '--include', '*.csv'))) {
     $errors++
 }
 
