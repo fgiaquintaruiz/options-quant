@@ -45,7 +45,7 @@ The loop stops when **EITHER**:
 
 #### **Start the Learning Loop:**
 ```bash
-curl -X POST "http://localhost:8080/api/backtest/learn?from=2025-01-01&to=2026-04-01&tickers=AMZN,NVDA,GOOGL&maxIterations=20"
+curl -X POST "http://localhost:8090/api/backtest/learn?from=2025-01-01&to=2026-04-01&tickers=AMZN,NVDA,GOOGL&maxIterations=20"
 ```
 
 **Parameters:**
@@ -59,17 +59,17 @@ curl -X POST "http://localhost:8080/api/backtest/learn?from=2025-01-01&to=2026-0
 
 #### **Check Status:**
 ```bash
-curl http://localhost:8080/api/backtest/learn/status
+curl http://localhost:8090/api/backtest/learn/status
 ```
 
 #### **Stop the Loop:**
 ```bash
-curl -X POST "http://localhost:8080/api/backtest/learn/stop"
+curl -X POST "http://localhost:8090/api/backtest/learn/stop"
 ```
 
 #### **View Learning Report:**
 ```bash
-curl http://localhost:8080/api/backtest/learning-report
+curl http://localhost:8090/api/backtest/learning-report
 ```
 
 ---
@@ -277,7 +277,7 @@ Iter 3: 48% WR, $900 PnL   ← Even worse!
 
 ### **Start:**
 ```bash
-curl -X POST "http://localhost:8080/api/backtest/learn?from=2025-01-01&to=2026-04-01&tickers=AMZN,NVDA,GOOGL&maxIterations=20"
+curl -X POST "http://localhost:8090/api/backtest/learn?from=2025-01-01&to=2026-04-01&tickers=AMZN,NVDA,GOOGL&maxIterations=20"
 ```
 
 ### **Watch Logs (Real-time):**
@@ -333,7 +333,7 @@ curl -X POST "http://localhost:8080/api/backtest/learn?from=2025-01-01&to=2026-0
 
 ### **Check Final State:**
 ```bash
-curl http://localhost:8080/api/backtest/learning-report
+curl http://localhost:8090/api/backtest/learning-report
 ```
 
 **Output:**
@@ -370,7 +370,7 @@ AMZN            c1squeezecall            12    58.3% $  1,160.00       62%     1
 
 ### **Get AI Recommendations:**
 ```bash
-curl -X POST http://localhost:8080/api/backtest/ai-analysis
+curl -X POST http://localhost:8090/api/backtest/ai-analysis
 ```
 
 **AI says:**
@@ -439,24 +439,24 @@ curl -X POST http://localhost:8080/api/backtest/ai-analysis
 
 ```bash
 # 1. Reset memory (clean slate)
-curl -X POST http://localhost:8080/api/memory/reset-all
+curl -X POST http://localhost:8090/api/memory/reset-all
 
 # 2. Start learning loop
-curl -X POST "http://localhost:8080/api/backtest/learn?from=2025-01-01&to=2026-04-01&tickers=AMZN,NVDA,GOOGL&maxIterations=20"
+curl -X POST "http://localhost:8090/api/backtest/learn?from=2025-01-01&to=2026-04-01&tickers=AMZN,NVDA,GOOGL&maxIterations=20"
 
 # 3. Monitor status
-curl http://localhost:8080/api/backtest/learn/status
+curl http://localhost:8090/api/backtest/learn/status
 
 # 4. Wait for convergence...
 
 # 5. View results
-curl http://localhost:8080/api/backtest/learning-report
+curl http://localhost:8090/api/backtest/learning-report
 
 # 6. Get AI analysis
-curl -X POST http://localhost:8080/api/backtest/ai-analysis
+curl -X POST http://localhost:8090/api/backtest/ai-analysis
 
 # 7. Validate on fresh data
-curl -X POST "http://localhost:8080/api/backtest/learn?from=2026-04-01&to=2026-10-01&tickers=AMZN,NVDA,GOOGL&maxIterations=5"
+curl -X POST "http://localhost:8090/api/backtest/learn?from=2026-04-01&to=2026-10-01&tickers=AMZN,NVDA,GOOGL&maxIterations=5"
 
 # 8. If validation passes → Ready for paper trading! 🎉
 ```
