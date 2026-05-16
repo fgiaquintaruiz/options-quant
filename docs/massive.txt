@@ -1,0 +1,858 @@
+At Massive, we provide a comprehensive suite of U.S. stock market data through a standardized and intuitive API, offering unparalleled coverage of the U.S. stock market landscape. Our offerings encompass real-time prices, historical data, company information, and news from all 19 major stock exchanges, additional dark pools, FINRA trading facilities, and OTC markets. Accessible via REST APIs, WebSocket streams, and flat files, this rich dataset supports the development of sophisticated applications tailored for both retail and professional trading environments. Leveraging detailed trade data and reference information, our platform delivers a robust analytical toolset crucial for comprehensive market analysis and decision-making.
+
+Available Endpoints
+Browse the endpoints available for Stocks. Each row links to its dedicated documentation, with a short description and the API path.
+
+Endpoints
+Description
+Tickers
+All Tickers
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve a comprehensive list of ticker symbols supported by Massive across various asset classes (e.g., stocks, indices, forex, crypto). Each ticker entry provides essential details such as symbol, name, market, currency, and active status. Use Cases: Asset discovery, data integration, filtering/selection, and application development.
+GET
+/v3/reference/tickers
+Ticker Overview
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve comprehensive details for a single ticker supported by Massive that is active as-of a given date. This endpoint offers a deep look into a company’s fundamental attributes, including its primary exchange, standardized identifiers (CIK, composite FIGI, share class FIGI), market capitalization, industry classification, and key dates. Users also gain access to branding assets (e.g., logos, icons), enabling them to enrich applications and analyses with visually consistent, contextually relevant information. For information on delisted tickers, use the [All Tickers](/docs/rest/stocks/tickers/all-tickers) endpoint with `active=false`. Use Cases: Company research, data integration, application enhancement, due diligence & compliance.
+GET
+/v3/reference/tickers/{ticker}
+Ticker Types
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve a list of all ticker types supported by Massive. This endpoint categorizes tickers across asset classes, markets, and instruments, helping users understand the different classifications and their attributes. Use Cases: Data classification, filtering mechanisms, educational reference, system integration.
+GET
+/v3/reference/tickers/types
+Related Tickers
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve a list of tickers related to a specified ticker, identified through an analysis of news coverage and returns data. This endpoint helps users discover peers, competitors, or thematically similar companies, aiding in comparative analysis, portfolio diversification, and market research. Use Cases: Peer identification, comparative analysis, portfolio diversification, market research.
+GET
+/v1/related-companies/{ticker}
+Aggregate Bars (OHLC)
+Custom Bars
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve aggregated historical OHLC (Open, High, Low, Close) and volume data for a specified stock ticker over a custom date range and time interval in Eastern Time (ET). Aggregates are constructed exclusively from qualifying trades that meet specific conditions. If no eligible trades occur within a given timeframe, no aggregate bar is produced, resulting in an empty interval that indicates a lack of trading activity during that period. Users can tailor their data by adjusting the multiplier and timespan parameters (e.g., a 5-minute bar), covering pre-market, regular market, and after-hours sessions. This flexibility supports a broad range of analytical and visualization needs. Use Cases: Data visualization, technical analysis, backtesting strategies, market research.
+GET
+/v2/aggs/ticker/{stocksTicker}/range/{multiplier}/{timespan}/{from}/{to}
+Daily Market Summary
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve daily OHLC (open, high, low, close), volume, and volume-weighted average price (VWAP) data for all U.S. stocks on a specified trading date. This endpoint returns comprehensive market coverage in a single request, enabling wide-scale analysis, bulk data processing, and research into broad market performance. Use Cases: Market overview, bulk data processing, historical research, and portfolio comparison.
+GET
+/v2/aggs/grouped/locale/us/market/stocks/{date}
+Daily Ticker Summary
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve the opening and closing prices for a specific stock ticker on a given date, along with any pre-market and after-hours trade prices. This endpoint provides essential daily pricing details, enabling users to evaluate performance, conduct historical analysis, and gain insights into trading activity outside regular market sessions. Use Cases: Daily performance analysis, historical data collection, after-hours insights, portfolio tracking.
+GET
+/v1/open-close/{stocksTicker}/{date}
+Previous Day Bar
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve the previous trading day's open, high, low, and close (OHLC) data for a specified stock ticker. This endpoint provides key pricing metrics, including volume, to help users assess recent performance and inform trading strategies. Use Cases: Baseline comparison, technical analysis, market research, and daily reporting.
+GET
+/v2/aggs/ticker/{stocksTicker}/prev
+Snapshots
+Single Ticker Snapshot
+Not included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve the most recent market data snapshot for a single ticker. This endpoint consolidates the latest trade, quote, and aggregated data (minute, day, and previous day) for the specified ticker. Snapshot data is cleared at 3:30 AM EST and begins updating as exchanges report new information, which can start as early as 4:00 AM EST. By focusing on a single ticker, users can closely monitor real-time developments and incorporate up-to-date information into trading strategies, alerts, or company-level reporting. Use Cases: Focused monitoring, real-time analysis, price alerts, investor relations.
+GET
+/v2/snapshot/locale/us/markets/stocks/tickers/{stocksTicker}
+Full Market Snapshot
+Not included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve a comprehensive snapshot of the entire U.S. stock market, covering over 10,000+ actively traded tickers in a single response. This endpoint consolidates key information like pricing, volume, and trade activity to provide a full-market-snapshot view, eliminating the need for multiple queries. Snapshot data is cleared daily at 3:30 AM EST and begins to repopulate as exchanges report new data, which can start as early as 4:00 AM EST. By accessing all tickers at once, users can efficiently monitor broad market conditions, perform bulk analyses, and power applications that require complete, current market information. Use Cases: Market overview, bulk data processing, heat maps/dashboards, automated monitoring.
+GET
+/v2/snapshot/locale/us/markets/stocks/tickers
+Unified Snapshot
+Not included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve unified snapshots of market data for multiple asset classes including stocks, options, forex, and cryptocurrencies in a single request. This endpoint consolidates key metrics such as last trade, last quote, open, high, low, close, and volume for a comprehensive view of current market conditions. By aggregating data from various sources into one response, users can efficiently monitor, compare, and act on information spanning multiple markets and asset types. Use Cases: Cross-market analysis, diversified portfolio monitoring, global market insights, multi-asset trading strategies.
+GET
+/v3/snapshot
+Top Market Movers
+Not included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve snapshot data highlighting the top 20 gainers or losers in the U.S. stock market. Gainers are stocks with the largest percentage increase since the previous day’s close, and losers are those with the largest percentage decrease. To ensure meaningful insights, only tickers with a minimum trading volume of 10,000 are included. Snapshot data is cleared daily at 3:30 AM EST and begins repopulating as exchanges report new information, typically starting around 4:00 AM EST. By focusing on these market movers, users can quickly identify significant price shifts and monitor evolving market dynamics. Use Cases: Market movers identification, trading strategies, market sentiment analysis, portfolio adjustments.
+GET
+/v2/snapshot/locale/us/markets/stocks/{direction}
+Trades & Quotes
+Trades
+Not included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve comprehensive, tick-level trade data for a specified stock ticker within a defined time range. Each record includes price, size, exchange, trade conditions, and precise timestamp information. This granular data is foundational for constructing aggregated bars and performing in-depth analyses, as it captures every eligible trade that contributes to calculations of open, high, low, and close (OHLC) values. By leveraging these trades, users can refine their understanding of intraday price movements, test and optimize algorithmic strategies, and ensure compliance by maintaining an auditable record of market activity. Use Cases: Intraday analysis, algorithmic trading, market microstructure research, data integrity and compliance.
+GET
+/v3/trades/{stockTicker}
+Last Trade
+Not included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve the latest available trade for a specified stock ticker, including details such as price, size, exchange, and timestamp. This endpoint supports monitoring recent trading activity and updating dashboards or applications with the most current trade information, providing timely insights into ongoing market conditions. Use Cases: Trade monitoring, price updates, market snapshot.
+GET
+/v2/last/trade/{stocksTicker}
+Quotes
+Not included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve National Best Bid and Offer (NBBO) quotes for a specified stock ticker over a defined time range. Each record includes the prevailing best bid/ask prices, sizes, exchanges, and timestamps, reflecting the top-of-book quote environment at each moment. By examining this historical quote data, users can analyze price movements, evaluate liquidity at the NBBO level, and enhance trading strategies or research efforts. Use Cases: Historical quote analysis, liquidity evaluation, algorithmic backtesting, trading strategy refinement.
+GET
+/v3/quotes/{stockTicker}
+Last Quote
+Not included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve the most recent National Best Bid and Offer (NBBO) quote for a specified stock ticker, including the latest bid/ask prices, sizes, exchange details, and timestamp. This endpoint supports monitoring current market conditions and updating platforms or applications with near-term quote information, allowing users to evaluate liquidity, track spreads, and make more informed decisions. Use Cases: Price display, spread analysis, market monitoring.
+GET
+/v2/last/nbbo/{stocksTicker}
+Technical Indicators
+SMA
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve the Simple Moving Average (SMA) for a specified ticker over a defined time range. The SMA calculates the average price across a set number of periods, smoothing price fluctuations to reveal underlying trends and potential signals. Use Cases: Trend analysis, trading signal generation (e.g., SMA crossovers), identifying support/resistance, and refining entry/exit timing.
+GET
+/v1/indicators/sma/{stockTicker}
+EMA
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve the Exponential Moving Average (EMA) for a specified ticker over a defined time range. The EMA places greater weight on recent prices, enabling quicker trend detection and more responsive signals. Use Cases: Trend identification, EMA crossover signals, dynamic support/resistance levels, and adjusting strategies based on recent market volatility.
+GET
+/v1/indicators/ema/{stockTicker}
+MACD
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve the Moving Average Convergence/Divergence (MACD) for a specified ticker over a defined time range. MACD is a momentum indicator derived from two moving averages, helping to identify trend strength, direction, and potential trading signals. Use Cases: Momentum analysis, signal generation (crossover events), spotting overbought/oversold conditions, and confirming trend directions.
+GET
+/v1/indicators/macd/{stockTicker}
+RSI
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve the Relative Strength Index (RSI) for a specified ticker over a defined time range. The RSI measures the speed and magnitude of price changes, oscillating between 0 and 100 to help identify overbought or oversold conditions. Use Cases: Overbought/oversold detection, divergence analysis, trend confirmation, and refining market entry/exit strategies.
+GET
+/v1/indicators/rsi/{stockTicker}
+Market Operations
+Exchanges
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve a list of known exchanges, including their identifiers, names, market types, and other relevant attributes. This information helps map exchange codes, understand market coverage, and integrate exchange details into applications. Use Cases: Data mapping, market coverage analysis, application development (e.g., display exchange options), and ensuring regulatory compliance.
+GET
+/v3/reference/exchanges
+Market Holidays
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve upcoming market holidays and their corresponding open/close times. This endpoint is forward-looking only, listing future holidays that affect market hours. Use this data to plan ahead for trading activities and system operations. Use Cases: Trading schedule adjustments, integrated holiday calendars, operational planning (e.g., system maintenance), and notifying users about upcoming market closures.
+GET
+/v1/marketstatus/upcoming
+Market Status
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve the current trading status for various exchanges and overall financial markets. This endpoint provides real-time indicators of whether markets are open, closed, or operating in pre-market/after-hours sessions, along with timing details for the current or upcoming trading periods. Use Cases: Real-time monitoring, algorithm scheduling, UI updates, and operational planning.
+GET
+/v1/marketstatus/now
+Condition Codes
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve a unified and comprehensive list of trade and quote conditions from various upstream market data providers (e.g., CTA, UTP, OPRA, FINRA). Each condition identifies special circumstances associated with market data, such as trades occurring outside regular sessions or at averaged prices, and outlines how these conditions affect metrics like high, low, open, close, and volume. By examining these mapped conditions, users can accurately interpret the context of trades and quotes, apply appropriate filtering, and ensure that aggregated data correctly reflects eligible trading activity. Use Cases: Data interpretation, unified condition mapping, filtering and analysis, algorithmic adjustments, compliance and reporting.
+GET
+/v3/reference/conditions
+Corporate Actions
+IPOs
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve comprehensive information on Initial Public Offerings (IPOs), including upcoming and historical events, starting from the year 2008. This endpoint provides key details such as issuer name, ticker symbol, security type, IPO date, number of shares offered, expected price ranges, final issue prices, and offering sizes. Users can filter results by IPO status (e.g., pending, new, rumors, historical) to target their research and inform investment decisions. Use Cases: IPO research, market trend analysis, investment screening, historical event comparison.
+GET
+/vX/reference/ipos
+Splits (Deprecated)
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve historical stock split events, including execution dates and ratio factors, to understand changes in a company’s share structure over time. Massive leverages this data for accurate price adjustments in other endpoints, such as the Aggregates API, ensuring that users can access both adjusted and unadjusted views of historical prices for more informed analysis. Use Cases: Historical analysis, price adjustments, data consistency, modeling.
+GET
+/v3/reference/splits
+Splits
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve historical stock split events, including execution dates and ratio factors, to understand changes in a company’s share structure over time. Also find adjustment factors that can be used to normalize historical prices to today's share basis. Use Cases: Historical analysis, price adjustments, data consistency, modeling.
+GET
+/stocks/v1/splits
+Dividends (Deprecated)
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve a historical record of cash dividend distributions for a given ticker, including declaration, ex-dividend, record, and pay dates, as well as payout amounts and frequency. This endpoint consolidates key dividend information, enabling users to account for dividend income in returns, develop dividend-focused strategies, and support tax reporting needs. Use Cases: Income analysis, total return calculations, dividend strategies, tax planning.
+GET
+/v3/reference/dividends
+Dividends
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve a historical record of cash dividend distributions for a given ticker, including declaration, ex-dividend, record, and pay dates, as well as payout amounts and adjustment factors for normalizing historical data to offset the effects of dividends. This endpoint consolidates key dividend information, enabling users to account for dividend income in returns, develop dividend-focused strategies, and support tax reporting needs. Use Cases: Income analysis, total return calculations, dividend strategies, tax planning.
+GET
+/stocks/v1/dividends
+Ticker Events
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve a timeline of key events associated with a given ticker, CUSIP, or Composite FIGI. This endpoint is experimental and highlights ticker changes, such as symbol renaming or rebranding, helping users maintain continuity in their records and analyses. Use Cases: Historical reference for ticker symbol changes, data continuity, and record-keeping.
+GET
+/vX/reference/tickers/{id}/events
+Fundamentals
+Balance Sheets
+Not included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Financials & Ratios Expansion
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve comprehensive balance sheet data for public companies, containing quarterly and annual financial positions. This dataset includes detailed asset, liability, and equity positions representing the company's financial position at specific points in time. Balance sheet data represents point-in-time snapshots rather than cumulative flows, showing what the company owns, owes, and shareholders' equity as of each period end date. Use Cases: Financial analysis, company valuation, asset assessment, debt analysis, equity research.
+GET
+/stocks/financials/v1/balance-sheets
+Cash Flow Statements
+Not included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Financials & Ratios Expansion
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve comprehensive cash flow statement data for public companies, including quarterly, annual, and trailing twelve-month cash flows. This dataset includes detailed operating, investing, and financing cash flows with TTM calculations that sum all cash flow components over four quarters. Use Cases: Cash flow analysis, liquidity assessment, operational efficiency evaluation, investment activity tracking.
+GET
+/stocks/financials/v1/cash-flow-statements
+Income Statements
+Not included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Financials & Ratios Expansion
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve comprehensive income statement data for public companies, including key metrics such as revenue, expenses, and net income for various reporting periods. This dataset provides detailed financial performance data including revenue breakdowns, operating expenses, and profitability metrics across quarterly, annual, and trailing twelve-month periods. Use Cases: Profitability analysis, revenue trend analysis, expense management evaluation, earnings assessment.
+GET
+/stocks/financials/v1/income-statements
+Ratios
+Not included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Financials & Ratios Expansion
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve comprehensive financial ratios data providing key valuation, profitability, liquidity, and leverage metrics for public companies. This dataset combines data from income statements, balance sheets, and cash flow statements with daily stock prices to calculate ratios for the most recent trading day using trailing twelve months (TTM) financials. Use Cases: Company valuation, comparative analysis, financial health assessment, investment screening.
+GET
+/stocks/financials/v1/ratios
+Short Interest
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve aggregated short interest data reported to FINRA by broker-dealers for a specified stock ticker on a two-week cadence. Short interest represents the total number of shares sold short but not yet covered or closed out, serving as an indicator of market sentiment and potential price movements. High short interest can signal bearish sentiment or highlight opportunities such as potential short squeezes. This endpoint provides essential insights for investors monitoring market positioning and sentiment. Use Cases: Market sentiment analysis, short-squeeze prediction, risk management, trading strategy refinement.
+GET
+/stocks/v1/short-interest
+Short Volume
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve daily aggregated short sale volume data reported to FINRA from off-exchange trading venues and alternative trading systems (ATS) for a specified stock ticker. Unlike short interest, which measures outstanding short positions at specific reporting intervals, short volume captures the daily trading activity of short sales. Monitoring short volume helps users detect immediate market sentiment shifts, analyze trading behavior, and identify trends in short-selling activity that may signal upcoming price movements. Use Cases: Intraday sentiment analysis, short-sale trend identification, liquidity analysis, trading strategy optimization.
+GET
+/stocks/v1/short-volume
+Float
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve the latest free float for a specified stock ticker. Free float represents the shares outstanding that are considered available for public trading, after accounting for shares held by strategic or long-term holders. Shares held by founders, officers and directors, employees, controlling shareholders, affiliated companies, private equity and venture capital firms, sovereign wealth funds, government entities, employee plans, trusts, restricted or locked-up holdings, and any shareholder owning 5% or more of total issued shares are not treated as part of the tradable supply. Shares held by pension funds, mutual funds, ETFs, hedge funds without board representation, depositary banks, and other broadly diversified investors are generally treated as part of the public free float. Free float reflects a stock’s effective tradable supply and is a key input for assessing liquidity, volatility, market impact, and ownership structure. Figures may reflect ownership changes with a reporting lag, since they are based on publicly available disclosures and ownership information rather than real-time trading activity. Use cases: liquidity analysis, volatility modeling, position sizing, market impact estimation, and ownership structure analysis.
+GET
+/stocks/vX/float
+Filings & Disclosures
+EDGAR Index
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve the master index of all SEC EDGAR filings, including form types, filing dates, CIKs, tickers, issuer names, accession numbers, and direct links to original documents on SEC.gov. This serves as the central discovery layer for the entire EDGAR database, allowing powerful filtering and sorting without manual website searches. Use Cases: Automated filing discovery and monitoring, regulatory compliance alerts, due diligence pipelines, competitive intelligence, and historical disclosure research.
+GET
+/stocks/filings/vX/index
+10-K Sections
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve clean plain-text extracts of key narrative sections from annual 10-K filings, including Business and Risk Factors. These provide detailed insights into company operations, strategy, markets, and material risks in structured AI-ready format. Use Cases: NLP and text analysis, automated risk profiling, competitive benchmarking, topic modeling, summarization, and LLM knowledge base construction.
+GET
+/stocks/filings/10-K/vX/sections
+8-K Text
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve parsed plain-text content from the core Items sections of Form 8-K current reports. These disclose major material events such as acquisitions, leadership changes, material contracts, and other significant developments in AI-ready format. Use Cases: Real-time event detection and alerts, event-driven trading strategies, automated news digestion, M&A tracking, and corporate action timelines.
+GET
+/stocks/filings/8-K/vX/text
+13-F Filings
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve quarterly holdings data from SEC Form 13-F filings submitted by institutional investment managers with at least $100 million in assets. Reports show equity positions, share counts, market values, investment discretion, and voting authority as of quarter-end. Use Cases: Tracking institutional ownership trends, replicating hedge fund strategies, portfolio overlap analysis, activist monitoring, and idea generation from smart-money flows.
+GET
+/stocks/filings/vX/13-F
+Risk Factors
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Standardized, machine-readable risk factor disclosures from SEC filings. Each risk factor is categorized using a consistent taxonomy, enabling direct comparison across time periods or between different companies. For details on the methodology used, see our [research paper](https://arxiv.org/pdf/2601.15247). Use Cases: Risk trend analysis, cross-company comparisons, compliance tools, classification models, investment research.
+GET
+/stocks/filings/vX/risk-factors
+Risk Categories
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Access the full standardized hierarchical taxonomy used to classify risk factors in SEC filings. It includes primary, secondary, and tertiary categories with detailed descriptions and examples for consistent analysis across companies and time periods. Use Cases: Risk classification models, category-level analytics and dashboards, cross-company comparisons, quantitative risk scoring, and thematic monitoring.
+GET
+/stocks/taxonomies/vX/risk-factors
+Form 3
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve SEC Form 3 filings that report the initial beneficial ownership of securities by corporate insiders (directors, officers, and 10%+ shareholders). These filings establish the baseline ownership position when an insider first becomes subject to Section 16 reporting requirements. Use Cases: Tracking new insider positions, monitoring executive and director ownership, due diligence on large shareholders, building ownership databases, and regulatory compliance checks.
+GET
+/stocks/filings/vX/form-3
+Form 4
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve SEC Form 4 filings that disclose all changes in beneficial ownership by corporate insiders. These must be filed within two business days of any transaction (purchases, sales, option exercises, grants, gifts, etc.) and include detailed transaction data such as dates, prices, share amounts, and transaction codes. Use Cases: Real-time insider trading monitoring, management confidence analysis, large trade detection, regulatory and Section 16 compliance tracking, and historical insider behavior studies.
+GET
+/stocks/filings/vX/form-4
+News
+Included in your Stocks plan
+Individual Plans
+Business Plans
+Stocks Basic
+Free
+Your plan
+Stocks Starter
+$29/mo
+Stocks Developer
+$79/mo
+Stocks Advanced
+$199/mo
+
+Retrieve the most recent news articles related to a specified ticker, along with summaries, source details, and sentiment analysis. This endpoint consolidates relevant financial news in one place, extracting associated tickers, assigning sentiment, and providing direct links to the original sources. By incorporating publisher information, article metadata, and sentiment reasoning, users can quickly gauge market sentiment, stay informed on company developments, and integrate news insights into their trading or research workflows. Use Cases: Market sentiment analysis, investment research, automated monitoring, and portfolio strategy refinement.
+GET
+/v2/reference/news
+Market Hours and Timezone
+Data is available for all U.S. market sessions, which are segmented into pre-market, regular market, and after-hours:
+
+U.S. stock market trading hours in Eastern Time (ET): Pre-market from 4:00 AM to 9:30 AM, regular hours from 9:30 AM to 4:00 PM, and after-hours from 4:00 PM to 8:00 PM.
+Pre-Market Trading Hours: From 4:00 AM to 9:30 AM Eastern Time (ET).
+Regular Market Hours: From 9:30 AM to 4:00 PM ET.
+After-Hours Trading: From 4:00 PM to 8:00 PM ET.
+All timestamps in the datasets are provided as Unix timestamps (seconds since epoch, UTC). When converting these timestamps into human-readable form (e.g., market open at 9:30 AM), remember they represent UTC time, not Eastern Time (ET). To correctly align data with market hours or dates, you'll need to explicitly convert timestamps from UTC to ET during your analysis.
+
+Infrastructure and Reliability
+Our platform's robustness begins with our primary data facility at the Equinix Data Center in New Jersey, strategically co-located with the exchanges. This setup allows us to receive data through direct physical connections, significantly reducing latency and enhancing the reliability of the data. Initially established in New Jersey, our infrastructure has expanded to include full redundancy at the ORD11 data center in Chicago. This expansion ensures uninterrupted service and data availability, even under adverse conditions, across multiple geographic locations.
+
+Our data is sourced directly from proprietary exchange feeds and government-regulated consolidators known as Securities Information Processors (SIPs). By combining direct exchange access with regulated data consolidation, we ensure the provision of the most accurate and timely market data available. This infrastructure supports a wide range of financial data services and applications, offering our clients resilience, speed, and compliance with the highest industry standards.
+
+Data Flow: From Exchanges to You
+Our stock market data journey begins at the numerous trading venues across the U.S., encompassing all 19 major stock exchanges and additional dark pools. We maintain direct relationships with each exchange and comply with all licensing requirements, ensuring our data includes every trade, quote, and market event as it occurs.
+
+The flow of U.S. stock market data from major exchanges (e.g., NYSE, Nasdaq, Cboe) and dark pools through direct connections to Massive's co-located data facilities.
+Our data facility, co-located with the exchanges in the Equinix Data Center in New Jersey, receives this data through direct physical connections. This setup not only guarantees the fastest possible data transmission due to our proximity to the source but also enhances the reliability and integrity of the data we deliver.
+
+This extensive coverage includes major platforms such as:
+
+New York Stock Exchange (NYSE, NYSE American, NYSE Arca, NYSE Chicago, NYSE National)
+Nasdaq (OMX, BX, PSX, Philadelphia)
+Cboe Global Markets (BZX, BYX, EDGX, EDGA)
+MIAX Exchange Group (Pearl, Emerald, Equities)
+Members Exchange (MEMX)
+Investors Exchange (IEX)
+Long-Term Stock Exchange (LTSE)
+Additionally, our dataset is enriched with trade data from:
+
+FINRA Trading Facilities: including FINRA NYSE TRF, FINRA Nasdaq TRF Carteret, and FINRA Nasdaq TRF Chicago, which provide comprehensive trade reporting but not quotes.
+OTC Reporting Facility: captures trades from over-the-counter markets but not quotes.
+While our core data includes every trade and quote from the major stock exchanges, it's important to note that for the FINRA and OTC platforms, we exclusively capture trade information. This distinction is crucial for users relying on our data for accurate market analysis and decision-making.
+
+From these diverse sources, the raw data is channeled to Securities Information Processors (SIPs). Our broad coverage across these platforms allows us to offer a complete view of the U.S. stock market landscape, making our data essential for those requiring comprehensive market insights. By integrating and processing this data, we ensure that all market participants have access to the full spectrum of market activities, empowering them with the data needed to make informed decisions.
+
+What are Securities Information Processors (SIPs)?
+Securities Information Processors (SIPs) are integral to the U.S. market data system, consolidating trade and quote data from all exchanges into a single feed, which includes the official National Best Bid and Offer (NBBO) and last sale data. We receive this consolidated data directly from SIPs such as the Consolidated Tape Association (CTA) for NYSE-listed and regional exchange securities (Tapes A and B), and the Unlisted Trading Privileges (UTP), managed by Nasdaq, for all Nasdaq-listed securities (Tape C). Additionally, our platform includes data from Alternative Trading Systems (ATSs), which are required to report executed trades to FINRA within 10 seconds. We access these trades directly from the FINRA feed, enriching our dataset with comprehensive on-exchange and off-exchange trading activity.
+
+SIPs are vital infrastructure in the U.S. financial markets, designed to consolidate and standardize the torrent of information from various exchanges. Their primary function is to ensure all market participants have equal access to trade and quote data, which is essential for maintaining a transparent and fair trading environment. SIPs compile this data into a consolidated stream that includes the National Best Bid and Offer (NBBO) and trade information, thus providing the official record of stock prices and transactions.
+
+After processing by the SIPs, this consolidated data is delivered to Massive, where we further refine and distribute it to our users through our REST APIs, WebSocket streams, and Flat Files. This structured data flow ensures that you receive comprehensive, accurate, and timely market data to power your applications and analyses.
+
+Regulatory Compliance
+U.S. stock market data regulations allow us to provide the full U.S. feed, covering all exchanges, to non-industry professionals for personal use. We closely monitor compliance to ensure these data feeds are used appropriately. For business clients, we offer tailored plans that may include specific exchange licensing requirements, providing a flexible approach to meet diverse professional needs. This ensures that our platform can serve a broad spectrum of users from casual individual traders to large institutional clients.
+
+Next Steps
+Explore our REST API endpoints to fully harness the capabilities of our extensive market data. Our detailed documentation will guide you through integrating real-time and historical data into your applications, helping you make informed decisions backed by comprehensive and timely market insights.
+
+Quickstart
+All Tickers

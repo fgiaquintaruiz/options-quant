@@ -105,6 +105,15 @@ _Last updated: 2026-05-16_
 - **Prerequisito**: completar SDD Telegram Dead Code Cleanup (ver abajo)
 - **Retomar cuando**: dead code eliminado y `validateWebhookRequest` wired up en controller
 
+### Migración a Kotlin DDD 🔜 PLACEHOLDER
+Idea sin scope todavía. Refactor del backend a Kotlin con arquitectura DDD.
+Pendiente: definir alcance, motivación, plan de migración incremental.
+
+### Creador de estrategias 🔜 PLACEHOLDER
+Idea sin scope todavía. Tooling para que el sistema genere/proponga estrategias
+en lugar de implementarlas a mano.
+Pendiente: definir alcance, motivación, plan.
+
 ---
 
 ## SDD: Telegram Dead Code Cleanup 🔜 DEFERRED
@@ -165,6 +174,18 @@ loguee `WARN` con mensaje claro si alguno falla.
 ---
 
 - **M10 — Schema migrations**: introducir Flyway o Liquibase para versionar el schema SQLite. Hoy el schema se crea de forma idempotente vía `SchemaInitializer.java` con `CREATE TABLE IF NOT EXISTS` y `ALTER TABLE` envuelto en try/catch para columnas (ej. `chunk_origin` agregada en DEL1 live-tail fix). Cada nueva columna requiere ese patrón manual; con Flyway dejaríamos un trail versionado y auditable. Bloqueado por sprint corto previo al paper trading; programar fuera del path crítico.
+
+### A2 — Analytics service — Bugs pendientes (rescatado de info-optionsquant 2026-05-09)
+**Severidad**: MEDIA | **Esfuerzo**: S
+
+- **Renombrar** `java_grpc_connected` → `java_rest_connected` en `main.py` de analytics_service.
+  El campo no tiene nada de gRPC — usa REST puro (httpx). El nombre incorrecto causó horas de
+  diagnóstico en la dirección equivocada.
+- **Mover** `JavaApiClient.connect()` del módulo top-level al lifecycle `lifespan` de FastAPI
+  (~línea 178 de `main.py`). Bug: si Java no está up en el momento exacto de import →
+  `connected = False` para siempre, sin reconexión.
+- **Estado actual**: workaround manual aplicado (reinicio del analytics_service).
+  Fix permanente pendiente.
 
 ## Fixes recientes
 
