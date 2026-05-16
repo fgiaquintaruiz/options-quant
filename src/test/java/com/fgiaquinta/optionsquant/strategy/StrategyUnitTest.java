@@ -909,7 +909,7 @@ class StrategyUnitTest {
 
             // 15m close riding lower band: with all historical 15m closes at 100, lower band ~100
             // close=99.5 <= 100 * 1.005 = 100.5 → riding lower band
-            double[] current15m = {99.6, 99.8, 99.3, 99.5, 2000000L};
+            double[] current15m = {99.8, 99.9, 99.0, 99.5, 2000000L};
 
             StrategyData data = buildP1Data(testTime, hourlyCloses, hourlyLows, hourlyOpens, current15m);
             P1SqueezePutStrategy strategy = new P1SqueezePutStrategy();
