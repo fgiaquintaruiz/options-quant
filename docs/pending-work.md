@@ -270,3 +270,30 @@ Fix: BackfillCheckpoint.java — `getLastDownloaded()`, ~línea 72.
 
 ### P3 — IntelliJ ghost process
 JVM huérfana compite por puerto 9090/TWS/candles.db. Correr `netstat -ano | findstr :9090` antes de arrancar.
+
+## Filtro --complete-tickers (NUEVO, pendiente implementación Java)
+
+### Tabla ticker_stats ✅ DONE
+Materializada con stats agregadas de candles. Refresh manual con
+scripts/refresh_ticker_stats.py.
+
+- Performance: query original 17.9s → ticker_stats 14-43ms (~1000×)
+- Cobertura: 510/512 tickers con los 4 timeframes (2 incompletos)
+- Threshold elegido: has_all_4_tfs=1 AND bars_total >= 80000
+- Universo inicial: 57 tickers califican (subset estricto para backtest)
+- Refresh tarda ~41s (full scan candles 24M filas)
+- Tabla creada con WITHOUT ROWID + 2 índices
+- Rango analizado: desde 2024-05-01 (inicio cobertura Polygon)
+
+### Pendiente — flag --complete-tickers en Java
+En BacktestBatchRunner.java, parsear flag, ejecutar al inicio del
+backtest:
+  SELECT ticker FROM ticker_stats
+  WHERE active=1 AND has_all_4_tfs=1 AND bars_total >= 80000;
+Cachear resultado, usar como universo del backtest.
+
+### Workflow operativo
+1. Después de cada batch significativo de backfill (Polygon o TWS),
+   correr: python scripts/refresh_ticker_stats.py
+2. Al iniciar backtest con --complete-tickers, query rápida contra
+   ticker_stats define universo.

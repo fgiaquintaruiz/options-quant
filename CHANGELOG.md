@@ -13,6 +13,12 @@ BackfillCheckpoint: Opción 3 chunk_origin filter implementation
 HistoricalBackfillService: chunk_origin filtering logic
 application.yml: backfill period adjusted 2023-01 → 2024-05 for Polygon handoff
 
+### Infrastructure
+- New table ticker_stats: materialized aggregations of candles
+  (per-timeframe counts + min/max timestamps). Range: 2024-05+.
+- scripts/refresh_ticker_stats.py: idempotent refresh script.
+- Filter query reduced from 17.9s → 14ms (~1000× speedup).
+
 ---
 
 [1.3.30] - 2026-04-10 (Spring Boot 4, Advanced CLIs & Strategy Tuning)
