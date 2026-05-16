@@ -13,6 +13,32 @@ import java.util.Set;
 
 public class P1SqueezePutStrategy implements TradingStrategy, TimeframeRequirements {
 
+    private static final double DEFAULT_BREAKOUT_BUFFER_PCT = 0.003;
+    private static final double DEFAULT_MIN_BODY_PCT = 0.002;
+    private static final double DEFAULT_BB_VOLATILITY_THRESHOLD = 1.1;
+
+    private final double breakoutBufferPct;
+    private final double minBodyPct;
+    private final double bbVolatilityThreshold;
+
+    public P1SqueezePutStrategy() {
+        this(DEFAULT_BREAKOUT_BUFFER_PCT, DEFAULT_MIN_BODY_PCT, DEFAULT_BB_VOLATILITY_THRESHOLD);
+    }
+
+    public P1SqueezePutStrategy(double breakoutBufferPct) {
+        this(breakoutBufferPct, DEFAULT_MIN_BODY_PCT, DEFAULT_BB_VOLATILITY_THRESHOLD);
+    }
+
+    public P1SqueezePutStrategy(double breakoutBufferPct, double minBodyPct) {
+        this(breakoutBufferPct, minBodyPct, DEFAULT_BB_VOLATILITY_THRESHOLD);
+    }
+
+    public P1SqueezePutStrategy(double breakoutBufferPct, double minBodyPct, double bbVolatilityThreshold) {
+        this.breakoutBufferPct = breakoutBufferPct;
+        this.minBodyPct = minBodyPct;
+        this.bbVolatilityThreshold = bbVolatilityThreshold;
+    }
+
     @Override
     public Set<TimeFrame> requiredTimeframes() {
         return Set.of(TimeFrame.MIN_15, TimeFrame.HOUR_1);
@@ -67,20 +93,44 @@ public class P1SqueezePutStrategy implements TradingStrategy, TimeframeRequireme
         double currentClose1h = close1h.getValue(idx1h).doubleValue();
         double currentOpen1h = series1h.getBar(idx1h).getOpenPrice().doubleValue();
 
-        // Breaks the floor with a red candle
-        boolean isBreakoutDown = currentClose1h < minPriceLast10Days && currentClose1h < currentOpen1h;
+        // Breaks the floor with a red candle — must clear the buffer to avoid false breakouts
+        double breakoutThreshold = minPriceLast10Days * (1.0 - breakoutBufferPct);
+        boolean isBreakoutDown = currentClose1h < breakoutThreshold && currentClose1h < currentOpen1h;
         if (!isBreakoutDown) return false;
+
+        // =========================================================================
+        // RULE 3b: MIN_15 BODY FILTER (bearish confirmation on 15-min timeframe)
+        // Body filter moved to MIN_15 — HOUR_1 breakout direction is already verified above.
+        // =========================================================================
+        double currentOpen15m = series15m.getBar(idx15m).getOpenPrice().doubleValue();
+        double currentClose15m = series15m.getBar(idx15m).getClosePrice().doubleValue();
+        double bodyPct15m = (currentClose15m - currentOpen15m) / currentOpen15m;
+        if (bodyPct15m > -minBodyPct) return false;
 
         // =========================================================================
         // RULE 4: HIGH VOLATILITY CONFIRMATION ON 15-MIN BOLLINGER BAND
         // Book: "confirmacion con vela final bajista en Bollinger Bands en periodo de 15 minutos con alta volatilidad"
         // =========================================================================
         BollingerBandsUtil bb15m = new BollingerBandsUtil(series15m, 20);
-        double currentClose15m = series15m.getBar(idx15m).getClosePrice().doubleValue();
+
+        // BB width must exceed the 20-bar average by the volatility threshold — confirms expansion, not squeeze
+        double bbWidthCurrent = bb15m.getWidthPercent(idx15m);
+        double bbWidthAvg = computeBBWidthAvg(bb15m, idx15m, 20);
+        if (bbWidthCurrent < bbWidthAvg * bbVolatilityThreshold) return false;
 
         // Pushing the lower band downward
         boolean isRidingLowerBand = bb15m.isRidingLowerBand(idx15m, 0.005); // Within 0.5% of lower band
 
         return isRidingLowerBand;
+    }
+
+    private double computeBBWidthAvg(BollingerBandsUtil bb, int currentIndex, int lookback) {
+        double sum = 0;
+        int count = 0;
+        for (int i = currentIndex - 1; i >= Math.max(0, currentIndex - lookback); i--) {
+            sum += bb.getWidthPercent(i);
+            count++;
+        }
+        return count == 0 ? 0 : sum / count;
     }
 }
