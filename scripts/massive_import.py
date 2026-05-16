@@ -143,14 +143,15 @@ def fetch_bars(url: str) -> dict:
 def fetch_all_bars(api_key: str, ticker: str, tf: dict, from_date: str, to_date: str,
                    sleep_fn=time.sleep) -> dict:
     """
-    Fetches ALL bars for a ticker/timeframe pair, following Polygon.io pagination.
+    Fetches ALL bars for a ticker/timeframe pair, following Polygon.io pagination via next_url.
 
-    The /v2/aggs endpoint returns at most 50,000 bars per request. When a response
-    contains exactly 50,000 results, more pages exist. This function keeps fetching
-    subsequent pages using the last bar's timestamp + 1 ms as the new `from` parameter,
-    until a partial page (< 50,000 results) is received.
+    The /v2/aggs endpoint returns at most 50,000 bars per request. When the response
+    contains a `next_url` field, more pages exist — regardless of how many bars the current
+    page returned. This function follows `next_url` until it is absent.
 
-    Rate limiting between pages handled internally via sleep_fn.
+    NOTE: Polygon does NOT include apiKey in next_url — we append it on each request.
+
+    Rate limiting between pages is handled internally via sleep_fn.
     CALLER still handles sleep after the full ticker import completes.
 
     Returns a merged dict: {"status": "OK", "results": all_results, "resultsCount": len(all_results)}
@@ -164,18 +165,15 @@ def fetch_all_bars(api_key: str, ticker: str, tf: dict, from_date: str, to_date:
 
     all_results = list(response.get("results") or [])
 
-    while len(all_results) > 0 and len(response.get("results") or []) == 50_000:
-        last_t = all_results[-1]["t"]
-        next_from = str(last_t + 1)
+    while response.get("next_url"):
+        next_url = response["next_url"] + f"&apiKey={api_key}"
         sleep_fn(RATE_LIMIT_SLEEP)
-        url = build_url(api_key, ticker, tf["multiplier"], tf["timespan"], next_from, to_date)
-        response = fetch_bars(url)
+        response = fetch_bars(next_url)
 
         if response.get("status") == FETCH_ERROR:
             return response
 
-        page_results = response.get("results") or []
-        all_results.extend(page_results)
+        all_results.extend(response.get("results") or [])
 
     return {"status": "OK", "results": all_results, "resultsCount": len(all_results)}
 

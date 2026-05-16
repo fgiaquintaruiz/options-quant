@@ -379,14 +379,15 @@ class TestFetchAllBars(unittest.TestCase):
     @patch("massive_import.fetch_bars")
     @patch("massive_import.build_url")
     def test_two_pages(self, mock_build_url, mock_fetch):
-        """Exactly 50000 on first call → fetches second page; sleep called once between pages."""
+        """Page 1 has next_url → fetches second page; sleep called once between pages."""
         LAST_T = 1_700_000_000_000
         page1_results = self._make_results(50_000, last_t=LAST_T)
         page2_results = self._make_results(200)
 
         mock_build_url.return_value = "http://fake-url"
         mock_fetch.side_effect = [
-            {"status": "OK", "results": page1_results, "resultsCount": 50_000},
+            {"status": "OK", "results": page1_results, "resultsCount": 50_000,
+             "next_url": "https://api.polygon.io/v2/aggs/ticker/SPY?cursor=page2"},
             {"status": "OK", "results": page2_results, "resultsCount": 200},
         ]
         sleep_mock = MagicMock()
@@ -395,11 +396,10 @@ class TestFetchAllBars(unittest.TestCase):
                                 sleep_fn=sleep_mock)
 
         self.assertEqual(mock_fetch.call_count, 2)
-        # Second build_url call must use str(last_t + 1) as from_date
-        second_build_call_kwargs = mock_build_url.call_args_list[1]
-        # build_url is called positionally: (api_key, ticker, multiplier, timespan, from_date, to_date)
-        args_second = second_build_call_kwargs[0]
-        self.assertEqual(args_second[4], str(LAST_T + 1))
+        # Second fetch must use next_url + apiKey (not a rebuild from timestamp)
+        second_call_url = mock_fetch.call_args_list[1][0][0]
+        self.assertIn("cursor=page2", second_call_url)
+        self.assertIn("apiKey=KEY", second_call_url)
         # sleep called once (between page 1 and page 2, NOT after page 2)
         sleep_mock.assert_called_once_with(RATE_LIMIT_SLEEP)
         self.assertEqual(len(result["results"]), 50_200)
@@ -407,7 +407,7 @@ class TestFetchAllBars(unittest.TestCase):
     @patch("massive_import.fetch_bars")
     @patch("massive_import.build_url")
     def test_three_pages(self, mock_build_url, mock_fetch):
-        """Two full pages then a partial → fetch called 3 times, sleep called twice."""
+        """Two pages with next_url then a final partial → fetch called 3 times, sleep called twice."""
         T1 = 1_700_000_000_000
         T2 = 1_800_000_000_000
         page1 = self._make_results(50_000, last_t=T1)
@@ -416,8 +416,10 @@ class TestFetchAllBars(unittest.TestCase):
 
         mock_build_url.return_value = "http://fake-url"
         mock_fetch.side_effect = [
-            {"status": "OK", "results": page1, "resultsCount": 50_000},
-            {"status": "OK", "results": page2, "resultsCount": 50_000},
+            {"status": "OK", "results": page1, "resultsCount": 50_000,
+             "next_url": "https://api.polygon.io/v2/aggs/ticker/SPY?cursor=page2"},
+            {"status": "OK", "results": page2, "resultsCount": 50_000,
+             "next_url": "https://api.polygon.io/v2/aggs/ticker/SPY?cursor=page3"},
             {"status": "OK", "results": page3, "resultsCount": 500},
         ]
         sleep_mock = MagicMock()
@@ -454,7 +456,8 @@ class TestFetchAllBars(unittest.TestCase):
         page1 = self._make_results(50_000, last_t=1_700_000_000_000)
         mock_build_url.return_value = "http://fake-url"
         mock_fetch.side_effect = [
-            {"status": "OK", "results": page1, "resultsCount": 50_000},
+            {"status": "OK", "results": page1, "resultsCount": 50_000,
+             "next_url": "https://api.polygon.io/v2/aggs/ticker/SPY?cursor=xyz"},
             {"status": FETCH_ERROR, "error": "timeout", "results": []},
         ]
         sleep_mock = MagicMock()
@@ -464,6 +467,57 @@ class TestFetchAllBars(unittest.TestCase):
 
         self.assertEqual(result["status"], FETCH_ERROR)
         sleep_mock.assert_called_once_with(RATE_LIMIT_SLEEP)
+
+    @patch("massive_import.fetch_bars")
+    @patch("massive_import.build_url")
+    def test_paginates_when_page1_partial_with_next_url(self, mock_build_url, mock_fetch):
+        """
+        Regression: page 1 returns < 50000 bars but has next_url → must paginate.
+        Bug: old code used len(results) == 50000 which is False here → stopped at page 1.
+        Fix: check response.get("next_url") instead.
+        """
+        LAST_T = 1_700_000_000_000
+        page1 = self._make_results(11_492, last_t=LAST_T)
+        page2 = self._make_results(8_000)
+        mock_build_url.return_value = "http://fake-url"
+        mock_fetch.side_effect = [
+            {"status": "OK", "results": page1, "resultsCount": 11_492,
+             "next_url": "fake://page2"},
+            {"status": "OK", "results": page2, "resultsCount": 8_000},
+        ]
+        sleep_mock = MagicMock()
+
+        result = fetch_all_bars("KEY", "CTRA", self.TF, "2024-01-01", "2024-12-31",
+                                sleep_fn=sleep_mock)
+
+        self.assertEqual(result["resultsCount"], 19_492)
+        self.assertEqual(len(result["results"]), 19_492)
+        sleep_mock.assert_called_once_with(RATE_LIMIT_SLEEP)
+
+    @patch("massive_import.fetch_bars")
+    @patch("massive_import.build_url")
+    def test_next_url_gets_api_key_appended(self, mock_build_url, mock_fetch):
+        """
+        Polygon's next_url does NOT include apiKey. We must append it.
+        """
+        page1 = self._make_results(50_000, last_t=1_700_000_000_000)
+        page2 = self._make_results(100)
+        next_url_base = "https://api.polygon.io/v2/aggs/ticker/CTRA?cursor=abc123"
+        mock_build_url.return_value = "http://fake-url"
+        mock_fetch.side_effect = [
+            {"status": "OK", "results": page1, "resultsCount": 50_000,
+             "next_url": next_url_base},
+            {"status": "OK", "results": page2, "resultsCount": 100},
+        ]
+        sleep_mock = MagicMock()
+
+        result = fetch_all_bars("MY_KEY", "CTRA", self.TF, "2024-01-01", "2024-12-31",
+                                sleep_fn=sleep_mock)
+
+        second_call_url = mock_fetch.call_args_list[1][0][0]
+        self.assertIn("MY_KEY", second_call_url)
+        self.assertEqual(second_call_url, next_url_base + "&apiKey=MY_KEY")
+        self.assertEqual(result["resultsCount"], 50_100)
 
 
 # ---------------------------------------------------------------------------
