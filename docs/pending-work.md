@@ -152,6 +152,50 @@ Pendiente: definir alcance, motivación, plan.
 
 ---
 
+## Bug — Backtest persistence falla con HikariDataSource closed 🔴 P1
+
+**Síntoma**: después de `engine.run()` completar (1m 12s, 57 tickers), `exit(0)` dispara shutdown hook → Spring cierra HikariCP. Los callbacks de persistencia que corren en `AsyncRun` separados intentan abrir conexiones a la DB ya cerrada → `"HikariDataSource has been closed"`.
+
+**Stack trace clave**:
+```
+CannotCreateTransactionException at BacktestPersistenceService.java:218
+BacktestBatchRunner.lambda$buildConfig$0(BacktestBatchRunner.java:437)
+BacktestEngine.lambda$runCore$4(BacktestEngine.java:450)
+CompletableFuture$AsyncRun.run(CompletableFuture.java:1825)
+```
+
+**Timeline confirmado** (backtest.log 2026-05-16):
+- 22:42:39 — Spring started
+- 22:43:13 — HikariCP `candles-write` cerrado por Thread-1 (shutdown hook)
+- 22:43:19 — primer error "has been closed" (5.4s post-cierre)
+
+**Hipótesis**: el callback (`.accept()` síncrono en `BacktestEngine:450`) en realidad dispara una sub-tarea `AsyncRun` (probablemente vía `TransactionTemplate` interno o un `thenRunAsync` en `buildConfig`). Ese `AsyncRun` NO está en `processFutures`, así que `allOf().join()` no lo espera → `exit(0)` se llama antes de que persistan los trades.
+
+**Fix probable**:
+1. Confirmar dónde se crea el `AsyncRun` separado (`BacktestBatchRunner.buildConfig` L437 o `BacktestEngine` L450)
+2. Garantizar que el callback complete SÍNCRONAMENTE antes de que retorne el `runAsync` principal, O trackear el callback-future en `processFutures`
+3. TDD: test que verifica `persistTickerResult()` se completa antes de que `run()` retorne
+
+**Prioridad**: P1 — bloquea cualquier backtest con persistencia habilitada.
+**Próxima sesión**: leer `BacktestEngine.java:440-480` + `BacktestBatchRunner.buildConfig` para confirmar origen del `AsyncRun`, luego TDD fix.
+
+### ✅ SOLUCIÓN — DevTools era el culpable
+
+DevTools (`spring.devtools.restart.enabled=true`) está activado intencionalmente para desarrollo (recompile automático al guardar). Durante el backtest masivo, cualquier recompilación (IntelliJ auto-build, edición de archivos) dispara DevTools restart → HikariCP cerrado → worker threads daemon siguen corriendo pero la DB está cerrada → callbacks de persistencia fallan.
+
+**Solución (sin tocar código)**: agregar `--spring.devtools.restart.enabled=false` al comando de batch.
+
+**Comando oficial de backtest**:
+```
+./gradlew bootRun --args="--backtest-all --complete-tickers --server.port=-1 --spring.devtools.restart.enabled=false"
+```
+
+DevTools queda activado para desarrollo normal pero desactivado para batch jobs.
+
+**Verificación 2026-05-17**: backtest re-corrido con la flag, 2221 trades persistidos correctamente en backtest_trades (run_id `2026-05-17_00-10`).
+
+---
+
 ## Tech debt
 
 ### A1.1 — Startup health check para servicios externos
@@ -263,15 +307,14 @@ Fix: BackfillCheckpoint.java — `getLastDownloaded()`, ~línea 72.
 - `volume` Stooq es float — candles.volume es INTEGER (decidir redondear vs cambiar tipo)
 - Esperar que terminen massive_import.py Y backfill Java antes de ejecutar
 
-### P2 — Tests pendientes de arreglar (3)
+### P2 — Tests pendientes de arreglar (2)
 1. `BacktestBatchRunnerResumeTest.whenBacktestFreshFlagPresent_startsFreshWithoutPrompt`
 2. `RollbackConfigTest$CsvActiveTest`
-3. `TestMainSkipLogic.test_no_fetch_when_all_done`
 
 ### P3 — IntelliJ ghost process
 JVM huérfana compite por puerto 9090/TWS/candles.db. Correr `netstat -ano | findstr :9090` antes de arrancar.
 
-## Filtro --complete-tickers (NUEVO, pendiente implementación Java)
+## Filtro --complete-tickers ✅ DONE
 
 ### Tabla ticker_stats ✅ DONE
 Materializada con stats agregadas de candles. Refresh manual con
@@ -285,7 +328,7 @@ scripts/refresh_ticker_stats.py.
 - Tabla creada con WITHOUT ROWID + 2 índices
 - Rango analizado: desde 2024-05-01 (inicio cobertura Polygon)
 
-### Pendiente — flag --complete-tickers en Java
+### Implementado — commits 5c9e7a3 + 81fed5d
 En BacktestBatchRunner.java, parsear flag, ejecutar al inicio del
 backtest:
   SELECT ticker FROM ticker_stats
