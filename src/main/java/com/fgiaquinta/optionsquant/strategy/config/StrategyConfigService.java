@@ -37,4 +37,16 @@ public class StrategyConfigService {
     public int update(String name, boolean enabledBacktest, boolean enabledLive, String notes, String updatedBy) {
         return repository.update(name, enabledBacktest, enabledLive, notes, updatedBy);
     }
+
+    /**
+     * Partial update: only applies non-null fields. Returns the updated config, or empty if name not found.
+     */
+    public Optional<StrategyConfig> partialUpdate(String name, Boolean enabledLive, Boolean enabledBacktest) {
+        return repository.findByName(name).map(existing -> {
+            boolean newEnabledLive = enabledLive != null ? enabledLive : existing.isEnabledLive();
+            boolean newEnabledBacktest = enabledBacktest != null ? enabledBacktest : existing.isEnabledBacktest();
+            repository.update(name, newEnabledBacktest, newEnabledLive, existing.getNotes(), existing.getUpdatedBy());
+            return repository.findByName(name).orElseThrow();
+        });
+    }
 }

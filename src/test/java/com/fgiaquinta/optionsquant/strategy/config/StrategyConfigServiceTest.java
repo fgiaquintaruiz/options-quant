@@ -68,4 +68,66 @@ class StrategyConfigServiceTest {
         when(repository.findByName("unknown")).thenReturn(Optional.empty());
         assertThat(service.findByName("unknown")).isEmpty();
     }
+
+    // --- partialUpdate ---
+
+    private static final StrategyConfig EXISTING = StrategyConfig.builder()
+            .strategyName("p6 reversal")
+            .enabledLive(true)
+            .enabledBacktest(false)
+            .notes("note")
+            .updatedAt(1000L)
+            .updatedBy("user1")
+            .build();
+
+    @Test
+    void partialUpdate_returnsEmptyWhenNameNotFound() {
+        when(repository.findByName("ghost")).thenReturn(Optional.empty());
+        assertThat(service.partialUpdate("ghost", true, null)).isEmpty();
+    }
+
+    @Test
+    void partialUpdate_onlyEnabledLive_keepsExistingBacktest() {
+        StrategyConfig afterUpdate = EXISTING.toBuilder().enabledLive(false).build();
+        when(repository.findByName("p6 reversal"))
+                .thenReturn(Optional.of(EXISTING))
+                .thenReturn(Optional.of(afterUpdate));
+
+        Optional<StrategyConfig> result = service.partialUpdate("p6 reversal", false, null);
+
+        assertThat(result).isPresent();
+        assertThat(result.get().isEnabledLive()).isFalse();
+        assertThat(result.get().isEnabledBacktest()).isFalse(); // unchanged
+        verify(repository).update("p6 reversal", false, false, "note", "user1");
+    }
+
+    @Test
+    void partialUpdate_onlyEnabledBacktest_keepsExistingLive() {
+        StrategyConfig afterUpdate = EXISTING.toBuilder().enabledBacktest(true).build();
+        when(repository.findByName("p6 reversal"))
+                .thenReturn(Optional.of(EXISTING))
+                .thenReturn(Optional.of(afterUpdate));
+
+        Optional<StrategyConfig> result = service.partialUpdate("p6 reversal", null, true);
+
+        assertThat(result).isPresent();
+        assertThat(result.get().isEnabledBacktest()).isTrue();
+        assertThat(result.get().isEnabledLive()).isTrue(); // unchanged
+        verify(repository).update("p6 reversal", true, true, "note", "user1");
+    }
+
+    @Test
+    void partialUpdate_bothFields_appliesBoth() {
+        StrategyConfig afterUpdate = EXISTING.toBuilder().enabledLive(false).enabledBacktest(true).build();
+        when(repository.findByName("p6 reversal"))
+                .thenReturn(Optional.of(EXISTING))
+                .thenReturn(Optional.of(afterUpdate));
+
+        Optional<StrategyConfig> result = service.partialUpdate("p6 reversal", false, true);
+
+        assertThat(result).isPresent();
+        assertThat(result.get().isEnabledLive()).isFalse();
+        assertThat(result.get().isEnabledBacktest()).isTrue();
+        verify(repository).update("p6 reversal", true, false, "note", "user1");
+    }
 }
