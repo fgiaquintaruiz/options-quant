@@ -9,6 +9,7 @@ import com.fgiaquinta.optionsquant.config.ScannerProperties;
 import com.fgiaquinta.optionsquant.domain.Candle;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.*;
+import com.fgiaquinta.optionsquant.strategy.config.StrategyConfigService;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.model.TradePlan;
 import com.fgiaquinta.optionsquant.strategy.utils.CandlestickPatternDetector;
@@ -71,6 +72,7 @@ public class StrategyScannerService {
     private final MarketCalendarService marketCalendar;
     private final ScannerProperties scannerProperties;
     private final ScanPrioritizationService scanPrioritizationService;
+    private final StrategyConfigService strategyConfigService;
 
     private final List<TradingStrategy> callStrategies;
     private final List<TradingStrategy> putStrategies;
@@ -137,7 +139,8 @@ public class StrategyScannerService {
                                    NewsBiasService newsBiasService,
                                    MarketCalendarService marketCalendar,
                                    ScannerProperties scannerProperties,
-                                   ScanPrioritizationService scanPrioritizationService) {
+                                   ScanPrioritizationService scanPrioritizationService,
+                                   StrategyConfigService strategyConfigService) {
         this.candleRepository = candleRepository;
         this.ibkrService = ibkrService;
         this.ibkrProperties = ibkrProperties;
@@ -148,6 +151,7 @@ public class StrategyScannerService {
         this.marketCalendar = marketCalendar;
         this.scannerProperties = scannerProperties;
         this.scanPrioritizationService = scanPrioritizationService;
+        this.strategyConfigService = strategyConfigService;
 
         this.callStrategies = List.of(
                 new C1SqueezeCallStrategy(),
@@ -722,6 +726,10 @@ public class StrategyScannerService {
 
         for (TradingStrategy strategy : applicable) {
             try {
+                if (!strategyConfigService.isLiveEnabled(strategy.getName())) {
+                    log.debug("[live] Strategy {} not enabled — skipping", strategy.getName());
+                    continue;
+                }
                 boolean triggered = strategy.isTriggered(ticker, data, nyTime);
                 if (!triggered) continue;
                 

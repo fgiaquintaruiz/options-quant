@@ -6,6 +6,7 @@ import com.fgiaquinta.optionsquant.config.ScannerProperties;
 import com.fgiaquinta.optionsquant.domain.Candle;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.TimeframeRequirements;
+import com.fgiaquinta.optionsquant.strategy.config.StrategyConfigService;
 import com.fgiaquinta.optionsquant.strategy.TradingStrategy;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,6 +54,7 @@ class StrategyScannerServiceTimeframeRequirementsTest {
     @Mock private MarketCalendarService marketCalendar;
     @Mock private ScannerProperties scannerProperties;
     @Mock private ScanPrioritizationService scanPrioritizationService;
+    @Mock private StrategyConfigService strategyConfigService;
 
     private StrategyScannerService service;
 
@@ -66,7 +68,8 @@ class StrategyScannerServiceTimeframeRequirementsTest {
                 candleRepository, ibkrService, ibkrProperties,
                 tickerService, tickerMemory, earningsService,
                 newsBiasService, marketCalendar,
-                scannerProperties, scanPrioritizationService);
+                scannerProperties, scanPrioritizationService,
+                strategyConfigService);
     }
 
     private List<Candle> sampleCandles() {
