@@ -3,7 +3,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
-import StrategiesPage from './StrategiesPage'
+import StrategiesPage, { sortStrategiesForTest } from './StrategiesPage'
 import { strategyConfigApi } from '../api'
 
 vi.mock('../api', () => ({
@@ -195,6 +195,20 @@ describe('StrategiesPage', () => {
       fireEvent.click(checkbox)
       expect(screen.getByTestId('strategy-backtest-p1_squeeze').checked).toBe(true)
       resolveUpdate({ name: 'p1_squeeze', enabledLive: true, enabledBacktest: true })
+    })
+  })
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Defensive sort — undefined name
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('Defensive sort — undefined name', () => {
+    it('sortStrategiesForTest does not throw when a strategy has name undefined', () => {
+      const list = [
+        { name: undefined,     enabledLive: false, enabledBacktest: false },
+        { name: 'p6_reversal', enabledLive: true,  enabledBacktest: true  },
+      ]
+      expect(() => sortStrategiesForTest(list)).not.toThrow()
     })
   })
 

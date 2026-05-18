@@ -6,10 +6,12 @@ import './StrategiesPage.css'
 // ── Sorting ───────────────────────────────────────────────────────────────────
 
 function sortStrategies(list) {
-  const live    = list.filter(s => s.enabledLive).sort((a, b) => a.name.localeCompare(b.name))
-  const notLive = list.filter(s => !s.enabledLive).sort((a, b) => a.name.localeCompare(b.name))
+  const live    = list.filter(s => s.enabledLive).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
+  const notLive = list.filter(s => !s.enabledLive).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
   return [...live, ...notLive]
 }
+
+export { sortStrategies as sortStrategiesForTest }
 
 // ── ConfirmDialog ─────────────────────────────────────────────────────────────
 
