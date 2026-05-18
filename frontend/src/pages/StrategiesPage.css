@@ -1,0 +1,77 @@
+.strategies-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  color: #c9d1d9;
+}
+
+.strategies-section-header {
+  color: #f0883e;
+  margin-bottom: 16px;
+}
+
+.strategies-section-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #c9d1d9;
+}
+
+.strategies-section-header h2 span {
+  color: #f0883e;
+}
+
+.strategies-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.strategies-table th,
+.strategies-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #30363d;
+  text-align: left;
+}
+
+.strategies-table th {
+  color: #8b949e;
+  font-weight: 500;
+  background: #161b22;
+}
+
+.strategies-section-live {
+  background: #f0883e11;
+}
+
+/* ── Confirm dialog overlay ─────────────────────────────────────────────── */
+
+.confirm-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.confirm-dialog {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 440px;
+  width: 100%;
+  color: #c9d1d9;
+}
+
+.confirm-dialog p {
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}

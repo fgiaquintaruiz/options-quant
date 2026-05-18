@@ -47,6 +47,10 @@ vi.mock('../components/SwapButton', () => ({
   default: () => <div />,
 }))
 
+vi.mock('../components/ScanEngineControls', () => ({
+  default: () => <div data-testid="scan-engine-controls-mock" />,
+}))
+
 vi.mock('../utils/storage', () => ({
   LS: {
     get: vi.fn().mockReturnValue(null),

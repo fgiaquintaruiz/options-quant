@@ -1,8 +1,10 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { Play, Square, Monitor, Cpu, OctagonAlert } from 'lucide-react'
 import SwapButton from './SwapButton'
 import AdvancedScanControls from './AdvancedScanControls'
 import { formatMinSec } from '../utils/liveSignalUtils'
+import { strategyConfigApi } from '../api'
 
 /**
  * Row 2 of the LiveDashboard toolbar — engine controls.
@@ -35,6 +37,17 @@ export default function ScanEngineControls({
   onReplayActiveChange,
   onError,
 }) {
+  const [liveCount, setLiveCount] = useState(0)
+
+  useEffect(() => {
+    const fetchCount = () => strategyConfigApi.findAll()
+      .then(list => setLiveCount(list.filter(s => s.enabledLive).length))
+      .catch(() => {})
+    fetchCount()
+    const id = setInterval(fetchCount, 30000)
+    return () => clearInterval(id)
+  }, [])
+
   const forceStopClass = forceStopReleasing ? 'ld-force-stop-btn--releasing'
     : exclusiveScanLockHeld ? 'ld-force-stop-btn--locked' : 'ld-force-stop-btn--free'
   const forceStopLabelClass = (forceStopReleasing || exclusiveScanLockHeld)
@@ -113,6 +126,10 @@ export default function ScanEngineControls({
           onReplayActiveChange={onReplayActiveChange}
           onError={onError}
         />
+
+        <Link to="/strategies" data-testid="strategies-badge" className="strategies-badge">
+          ⚙ Strategies · {liveCount} active
+        </Link>
 
       </div>
     </div>

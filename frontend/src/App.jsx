@@ -1,5 +1,5 @@
 import { NavLink, useLocation, Routes, Route, Navigate } from 'react-router-dom'
-import { Activity, BarChart3, HeartPulse, Settings, History } from 'lucide-react'
+import { Activity, BarChart3, HeartPulse, Settings, History, Layers } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
 import { liveApi, accountApi } from './api'
 import { LS } from './utils/storage'
@@ -8,6 +8,7 @@ import BacktestDashboard from './pages/BacktestDashboard'
 import BacktestHistoryPage from './pages/BacktestHistoryPage'
 import HealthPage from './pages/HealthPage'
 import SettingsPage from './pages/SettingsPage'
+import StrategiesPage from './pages/StrategiesPage'
 import AccountMenuDropdown from './components/AccountMenuDropdown'
 import { useStorageBackup } from './hooks/useStorageBackup'
 
@@ -111,6 +112,7 @@ export default function App() {
             <NavLink to="/backtest-history" className={({ isActive }) => isActive ? 'active' : ''}><History size={14} /> History</NavLink>
             <NavLink to="/settings" className={({ isActive }) => isActive ? 'active' : ''}><Settings size={14} /> Config</NavLink>
             <NavLink to="/health"   className={({ isActive }) => isActive ? 'active' : ''}><HeartPulse size={14} /> Health</NavLink>
+            <NavLink to="/strategies" className={({ isActive }) => isActive ? 'active' : ''} data-testid="navlink-strategies"><Layers size={14} /> Strategies</NavLink>
           </div>
         </div>
 
@@ -152,6 +154,7 @@ export default function App() {
         <Route path="/backtest-history" element={<BacktestHistoryPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/health"  element={<HealthPage />} />
+        <Route path="/strategies" element={<StrategiesPage />} />
         <Route path="*"        element={<Navigate to="/live" replace />} />
       </Routes>
     </div>

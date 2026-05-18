@@ -23,6 +23,9 @@ const putJson  = (path, b)  => fetch(`${API}${path}`, {
   method: 'PUT',  headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b),
 }).then(handleResponse)
 const del      = (path)     => fetch(`${API}${path}`, { method: 'DELETE' }).then(handleResponse)
+const patchJson = (path, b) => fetch(`${API}${path}`, {
+  method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b),
+}).then(handleResponse)
 
 // ===== Live Mode API =====
 
@@ -169,6 +172,13 @@ export const backtestHistoryApi = {
   },
   getLossesAnalysis: (runId) => get(`/api/backtest/runs/${encodeURIComponent(runId)}/losses-analysis`),
 }
+
+// ===== Strategy Config API =====
+
+export const strategyConfigApi = {
+  findAll: () => get('/api/strategy-config'),
+  update:  (name, body) => patchJson(`/api/strategy-config/${encodeURIComponent(name)}`, body),
+};
 
 // ===== Health API =====
 

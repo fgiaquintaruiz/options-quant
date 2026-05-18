@@ -1,8 +1,19 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 import ScanEngineControls from './ScanEngineControls'
+
+vi.mock('../api', () => ({
+  strategyConfigApi: { findAll: vi.fn() },
+}))
+
+// Default: all tests get a silent resolved empty array so the badge useEffect doesn't crash
+import { strategyConfigApi } from '../api'
+beforeEach(() => {
+  strategyConfigApi.findAll.mockResolvedValue([])
+})
 
 /**
  * Tests for ScanEngineControls — toolbar row 2 of LiveDashboard.
@@ -55,36 +66,38 @@ const baseProps = {
   onError: vi.fn(),
 }
 
+const renderWithRouter = (ui) => render(<MemoryRouter>{ui}</MemoryRouter>)
+
 describe('ScanEngineControls', () => {
   it('renders idle state with enabled Start button', () => {
-    render(<ScanEngineControls {...baseProps} />)
+    renderWithRouter(<ScanEngineControls {...baseProps} />)
     const btn = screen.getByTestId('live-start-scan')
     expect(btn).toBeInTheDocument()
     expect(btn.disabled).toBe(false)
   })
 
   it('renders Stop button when scanning=true', () => {
-    render(<ScanEngineControls {...baseProps} scanning={true} stopRequested={false} />)
+    renderWithRouter(<ScanEngineControls {...baseProps} scanning={true} stopRequested={false} />)
     expect(screen.getByTestId('live-stop-scan')).toBeInTheDocument()
     expect(screen.queryByTestId('live-start-scan')).toBeNull()
   })
 
   it('calls onStartScan when Start is clicked', async () => {
     const onStartScan = vi.fn()
-    render(<ScanEngineControls {...baseProps} onStartScan={onStartScan} />)
+    renderWithRouter(<ScanEngineControls {...baseProps} onStartScan={onStartScan} />)
     await userEvent.click(screen.getByTestId('live-start-scan'))
     expect(onStartScan).toHaveBeenCalledOnce()
   })
 
   it('calls onStopScan when Stop is clicked', async () => {
     const onStopScan = vi.fn()
-    render(<ScanEngineControls {...baseProps} scanning={true} onStopScan={onStopScan} />)
+    renderWithRouter(<ScanEngineControls {...baseProps} scanning={true} onStopScan={onStopScan} />)
     await userEvent.click(screen.getByTestId('live-stop-scan'))
     expect(onStopScan).toHaveBeenCalledOnce()
   })
 
   it('disables Start when IBKR lock is active (exclusiveScanLockHeld=true, canScan=false)', () => {
-    render(
+    renderWithRouter(
       <ScanEngineControls
         {...baseProps}
         canScan={false}
@@ -98,7 +111,7 @@ describe('ScanEngineControls', () => {
   })
 
   it('renders countdown when schedulerEnabled=true and nextScanSecs provided', () => {
-    render(
+    renderWithRouter(
       <ScanEngineControls
         {...baseProps}
         status={{ ...baseProps.status, schedulerEnabled: true }}
@@ -112,13 +125,13 @@ describe('ScanEngineControls', () => {
 
   it('calls onForceStop once when force-stop button is clicked', async () => {
     const onForceStop = vi.fn()
-    render(<ScanEngineControls {...baseProps} forceStopReleasing={false} exclusiveScanLockHeld={false} onForceStop={onForceStop} />)
+    renderWithRouter(<ScanEngineControls {...baseProps} forceStopReleasing={false} exclusiveScanLockHeld={false} onForceStop={onForceStop} />)
     await userEvent.click(screen.getByTestId('live-force-stop'))
     expect(onForceStop).toHaveBeenCalledOnce()
   })
 
   it('disables force-stop button and shows Liberando text when forceStopReleasing=true', () => {
-    render(<ScanEngineControls {...baseProps} forceStopReleasing={true} />)
+    renderWithRouter(<ScanEngineControls {...baseProps} forceStopReleasing={true} />)
     const btn = screen.getByTestId('live-force-stop')
     expect(btn.disabled).toBe(true)
     expect(btn.textContent).toContain('Liberando…')
@@ -126,27 +139,27 @@ describe('ScanEngineControls', () => {
 
   it('calls onToggleScheduler once when Auto Scan button is clicked', async () => {
     const onToggleScheduler = vi.fn()
-    render(<ScanEngineControls {...baseProps} onToggleScheduler={onToggleScheduler} />)
+    renderWithRouter(<ScanEngineControls {...baseProps} onToggleScheduler={onToggleScheduler} />)
     await userEvent.click(screen.getByTestId('live-toggle-scheduler'))
     expect(onToggleScheduler).toHaveBeenCalledOnce()
   })
 
   it('calls onToggleAutoExecute once when auto-execute swap button is clicked', async () => {
     const onToggleAutoExecute = vi.fn()
-    render(<ScanEngineControls {...baseProps} onToggleAutoExecute={onToggleAutoExecute} />)
+    renderWithRouter(<ScanEngineControls {...baseProps} onToggleAutoExecute={onToggleAutoExecute} />)
     await userEvent.click(screen.getByTestId('live-toggle-auto-execute'))
     expect(onToggleAutoExecute).toHaveBeenCalledOnce()
   })
 
   it('calls onToggleMacroFilter once when macro-filter swap button is clicked', async () => {
     const onToggleMacroFilter = vi.fn()
-    render(<ScanEngineControls {...baseProps} onToggleMacroFilter={onToggleMacroFilter} />)
+    renderWithRouter(<ScanEngineControls {...baseProps} onToggleMacroFilter={onToggleMacroFilter} />)
     await userEvent.click(screen.getByTestId('live-toggle-macro-filter'))
     expect(onToggleMacroFilter).toHaveBeenCalledOnce()
   })
 
   it('renders AdvancedScanControls and passes handlers through', () => {
-    render(<ScanEngineControls {...baseProps} />)
+    renderWithRouter(<ScanEngineControls {...baseProps} />)
     expect(screen.getByTestId('advanced-scan-controls-mock')).toBeInTheDocument()
   })
 
@@ -154,27 +167,102 @@ describe('ScanEngineControls', () => {
 
   it('passes onRiskAdjust(1.0) through AdvancedScanControls', async () => {
     const onRiskAdjust = vi.fn()
-    render(<ScanEngineControls {...baseProps} onRiskAdjust={onRiskAdjust} />)
+    renderWithRouter(<ScanEngineControls {...baseProps} onRiskAdjust={onRiskAdjust} />)
     await userEvent.click(screen.getByTestId('live-risk-up'))
     expect(onRiskAdjust).toHaveBeenCalledWith(1.0)
   })
 
   it('passes onRiskAdjust(-1.0) through AdvancedScanControls', async () => {
     const onRiskAdjust = vi.fn()
-    render(<ScanEngineControls {...baseProps} onRiskAdjust={onRiskAdjust} />)
+    renderWithRouter(<ScanEngineControls {...baseProps} onRiskAdjust={onRiskAdjust} />)
     await userEvent.click(screen.getByTestId('live-risk-down'))
     expect(onRiskAdjust).toHaveBeenCalledWith(-1.0)
   })
 
   it('shows mock signal button in AdvancedScanControls when mockMarketOpen=true', () => {
-    render(<ScanEngineControls {...baseProps} mockMarketOpen={true} />)
+    renderWithRouter(<ScanEngineControls {...baseProps} mockMarketOpen={true} />)
     expect(screen.getByTestId('live-inject-mock-signal')).toBeInTheDocument()
   })
 
   it('passes onInjectMockSignal through AdvancedScanControls', async () => {
     const onInjectMockSignal = vi.fn()
-    render(<ScanEngineControls {...baseProps} mockMarketOpen={true} onInjectMockSignal={onInjectMockSignal} />)
+    renderWithRouter(<ScanEngineControls {...baseProps} mockMarketOpen={true} onInjectMockSignal={onInjectMockSignal} />)
     await userEvent.click(screen.getByTestId('live-inject-mock-signal'))
     expect(onInjectMockSignal).toHaveBeenCalledOnce()
+  })
+})
+
+describe('Strategies badge', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('renders strategies badge with zero count when api returns empty array', async () => {
+    const { strategyConfigApi } = await import('../api')
+    strategyConfigApi.findAll.mockResolvedValue([])
+    renderWithRouter(<ScanEngineControls {...baseProps} />)
+    await waitFor(() => {
+      expect(screen.getByTestId('strategies-badge')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('strategies-badge').textContent).toContain('0 active')
+  })
+
+  it('fetches strategy count on mount', async () => {
+    const { strategyConfigApi } = await import('../api')
+    strategyConfigApi.findAll.mockResolvedValue([])
+    renderWithRouter(<ScanEngineControls {...baseProps} />)
+    await waitFor(() => {
+      expect(strategyConfigApi.findAll).toHaveBeenCalledOnce()
+    })
+  })
+
+  it('renders live-active count after fetch', async () => {
+    const { strategyConfigApi } = await import('../api')
+    strategyConfigApi.findAll.mockResolvedValue([
+      { name: 'A', enabledLive: true },
+      { name: 'B', enabledLive: true },
+      { name: 'C', enabledLive: false },
+    ])
+    renderWithRouter(<ScanEngineControls {...baseProps} />)
+    await waitFor(() => {
+      expect(screen.getByTestId('strategies-badge').textContent).toContain('2 active')
+    })
+  })
+
+  it('badge is a link to /strategies', async () => {
+    const { strategyConfigApi } = await import('../api')
+    strategyConfigApi.findAll.mockResolvedValue([])
+    renderWithRouter(<ScanEngineControls {...baseProps} />)
+    await waitFor(() => {
+      const badge = screen.getByTestId('strategies-badge')
+      expect(badge.getAttribute('href')).toBe('/strategies')
+    })
+  })
+
+  it('badge has correct testId', async () => {
+    const { strategyConfigApi } = await import('../api')
+    strategyConfigApi.findAll.mockResolvedValue([])
+    renderWithRouter(<ScanEngineControls {...baseProps} />)
+    await waitFor(() => {
+      expect(screen.getByTestId('strategies-badge')).toBeInTheDocument()
+    })
+  })
+
+  it('updates count after refresh interval', async () => {
+    vi.useFakeTimers()
+    const { strategyConfigApi } = await import('../api')
+    strategyConfigApi.findAll.mockResolvedValue([])
+    renderWithRouter(<ScanEngineControls {...baseProps} />)
+    // initial mount call
+    await act(async () => { await Promise.resolve() })
+    expect(strategyConfigApi.findAll).toHaveBeenCalledTimes(1)
+    // advance 30s
+    await act(async () => { vi.advanceTimersByTime(30000) })
+    await act(async () => { await Promise.resolve() })
+    expect(strategyConfigApi.findAll).toHaveBeenCalledTimes(2)
   })
 })

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { handleResponse, liveApi, backtestApi, tickerConfigApi, healthApi, replayApi, externalPositionsApi, analyticsApi, accountApi } from './api.js'
+import { handleResponse, liveApi, backtestApi, tickerConfigApi, healthApi, replayApi, externalPositionsApi, analyticsApi, accountApi, strategyConfigApi } from './api.js'
 
 describe('handleResponse', () => {
   it('parses JSON when ok', async () => {
@@ -520,5 +520,49 @@ describe('externalPositionsApi', () => {
       json: () => Promise.resolve({ error: 'already scheduled' }),
     })
     await expect(externalPositionsApi.scheduleClose1450('AAPL')).rejects.toThrow('HTTP 409: already scheduled')
+  })
+})
+
+describe('strategyConfigApi', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([]),
+    })
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('findAll calls GET /api/strategy-config', async () => {
+    await strategyConfigApi.findAll()
+    expect(fetch).toHaveBeenCalledWith('/api/strategy-config')
+  })
+
+  it('findAll returns parsed JSON array', async () => {
+    const data = [{ name: 'S1' }, { name: 'S2' }]
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(data),
+    })
+    const result = await strategyConfigApi.findAll()
+    expect(result).toEqual(data)
+  })
+
+  it('update calls PATCH /api/strategy-config/{name}', async () => {
+    await strategyConfigApi.update('MyStrategy', { enabled: true })
+    expect(fetch.mock.calls[0][0]).toBe('/api/strategy-config/MyStrategy')
+    expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'PATCH' })
+  })
+
+  it('update sends correct JSON body with Content-Type header', async () => {
+    const body = { enabled: false, riskPct: 0.01 }
+    await strategyConfigApi.update('MyStrategy', body)
+    expect(fetch).toHaveBeenCalledWith('/api/strategy-config/MyStrategy', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
   })
 })
