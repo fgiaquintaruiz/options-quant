@@ -93,3 +93,9 @@
 - Análisis de overfitting completo
 - DROP candles_stooq + VACUUM (~5-6 GB liberados)
 - Roadmap reorganizado
+- Investigación Fase A pre-paper: pricing direccional puro (delta=1 implícito), gap esperado vs realidad opciones reales
+- Verificación cobertura tickers tácticos: MU/OXY/URA ya completos en 4 TFs ✅, SMH/GLD bootstrapeados
+- Modificación massive_import.py: --only-tickers flag (TDD)
+- Nuevo scripts/yfinance_day1_import.py para DAY_1 vía sidecar :8001 (TDD)
+- Descarga overnight: SMH/GLD intradía (HOUR_1+MIN_15+MIN_5) via massive en background
+- Universo final 16 tickers definido: NVDA, AMD, AMZN, TSLA, META, AVGO, COIN, MSTR, AAPL, AMZN + SPY + URA, MU, SMH, OXY, GLD

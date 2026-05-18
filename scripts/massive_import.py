@@ -247,6 +247,8 @@ def main(args=None):
     parser = argparse.ArgumentParser(description="Importa candles históricos desde Polygon.io")
     parser.add_argument("--dry-run", action="store_true",
                         help="Simula sin hacer HTTP calls ni escribir en DB")
+    parser.add_argument("--only-tickers", type=str, default=None,
+                        help="Comma-separated tickers (overrides load_tickers)")
     parsed = parser.parse_args(args)
 
     # Leer API key
@@ -268,8 +270,12 @@ def main(args=None):
         cursor = conn.cursor()
         cursor.execute("SELECT ticker, timeframe FROM massive_import_progress WHERE status='DONE'")
         done_set = {(row[0], row[1]) for row in cursor.fetchall()}
-        tickers = load_tickers(DB_PATH)
-        print(f"[INFO] Tickers encontrados: {len(tickers)}")
+        if parsed.only_tickers:
+            tickers = [t.strip().upper() for t in parsed.only_tickers.split(",") if t.strip()]
+            print(f"[INFO] Modo --only-tickers: {tickers}")
+        else:
+            tickers = load_tickers(DB_PATH)
+            print(f"[INFO] Tickers encontrados: {len(tickers)}")
 
         counts = {"DONE": 0, "ERROR": 0, "EMPTY": 0, "SKIP": 0}
 

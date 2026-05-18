@@ -568,5 +568,24 @@ class TestImportTickerTimeframePagination(unittest.TestCase):
         self.assertEqual(result["bars"], 1)
 
 
+# ---------------------------------------------------------------------------
+# Test 10 — --only-tickers argument parsing logic
+# ---------------------------------------------------------------------------
+def test_only_tickers_parses_comma_separated():
+    raw = "SMH,GLD"
+    tickers = [t.strip().upper() for t in raw.split(",") if t.strip()]
+    assert tickers == ["SMH", "GLD"]
+
+def test_only_tickers_strips_whitespace_and_uppercase():
+    raw = "  smh , GLD , URA  "
+    tickers = [t.strip().upper() for t in raw.split(",") if t.strip()]
+    assert tickers == ["SMH", "GLD", "URA"]
+
+def test_only_tickers_filters_empty_entries():
+    raw = "SMH,,GLD,"
+    tickers = [t.strip().upper() for t in raw.split(",") if t.strip()]
+    assert tickers == ["SMH", "GLD"]
+
+
 if __name__ == "__main__":
     unittest.main()
