@@ -56,9 +56,9 @@ ibkr:
   auto-execute: true
   account-id: "DUN598216"
   default-qty: 10
-  risk-per-trade-pct: 0.02
-  hot-ticker-count: 20 # Used when hot-tickers is empty: top N CSV names by market cap (see TickerService)
-  tickers: AAPL,MSFT
+  risk-per-trade-pct: 1.0
+  hot-ticker-count: 11 # Used when hot-tickers is empty: top N CSV names by market cap (see TickerService)
+  tickers: NVDA,AMD,AMDL,TSLA,META,AVGO,COIN,MSTR,AAPL,AMZN,SPY
   vix-tickers:
     - "^VIX"
 

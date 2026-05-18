@@ -1,7 +1,7 @@
 # Roadmap — Options Quant Engine
 
 > Plan estratégico vivo. Se actualiza al final de cada sesión.
-> Última actualización: 2026-05-17
+> Última actualización: 2026-05-18
 
 ## Estado actual
 
@@ -37,9 +37,9 @@
 - [ ] Decisión: ¿activar paper hoy o postergar?
 
 **Fase 2 — Filtro de estrategias por DB (~2.5h)**
-- [ ] Bloque 1: tabla strategy_config + StrategyConfigService + TDD
+- ✅ Bloque 1: tabla strategy_config + StrategyConfigService + TDD (StrategyConfigController REST API GET /api/strategy-config + PATCH /api/strategy-config/{name}, 12 tests, commit 6aa7a0e)
 - [ ] Bloque 2: integración con BacktestBatchRunner + Live engine
-- [ ] SQL manual para activar p6 reversal, p1 squeeze, c6 reversal en live
+- ✅ SQL manual para activar p6 reversal, p1 squeeze, c6 reversal en live (verificado GET /api/strategy-config: c6_reversal, p1_squeeze, p6_reversal enabledLive=true, PID 42108)
 
 **Fase 3 — Smoke test (15 min antes de mercado)**
 - [ ] Arrancar live mode
@@ -51,14 +51,19 @@
 
 ### P1 — Esta semana (post primer paper)
 
-- [ ] UI React para filtro de estrategias (Bloques 3+4: REST API + frontend)
+- ✅ UI React para filtro de estrategias — StrategiesPage.jsx + /strategies route + badge en ScanEngineControls. 890 tests, 95.7% coverage. Commit 313eb64.
+- ✅ scripts/run-live.ps1 — script PowerShell de arranque: UTF-8 logging, port 9090, log con timestamp, sin DevTools. Creado 2026-05-18.
 - [ ] Análisis de los primeros días de paper trades
 - [ ] Bajar 2 años de tickers tácticos via Polygon (URA, MU, etc.)
 - [ ] Implementar filtro por fecha en BacktestBatchRunner (--start-date, --end-date)
 
 ### P2 — Próximas 2 semanas
 
-- [ ] Investigar c4 opening / p4 opening: ¿por qué no generan trades?
+- [ ] Investigar c4 opening / p4 opening: ¿por qué no generan trades? (0 trades en backtest — revisar detección de señales o umbrales de parámetros)
+- [ ] Investigar bug MIN_5 0 bars — algunos tickers devuelven 0 bars en timeframe MIN_5; no es crítico pero afecta completeness
+- [ ] Evaluar habilitar MIN_5 para tickers tácticos (c4/p4) — considerar MIN_5 específicamente para estrategias de apertura
+- [ ] Revisar CLAUDE_ANALYSIS.md overfitting analysis — reorientación filosófica pendiente según risk philosophy de the course author; no es un bug, es decisión estratégica
+- [ ] Decidir inclusión de strategy.config en JaCoCo o formalizar exclusión — exclusión actual documentada en testing-debt.md; definir si entra al coverage gate
 - [ ] Revisar gestión de riesgo: worst trades de -$1500 son excesivos
 - [ ] Implementar threshold dinámico en ticker_stats (para tickers nuevos con poca data)
 - [ ] Re-correr backtest con universo focal (16 tickers) y rango 2020+
@@ -86,6 +91,12 @@
 - ticker_stats materializada
 - Flag --complete-tickers TDD
 - 23.9M filas DAY_1 borradas de candles
+
+### 2026-05-18 (lunes, sesión pre-paper)
+- StrategyConfigController REST API: GET /api/strategy-config + PATCH /api/strategy-config/{name}, TDD 12 tests (commit 6aa7a0e)
+- StrategiesPage.jsx + /strategies route + badge ScanEngineControls, TDD 15+6+5 tests, 890 total, 95.7% coverage (commit 313eb64)
+- scripts/run-live.ps1: startup script UTF-8, port 9090, timestamped log, sin DevTools
+- Backend verificado en :9090 — 12 estrategias, c6_reversal/p1_squeeze/p6_reversal enabledLive=true
 
 ### 2026-05-17 (domingo, sesión cierre)
 - Bug persistencia HikariCP/DevTools resuelto (commit 7224145)
