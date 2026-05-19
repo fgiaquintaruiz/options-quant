@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -97,5 +98,41 @@ class ReplaySchedulerTest {
 
         assertThat(withJitter100).isEqualTo(base + 100);
         assertThat(withJitter800).isEqualTo(base + 800);
+    }
+
+    @Test
+    void tick_autoStopsWhenVirtualTimeReachesWallClock() {
+        // Virtual time starts exactly one tick before wall-clock "now".
+        // After one tick, virtualNow == wallNow → replay must auto-stop.
+        ZonedDateTime wallNow = SESSION_OPEN.plusMinutes(15);
+        Supplier<ZonedDateTime> fixedWallClock = () -> wallNow;
+
+        ReplayScheduler schedulerWithFixedClock =
+                new ReplayScheduler(clock, scanner, orderService, fixedWallClock);
+        clock.activate(SESSION_OPEN, 60, "run-auto-stop");
+
+        schedulerWithFixedClock.tick();
+
+        assertThat(clock.isActive())
+                .as("clock must be deactivated after virtual time reaches wall-clock now")
+                .isFalse();
+    }
+
+    @Test
+    void tick_doesNotAutoStopWhenVirtualTimeIsStillBeforeWallClock() {
+        // Virtual time starts two ticks before wall-clock "now".
+        // After one tick virtualNow is still < wallNow → replay must continue.
+        ZonedDateTime wallNow = SESSION_OPEN.plusMinutes(30);
+        Supplier<ZonedDateTime> fixedWallClock = () -> wallNow;
+
+        ReplayScheduler schedulerWithFixedClock =
+                new ReplayScheduler(clock, scanner, orderService, fixedWallClock);
+        clock.activate(SESSION_OPEN, 60, "run-no-stop");
+
+        schedulerWithFixedClock.tick();
+
+        assertThat(clock.isActive())
+                .as("clock must remain active when virtual time is still before wall-clock now")
+                .isTrue();
     }
 }

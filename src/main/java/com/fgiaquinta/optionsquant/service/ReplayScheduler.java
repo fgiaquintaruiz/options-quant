@@ -5,12 +5,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.ZonedDateTime;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 /**
  * Drives the virtual clock forward during live-replay-mode. Each "tick"
@@ -29,6 +31,7 @@ public class ReplayScheduler {
     private final ReplayClock clock;
     private final MarketScanner scanner;
     private final OrderExecutionService orderService;
+    private final Supplier<ZonedDateTime> wallClock;
 
     private int jitterMinMs = 100;
     private int jitterMaxMs = 800;
@@ -39,9 +42,18 @@ public class ReplayScheduler {
     public ReplayScheduler(ReplayClock clock,
                            @org.springframework.context.annotation.Lazy MarketScanner scanner,
                            OrderExecutionService orderService) {
+        this(clock, scanner, orderService, ZonedDateTime::now);
+    }
+
+    /** Package-private constructor for testing — accepts an injectable wall clock. */
+    ReplayScheduler(ReplayClock clock,
+                    MarketScanner scanner,
+                    OrderExecutionService orderService,
+                    Supplier<ZonedDateTime> wallClock) {
         this.clock = clock;
         this.scanner = scanner;
         this.orderService = orderService;
+        this.wallClock = wallClock;
     }
 
     @Value("${replay.jitter-ms-min:100}")
@@ -60,6 +72,14 @@ public class ReplayScheduler {
             return;
         }
         clock.advance(TICK_STEP);
+        ZonedDateTime virtualNow = clock.snapshot().virtualNow();
+        if (!virtualNow.isBefore(wallClock.get())) {
+            log.info("Replay auto-stop: virtualNow={} has reached wall-clock now={} — stopping",
+                    virtualNow, wallClock.get());
+            clock.deactivate();
+            stop();
+            return;
+        }
         scanner.scanAndExecute();
     }
 
