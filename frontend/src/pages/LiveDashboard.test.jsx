@@ -2,6 +2,13 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
 import LiveDashboard from './LiveDashboard'
 
+// Controlled replay status for banner tests — overridden per test
+let mockReplayStatus = { active: false, virtualNow: null, speed: null }
+
+vi.mock('../hooks/useReplayStatus', () => ({
+  useReplayStatus: () => ({ status: mockReplayStatus, error: null }),
+}))
+
 // Mock all external dependencies LiveDashboard uses so it renders in isolation
 vi.mock('../api', () => ({
   liveApi: {
@@ -73,5 +80,27 @@ describe('LiveDashboard', () => {
     // LiveTradeGrid is rendered; ExternalPositionsPanel is no longer a separate component
     expect(screen.getByTestId('live-trade-grid')).toBeInTheDocument()
     expect(screen.queryByTestId('external-positions-panel')).not.toBeInTheDocument()
+  })
+})
+
+describe('LiveDashboard — replay banner driven by useReplayStatus', () => {
+  it('shows REPLAY MODE ACTIVE banner when useReplayStatus returns active:true', async () => {
+    mockReplayStatus = { active: true, virtualNow: '2026-05-01T10:00:00Z', speed: 30 }
+
+    await act(async () => {
+      render(<LiveDashboard twsStatus={{}} marketOpen={false} />)
+    })
+
+    expect(screen.getByText(/REPLAY MODE ACTIVE/i)).toBeInTheDocument()
+  })
+
+  it('does NOT show replay banner when useReplayStatus returns active:false', async () => {
+    mockReplayStatus = { active: false, virtualNow: null, speed: null }
+
+    await act(async () => {
+      render(<LiveDashboard twsStatus={{}} marketOpen={false} />)
+    })
+
+    expect(screen.queryByText(/REPLAY MODE ACTIVE/i)).not.toBeInTheDocument()
   })
 })

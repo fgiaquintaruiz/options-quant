@@ -11,6 +11,7 @@ import { useScanCountdown } from '../hooks/useScanCountdown'
 import { useLiveScanner } from '../hooks/useLiveScanner'
 import { useScanSettings } from '../hooks/useScanSettings'
 import { useTradeActions } from '../hooks/useTradeActions'
+import { useReplayStatus } from '../hooks/useReplayStatus'
 
 // ── LiveDashboard ──────────────────────────────────────────────────────────
 
@@ -22,6 +23,7 @@ import { useTradeActions } from '../hooks/useTradeActions'
 export default function LiveDashboard({ twsStatus, marketOpen }) {
   const [errorMsg, setErrorMsg]           = useState(null)
   const [replayActive, setReplayActive]   = useState(false)
+  const { status: replayStatus }          = useReplayStatus({ active: true })
   const [tickerFilter, setTickerFilter]   = useState(() => LS.get('live_tickerFilter', ''))
   const [tickerScope, setTickerScope]     = useState(() => LS.get('live_tickerScope', 'HOT'))
   const { addGroup: addWatchlist }            = useWatchlists()
@@ -111,7 +113,7 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
   return (
     <div className="flex-col" data-testid="live-dashboard">
 
-      {replayActive && (
+      {(replayActive || !!replayStatus?.active) && (
         <div className="replay-banner">⚠ REPLAY MODE ACTIVE — signals/brackets are replay runs (PAPER) ⚠</div>
       )}
 
@@ -180,7 +182,7 @@ export default function LiveDashboard({ twsStatus, marketOpen }) {
         scanScores={scanScores}
         macroRegime={macroRegime}
         staleSignalCount={staleSignalCount}
-        replayActive={replayActive}
+        replayActive={replayActive || !!replayStatus?.active}
         onCloseTrade={handleCloseTrade}
         onCancelTrade={handleCancelTrade}
         onDeleteSignal={handleDeleteSignal}
