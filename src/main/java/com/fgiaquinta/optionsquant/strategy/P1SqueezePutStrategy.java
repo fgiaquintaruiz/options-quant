@@ -4,12 +4,16 @@ import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.utils.BollingerBandsUtil;
 import com.fgiaquinta.optionsquant.strategy.utils.ChannelAnalyzer;
+import lombok.extern.slf4j.Slf4j;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
 
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.Set;
+
+@Slf4j
 
 public class P1SqueezePutStrategy implements TradingStrategy, TimeframeRequirements {
 
@@ -58,9 +62,6 @@ public class P1SqueezePutStrategy implements TradingStrategy, TimeframeRequireme
 
         ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
 
-        // =========================================================================
-        // RULE 1 and 2: LATERAL CHANNEL AND INTERLACED AVERAGES (10 DAYS / ~70 BARS)
-        // =========================================================================
         SMAIndicator sma20 = new SMAIndicator(close1h, 20);
         SMAIndicator sma40 = new SMAIndicator(close1h, 40);
         SMAIndicator sma100 = new SMAIndicator(close1h, 100);
@@ -74,54 +75,68 @@ public class P1SqueezePutStrategy implements TradingStrategy, TimeframeRequireme
 
         double maxSma = Math.max(Math.max(s20, s40), Math.max(s100, s200));
         double minSma = Math.min(Math.min(s20, s40), Math.min(s100, s200));
+        double smaSpread = (maxSma - minSma) / minSma;
 
-        if ((maxSma - minSma) / minSma > 0.04) return false;
-
-        // RULE 1b: MULTI-BAR COMPRESSION CONFIRMATION (ChannelAnalyzer)
-        if (!ChannelAnalyzer.isSmaLateralChannel(series1h, prevIdx, 70, 4.0)) return false;
-
-        // Find the floor of the channel over last 10 days (70 bars)
         double minPriceLast10Days = Double.MAX_VALUE;
         for (int i = 1; i <= 70; i++) {
             double low = series1h.getBar(idx1h - i).getLowPrice().doubleValue();
             if (low < minPriceLast10Days) minPriceLast10Days = low;
         }
 
-        // =========================================================================
-        // RULE 3: THE BEARISH BREAKOUT
-        // =========================================================================
         double currentClose1h = close1h.getValue(idx1h).doubleValue();
         double currentOpen1h = series1h.getBar(idx1h).getOpenPrice().doubleValue();
-
-        // Breaks the floor with a red candle — must clear the buffer to avoid false breakouts
         double breakoutThreshold = minPriceLast10Days * (1.0 - breakoutBufferPct);
-        boolean isBreakoutDown = currentClose1h < breakoutThreshold && currentClose1h < currentOpen1h;
-        if (!isBreakoutDown) return false;
 
-        // =========================================================================
-        // RULE 3b: MIN_15 BODY FILTER (bearish confirmation on 15-min timeframe)
-        // Body filter moved to MIN_15 — HOUR_1 breakout direction is already verified above.
-        // =========================================================================
         double currentOpen15m = series15m.getBar(idx15m).getOpenPrice().doubleValue();
         double currentClose15m = series15m.getBar(idx15m).getClosePrice().doubleValue();
         double bodyPct15m = (currentClose15m - currentOpen15m) / currentOpen15m;
-        if (bodyPct15m > -minBodyPct) return false;
 
-        // =========================================================================
-        // RULE 4: HIGH VOLATILITY CONFIRMATION ON 15-MIN BOLLINGER BAND
-        // Book: "confirmacion con vela final bajista en Bollinger Bands en periodo de 15 minutos con alta volatilidad"
-        // =========================================================================
         BollingerBandsUtil bb15m = new BollingerBandsUtil(series15m, 20);
-
-        // BB width must exceed the 20-bar average by the volatility threshold — confirms expansion, not squeeze
         double bbWidthCurrent = bb15m.getWidthPercent(idx15m);
         double bbWidthAvg = computeBBWidthAvg(bb15m, idx15m, 20);
-        if (bbWidthCurrent < bbWidthAvg * bbVolatilityThreshold) return false;
+        double bbWidthMinRequired = bbWidthAvg * bbVolatilityThreshold;
 
-        // Pushing the lower band downward
-        boolean isRidingLowerBand = bb15m.isRidingLowerBand(idx15m, 0.005); // Within 0.5% of lower band
+        final double capturedMinPrice = minPriceLast10Days;
 
-        return isRidingLowerBand;
+        List<Condition> conditions = List.of(
+            new Condition() {
+                public boolean test() { return smaSpread <= 0.04; }
+                public String describe() { return String.format("SMA spread %.4f <= 0.04", smaSpread); }
+            },
+            new Condition() {
+                public boolean test() { return ChannelAnalyzer.isSmaLateralChannel(series1h, prevIdx, 70, 4.0); }
+                public String describe() { return String.format("ChannelAnalyzer lateral (70 bars, 4.0%% threshold)"); }
+            },
+            new Condition() {
+                public boolean test() { return currentClose1h < breakoutThreshold && currentClose1h < currentOpen1h; }
+                public String describe() { return String.format("bearish breakout close %.4f < threshold %.4f (floor %.4f - %.1f%%)", currentClose1h, breakoutThreshold, capturedMinPrice, breakoutBufferPct * 100); }
+            },
+            new Condition() {
+                public boolean test() { return bodyPct15m <= -minBodyPct; }
+                public String describe() { return String.format("15m body %.4f <= -%.4f (bearish body filter)", bodyPct15m, minBodyPct); }
+            },
+            new Condition() {
+                public boolean test() { return bbWidthCurrent >= bbWidthMinRequired; }
+                public String describe() { return String.format("BB width %.4f >= avg*threshold %.4f (volatility expansion)", bbWidthCurrent, bbWidthMinRequired); }
+            },
+            new Condition() {
+                public boolean test() { return bb15m.isRidingLowerBand(idx15m, 0.005); }
+                public String describe() { return String.format("15m riding lower BB (within 0.5%%)"); }
+            }
+        );
+
+        for (Condition c : conditions) {
+            if (!c.test()) {
+                if (log.isDebugEnabled()) {
+                    log.debug("[P1] {} @ {} — {} ❌ STOP", ticker, currentTime.toLocalTime(), c.describe());
+                }
+                return false;
+            }
+            if (log.isDebugEnabled()) {
+                log.debug("[P1] {} @ {} — {} ✅", ticker, currentTime.toLocalTime(), c.describe());
+            }
+        }
+        return true;
     }
 
     private double computeBBWidthAvg(BollingerBandsUtil bb, int currentIndex, int lookback) {
