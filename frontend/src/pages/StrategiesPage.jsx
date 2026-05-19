@@ -20,12 +20,12 @@ function ConfirmDialog({ strategyName, onCancel, onConfirm }) {
     <div className="confirm-dialog-overlay">
       <div className="confirm-dialog" role="dialog" aria-modal="true">
         <p>
-          Activate <strong>{strategyName}</strong> in LIVE TRADING?
-          This will generate real paper trades.
+          ¿Activar <strong>{strategyName}</strong> en LIVE TRADING?
+          Esto va a generar operaciones reales en paper trading.
         </p>
         <div className="confirm-dialog-actions">
-          <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
-          <button className="btn btn-primary"   onClick={onConfirm}>Confirm</button>
+          <button className="btn btn-secondary" onClick={onCancel}>Cancelar</button>
+          <button className="btn btn-primary"   onClick={onConfirm}>Confirmar</button>
         </div>
       </div>
     </div>
@@ -34,6 +34,7 @@ function ConfirmDialog({ strategyName, onCancel, onConfirm }) {
 
 // ── StrategiesPage ────────────────────────────────────────────────────────────
 
+/** Página de configuración de estrategias: habilitar/deshabilitar live y backtest por estrategia. */
 function StrategiesPage() {
   const [strategies, setStrategies] = useState([])
   const [loading,    setLoading]    = useState(true)
@@ -49,7 +50,7 @@ function StrategiesPage() {
         setLoading(false)
       })
       .catch(err => {
-        setError(err.message || 'Error loading strategies')
+        setError(err.message || 'Error al cargar estrategias')
         setLoading(false)
       })
   }, [])
@@ -101,7 +102,7 @@ function StrategiesPage() {
   const liveActiveCount = strategies.filter(s => s.enabledLive).length
 
   // ── Render ──────────────────────────────────────────────────────────────────
-  if (loading) return <div className="strategies-page"><p>Loading...</p></div>
+  if (loading) return <div className="strategies-page"><p>Cargando...</p></div>
   if (error)   return <div className="strategies-page"><p role="alert">{error}</p></div>
 
   return (
@@ -115,13 +116,13 @@ function StrategiesPage() {
       )}
 
       <div className="strategies-section-header">
-        <h2>Strategies — <span>{liveActiveCount} active in live</span></h2>
+        <h2>Estrategias — <span>{liveActiveCount} activas en live</span></h2>
       </div>
 
       <table className="strategies-table">
         <thead>
           <tr>
-            <th>Strategy</th>
+            <th>Estrategia</th>
             <th>Live</th>
             <th>Backtest</th>
           </tr>
@@ -133,8 +134,8 @@ function StrategiesPage() {
               <td>
                 <SwapButton
                   active={s.enabledLive}
-                  onText="Disable Live"
-                  offText="Enable Live"
+                  onText="Desactivar Live"
+                  offText="Activar Live"
                   onClick={() => handleLiveToggle(s)}
                   activeColor="#f0883e"
                   offColor="#238636"

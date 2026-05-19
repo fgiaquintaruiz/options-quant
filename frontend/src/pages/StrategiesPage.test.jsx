@@ -43,7 +43,7 @@ describe('StrategiesPage', () => {
     it('renders loading state initially', () => {
       strategyConfigApi.findAll.mockReturnValue(new Promise(() => {}))
       renderPage()
-      expect(screen.getByText(/Loading\.\.\.|Cargando/i)).toBeInTheDocument()
+      expect(screen.getByText(/Cargando\.\.\./i)).toBeInTheDocument()
     })
 
     it('renders error state on fetch failure', async () => {
@@ -92,7 +92,7 @@ describe('StrategiesPage', () => {
     it('renders correct count in header', async () => {
       renderPage()
       await waitFor(() => {
-        expect(screen.getByText(/2 active/i)).toBeInTheDocument()
+        expect(screen.getByText(/2 activas/i)).toBeInTheDocument()
       })
     })
   })
@@ -124,7 +124,7 @@ describe('StrategiesPage', () => {
       renderPage()
       await waitFor(() => screen.getByTestId('strategy-live-c6_reversal'))
       fireEvent.click(screen.getByTestId('strategy-live-c6_reversal'))
-      fireEvent.click(screen.getByRole('button', { name: /Cancel/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Cancelar/i }))
       expect(strategyConfigApi.update).not.toHaveBeenCalled()
     })
 
@@ -133,7 +133,7 @@ describe('StrategiesPage', () => {
       renderPage()
       await waitFor(() => screen.getByTestId('strategy-live-c6_reversal'))
       fireEvent.click(screen.getByTestId('strategy-live-c6_reversal'))
-      fireEvent.click(screen.getByRole('button', { name: /Confirm/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Confirmar/i }))
       await waitFor(() => {
         expect(strategyConfigApi.update).toHaveBeenCalledWith('c6_reversal', { enabledLive: true })
       })
@@ -150,7 +150,7 @@ describe('StrategiesPage', () => {
       // SwapButton: active=true shows onText, active=false shows offText
       // After optimistic: p6_reversal enabledLive becomes false → button shows "OFF" state text
       const btn = screen.getByTestId('strategy-live-p6_reversal')
-      expect(btn.textContent).toMatch(/Enable Live|OFF|Activate/i)
+      expect(btn.textContent).toMatch(/Activar Live|OFF|Activate/i)
       resolveUpdate({ name: 'p6_reversal', enabledLive: false, enabledBacktest: true })
     })
 
@@ -163,7 +163,7 @@ describe('StrategiesPage', () => {
       // After revert the button should show active (ON) state again
       await waitFor(() => {
         const btn = screen.getByTestId('strategy-live-p6_reversal')
-        expect(btn.textContent).toMatch(/Disable Live|ON|Active/i)
+        expect(btn.textContent).toMatch(/Desactivar Live|ON|Active/i)
       })
     })
   })

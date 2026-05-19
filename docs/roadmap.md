@@ -5,9 +5,11 @@
 
 ## Estado actual
 
-**Fase**: Pre-paper trading
-**Universo target**: 10 mega caps + SPY + 5 tickers tácticos rotativos
-**Capital simulación**: €500-800
+**Fase**: Paper trading activo (arrancó 2026-05-18)
+**Universo HOT**: NVDA, AMD, AMDL, TSLA, META, AVGO, COIN, MSTR, AMZN, SPY
+**Universo táctico**: AAPL, URA, MU, SMH, OXY, GLD
+**Estrategias activas**: p6 reversal, p1 squeeze, c6 reversal
+**Capital paper**: $968 USD — cuenta DUN598216 (2026-05-18)
 **Instrumento**: Opciones (CALL/PUT)
 **Stack**: SQLite + Spring Boot 4.0.5 + Java 25 + React frontend + IBKR TWS
 
@@ -31,21 +33,21 @@
 ### P0 — Mañana lunes (2026-05-18) ANTES de 15:30 mercado
 
 **Fase 1 — Investigación pre-paper (15-30 min)**
-- [ ] Verificar modelo de pricing del backtest (¿direccional o Black-Scholes?)
-- [ ] Identificar cómo el live mode manda órdenes a IBKR
-- [ ] Confirmar config cuenta paper IBKR (puerto 7497, capital simulado)
-- [ ] Decisión: ¿activar paper hoy o postergar?
+- ✅ Verificar modelo de pricing del backtest (¿direccional o Black-Scholes?)
+- ✅ Identificar cómo el live mode manda órdenes a IBKR
+- ✅ Confirmar config cuenta paper IBKR (puerto 7497, capital simulado)
+- ✅ Decisión: ¿activar paper hoy o postergar?
 
 **Fase 2 — Filtro de estrategias por DB (~2.5h)**
 - ✅ Bloque 1: tabla strategy_config + StrategyConfigService + TDD (StrategyConfigController REST API GET /api/strategy-config + PATCH /api/strategy-config/{name}, 12 tests, commit 6aa7a0e)
-- [ ] Bloque 2: integración con BacktestBatchRunner + Live engine
+- ✅ Bloque 2: integración con BacktestBatchRunner + Live engine
 - ✅ SQL manual para activar p6 reversal, p1 squeeze, c6 reversal en live (verificado GET /api/strategy-config: c6_reversal, p1_squeeze, p6_reversal enabledLive=true, PID 42108)
 
 **Fase 3 — Smoke test (15 min antes de mercado)**
-- [ ] Arrancar live mode
-- [ ] Verificar logs: solo las 3 estrategias activas
-- [ ] Verificar conexión TWS paper (puerto 7497)
-- [ ] Sin trades reales todavía
+- ✅ Arrancar live mode
+- ✅ Verificar logs: solo las 3 estrategias activas
+- ✅ Verificar conexión TWS paper (puerto 7497)
+- ✅ Sin trades reales todavía
 
 **15:30 → primer paper trade**
 
@@ -53,6 +55,7 @@
 
 - ✅ UI React para filtro de estrategias — StrategiesPage.jsx + /strategies route + badge en ScanEngineControls. 890 tests, 95.7% coverage. Commit 313eb64.
 - ✅ scripts/run-live.ps1 — script PowerShell de arranque: UTF-8 logging, port 9090, log con timestamp, sin DevTools. Creado 2026-05-18.
+- ✅ p2 trend activado en live (2026-05-19, SQL directo)
 - [ ] Análisis de los primeros días de paper trades
 - [ ] Bajar 2 años de tickers tácticos via Polygon (URA, MU, etc.)
 - [ ] Implementar filtro por fecha en BacktestBatchRunner (--start-date, --end-date)
@@ -74,6 +77,15 @@
 - [ ] Fix RollbackConfigTest$CsvActiveTest.candleStore_csv_injectsCsvCandleRepository
 - [ ] Investigar bug checkpoint HISTORICAL hardcoded (HistoricalBackfillService L311, L448)
 
+## Decisiones pendientes de estrategias
+
+### p2 trend — Predicate Subsumption (investigado 2026-05-19)
+- `priceBelowMiddleBB` es redundante con `isDowntrend15m` en `P2TrendPutStrategy.java:~125`
+  — `priceBelowMiddleBB` = precio < SMA20 = ya garantizado por `isDowntrend15m`
+- **Decisión pendiente the course author**: eliminar predicado redundante → aumenta trade count (actualmente 255)
+- Tickers negativos a considerar excluir del universo p2: LULU (-$2.719), LLY (-$1.784), ANET (-$1.010), GOOG (-$627), BITX (-$581)
+- Estado: ⏳ NO modificar aún — requiere validación backtest antes de activar en live
+
 ## Decisiones de arquitectura
 
 - **SQLite se queda** (no migrar a PostgreSQL hasta que universo crezca a 100+ tickers)
@@ -92,11 +104,15 @@
 - Flag --complete-tickers TDD
 - 23.9M filas DAY_1 borradas de candles
 
-### 2026-05-18 (lunes, sesión pre-paper)
+### 2026-05-18 (lunes, sesión pre-paper + arranque paper)
 - StrategyConfigController REST API: GET /api/strategy-config + PATCH /api/strategy-config/{name}, TDD 12 tests (commit 6aa7a0e)
 - StrategiesPage.jsx + /strategies route + badge ScanEngineControls, TDD 15+6+5 tests, 890 total, 95.7% coverage (commit 313eb64)
 - scripts/run-live.ps1: startup script UTF-8, port 9090, timestamped log, sin DevTools
 - Backend verificado en :9090 — 12 estrategias, c6_reversal/p1_squeeze/p6_reversal enabledLive=true
+- **Paper trading arrancado**: cuenta DUN598216, $968 USD, 3 estrategias activas
+- **HOT tickers corregidos**: NVDA, AMD, AMDL, TSLA, META, AVGO, COIN, MSTR, AMZN, SPY
+- **Universo completo**: HOT + AAPL, URA, MU, SMH, OXY, GLD (tácticos)
+- **Primer día**: 0 señales — condiciones no cumplidas, sistema funcionando correctamente
 
 ### 2026-05-17 (domingo, sesión cierre)
 - Bug persistencia HikariCP/DevTools resuelto (commit 7224145)
