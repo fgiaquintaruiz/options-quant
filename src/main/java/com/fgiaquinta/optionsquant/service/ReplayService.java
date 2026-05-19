@@ -1,7 +1,9 @@
 package com.fgiaquinta.optionsquant.service;
 
+import com.fgiaquinta.optionsquant.controller.LiveModeController;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -44,22 +46,26 @@ public class ReplayService {
     private final ReplayScheduler scheduler;
     private final OrderExecutionService orderService;
     private final TickerService tickerService;
+    private final LiveModeController liveModeController;
     private final Clock wallClock;
 
     @org.springframework.beans.factory.annotation.Autowired
     public ReplayService(ReplayClock clock, ReplayCandleSource source, ReplayScheduler scheduler,
-                         OrderExecutionService orderService, TickerService tickerService) {
-        this(clock, source, scheduler, orderService, tickerService, Clock.system(MADRID));
+                         OrderExecutionService orderService, TickerService tickerService,
+                         @Lazy LiveModeController liveModeController) {
+        this(clock, source, scheduler, orderService, tickerService, liveModeController, Clock.system(MADRID));
     }
 
-    // Package-private for tests (injectable wall clock).
+    // Package-private for tests (injectable wall clock and liveModeController).
     ReplayService(ReplayClock clock, ReplayCandleSource source, ReplayScheduler scheduler,
-                  OrderExecutionService orderService, TickerService tickerService, Clock wallClock) {
+                  OrderExecutionService orderService, TickerService tickerService,
+                  LiveModeController liveModeController, Clock wallClock) {
         this.clock = clock;
         this.source = source;
         this.scheduler = scheduler;
         this.orderService = orderService;
         this.tickerService = tickerService;
+        this.liveModeController = liveModeController;
         this.wallClock = wallClock;
     }
 
@@ -81,6 +87,7 @@ public class ReplayService {
         ZonedDateTime virtualOpen = replayDate.atTime(US_SESSION_OPEN_UTC).atZone(ZoneId.of("UTC"));
         clock.activate(virtualOpen, speed, runId);
         scheduler.start();
+        liveModeController.setMacroFilterForReplay(false);
 
         log.info("🎬 Replay started — runId={} date={} speed={}x tickers={}",
                 runId, replayDate, speed, tickers.size());
@@ -92,6 +99,7 @@ public class ReplayService {
         scheduler.stop();
         clock.deactivate();
         source.clear();
+        liveModeController.setMacroFilterForReplay(true);
     }
 
     public void setSpeed(int speed) {

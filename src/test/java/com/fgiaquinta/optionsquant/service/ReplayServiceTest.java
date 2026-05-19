@@ -1,5 +1,6 @@
 package com.fgiaquinta.optionsquant.service;
 
+import com.fgiaquinta.optionsquant.controller.LiveModeController;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,7 @@ class ReplayServiceTest {
     private ReplayScheduler scheduler;
     private OrderExecutionService orderService;
     private TickerService tickerService;
+    private LiveModeController liveModeController;
 
     @BeforeEach
     void setUp() {
@@ -49,12 +51,13 @@ class ReplayServiceTest {
         scheduler = mock(ReplayScheduler.class);
         orderService = mock(OrderExecutionService.class);
         tickerService = mock(TickerService.class);
+        liveModeController = mock(LiveModeController.class);
         when(tickerService.getHotTickers()).thenReturn(List.of("AAPL", "NVDA"));
         when(orderService.isConnected()).thenReturn(true);
     }
 
     private ReplayService newService(Clock wall) {
-        return new ReplayService(replayClock, source, scheduler, orderService, tickerService, wall);
+        return new ReplayService(replayClock, source, scheduler, orderService, tickerService, liveModeController, wall);
     }
 
     @Test
@@ -170,5 +173,24 @@ class ReplayServiceTest {
         svc.setSpeed(180);
 
         assertThat(replayClock.snapshot().speed()).isEqualTo(180);
+    }
+
+    @Test
+    void macroFilter_isDisabled_whenReplayStarts() {
+        ReplayService svc = newService(OFF_HOURS);
+
+        svc.start(LocalDate.of(2026, 4, 22), 60);
+
+        verify(liveModeController, times(1)).setMacroFilterForReplay(false);
+    }
+
+    @Test
+    void macroFilter_isRestored_whenReplayStops() {
+        ReplayService svc = newService(OFF_HOURS);
+        svc.start(LocalDate.of(2026, 4, 22), 60);
+
+        svc.stop();
+
+        verify(liveModeController, times(1)).setMacroFilterForReplay(true);
     }
 }

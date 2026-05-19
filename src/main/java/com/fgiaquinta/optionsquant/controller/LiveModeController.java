@@ -689,7 +689,7 @@ public class LiveModeController {
 
     @PostMapping("/toggle-extended-hours")
     public ResponseEntity<Map<String, Object>> toggleExtendedHours() {
-        boolean newState = !extendedHoursEnabled.getAndSet(!extendedHoursEnabled.get());
+        boolean newState = extendedHoursEnabled.updateAndGet(v -> !v);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", true);
         result.put("extendedHours", newState);
@@ -717,6 +717,11 @@ public class LiveModeController {
     }
 
     public boolean isRuntimeMacroFilterEnabled() { return runtimeMacroFilterEnabled; }
+
+    public void setMacroFilterForReplay(boolean enabled) {
+        runtimeMacroFilterEnabled = enabled;
+        log.info("Macro filter {} (replay session)", enabled ? "ENABLED" : "DISABLED");
+    }
 
     @PostMapping("/set-risk")
     public ResponseEntity<Map<String, Object>> setRisk(@RequestParam double pct) {
