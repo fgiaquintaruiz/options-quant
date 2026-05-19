@@ -523,6 +523,66 @@ describe('ReplayControls — Feature 4: speed badge', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Task 1 — mockMarket prop bypasses marketOpen disable
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('ReplayControls — mockMarket bypass', () => {
+
+  it('start button is ENABLED when marketOpen=true and mockMarket=true and replay inactive', async () => {
+    api.replayApi.status.mockResolvedValue({ active: false, virtualNow: null, speed: 0, runId: null })
+
+    render(<ReplayControls marketOpen={true} mockMarket={true} />)
+    await flushMountTick()
+
+    const startBtn = screen.getByTestId('replay-start-btn')
+    expect(startBtn).not.toBeDisabled()
+    expect(startBtn.title).toBeFalsy()
+  })
+
+  it('start button is DISABLED when marketOpen=true and mockMarket=false and replay inactive', async () => {
+    api.replayApi.status.mockResolvedValue({ active: false, virtualNow: null, speed: 0, runId: null })
+
+    render(<ReplayControls marketOpen={true} mockMarket={false} />)
+    await flushMountTick()
+
+    const startBtn = screen.getByTestId('replay-start-btn')
+    expect(startBtn).toBeDisabled()
+    expect(startBtn.title).toBe('No disponible durante horario de mercado')
+  })
+
+  it('start button is ENABLED when marketOpen=false regardless of mockMarket', async () => {
+    api.replayApi.status.mockResolvedValue({ active: false, virtualNow: null, speed: 0, runId: null })
+
+    render(<ReplayControls marketOpen={false} mockMarket={false} />)
+    await flushMountTick()
+
+    expect(screen.getByTestId('replay-start-btn')).not.toBeDisabled()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Task 3 — default date is 2 years back
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('ReplayControls — default date', () => {
+
+  it('date input defaults to 2 years ago when localStorage has no stored date', async () => {
+    localStorage.clear()
+    api.replayApi.status.mockResolvedValue({ active: false, virtualNow: null, speed: 0, runId: null })
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    const input = screen.getByTestId('replay-date-input')
+    const twoYearsAgo = new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split('T')[0]
+
+    expect(input.value).toBe(twoYearsAgo)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // virtualNow parsing — NaN regression tests
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -5,10 +5,8 @@ import { LS } from '../utils/storage'
 import { useReplayStatus } from '../hooks/useReplayStatus'
 
 const SPEEDS = [30, 60, 180, 360]
-const MS_PER_DAY = 86_400_000
 
-function todayStr()     { return new Date().toISOString().split('T')[0] }
-function yesterdayStr() { return new Date(Date.now() - MS_PER_DAY).toISOString().split('T')[0] }
+function todayStr() { return new Date().toISOString().split('T')[0] }
 
 /**
  * Parse an ISO 8601 string that may include a Java ZonedDateTime zone-id suffix
@@ -53,11 +51,14 @@ function calcProgressPct(wallStartMs, speedMultiplier, vStartMs) {
   return Math.min(100, Math.round((virtualElapsedMs / vRangeMs) * 100))
 }
 
-export default function ReplayControls({ marketOpen, onActiveChange, onError }) {
-  const today     = todayStr()
-  const yesterday = yesterdayStr()
+function twoYearsAgoStr() {
+  return new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+}
 
-  const [replayDate,         setReplayDate]         = useState(() => LS.get('replay_lastDate', yesterday))
+export default function ReplayControls({ marketOpen, mockMarket, onActiveChange, onError }) {
+  const today       = todayStr()
+
+  const [replayDate,         setReplayDate]         = useState(() => LS.get('replay_lastDate', twoYearsAgoStr()))
   const [replaySpeed,        setReplaySpeed]        = useState(30)
   const [replayActive,       setReplayActive]       = useState(false)
   const [wallStartMs,        setWallStartMs]        = useState(null)
@@ -161,8 +162,8 @@ export default function ReplayControls({ marketOpen, onActiveChange, onError }) 
         className={`btn ${replayActive ? 'btn-secondary' : 'btn-primary'} ld-replay-start`}
         data-testid="replay-start-btn"
         onClick={replayActive ? handleStop : handleStart}
-        disabled={marketOpen && !replayActive}
-        title={marketOpen && !replayActive ? 'No disponible durante horario de mercado' : undefined}
+        disabled={(marketOpen && !mockMarket) && !replayActive}
+        title={(marketOpen && !mockMarket) && !replayActive ? 'No disponible durante horario de mercado' : undefined}
       >
         {replayActive ? <Square size={14}/> : <Play size={14}/>}
       </button>

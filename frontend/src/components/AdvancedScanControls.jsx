@@ -131,6 +131,7 @@ export default function AdvancedScanControls({
               <div className="asc-row asc-row--block">
                 <ReplayControls
                   marketOpen={marketOpen}
+                  mockMarket={mockMarketOpen}
                   onActiveChange={onReplayActiveChange}
                   onError={onError}
                 />

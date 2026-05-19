@@ -4,8 +4,12 @@ import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi } from 'vitest'
 import AdvancedScanControls from './AdvancedScanControls'
 
+let lastReplayProps = {}
 vi.mock('./ReplayControls', () => ({
-  default: () => <div data-testid="replay-controls-mock">ReplayControls</div>,
+  default: (props) => {
+    lastReplayProps = props
+    return <div data-testid="replay-controls-mock">ReplayControls</div>
+  },
 }))
 
 const baseProps = {
@@ -116,5 +120,12 @@ describe('AdvancedScanControls', () => {
     await userEvent.click(screen.getByTestId('advanced-scan-trigger'))
     await userEvent.click(screen.getByTestId('live-inject-mock-signal'))
     expect(onInjectMockSignal).toHaveBeenCalledOnce()
+  })
+
+  it('passes mockMarket=true to ReplayControls when mockMarketOpen=true', async () => {
+    render(<AdvancedScanControls {...baseProps} mockMarketOpen={true} />)
+    await userEvent.click(screen.getByTestId('advanced-scan-trigger'))
+    expect(screen.getByTestId('replay-controls-mock')).toBeInTheDocument()
+    expect(lastReplayProps.mockMarket).toBe(true)
   })
 })
