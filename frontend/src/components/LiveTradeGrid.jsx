@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react'
-import { Activity, Trash2 } from 'lucide-react'
+import { Activity, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import TickerTooltip from './TickerTooltip'
 import { compareScanRows } from '../utils/scanRowSort'
+import SignalChart from './SignalChart'
 
 /** Format an ISO 8601 timestamp to dd/MM HH:mi:ss in browser local time. */
 function fmtTimestamp(iso) {
@@ -206,6 +207,10 @@ export default function LiveTradeGrid({
   const [selectedStale, setSelectedStale] = useState(() => new Set())
   const [closingExternal, setClosingExternal] = useState(() => new Set())
   const [scheduled1450, setScheduled1450] = useState(() => new Set())
+  const [expandedTicker, setExpandedTicker] = useState(null)
+
+  const toggleChart = (ticker) =>
+    setExpandedTicker((prev) => (prev === ticker ? null : ticker))
   const { hotSet, activeTrades, scanRows, staleTickersList } = useTradeData(trades, hotTickers, scanActivity, scanScores)
 
   // Status breakdown counts — derived from the real scanRows (post-dedupe).
@@ -352,7 +357,8 @@ export default function LiveTradeGrid({
                 const rowClass = staleHighlight ? 'ltg-row-stale' : exited ? 'ltg-row-exited' : 'ltg-row-normal'
 
                 return (
-                  <tr key={`${row.ticker}-${row.entryAt}-${idx}`} className={rowClass}>
+                  <React.Fragment key={`${row.ticker}-${row.entryAt}-${idx}`}>
+                  <tr className={rowClass}>
                     <td className="ltg-td--center">
                       {canCheck ? (
                         <input
@@ -368,6 +374,18 @@ export default function LiveTradeGrid({
 
                     <td className="ltg-td">
                       <div className="flex-align-center gap-4">
+                        <button
+                          type="button"
+                          className="btn ltg-chart-toggle"
+                          title={expandedTicker === row.ticker ? 'Ocultar gráfico' : 'Ver gráfico'}
+                          onClick={() => toggleChart(row.ticker)}
+                          style={{ padding: '2px 4px', background: 'transparent', border: 'none', color: '#58a6ff', cursor: 'pointer', lineHeight: 0 }}
+                        >
+                          {expandedTicker === row.ticker
+                            ? <ChevronDown size={14} />
+                            : <ChevronRight size={14} />
+                          }
+                        </button>
                         <TickerTooltip ticker={row.ticker}>
                           <strong className="ltg-ticker-label">{row.ticker}</strong>
                         </TickerTooltip>
@@ -487,6 +505,21 @@ export default function LiveTradeGrid({
                       </button>
                     </td>
                   </tr>
+
+                  {expandedTicker === row.ticker && (
+                    <tr className="ltg-chart-row">
+                      <td colSpan={COL_COUNT} style={{ padding: '0 12px 12px 12px', background: '#0d1117' }}>
+                        <SignalChart
+                          ticker={row.ticker}
+                          signalTimestamp={row.entryAt ? new Date(row.entryAt).getTime() : Date.now()}
+                          entryPrice={row.ep}
+                          tp={row.tp}
+                          sl={row.sl}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 )
               })}
 
