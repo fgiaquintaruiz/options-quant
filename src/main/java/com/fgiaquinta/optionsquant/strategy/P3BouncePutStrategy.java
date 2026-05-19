@@ -68,7 +68,7 @@ public class P3BouncePutStrategy implements TradingStrategy, TimeframeRequiremen
 
         // Book requirement: Verify price was in bullish BB context before rejection
         BollingerBandsUtil bb1h = new BollingerBandsUtil(series1h, 20);
-        boolean wasInBullishBBContext = bb1h.brokeAboveUpperBand(idx1h - 1, 5); // Price touched/broke upper band recently
+        boolean wasInBullishBBContext = bb1h.brokeAboveUpperBand(idx1h - 1, 10); // Price touched/broke upper band recently
 
         // =========================================================================
         // RULE 2: Pullback (Bounce) to SMA20 on 1 Hour

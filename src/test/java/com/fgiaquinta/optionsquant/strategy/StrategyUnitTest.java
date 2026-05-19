@@ -1905,6 +1905,77 @@ class StrategyUnitTest {
             boolean triggered = strategy.isTriggered("AAPL", data, testTime);
             assertThat(triggered).isFalse();
         }
+
+        /**
+         * Builds StrategyData for P3 with the upper-band spike placed at bars 18-20
+         * (indices 18..20 out of 30 total hourly bars, index 29 = current).
+         * brokeAboveUpperBand checks from idx1h-1=28 backwards by N bars.
+         * With N=5  → window 28..23 → spike NOT found → should NOT trigger.
+         * With N=10 → window 28..18 → spike at 20 IS found → should trigger.
+         */
+        private StrategyData buildP3DataWithDistantSpike(ZonedDateTime currentTime, double[] dailyCloses) {
+            List<Candle> dailyCandles = new ArrayList<>();
+            ZonedDateTime dayBase = currentTime.toLocalDate().atStartOfDay(NY).minusDays(dailyCloses.length - 1);
+            for (int i = 0; i < dailyCloses.length; i++) {
+                double c = dailyCloses[i];
+                dailyCandles.add(candle(dayBase.plusDays(i), c, c + 1, c - 1, c, 5000000L));
+            }
+
+            List<Candle> hourlyCandles = new ArrayList<>();
+            int totalHours = 30;
+            ZonedDateTime hourBase = currentTime.minusHours(totalHours);
+            double spikeClose = 110.0;
+            double current1hClose = 100.5;
+            double current1hHigh = 101.5;
+            for (int i = 0; i < totalHours; i++) {
+                // Spike at bars 18-20: 8-10 bars before index 28 (idx1h-1)
+                double c = (i >= 18 && i <= 20) ? spikeClose : 100.0;
+                if (i == totalHours - 1) {
+                    hourlyCandles.add(candle(hourBase.plusHours(i),
+                            current1hClose, current1hHigh, current1hClose - 0.5, current1hClose, 2000000L));
+                } else {
+                    hourlyCandles.add(candle(hourBase.plusHours(i), c, c + 0.5, c - 0.5, c, 2000000L));
+                }
+            }
+
+            List<Candle> candles15m = new ArrayList<>();
+            int total15m = 25;
+            double current15mClose = 98.0;
+            ZonedDateTime min15Base = currentTime.toLocalDate().atTime(9, 30).atZone(NY)
+                    .minusMinutes(15L * (total15m - 1));
+            for (int i = 0; i < total15m; i++) {
+                if (i == total15m - 1) {
+                    candles15m.add(candle(min15Base.plusMinutes(15L * i),
+                            current15mClose, current15mClose + 0.5, current15mClose - 0.5,
+                            current15mClose, 1000000L));
+                } else {
+                    candles15m.add(candle(min15Base.plusMinutes(15L * i),
+                            100.0, 100.5, 99.5, 100.0, 500000L));
+                }
+            }
+
+            Map<TimeFrame, List<Candle>> data = new EnumMap<>(TimeFrame.class);
+            data.put(TimeFrame.DAY_1, dailyCandles);
+            data.put(TimeFrame.HOUR_1, hourlyCandles);
+            data.put(TimeFrame.MIN_15, candles15m);
+            return new StrategyData(data);
+        }
+
+        @Test
+        @DisplayName("Should trigger P3 when upper-band break happened 8 bars ago (within window=10, outside window=5)")
+        void shouldTriggerP3WhenBrokeAboveUpperBandEightBarsAgo() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 10, 5, 0, 0, NY);
+
+            double[] dailyCloses = new double[25];
+            for (int i = 0; i < 24; i++) dailyCloses[i] = 102.0 - i * 0.1;
+            dailyCloses[24] = 100.0;
+
+            StrategyData data = buildP3DataWithDistantSpike(testTime, dailyCloses);
+            P3BouncePutStrategy strategy = new P3BouncePutStrategy();
+
+            boolean triggered = strategy.isTriggered("AAPL", data, testTime);
+            assertThat(triggered).isTrue();
+        }
     }
 
     // =========================================================================
