@@ -715,8 +715,9 @@ public class StrategyScannerService {
             return Collections.emptyList();
         }
 
-        // Use the latest candle's timestamp as "current time"
-        ZonedDateTime currentTime = getLatestTimestamp(data);
+        ZonedDateTime currentTime = (replayClock != null && replayClock.isActive())
+                ? replayClock.getNow()
+                : getLatestTimestamp(data);
         if (currentTime == null) return Collections.emptyList();
 
         // Convert to NY timezone for strategy time checks
