@@ -55,6 +55,8 @@ public class MarketScanner {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private ReplayOrderGate replayOrderGate;
 
+    private static final ZoneId SPAIN_TZ = ZoneId.of("Europe/Madrid");
+
     /** When false, scheduled scans are skipped (user can toggle from UI). */
     private final AtomicBoolean schedulerEnabled = new AtomicBoolean(true);
 
@@ -96,7 +98,7 @@ public class MarketScanner {
      */
     @EventListener(ApplicationReadyEvent.class)
     public void onStartup() {
-        ZonedDateTime nowSpain = ZonedDateTime.now(ZoneId.of("Europe/Madrid"));
+        ZonedDateTime nowSpain = ZonedDateTime.now(SPAIN_TZ);
         
         // Only download during market hours or pre-market
         int currentHour = nowSpain.getHour();
@@ -133,7 +135,7 @@ public class MarketScanner {
                     log.info("✅ Startup scan complete: {} tickers, {} signals in {}ms",
                             result.tickersScanned(), result.totalSignals(), elapsed);
                 } catch (Exception e) {
-                    log.warn("⚠️ Startup scan failed: {}", e.getMessage());
+                    log.warn("⚠️ Startup scan failed", e);
                 } finally {
                     scannerService.clearTickerOverride();
                     // Always reset scanning state so Stop Scan can clear it
@@ -154,29 +156,14 @@ public class MarketScanner {
     public void scanAndExecute() {
         boolean replayActive = replayClock != null && replayClock.isActive();
         ZonedDateTime nowSpain = replayActive
-                ? replayClock.getNow().withZoneSameInstant(ZoneId.of("Europe/Madrid"))
-                : ZonedDateTime.now(ZoneId.of("Europe/Madrid"));
+                ? replayClock.getNow().withZoneSameInstant(SPAIN_TZ)
+                : ZonedDateTime.now(SPAIN_TZ);
 
-        // Market-hours and weekend gates are bypassed while replay is active —
-        // the whole point of replay is running the pipeline outside market hours.
-        if (!replayActive) {
-            int currentHour = nowSpain.getHour();
-            boolean isExtendedHours = (currentHour >= 8 && currentHour < 10) || (currentHour >= 22 && currentHour < 24);
-
-            if (!liveModeController.isExtendedHoursEnabled()) {
-                if (currentHour < 10 || currentHour >= 22) {
-                    log.debug("⏸️ Outside market hours ({}:{} Spain) - skipping", currentHour, nowSpain.getMinute());
-                    return;
-                }
-            } else if (currentHour < 8 || currentHour >= 24) {
-                log.debug("⏸️ Outside extended hours ({}:{} Spain) - skipping", currentHour, nowSpain.getMinute());
-                return;
-            }
-
-            // Skip weekend (double check - cron already handles this)
-            if (nowSpain.getDayOfWeek().getValue() > 5) {
-                return;
-            }
+        // Market-hours gate applies to both live and replay — replay must not generate
+        // signals outside the real trading window even when running at virtual time.
+        if (!marketCalendar.isRegularMarketHours(nowSpain)) {
+            log.debug("⏸️ Outside market hours ({} Spain) - skipping", nowSpain.toLocalTime());
+            return;
         }
 
         // Skip if scheduler disabled or stop was requested
@@ -236,7 +223,7 @@ public class MarketScanner {
             log.info("======================\n");
 
         } catch (Exception e) {
-            log.error("❌ MarketScanner error: {}", e.getMessage(), e);
+            log.error("❌ MarketScanner error", e);
         } finally {
             scannerService.clearTickerOverride();
             // Always reset scanning state so Stop Scan works
@@ -326,7 +313,7 @@ public class MarketScanner {
                 log.error("    ❌ ORDER FAILED: Check logs for IBKR errors");
             }
         } catch (Exception e) {
-            log.error("    ❌ EXECUTION ERROR: {} - {}", signal.ticker(), e.getMessage());
+            log.error("    ❌ EXECUTION ERROR: {}", signal.ticker(), e);
         }
     }
 

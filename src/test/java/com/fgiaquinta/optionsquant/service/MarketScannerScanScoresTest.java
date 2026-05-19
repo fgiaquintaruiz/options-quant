@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.anyList;
+import org.mockito.InOrder;
+
 import static org.mockito.Mockito.*;
 
 /**
@@ -29,6 +31,7 @@ class MarketScannerScanScoresTest {
     private ScanPrioritizationService scanPrioritizationService;
     private StrategyScannerService strategyScannerService;
     private ScannerProperties scannerProperties;
+    private MarketCalendarService marketCalendar;
 
     @BeforeEach
     void setUp() {
@@ -40,7 +43,7 @@ class MarketScannerScanScoresTest {
         MacroEnvironmentFilter macroFilter = mock(MacroEnvironmentFilter.class);
         TelegramService telegramService = mock(TelegramService.class);
         TrailingStopMonitor trailingStopMonitor = mock(TrailingStopMonitor.class);
-        MarketCalendarService marketCalendar = mock(MarketCalendarService.class);
+        marketCalendar = mock(MarketCalendarService.class);
 
         scannerProperties = mock(ScannerProperties.class);
         when(scannerProperties.exclusiveScanSchedulerLockWaitMs()).thenReturn(5000L);
@@ -60,6 +63,9 @@ class MarketScannerScanScoresTest {
                 new StrategyScannerService.ScanResult(0, 0, List.of(), 0L, false);
         when(strategyScannerService.scanAll(anyBoolean(), anyBoolean(), anyBoolean(), anyLong()))
                 .thenReturn(emptyResult);
+
+        // Default: market is open — individual tests override when needed
+        when(marketCalendar.isRegularMarketHours(any())).thenReturn(true);
 
         marketScanner = new MarketScanner(
                 strategyScannerService, ibkrProperties, orderExecutionService,
@@ -91,7 +97,7 @@ class MarketScannerScanScoresTest {
         when(liveModeController.isStopRequested()).thenReturn(false);
 
         // Use org.mockito.InOrder to verify setScanScores is called before scanAll
-        var inOrder = inOrder(liveModeController, strategyScannerService);
+        InOrder inOrder = inOrder(liveModeController, strategyScannerService);
 
         marketScanner.scanAndExecute();
 
@@ -100,26 +106,50 @@ class MarketScannerScanScoresTest {
         inOrder.verify(strategyScannerService).scanAll(anyBoolean(), anyBoolean(), anyBoolean(), anyLong());
     }
 
-    // ─── W3 — market-hours bypass when replay is active ─────────────────────────
+    // ─── Market-hours gate applies during replay ────────────────────────────────
 
     @Test
-    @DisplayName("scanAndExecute bypasses market-hours gate when replayClock is active at 3am")
-    void scanAndExecute_bypassesMarketHoursGate_whenReplayActive() {
-        // GIVEN: replay clock is active and reports 03:00 Spain time (deep outside market hours)
-        ZonedDateTime threeAm = ZonedDateTime.now(ZoneId.of("Europe/Madrid"))
-                .withHour(3).withMinute(0).withSecond(0).withNano(0);
+    @DisplayName("replay active + virtual 08:00 ET (before open) → scanAndExecute returns early")
+    void scanAndExecute_returnsEarly_whenReplayActive_andVirtualTimeBeforeMarketOpen() {
+        // GIVEN: replay active, virtual time = 08:00 ET = 14:00 CEST (outside regular hours)
+        ZonedDateTime eightAmEt = ZonedDateTime.of(2026, 4, 22, 8, 0, 0, 0,
+                ZoneId.of("America/New_York"));
 
         ReplayClock mockClock = mock(ReplayClock.class);
         when(mockClock.isActive()).thenReturn(true);
-        when(mockClock.getNow()).thenReturn(threeAm);
+        when(mockClock.getNow()).thenReturn(eightAmEt);
         ReflectionTestUtils.setField(marketScanner, "replayClock", mockClock);
 
-        when(scanPrioritizationService.computeScores(anyList())).thenReturn(Map.of());
+        // Market calendar says this time is outside regular hours
+        when(marketCalendar.isRegularMarketHours(any())).thenReturn(false);
 
-        // WHEN: scanAndExecute() is called
+        // WHEN
         marketScanner.scanAndExecute();
 
-        // THEN: the scan proceeds — scanAll is invoked, proving the market-hours guard was bypassed
+        // THEN: scan must NOT proceed — outside market hours even during replay
+        verify(strategyScannerService, never()).scanAll(anyBoolean(), anyBoolean(), anyBoolean(), anyLong());
+    }
+
+    @Test
+    @DisplayName("replay active + virtual 10:00 ET (market open) → scanAndExecute proceeds")
+    void scanAndExecute_proceeds_whenReplayActive_andVirtualTimeDuringMarketHours() {
+        // GIVEN: replay active, virtual time = 10:00 ET = 16:00 CEST (inside regular hours)
+        ZonedDateTime tenAmEt = ZonedDateTime.of(2026, 4, 22, 10, 0, 0, 0,
+                ZoneId.of("America/New_York"));
+
+        ReplayClock mockClock = mock(ReplayClock.class);
+        when(mockClock.isActive()).thenReturn(true);
+        when(mockClock.getNow()).thenReturn(tenAmEt);
+        ReflectionTestUtils.setField(marketScanner, "replayClock", mockClock);
+
+        // Market calendar says this time is inside regular hours
+        when(marketCalendar.isRegularMarketHours(any())).thenReturn(true);
+        when(scanPrioritizationService.computeScores(anyList())).thenReturn(Map.of());
+
+        // WHEN
+        marketScanner.scanAndExecute();
+
+        // THEN: scan proceeds
         verify(strategyScannerService).scanAll(anyBoolean(), anyBoolean(), anyBoolean(), anyLong());
     }
 }

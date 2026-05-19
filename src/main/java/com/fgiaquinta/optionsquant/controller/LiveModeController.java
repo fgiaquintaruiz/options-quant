@@ -583,7 +583,7 @@ public class LiveModeController {
                                 executedTrades.put(signal.ticker(), new ExecutedTradeInfo(signal.ticker(), exTime, ok, ok ? "Auto-executed" : "Failed", ok ? orderResult.parentId() : null, ok ? orderResult.tpOrderId() : null, ok ? orderResult.slOrderId() : null));
                                 log.info("Auto-executed mock signal {} {}: {}", signal.ticker(), signal.direction(), ok ? "OK (orderId=" + orderResult.parentId() + ")" : "FAILED");
                             } catch (Exception ex) {
-                                log.error("Auto-execute failed for {}: {}", signal.ticker(), ex.getMessage());
+                                log.error("Auto-execute failed for {}", signal.ticker(), ex);
                             }
                         }
                     }
@@ -593,7 +593,7 @@ public class LiveModeController {
                     log.info("Manual scan stopped by user after {}ms", System.currentTimeMillis() - startTime);
                 }
             } catch (Exception e) {
-                log.error("Manual scan failed: {}", e.getMessage(), e);
+                log.error("Manual scan failed", e);
             } finally {
                 isScanning.set(false);
                 isAutoScan.set(false);
@@ -689,7 +689,9 @@ public class LiveModeController {
 
     @PostMapping("/toggle-extended-hours")
     public ResponseEntity<Map<String, Object>> toggleExtendedHours() {
-        boolean newState = extendedHoursEnabled.updateAndGet(v -> !v);
+        boolean prev = extendedHoursEnabled.get();
+        boolean newState = !prev;
+        extendedHoursEnabled.compareAndSet(prev, newState);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", true);
         result.put("extendedHours", newState);
@@ -803,7 +805,7 @@ public class LiveModeController {
                 autoExec = ok;
                 log.info("Auto-executed injected signal {} {}: {}", ticker, dir, ok ? "OK (orderId=" + orderResult.parentId() + ")" : "FAILED");
             } catch (Exception e) {
-                log.error("Auto-execute for injected signal {} failed: {}", ticker, e.getMessage());
+                log.error("Auto-execute for injected signal {}", ticker, e);
             }
         }
 
@@ -894,7 +896,7 @@ public class LiveModeController {
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             String errorId = UUID.randomUUID().toString();
-            log.error("❌ Manual trade exception [{}]: {}", errorId, e.getMessage(), e);
+            log.error("❌ Manual trade exception [{}]", errorId, e);
             return ResponseEntity.ok(errorBody("message", "Trade execution failed — see logs.", errorId));
         }
     }
@@ -949,7 +951,7 @@ public class LiveModeController {
                 return ResponseEntity.ok(result);
                 
             } catch (Exception e) {
-                log.error("Failed to cancel TP/SL orders for {}: {}", ticker, e.getMessage());
+                log.error("Failed to cancel TP/SL orders for {}", ticker, e);
                 // Fall through to simple close
             }
         }
@@ -1199,7 +1201,7 @@ public class LiveModeController {
                     java.nio.file.StandardOpenOption.CREATE,
                     java.nio.file.StandardOpenOption.APPEND);
         } catch (java.io.IOException e) {
-            log.warn("Failed to persist replay signal to JSONL: {}", e.getMessage());
+            log.warn("Failed to persist replay signal to JSONL", e);
         }
     }
 
