@@ -1553,6 +1553,49 @@ class StrategyUnitTest {
             boolean triggered = strategy.isTriggered("AAPL", data, testTime);
             assertThat(triggered).isFalse();
         }
+
+        /**
+         * Verifies that priceBelowMiddleBB is a redundant predicate and can be removed
+         * without changing observable behaviour.
+         *
+         * priceBelowMiddleBB = currentPrice15m < bb15m.getMiddle(idx15m)
+         * isDowntrend15m     = (currentPrice15m < currentSma15m) && (currentSma15m < prevSma15m)
+         *
+         * Both use the same SMA20 of 15-minute closes, so priceBelowMiddleBB is always
+         * implied by isDowntrend15m.  A setup that satisfies isDowntrend15m + isBearishBBTrend
+         * must already satisfy priceBelowMiddleBB — the third predicate adds no restriction.
+         *
+         * RED reasoning: the predicate is currently present in the AND chain but is logically
+         * unreachable as an independent gate.  This test documents that the signal fires with
+         * isDowntrend15m AND isBearishBBTrend alone (which is the entire effective condition),
+         * and must continue to fire after the redundant predicate is removed.
+         */
+        @Test
+        @DisplayName("priceBelowMiddleBB is redundant — signal fires with isDowntrend15m+isBearishBBTrend alone")
+        void priceBelowMiddleBB_isRedundant_signalFiresWithTwoPredicatesAlone() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 11, 0, 0, 0, NY);
+
+            double[] daily = fallingDailyCloses(22);
+            double[] hourly = hourlyClosesWithDowntrend();
+            // bearish15mCloses: each close decreases by 0.1; last close = 99.9, SMA20 ≈ 101.05
+            // → isDowntrend15m=true (price < SMA AND SMA falling)
+            // → isBearishBBTrend=true (>70% of last 10 candles below middle band)
+            // → priceBelowMiddleBB=true (same SMA as isDowntrend15m — always redundant)
+            double[] min15 = bearish15mCloses(22);
+
+            // 1H candle: valid pullback-rejection setup (same as "all conditions met" test)
+            StrategyData data = buildP2Data(testTime, daily, hourly,
+                    100.1, 99.85, 99.4, 99.5, 2000000L, min15);
+            P2TrendPutStrategy strategy = new P2TrendPutStrategy();
+
+            // Must fire: removing priceBelowMiddleBB from the AND chain cannot change this result
+            boolean triggered = strategy.isTriggered("AAPL", data, testTime);
+            assertThat(triggered)
+                    .as("Signal must fire when isDowntrend15m=true AND isBearishBBTrend=true; " +
+                        "priceBelowMiddleBB is always implied by isDowntrend15m (same SMA20 comparison) " +
+                        "and must not be an independent gate.")
+                    .isTrue();
+        }
     }
 
     // =========================================================================

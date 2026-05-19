@@ -122,7 +122,8 @@ public class P2TrendPutStrategy implements TradingStrategy, TimeframeRequirement
         boolean priceBelowMiddleBB = currentPrice15m < bb15m.getMiddle(idx15m);
 
         // Signal confirmed if BOTH: SMA downtrend AND BB bearish context
-        if (isDowntrend15m && isBearishBBTrend && priceBelowMiddleBB) {
+        // priceBelowMiddleBB removed: it is logically implied by isDowntrend15m (both use SMA20 of 15m closes)
+        if (isDowntrend15m && isBearishBBTrend) {
             lastTriggerMap.put(ticker, currentTime);
             return true;
         }
