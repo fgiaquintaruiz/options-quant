@@ -511,7 +511,7 @@ export default function LiveTradeGrid({
                       <td colSpan={COL_COUNT} style={{ padding: '0 12px 12px 12px', background: '#0d1117' }}>
                         <SignalChart
                           ticker={row.ticker}
-                          signalTimestamp={row.entryAt ? new Date(row.entryAt).getTime() : Date.now()}
+                          signalTimestamp={row.signalTimestampMs ?? Date.now()}
                           entryPrice={row.ep}
                           tp={row.tp}
                           sl={row.sl}

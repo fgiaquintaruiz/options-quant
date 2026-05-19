@@ -21,6 +21,7 @@ export function useTradeActions({ signals, closedTrades, fetchSignals, setErrorM
       exitReason: closed ? (closed.exitReason || 'MANUAL_CLOSE') : 'LIVE SIGNAL',
       netPnl: null, executeTime: s.executeTime, tradeStatus: s.tradeStatus,
       orderId: s.orderId, tpOrderId: s.tpOrderId, slOrderId: s.slOrderId, signalStale,
+      signalTimestampMs: new Date(s.timestamp).getTime(),
       replay: s.replay ?? false,
       newsBias: s.newsBias ?? 'NEUTRAL',
       earningsAlert: s.earningsAlert ?? false,

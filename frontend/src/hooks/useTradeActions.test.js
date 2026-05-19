@@ -342,4 +342,19 @@ describe('useTradeActions', () => {
     expect(props.setErrorMsg).toHaveBeenCalledWith(expect.stringContaining('TWS down'))
     expect(props.fetchSignals).not.toHaveBeenCalled()
   })
+
+  // ── mapSignal: signalTimestampMs ─────────────────────────────────────────────
+
+  it('mapSignal: signalTimestampMs es un número válido (no NaN) dado un signal con ISO timestamp', () => {
+    const isoTimestamp = '2026-05-19T14:30:00.000Z'
+    const signal = makeSignal({ timestamp: isoTimestamp })
+    const props = makeProps({ signals: [signal] })
+
+    const { result } = renderHook(() => useTradeActions(props))
+
+    const row = result.current.trades[0]
+    expect(typeof row.signalTimestampMs).toBe('number')
+    expect(Number.isNaN(row.signalTimestampMs)).toBe(false)
+    expect(row.signalTimestampMs).toBe(new Date(isoTimestamp).getTime())
+  })
 })
