@@ -6,7 +6,6 @@ export function useReplayStatus({ active, intervalMs = 5000 } = {}) {
   const [error,  setError]  = useState(null)
 
   useEffect(() => {
-    if (!active) return
     let cancelled = false
 
     const tick = async () => {

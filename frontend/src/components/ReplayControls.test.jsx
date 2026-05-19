@@ -37,8 +37,8 @@ async function flushMountTick() {
   })
 }
 
-// Helper: advance the 2s interval and let the async tick settle
-async function advancePolling(ms = 2000) {
+// Helper: advance the 5s interval and let the async tick settle
+async function advancePolling(ms = 5000) {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(ms)
     await Promise.resolve()
@@ -51,7 +51,7 @@ describe('ReplayControls — polling transitions', () => {
   // ── Test 1 — orphan replay detected on mount ────────────────────────────
 
   it('detects active replay on mount and notifies onActiveChange once', async () => {
-    api.replayApi.status.mockResolvedValue({ active: true })
+    api.replayApi.status.mockResolvedValue({ active: true, virtualNow: null, speed: 30, runId: null })
     const onActiveChange = vi.fn()
 
     render(<ReplayControls onActiveChange={onActiveChange} marketOpen={false} />)
@@ -71,8 +71,8 @@ describe('ReplayControls — polling transitions', () => {
   it('Stop click calls replayApi.stop and polling confirms inactive', async () => {
     // First status → active (orphan), subsequent → inactive after stop
     api.replayApi.status
-      .mockResolvedValueOnce({ active: true })
-      .mockResolvedValue({ active: false })
+      .mockResolvedValueOnce({ active: true, virtualNow: null, speed: 30, runId: null })
+      .mockResolvedValue({ active: false, virtualNow: null, speed: 0, runId: null })
     api.replayApi.stop.mockResolvedValue({ ok: true })
     const onActiveChange = vi.fn()
 
@@ -94,7 +94,7 @@ describe('ReplayControls — polling transitions', () => {
     expect(screen.getByTestId('replay-start-btn').className).toContain('btn-primary')
 
     // Polling fires and confirms inactive
-    await advancePolling(2000)
+    await advancePolling(5000)
 
     // onActiveChange: first true (mount), then false (stop click), no extra call from polling
     // (polling sees false, matches lastActiveRef=false after handleStop, so no extra transition)
@@ -105,8 +105,8 @@ describe('ReplayControls — polling transitions', () => {
 
   it('Start click calls replayApi.start with date/speed and polling confirms active', async () => {
     api.replayApi.status
-      .mockResolvedValueOnce({ active: false }) // mount tick
-      .mockResolvedValue({ active: true })      // subsequent polls
+      .mockResolvedValueOnce({ active: false, virtualNow: null, speed: 0, runId: null }) // mount tick
+      .mockResolvedValue({ active: true, virtualNow: '2026-04-27T10:00:00Z', speed: 30, runId: 'r1' }) // subsequent polls
     api.replayApi.start.mockResolvedValue({ ok: true })
     const onActiveChange = vi.fn()
 
@@ -131,7 +131,7 @@ describe('ReplayControls — polling transitions', () => {
 
     // Polling fires — backend returns active:true; handleStart already synced lastActiveRef=true,
     // so tick() sees true→true and does NOT fire onActiveChange again.
-    await advancePolling(2000)
+    await advancePolling(5000)
 
     expect(onActiveChange).toHaveBeenCalledTimes(1)
     expect(onActiveChange).toHaveBeenLastCalledWith(true)
@@ -141,7 +141,7 @@ describe('ReplayControls — polling transitions', () => {
 
   it('onActiveChange is called exactly once across repeated polls with same active state', async () => {
     // Always returns active:true — transition: false→true on first tick, then steady state
-    api.replayApi.status.mockResolvedValue({ active: true })
+    api.replayApi.status.mockResolvedValue({ active: true, virtualNow: null, speed: 30, runId: null })
     const onActiveChange = vi.fn()
 
     render(<ReplayControls onActiveChange={onActiveChange} marketOpen={false} />)
@@ -151,12 +151,12 @@ describe('ReplayControls — polling transitions', () => {
     expect(onActiveChange).toHaveBeenCalledTimes(1)
     expect(onActiveChange).toHaveBeenCalledWith(true)
 
-    // Second tick (2s): true → true → no new call
-    await advancePolling(2000)
+    // Second tick (5s): true → true → no new call
+    await advancePolling(5000)
     expect(onActiveChange).toHaveBeenCalledTimes(1)
 
-    // Third tick (2s): true → true → no new call
-    await advancePolling(2000)
+    // Third tick (5s): true → true → no new call
+    await advancePolling(5000)
     expect(onActiveChange).toHaveBeenCalledTimes(1)
   })
 })
@@ -166,7 +166,7 @@ describe('ReplayControls — branch coverage', () => {
   // ── 1. cycleSpeed — full cycle ─────────────────────────────────────────────
 
   it('cycleSpeed cycles through all SPEEDS and wraps back to 30', async () => {
-    api.replayApi.status.mockResolvedValue({ active: false })
+    api.replayApi.status.mockResolvedValue({ active: false, virtualNow: null, speed: 0, runId: null })
 
     render(<ReplayControls marketOpen={false} />)
     await flushMountTick()
@@ -203,7 +203,7 @@ describe('ReplayControls — branch coverage', () => {
   // ── 2. handleStart error — with e.message ──────────────────────────────────
 
   it('handleStart calls onError with e.message when start rejects with an Error', async () => {
-    api.replayApi.status.mockResolvedValue({ active: false })
+    api.replayApi.status.mockResolvedValue({ active: false, virtualNow: null, speed: 0, runId: null })
     api.replayApi.start.mockRejectedValue(new Error('market open'))
     const onError = vi.fn()
 
@@ -223,7 +223,7 @@ describe('ReplayControls — branch coverage', () => {
   // ── 3. handleStart error — without e.message (fallback string) ─────────────
 
   it('handleStart calls onError with fallback string when rejection has no message', async () => {
-    api.replayApi.status.mockResolvedValue({ active: false })
+    api.replayApi.status.mockResolvedValue({ active: false, virtualNow: null, speed: 0, runId: null })
     api.replayApi.start.mockRejectedValue({})
     const onError = vi.fn()
 
@@ -237,13 +237,13 @@ describe('ReplayControls — branch coverage', () => {
     })
 
     expect(onError).toHaveBeenCalledTimes(1)
-    expect(onError).toHaveBeenCalledWith('Replay blocked during market hours')
+    expect(onError).toHaveBeenCalledWith('Replay bloqueado durante horario de mercado')
   })
 
   // ── 4. handleStart — no onError prop (no crash) ────────────────────────────
 
   it('handleStart does not throw when onError prop is omitted', async () => {
-    api.replayApi.status.mockResolvedValue({ active: false })
+    api.replayApi.status.mockResolvedValue({ active: false, virtualNow: null, speed: 0, runId: null })
     api.replayApi.start.mockRejectedValue(new Error('oops'))
 
     render(<ReplayControls marketOpen={false} />)
@@ -262,20 +262,20 @@ describe('ReplayControls — branch coverage', () => {
   // ── 5. marketOpen=true disables start button when inactive ─────────────────
 
   it('start button is disabled and titled when marketOpen=true and replay inactive', async () => {
-    api.replayApi.status.mockResolvedValue({ active: false })
+    api.replayApi.status.mockResolvedValue({ active: false, virtualNow: null, speed: 0, runId: null })
 
     render(<ReplayControls marketOpen={true} />)
     await flushMountTick()
 
     const startBtn = screen.getByTestId('replay-start-btn')
     expect(startBtn).toBeDisabled()
-    expect(startBtn.title).toBe('Not available during market hours')
+    expect(startBtn.title).toBe('No disponible durante horario de mercado')
   })
 
   // ── 6. Date input change updates value ────────────────────────────────────
 
   it('changing the date input updates the displayed value', async () => {
-    api.replayApi.status.mockResolvedValue({ active: false })
+    api.replayApi.status.mockResolvedValue({ active: false, virtualNow: null, speed: 0, runId: null })
 
     render(<ReplayControls marketOpen={false} />)
     await flushMountTick()
@@ -299,7 +299,7 @@ describe('ReplayControls — branch coverage', () => {
     expect(screen.getByTestId('replay-start-btn')).toBeTruthy()
 
     // Advance one polling cycle — still no crash
-    await advancePolling(2000)
+    await advancePolling(5000)
 
     expect(screen.getByTestId('replay-start-btn')).toBeTruthy()
   })
@@ -308,8 +308,8 @@ describe('ReplayControls — branch coverage', () => {
 
   it('handleStop does not throw when onActiveChange prop is omitted', async () => {
     api.replayApi.status
-      .mockResolvedValueOnce({ active: true })
-      .mockResolvedValue({ active: false })
+      .mockResolvedValueOnce({ active: true, virtualNow: null, speed: 30, runId: null })
+      .mockResolvedValue({ active: false, virtualNow: null, speed: 0, runId: null })
     api.replayApi.stop.mockResolvedValue({ ok: true })
 
     render(<ReplayControls marketOpen={false} />)
@@ -327,5 +327,297 @@ describe('ReplayControls — branch coverage', () => {
 
     // If we reach here without throwing, the test passes
     expect(screen.getByTestId('replay-start-btn')).toBeTruthy()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NEW TESTS — Features 1–4
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('ReplayControls — Feature 1: virtual clock', () => {
+
+  it('shows virtual clock when replay is active with virtualNow', async () => {
+    api.replayApi.status.mockResolvedValue({
+      active: true,
+      virtualNow: '2026-04-27T14:30:00Z',
+      speed: 30,
+      runId: 'r1',
+    })
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    // Should display the date in DD/MM/YYYY HH:mm format
+    const clock = screen.getByTestId('replay-virtual-clock')
+    expect(clock.textContent).toMatch(/\d{2}\/\d{2}\/\d{4}/)
+  })
+
+  it('does not show virtual clock when replay is inactive', async () => {
+    api.replayApi.status.mockResolvedValue({
+      active: false,
+      virtualNow: null,
+      speed: 0,
+      runId: null,
+    })
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    expect(screen.queryByTestId('replay-virtual-clock')).toBeNull()
+  })
+
+  it('updates virtual clock on next poll', async () => {
+    api.replayApi.status
+      .mockResolvedValueOnce({
+        active: true,
+        virtualNow: '2026-04-27T10:00:00Z',
+        speed: 30,
+        runId: 'r1',
+      })
+      .mockResolvedValue({
+        active: true,
+        virtualNow: '2026-04-27T11:00:00Z',
+        speed: 30,
+        runId: 'r1',
+      })
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    const clock = screen.getByTestId('replay-virtual-clock')
+    const firstText = clock.textContent
+
+    await advancePolling(5000)
+
+    expect(screen.getByTestId('replay-virtual-clock').textContent).not.toBe(firstText)
+  })
+})
+
+describe('ReplayControls — Feature 2: progress bar', () => {
+
+  it('shows progress bar when replay is active', async () => {
+    api.replayApi.status.mockResolvedValue({
+      active: true,
+      virtualNow: '2026-04-27T12:00:00Z',
+      speed: 30,
+      runId: 'r1',
+    })
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    expect(screen.getByTestId('replay-progress-bar')).toBeTruthy()
+  })
+
+  it('does not show progress bar when replay is inactive', async () => {
+    api.replayApi.status.mockResolvedValue({
+      active: false,
+      virtualNow: null,
+      speed: 0,
+      runId: null,
+    })
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    expect(screen.queryByTestId('replay-progress-bar')).toBeNull()
+  })
+
+  it('shows date range labels in the progress bar', async () => {
+    api.replayApi.status.mockResolvedValue({
+      active: true,
+      virtualNow: '2026-04-27T12:00:00Z',
+      speed: 30,
+      runId: 'r1',
+    })
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    const progress = screen.getByTestId('replay-progress-bar')
+    // Should contain date info (DD/MM format)
+    expect(progress.textContent).toMatch(/\d{2}\/\d{2}/)
+  })
+})
+
+describe('ReplayControls — Feature 3: Play/Stop button', () => {
+
+  it('renders Play button (▶) when replay is inactive', async () => {
+    api.replayApi.status.mockResolvedValue({
+      active: false,
+      virtualNow: null,
+      speed: 0,
+      runId: null,
+    })
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    const startBtn = screen.getByTestId('replay-start-btn')
+    // btn-primary class = Play state
+    expect(startBtn.className).toContain('btn-primary')
+  })
+
+  it('renders Stop button (⏹) when replay is active', async () => {
+    api.replayApi.status.mockResolvedValue({
+      active: true,
+      virtualNow: '2026-04-27T10:00:00Z',
+      speed: 30,
+      runId: 'r1',
+    })
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    const startBtn = screen.getByTestId('replay-start-btn')
+    // btn-secondary class = Stop state
+    expect(startBtn.className).toContain('btn-secondary')
+  })
+})
+
+describe('ReplayControls — Feature 4: speed badge', () => {
+
+  it('shows speed badge from status when replay is active', async () => {
+    api.replayApi.status.mockResolvedValue({
+      active: true,
+      virtualNow: '2026-04-27T10:00:00Z',
+      speed: 30,
+      runId: 'r1',
+    })
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    const badge = screen.getByTestId('replay-speed-badge')
+    expect(badge.textContent).toBe('30x')
+  })
+
+  it('shows speed badge with different multiplier', async () => {
+    api.replayApi.status.mockResolvedValue({
+      active: true,
+      virtualNow: '2026-04-27T10:00:00Z',
+      speed: 180,
+      runId: 'r1',
+    })
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    const badge = screen.getByTestId('replay-speed-badge')
+    expect(badge.textContent).toBe('180x')
+  })
+
+  it('does not show speed badge when replay is inactive', async () => {
+    api.replayApi.status.mockResolvedValue({
+      active: false,
+      virtualNow: null,
+      speed: 0,
+      runId: null,
+    })
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    expect(screen.queryByTestId('replay-speed-badge')).toBeNull()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// virtualNow parsing — NaN regression tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('ReplayControls — virtualNow parsing', () => {
+
+  // ── 1. null virtualNow → clock not rendered (no NaN) ──────────────────────
+
+  it('does not render virtual clock when virtualNow is null', async () => {
+    api.replayApi.status.mockResolvedValue({
+      active: true,
+      virtualNow: null,
+      speed: 30,
+      runId: 'r1',
+    })
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    expect(screen.queryByTestId('replay-virtual-clock')).toBeNull()
+  })
+
+  // ── 2. ISO with zone offset only → displays valid date (no NaN) ───────────
+
+  it('formats virtualNow with offset-only ISO string (2026-04-27T09:30:00-05:00)', async () => {
+    api.replayApi.status.mockResolvedValue({
+      active: true,
+      virtualNow: '2026-04-27T09:30:00-05:00',
+      speed: 30,
+      runId: 'r1',
+    })
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    const clock = screen.getByTestId('replay-virtual-clock')
+    expect(clock.textContent).not.toContain('NaN')
+    // offset -05:00 → UTC 14:30 → display as UTC: 27/04/2026 14:30
+    expect(clock.textContent).toContain('27/04/2026 14:30')
+  })
+
+  // ── 3. ISO with Java ZonedDateTime.toString() suffix → no NaN ─────────────
+  //
+  //  Java's ZonedDateTime.toString() produces:
+  //    "2026-04-27T09:30:00-05:00[America/New_York]"
+  //  Browsers CANNOT parse the "[America/New_York]" zone-id suffix.
+  //  This was the ROOT CAUSE of the "NaN/NaN/NaN NaN:NaN" bug.
+
+  it('formats virtualNow with Java ZonedDateTime.toString() zone-id suffix (no NaN)', async () => {
+    api.replayApi.status.mockResolvedValue({
+      active: true,
+      virtualNow: '2026-04-27T09:30:00-05:00[America/New_York]',
+      speed: 30,
+      runId: 'r1',
+    })
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    const clock = screen.getByTestId('replay-virtual-clock')
+    expect(clock.textContent).not.toContain('NaN')
+    expect(clock.textContent).toContain('27/04/2026 14:30')
+  })
+
+  // ── 4. ISO with UTC Z suffix → displays valid date ────────────────────────
+
+  it('formats virtualNow with UTC Z suffix (2026-04-27T14:30:00Z)', async () => {
+    api.replayApi.status.mockResolvedValue({
+      active: true,
+      virtualNow: '2026-04-27T14:30:00Z',
+      speed: 30,
+      runId: 'r1',
+    })
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    const clock = screen.getByTestId('replay-virtual-clock')
+    expect(clock.textContent).not.toContain('NaN')
+    expect(clock.textContent).toContain('27/04/2026 14:30')
+  })
+
+  // ── 5. progress bar label does not contain NaN when zone-id suffix present ──
+
+  it('progress bar label has no NaN when virtualNow has zone-id suffix', async () => {
+    api.replayApi.status.mockResolvedValue({
+      active: true,
+      virtualNow: '2026-04-27T09:30:00-05:00[America/New_York]',
+      speed: 30,
+      runId: 'r1',
+    })
+
+    render(<ReplayControls marketOpen={false} />)
+    await flushMountTick()
+
+    const bar = screen.getByTestId('replay-progress-bar')
+    expect(bar.textContent).not.toContain('NaN')
   })
 })
