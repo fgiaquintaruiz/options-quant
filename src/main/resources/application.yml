@@ -114,7 +114,7 @@ replay:
   max-orders-per-minute: 10
   jitter-ms-min: 100
   jitter-ms-max: 800
-  signals-file-pattern: "data/replay-signals-%s-%s.jsonl" # %s %s = date, runId
+  signals-file-pattern: "replay-signals-%s-%s.jsonl" # %s %s = date, runId
 
 yahoo:
   finance:

@@ -25,7 +25,7 @@ import java.util.UUID;
 public class ReplayService {
 
     public static final ZoneId MADRID = ZoneId.of("Europe/Madrid");
-    private static final LocalTime MARKET_OPEN = LocalTime.of(10, 0);
+    private static final LocalTime MARKET_OPEN = LocalTime.of(15, 30);
     private static final LocalTime MARKET_CLOSE = LocalTime.of(22, 0);
     private static final List<TimeFrame> REPLAY_TIMEFRAMES = List.of(TimeFrame.MIN_5, TimeFrame.MIN_15, TimeFrame.HOUR_1);
     // US session virtual-open (14:30 UTC = 09:30 ET)

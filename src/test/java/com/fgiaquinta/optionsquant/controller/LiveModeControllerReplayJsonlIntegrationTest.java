@@ -138,6 +138,30 @@ class LiveModeControllerReplayJsonlIntegrationTest {
     }
 
     @Test
+    @DisplayName("addLiveSignal replay: el nombre del archivo contiene el runId del reloj activo")
+    void addLiveSignal_replaySignal_filenameContainsRunId() throws IOException {
+        // GIVEN — a replay clock is active with a known runId
+        ReplayClock replayClock = new ReplayClock();
+        replayClock.activate(java.time.ZonedDateTime.parse("2026-04-22T14:30:00Z"), 60, "R-abc1234");
+        ReflectionTestUtils.setField(controller, "replayClock", replayClock);
+        ReflectionTestUtils.setField(controller, "replaySignalDir", tempDir.toString());
+        ReflectionTestUtils.setField(controller, "replaySignalsFilePattern", "replay-signals-%s-%s.jsonl");
+
+        ZonedDateTime ts = ZonedDateTime.parse("2026-04-22T14:35:00Z");
+        Signal signal = new Signal("TSLA", "C1Squeeze", "BUY", 250.0, ts, null, "hammer", true);
+
+        // WHEN
+        controller.addLiveSignal(signal);
+
+        // THEN — file name contains both date AND runId
+        boolean foundFileWithRunId = Files.list(tempDir)
+                .anyMatch(p -> p.getFileName().toString().contains("R-abc1234"));
+        assertThat(foundFileWithRunId)
+                .as("JSONL filename must contain the runId (not just the date)")
+                .isTrue();
+    }
+
+    @Test
     @DisplayName("addLiveSignal con replay=false NO escribe ningún archivo JSONL")
     void addLiveSignal_liveSignal_doesNotWriteAnyJsonlFile() throws IOException {
         // GIVEN — a non-replay (live) signal

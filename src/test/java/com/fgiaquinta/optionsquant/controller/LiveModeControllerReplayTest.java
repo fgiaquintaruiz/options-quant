@@ -201,6 +201,34 @@ class LiveModeControllerReplayTest {
     }
 
     @Test
+    @DisplayName("replaySignals bucket: adding 501 signals drops the oldest, keeps size at 500")
+    void replaySignals_capAt500_dropsOldest() {
+        // Wire a real replayClock so addLiveSignal routes to the replaySignals path
+        replayClock.activate(ZonedDateTime.parse("2026-04-22T14:30:00Z"), 60, "R-cap-test");
+        ReflectionTestUtils.setField(controller, "replayClock", replayClock);
+
+        // Build 501 distinct replay signals — replay=true routes to replaySignals bucket
+        for (int i = 1; i <= 501; i++) {
+            Signal s = new Signal(
+                    "T" + String.format("%03d", i), "SMA", "BUY", 100.0 + i,
+                    ZonedDateTime.parse("2026-04-22T14:30:00Z"), null, "none", true
+            );
+            controller.addLiveSignal(s);
+        }
+
+        @SuppressWarnings("unchecked")
+        CopyOnWriteArrayList<Signal> bucket =
+                (CopyOnWriteArrayList<Signal>) ReflectionTestUtils.getField(controller, "replaySignals");
+
+        // Size must be capped at 500
+        assertThat(bucket).hasSize(500);
+        // The oldest signal (T001) must have been dropped; index 0 is now T002
+        assertThat(bucket.get(0).ticker()).isEqualTo("T002");
+        // The newest signal (T501) must still be present at the end
+        assertThat(bucket.get(499).ticker()).isEqualTo("T501");
+    }
+
+    @Test
     @DisplayName("GET /signals during replay does not leak any liveSignals item")
     void getSignals_whenReplayActive_doesNotLeakLiveSignals() {
         Signal replaySig = new Signal("AAPL", "SMA", "BUY", 180.0,

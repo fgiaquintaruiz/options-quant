@@ -60,6 +60,10 @@ public class LiveModeController {
     @org.springframework.beans.factory.annotation.Value("${replay.signal-dir:data}")
     String replaySignalDir = "data";
 
+    /** Filename pattern for replay-signal JSONL files. Args: date, runId. Overridable in tests via ReflectionTestUtils. */
+    @org.springframework.beans.factory.annotation.Value("${replay.signals-file-pattern:replay-signals-%s-%s.jsonl}")
+    String replaySignalsFilePattern = "replay-signals-%s-%s.jsonl";
+
     // Live-replay-mode — optional; null until services are wired in the context.
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private ReplayService replayService;
@@ -1137,10 +1141,15 @@ public class LiveModeController {
         totalTickers.set(total);
     }
 
+    private static final int REPLAY_SIGNALS_CAP = 500;
+
     public void addLiveSignal(Signal signal) {
         if (signal.replay()) {
             // Replay signals are added regardless of wall-clock age; they follow replay time.
             replaySignals.add(signal);
+            if (replaySignals.size() > REPLAY_SIGNALS_CAP) {
+                replaySignals.remove(0);
+            }
             signalFoundAt.put(signal.ticker().toUpperCase(Locale.ROOT), Instant.now());
             appendReplaySignalToJsonl(signal);
             return;
@@ -1167,7 +1176,13 @@ public class LiveModeController {
             java.nio.file.Path dir = java.nio.file.Path.of(replaySignalDir);
             if (!java.nio.file.Files.exists(dir)) java.nio.file.Files.createDirectories(dir);
             String date = signal.timestamp().toLocalDate().toString();
-            java.nio.file.Path file = dir.resolve("replay-signals-" + date + ".jsonl");
+            String runId = (replayClock != null && replayClock.isActive())
+                    ? replayClock.snapshot().runId()
+                    : null;
+            String filename = (runId != null)
+                    ? String.format(java.util.Locale.ROOT, replaySignalsFilePattern, date, runId)
+                    : "replay-signals-" + date + ".jsonl";
+            java.nio.file.Path file = dir.resolve(filename);
             String line = String.format(java.util.Locale.ROOT,
                     "{\"ticker\":\"%s\",\"strategy\":\"%s\",\"direction\":\"%s\",\"price\":%.4f,\"timestamp\":\"%s\",\"pattern\":\"%s\"}%n",
                     signal.ticker(), signal.strategy(), signal.direction(),
