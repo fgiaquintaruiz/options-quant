@@ -129,6 +129,7 @@ public class LiveModeController {
     public record ScanActivity(String time, String ticker, String status, String detail, String scanStarted, String scanEnded, String duration) {}
     public record ClosedTradeInfo(String ticker, double closePrice, String closeTime, String exitReason) {}
     public record ExecutedTradeInfo(String ticker, String executeTime, boolean success, String message, Integer orderId, Integer tpOrderId, Integer slOrderId) {}
+    public record ReplaySummary(int totalSignals, int uniqueTickers, ZonedDateTime firstSignalAt, ZonedDateTime lastSignalAt) {}
 
     @SuppressWarnings("this-escape")
     public LiveModeController(StrategyScannerService scannerService,
@@ -1183,16 +1184,46 @@ public class LiveModeController {
                     ? String.format(java.util.Locale.ROOT, replaySignalsFilePattern, date, runId)
                     : "replay-signals-" + date + ".jsonl";
             java.nio.file.Path file = dir.resolve(filename);
+            String tradePlanJson = buildTradePlanJson(signal.tradePlan());
             String line = String.format(java.util.Locale.ROOT,
-                    "{\"ticker\":\"%s\",\"strategy\":\"%s\",\"direction\":\"%s\",\"price\":%.4f,\"timestamp\":\"%s\",\"pattern\":\"%s\"}%n",
+                    "{\"ticker\":\"%s\",\"strategy\":\"%s\",\"direction\":\"%s\",\"price\":%.4f,\"timestamp\":\"%s\",\"pattern\":\"%s\",\"tradePlan\":%s}%n",
                     signal.ticker(), signal.strategy(), signal.direction(),
-                    signal.currentPrice(), signal.timestamp(), signal.candlestickPattern());
+                    signal.currentPrice(), signal.timestamp(), signal.candlestickPattern(),
+                    tradePlanJson);
             java.nio.file.Files.writeString(file, line,
                     java.nio.file.StandardOpenOption.CREATE,
                     java.nio.file.StandardOpenOption.APPEND);
         } catch (java.io.IOException e) {
             log.warn("Failed to persist replay signal to JSONL: {}", e.getMessage());
         }
+    }
+
+    private String buildTradePlanJson(TradePlan plan) {
+        if (plan == null) return "null";
+        return String.format(java.util.Locale.ROOT,
+                "{\"entry\":%.4f,\"tp\":%.4f,\"sl\":%.4f}",
+                plan.entryPrice, plan.takeProfit, plan.stopLoss);
+    }
+
+    public ReplaySummary computeReplaySummary() {
+        List<Signal> signals = List.copyOf(replaySignals);
+        if (signals.isEmpty()) {
+            return new ReplaySummary(0, 0, null, null);
+        }
+        long uniqueTickerCount = signals.stream()
+                .map(Signal::ticker)
+                .map(t -> t.toUpperCase(java.util.Locale.ROOT))
+                .distinct()
+                .count();
+        ZonedDateTime first = signals.stream()
+                .map(Signal::timestamp)
+                .min(ZonedDateTime::compareTo)
+                .orElse(null);
+        ZonedDateTime last = signals.stream()
+                .map(Signal::timestamp)
+                .max(ZonedDateTime::compareTo)
+                .orElse(null);
+        return new ReplaySummary(signals.size(), (int) uniqueTickerCount, first, last);
     }
 
     /**
@@ -1471,9 +1502,21 @@ public class LiveModeController {
     @PostMapping("/replay/stop")
     public ResponseEntity<Map<String, Object>> stopReplay() {
         if (replayService == null) return ResponseEntity.status(404).body(Map.of("error", "replay-disabled"));
+        ReplaySummary summary = computeReplaySummary();
+        log.info("🎬 Replay complete — signals={} uniqueTickers={} from={} to={}",
+                summary.totalSignals(), summary.uniqueTickers(),
+                summary.firstSignalAt(), summary.lastSignalAt());
         replayService.stop();
         clearReplaySignals();
-        return ResponseEntity.ok(Map.of("success", true));
+        Map<String, Object> summaryMap = new LinkedHashMap<>();
+        summaryMap.put("totalSignals", summary.totalSignals());
+        summaryMap.put("uniqueTickers", summary.uniqueTickers());
+        summaryMap.put("firstSignalAt", summary.firstSignalAt() != null ? summary.firstSignalAt().toString() : null);
+        summaryMap.put("lastSignalAt", summary.lastSignalAt() != null ? summary.lastSignalAt().toString() : null);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("success", true);
+        body.put("summary", summaryMap);
+        return ResponseEntity.ok(body);
     }
 
     @PutMapping("/replay/speed")
