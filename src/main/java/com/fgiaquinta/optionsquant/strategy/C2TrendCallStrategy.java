@@ -122,7 +122,8 @@ public class C2TrendCallStrategy implements TradingStrategy, TimeframeRequiremen
         boolean priceAboveMiddleBB = currentPrice15m > bb15m.getMiddle(idx15m);
 
         // Signal confirmed if BOTH: SMA uptrend AND BB bullish context
-        if (isUptrend15m && isBullishBBTrend && priceAboveMiddleBB) {
+        // priceAboveMiddleBB removed: it is logically implied by isUptrend15m (both use SMA20 of 15m closes)
+        if (isUptrend15m && isBullishBBTrend) {
             lastTriggerMap.put(ticker, currentTime);
             return true;
         }

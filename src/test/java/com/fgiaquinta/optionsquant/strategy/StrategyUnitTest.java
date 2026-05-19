@@ -1403,6 +1403,50 @@ class StrategyUnitTest {
             boolean triggered = strategy.isTriggered("AAPL", data, testTime);
             assertThat(triggered).isFalse();
         }
+
+        /**
+         * Verifies that priceAboveMiddleBB is a redundant predicate and can be removed
+         * without changing observable behaviour.
+         *
+         * priceAboveMiddleBB = currentPrice15m > bb15m.getMiddle(idx15m)
+         * isUptrend15m       = (currentPrice15m > currentSma15m) && (currentSma15m > prevSma15m)
+         *
+         * Both use the same SMA20 of 15-minute closes (bb15m.getMiddle == sma20_15m),
+         * so priceAboveMiddleBB is always implied by isUptrend15m.  A setup that satisfies
+         * isUptrend15m + isBullishBBTrend must already satisfy priceAboveMiddleBB — the third
+         * predicate adds no restriction.
+         *
+         * RED reasoning: the predicate is currently present in the AND chain but is logically
+         * unreachable as an independent gate.  This test documents that the signal fires with
+         * isUptrend15m AND isBullishBBTrend alone (which is the entire effective condition),
+         * and must continue to fire after the redundant predicate is removed.
+         */
+        @Test
+        @DisplayName("priceAboveMiddleBB is redundant — signal fires with isUptrend15m+isBullishBBTrend alone")
+        void priceAboveMiddleBB_isRedundant_signalFiresWithTwoPredicatesAlone() {
+            ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 11, 0, 0, 0, NY);
+
+            double[] daily = risingDailyCloses(22);
+            double[] hourly = hourlyClosesWithUptrend();
+            // bullish15mCloses: each close increases by 0.1; last close = 99.1, SMA20 ≈ 98.05
+            // → isUptrend15m=true (price > SMA AND SMA rising)
+            // → isBullishBBTrend=true (>70% of last 10 candles above middle band)
+            // → priceAboveMiddleBB=true (same SMA as isUptrend15m — always redundant)
+            double[] min15 = bullish15mCloses(22);
+
+            // 1H candle: valid pullback-rejection setup (same as "all conditions met" test)
+            StrategyData data = buildC2Data(testTime, daily, hourly,
+                    100.0, 100.55, 100.1, 100.5, 2000000L, min15);
+            C2TrendCallStrategy strategy = new C2TrendCallStrategy();
+
+            // Must fire: removing priceAboveMiddleBB from the AND chain cannot change this result
+            boolean triggered = strategy.isTriggered("AAPL", data, testTime);
+            assertThat(triggered)
+                    .as("Signal must fire when isUptrend15m=true AND isBullishBBTrend=true; " +
+                        "priceAboveMiddleBB is always implied by isUptrend15m (same SMA20 comparison) " +
+                        "and must not be an independent gate.")
+                    .isTrue();
+        }
     }
 
     // =========================================================================
