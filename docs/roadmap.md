@@ -1,14 +1,14 @@
 # Roadmap — Options Quant Engine
 
 > Plan estratégico vivo. Se actualiza al final de cada sesión.
-> Última actualización: 2026-05-18
+> Última actualización: 2026-05-19
 
 ## Estado actual
 
 **Fase**: Paper trading activo (arrancó 2026-05-18)
 **Universo HOT**: NVDA, AMD, AMDL, TSLA, META, AVGO, COIN, MSTR, AMZN, SPY
 **Universo táctico**: AAPL, URA, MU, SMH, OXY, GLD
-**Estrategias activas**: p6 reversal, p1 squeeze, c6 reversal
+**Estrategias activas**: 11 estrategias activadas para paper trading (2026-05-19)
 **Capital paper**: $968 USD — cuenta DUN598216 (2026-05-18)
 **Instrumento**: Opciones (CALL/PUT)
 **Stack**: SQLite + Spring Boot 4.0.5 + Java 25 + React frontend + IBKR TWS
@@ -56,6 +56,7 @@
 - ✅ UI React para filtro de estrategias — StrategiesPage.jsx + /strategies route + badge en ScanEngineControls. 890 tests, 95.7% coverage. Commit 313eb64.
 - ✅ scripts/run-live.ps1 — script PowerShell de arranque: UTF-8 logging, port 9090, log con timestamp, sin DevTools. Creado 2026-05-18.
 - ✅ p2 trend activado en live (2026-05-19, SQL directo)
+- ✅ 11 estrategias activadas para paper trading (2026-05-19) — c3/c4/p4/p5 activadas para recolección de datos — pendiente análisis post paper trading
 - [ ] Análisis de los primeros días de paper trades
 - [ ] Bajar 2 años de tickers tácticos via Polygon (URA, MU, etc.)
 - [ ] Implementar filtro por fecha en BacktestBatchRunner (--start-date, --end-date)
