@@ -20,6 +20,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.fgiaquinta.optionsquant.candle.TickerCursor;
+import org.ta4j.core.BarSeries;
 
 import java.io.PrintWriter;
 import java.nio.file.Files;
@@ -71,6 +72,7 @@ public class BacktestEngine {
     private static final ZoneId NY = ZoneId.of("America/New_York");
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final Path CHECKPOINT_FILE = Path.of("backtest/checkpoint.txt");
+    private static final int MAX_CONTRACTS_PER_TRADE = 10;
 
     private final List<TradingStrategy> strategies;
     private final CandleRepository candleRepository;
@@ -263,47 +265,49 @@ public class BacktestEngine {
         return map;
     }
 
+    /**
+     * Checkpoint state resolved at the start of each run.
+     *
+     * @param alreadyProcessed tickers that were completed in a prior run
+     * @param resumedTrades    trades loaded from the existing CSV for those tickers
+     * @param remainingTickers tickers that still need to be processed this run
+     */
+    private record ResumeState(
+            Set<String> alreadyProcessed,
+            List<TradeRecord> resumedTrades,
+            List<String> remainingTickers
+    ) {}
+
     private BacktestReport runCore(BacktestConfig config, boolean resumeFromCheckpoint, AtomicBoolean stopRequested, ProgressCallback progressCallback) {
         log.info(">>> Backtest: tickers={}, {} to {}, capital=${}, risk={}%{}",
                 config.tickers().size(), config.fromDate(), config.toDate(),
                 config.initialCapital(), config.riskPerTradePct() * 100,
                 resumeFromCheckpoint ? " (RESUME)" : "");
 
-        long startTime = System.currentTimeMillis();
+        final long startTime = System.currentTimeMillis();
 
         // ============================================================
-        // CHECKPOINT: Load already-processed tickers if resuming
+        // PHASE 1: Resolve checkpoint — which tickers still need work?
         // ============================================================
-        final Set<String> alreadyProcessed = new LinkedHashSet<>();
-        List<TradeRecord> resumedTrades = new ArrayList<>();
+        final ResumeState resumeState = loadResumeState(config, resumeFromCheckpoint);
 
-        if (resumeFromCheckpoint && hasCheckpoint()) {
-            alreadyProcessed.addAll(loadCheckpoint());
-            // Load existing trades from CSV for already-processed tickers
-            resumedTrades = loadTradesForTickers(alreadyProcessed);
-            log.info("📊 Resume mode: {} tickers already processed, {} trades loaded from CSV",
-                    alreadyProcessed.size(), resumedTrades.size());
-        }
-
-        // Filter tickers to only those not yet processed
-        List<String> remainingTickers = config.tickers().stream()
-                .filter(t -> !alreadyProcessed.contains(t))
-                .toList();
-
-        if (remainingTickers.isEmpty() && !alreadyProcessed.isEmpty()) {
+        if (resumeState.remainingTickers().isEmpty() && !resumeState.alreadyProcessed().isEmpty()) {
             log.info("✅ All tickers already processed! Loading full results from checkpoint...");
-            return buildReportFromResumedData(config, resumedTrades, startTime);
+            return buildReportFromResumedData(config, resumeState.resumedTrades(), startTime);
         }
 
-        log.info("🔄 Processing {} new tickers ({} already done)", remainingTickers.size(), alreadyProcessed.size());
+        final List<String> remainingTickers = resumeState.remainingTickers();
+        log.info("🔄 Processing {} new tickers ({} already done)", remainingTickers.size(), resumeState.alreadyProcessed().size());
 
-        // Async CSV writer using BlockingQueue + dedicated writer thread
-        LinkedBlockingQueue<TradeRecord> tradeQueue = new LinkedBlockingQueue<>(10000);
-        AtomicBoolean writerDone = new AtomicBoolean(false);
-        Path tradesCsvPath = Path.of("backtest/trades.csv");
+        // ============================================================
+        // PHASE 2: Set up async CSV writer
+        // ============================================================
+        final LinkedBlockingQueue<TradeRecord> tradeQueue = new LinkedBlockingQueue<>(10000);
+        final AtomicBoolean writerDone = new AtomicBoolean(false);
+        final Path tradesCsvPath = Path.of("backtest/trades.csv");
 
         // Dedicated CSV writer thread
-        Thread csvWriterThread = new Thread(() -> {
+        final Thread csvWriterThread = new Thread(() -> {
             try (java.io.BufferedWriter writer = Files.newBufferedWriter(tradesCsvPath, StandardOpenOption.APPEND)) {
                 List<TradeRecord> batch = new ArrayList<>(100);
                 while (!writerDone.get() || !tradeQueue.isEmpty()) {
@@ -330,41 +334,33 @@ public class BacktestEngine {
             }
         }, "backtest-csv-writer");
         csvWriterThread.setDaemon(true);
+
+        initTradesCsvFile(tradesCsvPath, resumeFromCheckpoint);
         csvWriterThread.start();
 
-        // Only clear CSV and write header if starting fresh (not resuming)
-        if (!resumeFromCheckpoint || !hasCheckpoint()) {
-            try {
-                Files.createDirectories(Path.of("backtest"));
-                Files.deleteIfExists(tradesCsvPath);
-                try (PrintWriter pw = new PrintWriter(Files.newBufferedWriter(tradesCsvPath, StandardOpenOption.CREATE))) {
-                    pw.println("Ticker,Strategy,Direction,Qty,EntryPrice,EntryTime,ExitPrice,ExitTime,ExitReason,GrossPnl,Commission,Slippage,NetPnl,MaxDD,MaxRunup,Pattern,ATR,VIX,EntryHour,MarketTrend");
-                }
-            } catch (Exception e) {
-                log.warn("Could not initialize CSV output: {}", e.getMessage(), e);
-            }
-        }
-
         // ============================================================
-        // PROCESS TICKERS: Load data, scan strategies, release memory per ticker
-        // Uses a semaphore to limit concurrent tickers in memory
+        // PHASE 3: Process remaining tickers in parallel
         // ============================================================
         if (progressCallback != null) {
             progressCallback.onProgress("ALL", "TESTING", "Analyzing strategies across " + remainingTickers.size() + " tickers...");
         }
 
         if (vixDailyMap == null) {
-            vixDailyMap = loadVixMap();
+            synchronized (this) {
+                if (vixDailyMap == null) {
+                    vixDailyMap = loadVixMap();
+                }
+            }
         }
         final NavigableMap<LocalDate, Double> vixMap = vixDailyMap;
 
-        TimeFrame execTf = config.executionTimeframe();
-        double capitalPerTicker = config.initialCapital() / config.tickers().size();
-        Map<String, TickerResult> tickerResults = new ConcurrentHashMap<>();
-        AtomicInteger processedCount = new AtomicInteger(0);
-        List<String> newlyProcessed = Collections.synchronizedList(new ArrayList<>());
-        int numThreads = Math.min(maxConcurrentScans.get(), Math.max(1, remainingTickers.size()));
-        Semaphore memorySemaphore = new Semaphore(numThreads);
+        final TimeFrame execTf = config.executionTimeframe();
+        final double capitalPerTicker = config.initialCapital() / config.tickers().size();
+        final Map<String, TickerResult> tickerResults = new ConcurrentHashMap<>();
+        final AtomicInteger processedCount = new AtomicInteger(0);
+        final List<String> newlyProcessed = Collections.synchronizedList(new ArrayList<>());
+        final int numThreads = Math.min(maxConcurrentScans.get(), Math.max(1, remainingTickers.size()));
+        final Semaphore memorySemaphore = new Semaphore(numThreads);
 
         try (ExecutorService processExecutor = Executors.newFixedThreadPool(numThreads, r -> {
             Thread t = new Thread(r);
@@ -424,9 +420,9 @@ public class BacktestEngine {
                             }
                         }
 
-                        int candleCount = tickerData.getOrDefault(execTf, List.of()).size();
-                        int idx = processedCount.incrementAndGet();
-                        int totalRemaining = remainingTickers.size();
+                        final int candleCount = tickerData.getOrDefault(execTf, List.of()).size();
+                        final int idx = processedCount.incrementAndGet();
+                        final int totalRemaining = remainingTickers.size();
                         log.info("[{}/{}] Processing ticker: {} ({} candles)", idx, totalRemaining, ticker, candleCount);
 
                         if (progressCallback != null) {
@@ -434,11 +430,11 @@ public class BacktestEngine {
                         }
 
                         // Process this ticker using its own loaded data
-                        Map<String, Map<TimeFrame, List<Candle>>> singleTickerData = Map.of(ticker, tickerData);
-                        long tickerStart = System.currentTimeMillis();
-                        TickerResult result = processSingleTicker(
+                        final Map<String, Map<TimeFrame, List<Candle>>> singleTickerData = Map.of(ticker, tickerData);
+                        final long tickerStart = System.currentTimeMillis();
+                        final TickerResult result = processSingleTicker(
                                 ticker, config, singleTickerData, capitalPerTicker, tradeQueue, vixMap);
-                        long tickerDuration = System.currentTimeMillis() - tickerStart;
+                        final long tickerDuration = System.currentTimeMillis() - tickerStart;
 
                         tickerResults.put(ticker, result);
                         newlyProcessed.add(ticker);
@@ -457,9 +453,9 @@ public class BacktestEngine {
                             progressCallback.onProgress(ticker, "OK", "Completed with " + result.trades.size() + " trades");
                         }
 
-                        int newlyProcessedCount = newlyProcessed.size();
+                        final int newlyProcessedCount = newlyProcessed.size();
                         if (newlyProcessedCount % 50 == 0 || newlyProcessedCount == remainingTickers.size()) {
-                            Set<String> allProcessedNow = new LinkedHashSet<>(alreadyProcessed);
+                            final Set<String> allProcessedNow = new LinkedHashSet<>(resumeState.alreadyProcessed());
                             allProcessedNow.addAll(newlyProcessed);
                             saveCheckpoint(new ArrayList<>(allProcessedNow));
                         }
@@ -477,7 +473,77 @@ public class BacktestEngine {
             CompletableFuture.allOf(processFutures.toArray(new CompletableFuture<?>[0])).join();
         }
 
-        // Signal CSV writer thread to finish and wait for completion
+        // ============================================================
+        // PHASE 4: Drain CSV writer, then aggregate results into report
+        // ============================================================
+        awaitCsvWriter(writerDone, csvWriterThread);
+
+        final List<TradeRecord> newTrades = tickerResults.values().stream()
+                .flatMap(r -> r.trades.stream())
+                .toList();
+
+        return mergeAndBuildReport(config, resumeState.resumedTrades(), newTrades, startTime);
+    }
+
+    /**
+     * Resolves checkpoint state at run start.
+     *
+     * <p>If {@code resumeFromCheckpoint} is true and a checkpoint file exists,
+     * loads already-processed tickers and their trades from the CSV.
+     * Filters the config's ticker list to only those not yet processed.
+     *
+     * @param config                 backtest configuration
+     * @param resumeFromCheckpoint   whether to honour an existing checkpoint
+     * @return resolved resume state: processed set, loaded trades, remaining tickers
+     */
+    private ResumeState loadResumeState(BacktestConfig config, boolean resumeFromCheckpoint) {
+        final Set<String> alreadyProcessed = new LinkedHashSet<>();
+        List<TradeRecord> resumedTrades = new ArrayList<>();
+
+        if (resumeFromCheckpoint && hasCheckpoint()) {
+            alreadyProcessed.addAll(loadCheckpoint());
+            resumedTrades = loadTradesForTickers(alreadyProcessed);
+            log.info("📊 Resume mode: {} tickers already processed, {} trades loaded from CSV",
+                    alreadyProcessed.size(), resumedTrades.size());
+        }
+
+        final List<String> remainingTickers = config.tickers().stream()
+                .filter(t -> !alreadyProcessed.contains(t))
+                .toList();
+
+        return new ResumeState(alreadyProcessed, resumedTrades, remainingTickers);
+    }
+
+    /**
+     * Creates or resets the trades CSV file when starting a fresh run.
+     *
+     * <p>When resuming (checkpoint exists), the file is left intact so that
+     * the async writer can append to existing content.
+     *
+     * @param tradesCsvPath        path to the trades output file
+     * @param resumeFromCheckpoint whether this is a resume run
+     */
+    private void initTradesCsvFile(Path tradesCsvPath, boolean resumeFromCheckpoint) {
+        if (!resumeFromCheckpoint || !hasCheckpoint()) {
+            try {
+                Files.createDirectories(Path.of("backtest"));
+                Files.deleteIfExists(tradesCsvPath);
+                try (PrintWriter pw = new PrintWriter(Files.newBufferedWriter(tradesCsvPath, StandardOpenOption.CREATE))) {
+                    pw.println("Ticker,Strategy,Direction,Qty,EntryPrice,EntryTime,ExitPrice,ExitTime,ExitReason,GrossPnl,Commission,Slippage,NetPnl,MaxDD,MaxRunup,Pattern,ATR,VIX,EntryHour,MarketTrend");
+                }
+            } catch (Exception e) {
+                log.warn("Could not initialize CSV output: {}", e.getMessage(), e);
+            }
+        }
+    }
+
+    /**
+     * Signals the async CSV writer thread to stop and waits for it to drain.
+     *
+     * @param writerDone      flag that unblocks the writer's poll loop
+     * @param csvWriterThread the dedicated writer thread to join
+     */
+    private void awaitCsvWriter(AtomicBoolean writerDone, Thread csvWriterThread) {
         writerDone.set(true);
         try {
             csvWriterThread.join(10000); // Wait up to 10 seconds
@@ -485,16 +551,25 @@ public class BacktestEngine {
             log.warn("Interrupted while waiting for CSV writer thread");
             Thread.currentThread().interrupt();
         }
+    }
 
-        // ============================================================
-        // STEP 3: Merge results into final report
-        // ============================================================
-        long elapsed = System.currentTimeMillis() - startTime;
+    /**
+     * Merges resumed and newly produced trades, computes statistics, builds the
+     * {@link BacktestReport}, writes output files, and clears the checkpoint.
+     *
+     * <p>This is the final phase of {@link #runCore}: all tickers have been
+     * processed and their trades are available in {@code newTrades}.
+     *
+     * @param config        backtest configuration (initialCapital, date range, etc.)
+     * @param resumedTrades trades loaded from the checkpoint CSV (may be empty)
+     * @param newTrades     trades produced during this run
+     * @param startTime     {@code System.currentTimeMillis()} captured at run start
+     * @return the completed backtest report
+     */
+    private BacktestReport mergeAndBuildReport(BacktestConfig config,
+            List<TradeRecord> resumedTrades, List<TradeRecord> newTrades, long startTime) {
+        final long elapsed = System.currentTimeMillis() - startTime;
 
-        // Merge resumed trades with newly processed trades
-        List<TradeRecord> newTrades = tickerResults.values().stream()
-                .flatMap(r -> r.trades.stream())
-                .toList();
         List<TradeRecord> allTrades = new ArrayList<>();
         allTrades.addAll(resumedTrades);
         allTrades.addAll(newTrades);
@@ -503,43 +578,41 @@ public class BacktestEngine {
                 .toList();
 
         // Portfolio equity curve: cumulative PnL by trade exit time (per-ticker curves are not additive)
-        List<BacktestReport.EquityPoint> portfolioEquity = buildPortfolioEquityCurve(config, allTrades);
-
+        final List<BacktestReport.EquityPoint> portfolioEquity = buildPortfolioEquityCurve(config, allTrades);
         final ComputedStats stats = computeStats(allTrades, config.initialCapital());
 
-        double finalCapital = config.initialCapital() + stats.totalPnl();
-        double winRate = allTrades.isEmpty() ? 0 : (double) stats.wins() / allTrades.size();
-        double profitFactor = stats.totalLoss() == 0
+        final double finalCapital = config.initialCapital() + stats.totalPnl();
+        final double winRate = allTrades.isEmpty() ? 0 : (double) stats.wins() / allTrades.size();
+        final double profitFactor = stats.totalLoss() == 0
                 ? (stats.totalProfit() > 0 ? Double.POSITIVE_INFINITY : 0)
                 : stats.totalProfit() / stats.totalLoss();
-        double avgWin = stats.wins() > 0 ? stats.totalProfit() / stats.wins() : 0;
-        double avgLoss = stats.losses() > 0 ? stats.totalLoss() / stats.losses() : 0;
+        final double avgWin = stats.wins() > 0 ? stats.totalProfit() / stats.wins() : 0;
+        final double avgLoss = stats.losses() > 0 ? stats.totalLoss() / stats.losses() : 0;
 
         // Max drawdown from portfolio equity curve
-        double maxDrawdown = 0, maxDrawdownPct = 0;
+        double maxDrawdown = 0;
+        double maxDrawdownPct = 0;
         double peak = config.initialCapital();
         for (BacktestReport.EquityPoint p : portfolioEquity) {
             if (p.equity() > peak) peak = p.equity();
-            double dd = peak - p.equity();
+            final double dd = peak - p.equity();
             if (dd > maxDrawdown) { maxDrawdown = dd; maxDrawdownPct = dd / peak; }
         }
 
-        BacktestReport report = new BacktestReport(
+        final BacktestReport report = new BacktestReport(
                 config.initialCapital(), finalCapital, stats.totalPnl(),
                 stats.totalPnl() / config.initialCapital(),
                 allTrades.size(), stats.wins(), stats.losses(), winRate, profitFactor,
                 maxDrawdown, maxDrawdownPct, stats.sharpe(), avgWin, avgLoss, stats.avgDuration(),
                 stats.byStrategy(), stats.byTicker(), portfolioEquity, allTrades, elapsed);
 
-        // Write summary and equity CSV
         writeSummaryReport(report);
         writeEquityCsv(portfolioEquity);
-
-        // Clear checkpoint on successful completion
         clearCheckpoint();
 
         log.info("<<< Backtest complete: equity=${}, elapsed={}ms ({}s), {} new + {} resumed trades",
-                String.format("%.2f", finalCapital), elapsed, String.format("%.1f", elapsed / 1000.0), newTrades.size(), resumedTrades.size());
+                String.format("%.2f", finalCapital), elapsed, String.format("%.1f", elapsed / 1000.0),
+                newTrades.size(), resumedTrades.size());
         return report;
     }
 
@@ -551,19 +624,19 @@ public class BacktestEngine {
             Map<String, Map<TimeFrame, List<Candle>>> allData, double initialCapital,
             LinkedBlockingQueue<TradeRecord> tradeQueue, NavigableMap<LocalDate, Double> vixMap) {
 
-        FillEngine fillEngine = new SimulatedFillEngine(config.slippagePct(), config.commissionPerContract());
-        TimeFrame execTf = config.executionTimeframe();
+        final FillEngine fillEngine = new SimulatedFillEngine(config.slippagePct(), config.commissionPerContract());
+        final TimeFrame execTf = config.executionTimeframe();
 
-        List<Candle> execCandles = allData.getOrDefault(ticker, Map.of())
+        final List<Candle> execCandles = allData.getOrDefault(ticker, Map.of())
                 .getOrDefault(execTf, List.of());
         if (execCandles.isEmpty()) {
             return new TickerResult(List.of(), List.of(), 0);
         }
 
         double equity = initialCapital;
-        List<OpenPosition> openPositions = new ArrayList<>();
-        List<TradeRecord> trades = Collections.synchronizedList(new ArrayList<>());
-        List<BacktestReport.EquityPoint> equityCurve = Collections.synchronizedList(new ArrayList<>());
+        final List<OpenPosition> openPositions = new ArrayList<>();
+        final List<TradeRecord> trades = new ArrayList<>();
+        final List<BacktestReport.EquityPoint> equityCurve = new ArrayList<>();
         double peakEquity = equity;
 
         // Build StrategyData ONCE with full candle data for this ticker
@@ -575,11 +648,6 @@ public class BacktestEngine {
 
         for (Candle currentCandle : execCandles) {
             ZonedDateTime candleTime = currentCandle.timestamp();
-
-            // Use the pre-built full StrategyData - strategies use getIndexForTime()
-            // which ensures they only access bars up to the current candleTime,
-            // so no look-ahead bias occurs despite having all bars available.
-            StrategyData data = fullData;
 
             // Check exits for open positions
             Iterator<OpenPosition> it = openPositions.iterator();
@@ -594,7 +662,9 @@ public class BacktestEngine {
                     TradeRecord trade = closePosition(ticker, pos, exitPrice, candleTime, exitReason, fillEngine);
                     trades.add(trade);
                     // Non-blocking queue offer for async CSV writing
-                    tradeQueue.offer(trade);
+                    if (!tradeQueue.offer(trade)) {
+                        log.warn("tradeQueue full — trade dropped for ticker {}", trade.ticker());
+                    }
                     it.remove();
                     continue;
                 }
@@ -633,7 +703,9 @@ public class BacktestEngine {
                     OpenPosition pos = forceIt.next();
                     TradeRecord trade = closePosition(ticker, pos, currentCandle.close(), candleTime, "FORCED", fillEngine);
                     trades.add(trade);
-                    tradeQueue.offer(trade);
+                    if (!tradeQueue.offer(trade)) {
+                        log.warn("tradeQueue full — trade dropped for ticker {}", trade.ticker());
+                    }
                     forceIt.remove();
                 }
             }
@@ -647,7 +719,7 @@ public class BacktestEngine {
             if (openPositions.size() < config.maxConcurrentTrades()
                     && !etTime.isBefore(config.entryWindowStart())
                     && etTime.isBefore(config.entryWindowEnd())) {
-                runStrategies(ticker, data, nyTime, currentCandle, candleTime,
+                runStrategies(ticker, fullData, nyTime, currentCandle, candleTime,
                         config, equity, openPositions, fillEngine, vixMap);
             }
         }
@@ -657,7 +729,9 @@ public class BacktestEngine {
         for (OpenPosition pos : new ArrayList<>(openPositions)) {
             TradeRecord trade = closePosition(ticker, pos, lastCandle.close(), lastCandle.timestamp(), "EOS", fillEngine);
             trades.add(trade);
-            tradeQueue.offer(trade);
+            if (!tradeQueue.offer(trade)) {
+                log.warn("tradeQueue full — trade dropped for ticker {}", trade.ticker());
+            }
         }
         openPositions.clear();
 
@@ -788,43 +862,15 @@ public class BacktestEngine {
 
     /**
      * Builds a BacktestReport entirely from resumed data (when all tickers already processed).
+     *
+     * <p>Delegates to {@link #mergeAndBuildReport} with an empty new-trades list,
+     * then emits a resume-specific log line.
      */
     private BacktestReport buildReportFromResumedData(BacktestConfig config,
-            List<TradeRecord> allTrades, long startTime) {
-        long elapsed = System.currentTimeMillis() - startTime;
-        List<BacktestReport.EquityPoint> equityCurve = buildPortfolioEquityCurve(config, allTrades);
-
-        final ComputedStats stats = computeStats(allTrades, config.initialCapital());
-
-        double finalCapital = config.initialCapital() + stats.totalPnl();
-        double winRate = allTrades.isEmpty() ? 0 : (double) stats.wins() / allTrades.size();
-        double profitFactor = stats.totalLoss() == 0
-                ? (stats.totalProfit() > 0 ? Double.POSITIVE_INFINITY : 0)
-                : stats.totalProfit() / stats.totalLoss();
-        double avgWin = stats.wins() > 0 ? stats.totalProfit() / stats.wins() : 0;
-        double avgLoss = stats.losses() > 0 ? stats.totalLoss() / stats.losses() : 0;
-
-        double maxDrawdown = 0, maxDrawdownPct = 0;
-        double peak = config.initialCapital();
-        for (BacktestReport.EquityPoint p : equityCurve) {
-            if (p.equity() > peak) peak = p.equity();
-            double dd = peak - p.equity();
-            if (dd > maxDrawdown) { maxDrawdown = dd; maxDrawdownPct = dd / peak; }
-        }
-
-        BacktestReport report = new BacktestReport(
-                config.initialCapital(), finalCapital, stats.totalPnl(),
-                stats.totalPnl() / config.initialCapital(),
-                allTrades.size(), stats.wins(), stats.losses(), winRate, profitFactor,
-                maxDrawdown, maxDrawdownPct, stats.sharpe(), avgWin, avgLoss, stats.avgDuration(),
-                stats.byStrategy(), stats.byTicker(), equityCurve, allTrades, elapsed);
-
-        writeSummaryReport(report);
-        writeEquityCsv(equityCurve);
-        clearCheckpoint();
-
+            List<TradeRecord> resumedTrades, long startTime) {
+        final BacktestReport report = mergeAndBuildReport(config, resumedTrades, List.of(), startTime);
         log.info("<<< Backtest resumed: equity=${}, {} total trades (all from checkpoint)",
-                String.format("%.2f", finalCapital), allTrades.size());
+                String.format("%.2f", report.finalCapital()), report.totalTrades());
         return report;
     }
 
@@ -890,28 +936,28 @@ public class BacktestEngine {
                 }
                 if (!strategy.isTriggered(ticker, data, nyTime)) continue;
 
-                boolean isCall = strategy.isCall();
-                double entryPrice = candle.close();
+                final boolean isCall = strategy.isCall();
+                final double entryPrice = candle.close();
 
-                TickerStrategyProfile profile = tickerMemory.getStrategyProfile(ticker, strategy.getName());
-                TradePlan plan = RiskCalculator.generatePlan(data, ticker, time, isCall, entryPrice, strategy.getName(), profile);
-                double riskPerContract = Math.abs(entryPrice - plan.stopLoss) * 100;
+                final TickerStrategyProfile profile = tickerMemory.getStrategyProfile(ticker, strategy.getName());
+                final TradePlan plan = RiskCalculator.generatePlan(data, ticker, time, isCall, entryPrice, strategy.getName(), profile);
+                final double riskPerContract = Math.abs(entryPrice - plan.stopLoss) * 100;
                 // Use fixed total capital (not dynamic per-ticker equity) to keep maxRisk
                 // constant at $50k × 2% = $1,000 per trade regardless of equity fluctuation.
-                double maxRisk = config.initialCapital() * config.riskPerTradePct();
+                final double maxRisk = config.initialCapital() * config.riskPerTradePct();
 
                 int qty = riskPerContract > 0 ? (int) Math.floor(maxRisk / riskPerContract) : 0;
-                qty = Math.min(qty, 10);
+                qty = Math.min(qty, MAX_CONTRACTS_PER_TRADE);
                 // Skip signal if risk budget is too small to afford even 1 contract.
                 if (qty <= 0) continue;
 
-                FillResult entryFill = fillEngine.fillEntry(ticker, isCall ? "CALL" : "PUT", qty, plan, time);
+                final FillResult entryFill = fillEngine.fillEntry(ticker, isCall ? "CALL" : "PUT", qty, plan, time);
 
-                String candlestickPattern = detectEntryCandlestickPattern(data, config.executionTimeframe());
-                String strategyPattern = extractPatternFromStrategy(strategy.getName());
-                String combinedPattern = strategyPattern + " + " + candlestickPattern;
+                final String candlestickPattern = detectEntryCandlestickPattern(data);
+                final String strategyPattern = extractPatternFromStrategy(strategy.getName());
+                final String combinedPattern = strategyPattern + " + " + candlestickPattern;
 
-                List<Candle> chartCandles = data.getCandles(config.executionTimeframe());
+                final List<Candle> chartCandles = data.getCandles(config.executionTimeframe());
 
                 Map.Entry<LocalDate, Double> vixEntry = vixMap.floorEntry(time.toLocalDate());
                 double vixAtEntry = vixEntry != null ? vixEntry.getValue() : 0.0;
@@ -922,7 +968,7 @@ public class BacktestEngine {
                         plan.atr, vixAtEntry, chartCandles);
                 openPositions.add(pos);
 
-                // Fix #13: Chart generation deferred to on-demand only.
+                // Chart generation deferred to on-demand only.
                 // Chart data (chartCandles) is stored in OpenPosition and will be used
                 // to generate charts only when explicitly requested via API after backtest completes.
                 // This avoids significant temporary string objects and disk I/O during scanning.
@@ -943,9 +989,9 @@ public class BacktestEngine {
     /**
      * Detects the actual candlestick pattern at the entry candle.
      */
-    private String detectEntryCandlestickPattern(StrategyData data, TimeFrame executionTimeframe) {
+    private String detectEntryCandlestickPattern(StrategyData data) {
         try {
-            org.ta4j.core.BarSeries series1h = data.getSeries(TimeFrame.HOUR_1);
+            BarSeries series1h = data.getSeries(TimeFrame.HOUR_1);
             if (series1h == null || series1h.isEmpty()) {
                 return "unknown";
             }
@@ -963,16 +1009,16 @@ public class BacktestEngine {
      */
     private TradeRecord closePosition(String ticker, OpenPosition pos, double exitPrice,
             ZonedDateTime exitTime, String reason, FillEngine fillEngine) {
-        FillResult exitFill = fillEngine.fillExit(ticker, pos.direction, pos.quantity, exitPrice, exitTime);
+        final FillResult exitFill = fillEngine.fillExit(ticker, pos.direction, pos.quantity, exitPrice, exitTime);
         // Delta=0.60 approximation: ITM options move $0.60 per $1 in the underlying.
         // Real option PnL also affected by theta decay, IV crush, and bid/ask spread — not modeled here.
         // See roadmap P1 CRÍTICO — Pricing de opciones.
-        double grossPnl = pos.isCall
+        final double grossPnl = pos.isCall
                 ? (exitPrice - pos.entryPrice) * pos.quantity * 100 * BacktestConfig.OPTIONS_DELTA
                 : (pos.entryPrice - exitPrice) * pos.quantity * 100 * BacktestConfig.OPTIONS_DELTA;
-        double netPnl = grossPnl - exitFill.commission() - exitFill.slippage() * pos.quantity * 100;
+        final double netPnl = grossPnl - exitFill.commission() - exitFill.slippage() * pos.quantity * 100;
 
-        TradeRecord trade = new TradeRecord(
+        final TradeRecord trade = new TradeRecord(
                 ticker, pos.strategy, pos.direction, pos.quantity,
                 pos.entryPrice, pos.entryTime, exitPrice, exitTime, reason,
                 grossPnl, exitFill.commission(), exitFill.slippage(),
@@ -1023,6 +1069,18 @@ public class BacktestEngine {
     }
 
     /**
+     * Mutable accumulator for per-name (strategy or ticker) trade statistics.
+     * Replaces raw {@code int[]} / {@code double[]} map values to give fields
+     * meaningful names and eliminate silent index aliasing.
+     */
+    private static final class Accum {
+        int total;
+        int wins;
+        double profit;
+        double loss;
+    }
+
+    /**
      * Computed statistics for a trade list. Returned by {@link #computeStats}.
      */
     private record ComputedStats(
@@ -1048,33 +1106,37 @@ public class BacktestEngine {
      * @return computed statistics ready to be passed to {@link BacktestReport}
      */
     private ComputedStats computeStats(List<TradeRecord> trades, double initialCapital) {
-        double totalPnl = 0, totalProfit = 0, totalLoss = 0, sharpeSum = 0, sharpeSqSum = 0;
+        double totalPnl = 0;
+        double totalProfit = 0;
+        double totalLoss = 0;
+        double sharpeSum = 0;
+        double sharpeSqSum = 0;
         int wins = 0, losses = 0;
         double avgDurationSum = 0;
-        Map<String, int[]> strategyCounts = new HashMap<>();
-        Map<String, double[]> strategyPnl = new HashMap<>();
-        Map<String, int[]> tickerCounts = new HashMap<>();
-        Map<String, double[]> tickerPnl = new HashMap<>();
+        Map<String, Accum> strategyAccum = new HashMap<>();
+        Map<String, Accum> tickerAccum = new HashMap<>();
 
         for (TradeRecord t : trades) {
             double pnl = t.netPnl();
             totalPnl += pnl;
+            Accum sa = strategyAccum.computeIfAbsent(t.strategy(), k -> new Accum());
+            Accum ta = tickerAccum.computeIfAbsent(t.ticker(), k -> new Accum());
+            sa.total++;
+            ta.total++;
             if (pnl > 0) {
                 wins++;
                 totalProfit += pnl;
-                strategyPnl.computeIfAbsent(t.strategy(), k -> new double[2])[0] += pnl;
-                tickerPnl.computeIfAbsent(t.ticker(), k -> new double[2])[0] += pnl;
+                sa.wins++;
+                ta.wins++;
+                sa.profit += pnl;
+                ta.profit += pnl;
             } else if (pnl < 0) {
                 losses++;
                 double absLoss = Math.abs(pnl);
                 totalLoss += absLoss;
-                strategyPnl.computeIfAbsent(t.strategy(), k -> new double[2])[1] += absLoss;
-                tickerPnl.computeIfAbsent(t.ticker(), k -> new double[2])[1] += absLoss;
+                sa.loss += absLoss;
+                ta.loss += absLoss;
             }
-            strategyCounts.computeIfAbsent(t.strategy(), k -> new int[2])[0]++;
-            if (pnl > 0) strategyCounts.get(t.strategy())[1]++;
-            tickerCounts.computeIfAbsent(t.ticker(), k -> new int[2])[0]++;
-            if (pnl > 0) tickerCounts.get(t.ticker())[1]++;
             avgDurationSum += Duration.between(t.entryTime(), t.exitTime()).toMinutes() / 60.0;
             double ret = pnl / initialCapital;
             sharpeSum += ret;
@@ -1087,22 +1149,18 @@ public class BacktestEngine {
                 : (sharpeSum / n) / Math.sqrt((sharpeSqSum / n) - (sharpeSum / n) * (sharpeSum / n) + 1e-10) * Math.sqrt(252);
 
         Map<String, BacktestReport.StrategyStats> byStrategy = new LinkedHashMap<>();
-        for (Map.Entry<String, int[]> e : strategyCounts.entrySet()) {
-            String name = e.getKey();
-            int[] counts = e.getValue();
-            double[] pnl = strategyPnl.getOrDefault(name, new double[2]);
-            double pf = pnl[1] == 0 ? (pnl[0] > 0 ? Double.POSITIVE_INFINITY : 0) : pnl[0] / pnl[1];
-            byStrategy.put(name, new BacktestReport.StrategyStats(counts[0], counts[1],
-                    counts[0] == 0 ? 0 : (double) counts[1] / counts[0], pnl[0] - pnl[1], pf, 0));
+        for (Map.Entry<String, Accum> e : strategyAccum.entrySet()) {
+            Accum a = e.getValue();
+            double pf = a.loss == 0 ? (a.profit > 0 ? Double.POSITIVE_INFINITY : 0) : a.profit / a.loss;
+            byStrategy.put(e.getKey(), new BacktestReport.StrategyStats(a.total, a.wins,
+                    a.total == 0 ? 0 : (double) a.wins / a.total, a.profit - a.loss, pf, 0));
         }
         Map<String, BacktestReport.StrategyStats> byTicker = new LinkedHashMap<>();
-        for (Map.Entry<String, int[]> e : tickerCounts.entrySet()) {
-            String name = e.getKey();
-            int[] counts = e.getValue();
-            double[] pnl = tickerPnl.getOrDefault(name, new double[2]);
-            double pf = pnl[1] == 0 ? (pnl[0] > 0 ? Double.POSITIVE_INFINITY : 0) : pnl[0] / pnl[1];
-            byTicker.put(name, new BacktestReport.StrategyStats(counts[0], counts[1],
-                    counts[0] == 0 ? 0 : (double) counts[1] / counts[0], pnl[0] - pnl[1], pf, 0));
+        for (Map.Entry<String, Accum> e : tickerAccum.entrySet()) {
+            Accum a = e.getValue();
+            double pf = a.loss == 0 ? (a.profit > 0 ? Double.POSITIVE_INFINITY : 0) : a.profit / a.loss;
+            byTicker.put(e.getKey(), new BacktestReport.StrategyStats(a.total, a.wins,
+                    a.total == 0 ? 0 : (double) a.wins / a.total, a.profit - a.loss, pf, 0));
         }
 
         return new ComputedStats(totalPnl, totalProfit, totalLoss, wins, losses, avgDuration, sharpe, byStrategy, byTicker);
