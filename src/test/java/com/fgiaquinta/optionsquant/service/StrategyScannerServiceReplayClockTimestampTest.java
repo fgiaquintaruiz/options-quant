@@ -22,6 +22,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -74,10 +75,9 @@ class StrategyScannerServiceReplayClockTimestampTest {
                 tickerService, tickerMemory, earningsService,
                 newsBiasService, marketCalendar,
                 scannerProperties, scanPrioritizationService,
-                strategyConfigService);
+                strategyConfigService,
+                Optional.of(replayClock), Optional.of(replayCandleSource));
 
-        ReflectionTestUtils.setField(service, "replayClock", replayClock);
-        ReflectionTestUtils.setField(service, "replayCandleSource", replayCandleSource);
         ReflectionTestUtils.setField(service, "callStrategies", List.of(mockStrategy));
         ReflectionTestUtils.setField(service, "putStrategies", List.of());
 

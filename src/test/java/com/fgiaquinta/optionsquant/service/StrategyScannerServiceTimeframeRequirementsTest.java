@@ -23,9 +23,11 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
 
 /**
  * Verifies the timeframe-requirements gating logic of
@@ -60,16 +62,16 @@ class StrategyScannerServiceTimeframeRequirementsTest {
 
     @BeforeEach
     void setUp() {
-        org.mockito.Mockito.when(scannerProperties.concurrentMode())
-                .thenReturn(ScannerProperties.ConcurrentMode.FIXED);
-        org.mockito.Mockito.when(scannerProperties.fixedMaxConcurrent()).thenReturn(1);
+        when(scannerProperties.concurrentMode()).thenReturn(ScannerProperties.ConcurrentMode.FIXED);
+        when(scannerProperties.fixedMaxConcurrent()).thenReturn(1);
 
         service = new StrategyScannerService(
                 candleRepository, ibkrService, ibkrProperties,
                 tickerService, tickerMemory, earningsService,
                 newsBiasService, marketCalendar,
                 scannerProperties, scanPrioritizationService,
-                strategyConfigService);
+                strategyConfigService,
+                Optional.empty(), Optional.empty());
     }
 
     private List<Candle> sampleCandles() {

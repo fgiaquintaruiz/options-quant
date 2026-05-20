@@ -47,6 +47,14 @@ public record BacktestConfig(
          */
         LocalTime forcedCloseTime
 ) {
+    /**
+     * Delta approximation for ITM options (≈0.60). Used in PnL calculation.
+     * An ITM call/put with delta=0.60 moves $0.60 for every $1.00 move in the underlying.
+     * See also: RiskCalculator javadoc — slippage calibrated for delta ≈ 0.60.
+     * See also: roadmap P1 CRÍTICO — Pricing de opciones (theta decay, IV crush not modeled).
+     */
+    public static final double OPTIONS_DELTA = 0.60;
+
     public BacktestConfig {
         if (initialCapital <= 0) throw new IllegalArgumentException("Initial capital must be positive");
         if (riskPerTradePct <= 0 || riskPerTradePct > 1) throw new IllegalArgumentException("Risk must be between 0 and 1");

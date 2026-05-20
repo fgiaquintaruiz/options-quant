@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -60,7 +61,8 @@ class StrategyScannerServiceRepositoryWiringTest {
                 tickerService, tickerMemory, earningsService,
                 newsBiasService, marketCalendar,
                 scannerProperties, scanPrioritizationService,
-                strategyConfigService);
+                strategyConfigService,
+                Optional.empty(), Optional.empty());
     }
 
     @Test

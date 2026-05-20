@@ -811,36 +811,6 @@ public class BacktestEngine {
     }
 
     /**
-     * Loads the equity curve from CSV (resume support).
-     */
-    private List<BacktestReport.EquityPoint> loadEquityCurve() {
-        List<BacktestReport.EquityPoint> equity = new ArrayList<>();
-        Path csvPath = Path.of("backtest/equity.csv");
-        if (!Files.exists(csvPath)) return equity;
-
-        try {
-            List<String> lines = Files.readAllLines(csvPath);
-            if (lines.isEmpty()) return equity;
-
-            for (int i = 1; i < lines.size(); i++) { // Skip header
-                String line = lines.get(i).trim();
-                if (line.isEmpty()) continue;
-                String[] parts = line.split(",");
-                if (parts.length >= 2) {
-                    equity.add(new BacktestReport.EquityPoint(
-                            ZonedDateTime.parse(parts[0].trim(), TS_FMT),
-                            Double.parseDouble(parts[1].trim())
-                    ));
-                }
-            }
-            log.debug("Loaded {} equity points from CSV", equity.size());
-        } catch (Exception e) {
-            log.warn("Failed to load equity curve: {}", e.getMessage());
-        }
-        return equity;
-    }
-
-    /**
      * Single portfolio equity series: start at initial capital, add each trade's net PnL at exit time (chronological by exit).
      * Matches {@code initialCapital + sum(netPnl)} at the last point so KPIs and chart align.
      */
@@ -1002,10 +972,11 @@ public class BacktestEngine {
     private double calculateEquity(double cash, List<OpenPosition> openPositions, Candle candle) {
         double unrealized = 0;
         for (OpenPosition pos : openPositions) {
+            // Delta=0.60 approximation — consistent with closePosition PnL calculation.
             if (pos.isCall) {
-                unrealized += (candle.close() - pos.entryPrice) * pos.quantity * 100;
+                unrealized += (candle.close() - pos.entryPrice) * pos.quantity * 100 * BacktestConfig.OPTIONS_DELTA;
             } else {
-                unrealized += (pos.entryPrice - candle.close()) * pos.quantity * 100;
+                unrealized += (pos.entryPrice - candle.close()) * pos.quantity * 100 * BacktestConfig.OPTIONS_DELTA;
             }
         }
         return cash + unrealized;
@@ -1111,9 +1082,12 @@ public class BacktestEngine {
     private TradeRecord closePosition(String ticker, OpenPosition pos, double exitPrice,
             ZonedDateTime exitTime, String reason, FillEngine fillEngine) {
         FillResult exitFill = fillEngine.fillExit(ticker, pos.direction, pos.quantity, exitPrice, exitTime);
+        // Delta=0.60 approximation: ITM options move $0.60 per $1 in the underlying.
+        // Real option PnL also affected by theta decay, IV crush, and bid/ask spread — not modeled here.
+        // See roadmap P1 CRÍTICO — Pricing de opciones.
         double grossPnl = pos.isCall
-                ? (exitPrice - pos.entryPrice) * pos.quantity * 100
-                : (pos.entryPrice - exitPrice) * pos.quantity * 100;
+                ? (exitPrice - pos.entryPrice) * pos.quantity * 100 * BacktestConfig.OPTIONS_DELTA
+                : (pos.entryPrice - exitPrice) * pos.quantity * 100 * BacktestConfig.OPTIONS_DELTA;
         double netPnl = grossPnl - exitFill.commission() - exitFill.slippage() * pos.quantity * 100;
 
         TradeRecord trade = new TradeRecord(
