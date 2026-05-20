@@ -4,12 +4,15 @@ import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.indicator.WordenStochasticIndicator;
 import com.fgiaquinta.optionsquant.strategy.utils.BollingerBandsUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
-import org.ta4j.core.indicators.helpers.*;
+import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
+import org.ta4j.core.indicators.helpers.VolumeIndicator;
 
 import java.time.ZonedDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -17,20 +20,16 @@ import java.util.Set;
  *
  * Bearish trend + gap down + Bollinger breakout below + Worden Stochastic confirmation.
  *
- * REQUIREMENTS (from the course author's book):
- * 1. Clearly bearish trend (several days falling)
- * 2. Price opens with a strong gap down, far from 20-period MA on 1H (at least 3% below)
- * 3. On 15m Bollinger Bands, the first candle must be completely outside (below) the oscillator
- * 4. When the new candle starts forming, it must cross the red line of Worden Stochastics (buy confirmation)
+ * REQUIREMENTS (from the course author's book, libro 7/8):
+ * 1. "Tendencia clara llevando varios días"                         — bearish daily trend (2+ red candles)
+ * 2. "Apertura con fuerte salto, precio alejado de SMA20"          — gap down + >3% below 1H SMA20
+ * 3. "Primera vela 15m completamente fuera del Bollinger"          — first 15m candle fully below lower BB
+ * 4. "Vela cruza línea roja del Worden Stochastics → entrada"      — reversal up + Worden / volume confirmation
  *
  * Time window: 9:45 AM - 9:55 AM NY (after the first 15m candle closes)
  */
+@Slf4j
 public class C5ContinuationCallStrategy implements TradingStrategy, TimeframeRequirements {
-
-    @Override
-    public Set<TimeFrame> requiredTimeframes() {
-        return Set.of(TimeFrame.MIN_15, TimeFrame.HOUR_1, TimeFrame.DAY_1);
-    }
 
     private final WordenStochasticIndicator wordenStochastic;
 
@@ -48,6 +47,34 @@ public class C5ContinuationCallStrategy implements TradingStrategy, TimeframeReq
         this.wordenStochastic = null;
     }
 
+    @Override
+    public Set<TimeFrame> requiredTimeframes() {
+        return Set.of(TimeFrame.MIN_15, TimeFrame.HOUR_1, TimeFrame.DAY_1);
+    }
+
+    /**
+     * Evaluates the C5 Continuation Call (Efecto Imán) strategy against the provided market data
+     * at {@code currentTime}.
+     *
+     * <p>Evaluation window: 9:45 AM – 9:55 AM NY (right after the first 15m candle closes).
+     * Outside this window the method returns {@code false} immediately.
+     *
+     * <p>The evaluation proceeds through four sequential book steps (short-circuit on first failure):
+     * <ol>
+     *   <li>Tendencia clara llevando varios días — bearish daily trend (3 prior descending closes)</li>
+     *   <li>Apertura con fuerte salto, precio alejado de SMA20 — gap down + open &gt;3% below 1H SMA20</li>
+     *   <li>Primera vela 15m completamente fuera del Bollinger — first 15m candle high below lower BB</li>
+     *   <li>Vela cruza línea roja del Worden Stochastics → entrada — reversal up + Worden/volume confirmation</li>
+     * </ol>
+     *
+     * <p>When DEBUG logging is enabled, each step emits a structured log line:
+     * {@code [C5] <ticker> @ <time> — Paso X/4 "<libro description>" → <value> ✅|❌ STOP}
+     *
+     * @param ticker      the instrument symbol being evaluated
+     * @param data        multi-timeframe market data container
+     * @param currentTime the virtual or wall-clock time of evaluation
+     * @return {@code true} if all four steps are satisfied; {@code false} on the first failure
+     */
     @Override
     public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {
         ZonedDateTime nyTime = currentTime.withZoneSameInstant(ZoneId.of("America/New_York"));
@@ -74,66 +101,34 @@ public class C5ContinuationCallStrategy implements TradingStrategy, TimeframeReq
         if (idx1D < 3 || idx1h < 20 || idx15m < 20) return false;
 
         // =========================================================================
-        // RULE 1: CLEARLY BEARISH TREND (Multiple days falling)
+        // Pre-compute all values needed by conditions (capture for lambda closures)
         // =========================================================================
         ClosePriceIndicator close1D = new ClosePriceIndicator(series1D);
-        double prevClose1D = close1D.getValue(idx1D - 1).doubleValue();
-        double prev2Close1D = close1D.getValue(idx1D - 2).doubleValue();
-        double prev3Close1D = close1D.getValue(idx1D - 3).doubleValue();
+        final double prevClose1D  = close1D.getValue(idx1D - 1).doubleValue();
+        final double prev2Close1D = close1D.getValue(idx1D - 2).doubleValue();
+        final double prev3Close1D = close1D.getValue(idx1D - 3).doubleValue();
 
-        // Confirm at least 2 consecutive red daily candles
-        if (prevClose1D >= prev2Close1D || prev2Close1D >= prev3Close1D) {
-            return false;
-        }
-
-        // =========================================================================
-        // RULE 2: STRONG GAP DOWN AND FAR FROM MM20 ON 1 HOUR
-        // =========================================================================
         ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
         SMAIndicator sma20_1h = new SMAIndicator(close1h, 20);
-        double currentSma1h = sma20_1h.getValue(idx1h).doubleValue();
+        final double currentSma1h = sma20_1h.getValue(idx1h).doubleValue();
 
-        int firstCandle15mIdx = idx15m - 1; // The 9:30 to 9:45 candle
-        double first15mOpen = series15m.getBar(firstCandle15mIdx).getOpenPrice().doubleValue();
+        final int firstCandle15mIdx = idx15m - 1; // The 9:30–9:45 candle
+        final double first15mOpen = series15m.getBar(firstCandle15mIdx).getOpenPrice().doubleValue();
+        final double first15mHigh = series15m.getBar(firstCandle15mIdx).getHighPrice().doubleValue();
 
-        // Must be a Gap Down relative to yesterday's close
-        if (first15mOpen >= prevClose1D) return false;
-
-        // "Very far" from the 20-period Moving Average (At least 3% below the magnet)
-        if (first15mOpen > (currentSma1h * 0.97)) return false;
-
-        // =========================================================================
-        // RULE 3: FIRST 15M CANDLE COMPLETELY OUTSIDE BOLLINGER (BELOW)
-        // =========================================================================
         BollingerBandsUtil bb = new BollingerBandsUtil(series15m, 20);
+        final double lowerBand15m = bb.getLower(firstCandle15mIdx - 1);
 
-        double lowerBand15m = bb.getLower(firstCandle15mIdx - 1);
-        double first15mHigh = series15m.getBar(firstCandle15mIdx).getHighPrice().doubleValue();
+        final double currentPrice = series15m.getBar(idx15m).getClosePrice().doubleValue();
+        final double currentOpen  = series15m.getBar(idx15m).getOpenPrice().doubleValue();
+        final boolean isReversingUp = currentPrice > currentOpen;
 
-        // "Completely outside": Even the highest point of that first candle must be below the band
-        if (first15mHigh >= lowerBand15m) {
-            return false;
-        }
-
-        // =========================================================================
-        // RULE 4: CONFIRMATION - Worden Stochastic cross OR volume surge fallback
-        // =========================================================================
-        double currentPrice = series15m.getBar(idx15m).getClosePrice().doubleValue();
-        double currentOpen = series15m.getBar(idx15m).getOpenPrice().doubleValue();
-
-        // The new candle (9:45 - 10:00) starts green and begins rising toward the magnet
-        boolean isReversingUp = currentPrice > currentOpen;
-
-        boolean confirmation;
+        final boolean confirmation;
         if (wordenStochastic != null) {
-            // Worden Stochastic: buy when value crosses above 20 (oversold recovery)
             double currentWorden = wordenStochastic.getValue(idx15m).doubleValue();
-            double prevWorden = wordenStochastic.getValue(idx15m - 1).doubleValue();
-            // Cross above 20 level (the "red line") from below = buy signal
-            boolean crossedAbove20 = prevWorden <= 20 && currentWorden > 20;
-            confirmation = crossedAbove20;
+            double prevWorden    = wordenStochastic.getValue(idx15m - 1).doubleValue();
+            confirmation = prevWorden <= 20 && currentWorden > 20;
         } else {
-            // Fallback: volume surge (1.5x average) as mathematical substitute
             VolumeIndicator vol15m = new VolumeIndicator(series15m);
             SMAIndicator avgVol15m = new SMAIndicator(vol15m, 10);
             double firstCandleVol = vol15m.getValue(firstCandle15mIdx).doubleValue();
@@ -141,6 +136,50 @@ public class C5ContinuationCallStrategy implements TradingStrategy, TimeframeReq
             confirmation = firstCandleVol > (avgVol * 1.5);
         }
 
-        return isReversingUp && confirmation;
+        // =========================================================================
+        // CONDITION PIPELINE — 4 reference book steps
+        // =========================================================================
+        final List<Condition> conditions = List.of(
+            new Condition() {
+                @Override public boolean test()   { return prevClose1D < prev2Close1D && prev2Close1D < prev3Close1D; }
+                @Override public String label()   { return "Tendencia clara llevando varios días"; }
+                @Override public String value()   { return String.format("close[-1]=%.2f < close[-2]=%.2f < close[-3]=%.2f",
+                        prevClose1D, prev2Close1D, prev3Close1D); }
+            },
+            new Condition() {
+                @Override public boolean test()   { return first15mOpen < prevClose1D && first15mOpen < currentSma1h * 0.97; }
+                @Override public String label()   { return "Apertura con fuerte salto, precio alejado de SMA20"; }
+                @Override public String value()   { return String.format("open=%.2f < prevClose=%.2f; open=%.2f < SMA20*0.97=%.2f",
+                        first15mOpen, prevClose1D, first15mOpen, currentSma1h * 0.97); }
+            },
+            new Condition() {
+                @Override public boolean test()   { return first15mHigh < lowerBand15m; }
+                @Override public String label()   { return "Primera vela 15m completamente fuera del Bollinger"; }
+                @Override public String value()   { return String.format("high=%.2f < lowerBB=%.2f", first15mHigh, lowerBand15m); }
+            },
+            new Condition() {
+                @Override public boolean test()   { return isReversingUp && confirmation; }
+                @Override public String label()   { return "Vela cruza línea roja del Worden Stochastics → entrada"; }
+                @Override public String value()   { return String.format("reversingUp=%b confirmation=%b (close=%.2f open=%.2f)",
+                        isReversingUp, confirmation, currentPrice, currentOpen); }
+            }
+        );
+
+        final int total = conditions.size();
+        for (int step = 0; step < total; step++) {
+            final Condition c = conditions.get(step);
+            if (log.isDebugEnabled()) {
+                final String stepPrefix = String.format("[C5] %s @ %s — Paso %d/%d \"%s\" → %s",
+                        ticker, nyTime.toLocalTime(), step + 1, total, c.label(), c.value());
+                if (!c.test()) {
+                    log.debug("{} ❌ STOP", stepPrefix);
+                    return false;
+                }
+                log.debug("{} ✅", stepPrefix);
+            } else if (!c.test()) {
+                return false;
+            }
+        }
+        return true;
     }
 }
