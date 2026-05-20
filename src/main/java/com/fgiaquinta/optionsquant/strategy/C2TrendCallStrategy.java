@@ -3,6 +3,7 @@ package com.fgiaquinta.optionsquant.strategy;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.utils.BollingerBandsUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.*;
@@ -10,9 +11,11 @@ import org.ta4j.core.indicators.helpers.*;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+@Slf4j
 public class C2TrendCallStrategy implements TradingStrategy, TimeframeRequirements {
     private final Map<String, ZonedDateTime> lastTriggerMap = new HashMap<>();
 
@@ -21,6 +24,25 @@ public class C2TrendCallStrategy implements TradingStrategy, TimeframeRequiremen
         return Set.of(TimeFrame.MIN_15, TimeFrame.HOUR_1, TimeFrame.DAY_1);
     }
 
+    /**
+     * Evaluates the C2 Trend Call strategy against the provided market data at {@code currentTime}.
+     *
+     * <p>The evaluation proceeds through four sequential book steps (short-circuit on first failure):
+     * <ol>
+     *   <li>Línea de tendencia bordeando puntos de la tendencia previa — 1D uptrend + 1H price above SMA20 for last 3 bars</li>
+     *   <li>El precio rompe la línea de tendencia — low touches SMA20 (within 0.5%) and close stays above</li>
+     *   <li>El precio rompe la SMA20 + vela de confirmación alcista — bullish candle, close in top 35%, volume ≥ 90%</li>
+     *   <li>En 15m la tendencia alcista debe estar totalmente alineada — SMA20 uptrend AND Bollinger Bands bullish context</li>
+     * </ol>
+     *
+     * <p>When DEBUG logging is enabled, each step emits a structured log line:
+     * {@code [C2] <ticker> @ <time> — Paso X/4 "<libro description>" → <value> ✅|❌ STOP}
+     *
+     * @param ticker      the instrument symbol being evaluated
+     * @param data        multi-timeframe market data container
+     * @param currentTime the virtual or wall-clock time of evaluation
+     * @return {@code true} if all four steps are satisfied; {@code false} on the first failure
+     */
     @Override
     public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {
 
@@ -45,89 +67,120 @@ public class C2TrendCallStrategy implements TradingStrategy, TimeframeRequiremen
 
         if (idx1D < 20 || idx1h < 20 || idx15m < 20) return false;
 
-        ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
-        OpenPriceIndicator open1h = new OpenPriceIndicator(series1h);
-        HighPriceIndicator high1h = new HighPriceIndicator(series1h);
-        LowPriceIndicator low1h = new LowPriceIndicator(series1h);
-        SMAIndicator sma20_1h = new SMAIndicator(close1h, 20);
+        // ---- Pre-compute all values needed by conditions ----
 
-        // =========================================================================
-        // RULE 1: ESTABLISHED UPTREND (1D and 1H)
-        // =========================================================================
         ClosePriceIndicator close1D = new ClosePriceIndicator(series1D);
-        boolean isDailyUptrend = close1D.getValue(idx1D - 1).isGreaterThan(close1D.getValue(idx1D - 2));
-        if (!isDailyUptrend) return false;
+        final double dailyClose1 = close1D.getValue(idx1D - 1).doubleValue();
+        final double dailyClose2 = close1D.getValue(idx1D - 2).doubleValue();
+        final boolean isDailyUptrend = dailyClose1 > dailyClose2;
 
-        // Price must be above SMA20 on 1H for the last 3 bars (healthy trend)
+        ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
+        OpenPriceIndicator open1h   = new OpenPriceIndicator(series1h);
+        HighPriceIndicator high1h   = new HighPriceIndicator(series1h);
+        LowPriceIndicator low1h     = new LowPriceIndicator(series1h);
+        SMAIndicator sma20_1h       = new SMAIndicator(close1h, 20);
+
+        // Last 3 bars above SMA20
         boolean wasAboveSma = true;
+        int barsBelowSma = 0;
         for (int i = 1; i <= 3; i++) {
             if (close1h.getValue(idx1h - i).doubleValue() <= sma20_1h.getValue(idx1h - i).doubleValue()) {
                 wasAboveSma = false;
-                break;
+                barsBelowSma++;
             }
         }
-        if (!wasAboveSma) return false;
+        final boolean capturedWasAboveSma = wasAboveSma;
+        final int capturedBarsBelowSma    = barsBelowSma;
 
-        // =========================================================================
-        // RULE 2: THE PULLBACK (Retracement to the Average)
-        // =========================================================================
-        double currentClose1h = close1h.getValue(idx1h).doubleValue();
-        double currentOpen1h = open1h.getValue(idx1h).doubleValue();
-        double currentHigh1h = high1h.getValue(idx1h).doubleValue();
-        double currentLow1h = low1h.getValue(idx1h).doubleValue();
-        double currentSma1h = sma20_1h.getValue(idx1h).doubleValue();
+        final double currentClose1h = close1h.getValue(idx1h).doubleValue();
+        final double currentOpen1h  = open1h.getValue(idx1h).doubleValue();
+        final double currentHigh1h  = high1h.getValue(idx1h).doubleValue();
+        final double currentLow1h   = low1h.getValue(idx1h).doubleValue();
+        final double currentSma1h   = sma20_1h.getValue(idx1h).doubleValue();
 
-        // The low of the bar must "touch" or get very close to SMA20 (0.5% margin)
-        // But NEVER close below (rejection).
-        boolean touchedSupport = currentLow1h <= (currentSma1h * 1.005);
-        boolean rejectedSupport = currentClose1h > currentSma1h;
+        // Paso 2: low touches SMA20 (within 0.5% margin), close stays above
+        final boolean touchedSupport   = currentLow1h <= (currentSma1h * 1.005);
+        final boolean rejectedSupport  = currentClose1h > currentSma1h;
 
-        if (!touchedSupport || !rejectedSupport) return false;
+        // Paso 3: bullish candle body + close near high + volume
+        final boolean isBullishCandle  = currentClose1h > currentOpen1h;
+        final double candleRange       = currentHigh1h - currentLow1h;
+        final boolean closedNearHigh   = candleRange > 0 && (currentHigh1h - currentClose1h) <= (candleRange * 0.35);
 
-        // =========================================================================
-        // RULE 3: INSTITUTIONAL BUYING STRENGTH (Candle and Volume)
-        // =========================================================================
-        boolean isBullishCandle = currentClose1h > currentOpen1h;
+        VolumeIndicator vol1h   = new VolumeIndicator(series1h);
+        SMAIndicator avgVol1h   = new SMAIndicator(vol1h, 10);
+        final double currentVol = vol1h.getValue(idx1h).doubleValue();
+        final double avgVol     = avgVol1h.getValue(idx1h).doubleValue();
+        final boolean hasVolume = currentVol >= (avgVol * 0.90);
 
-        // WICK FILTER: Closes in the top 35% of its range
-        double candleRange = currentHigh1h - currentLow1h;
-        boolean closedNearHigh = (currentHigh1h - currentClose1h) <= (candleRange * 0.35);
-
-        if (!isBullishCandle || !closedNearHigh) return false;
-
-        // VOLUME FILTER: Continuation requires healthy volume
-        VolumeIndicator vol1h = new VolumeIndicator(series1h);
-        SMAIndicator avgVol1h = new SMAIndicator(vol1h, 10);
-        double currentVol = vol1h.getValue(idx1h).doubleValue();
-        double avgVol = avgVol1h.getValue(idx1h).doubleValue();
-        if (currentVol < (avgVol * 0.90)) return false;
-
-        // =========================================================================
-        // RULE 4: 15-MINUTE CONFIRMATION (Bollinger Bands context per book)
-        // Book: "Cambiar a la temporalidad 15 minutos y la tendencia debe mostrarse totalmente alcista"
-        // =========================================================================
+        // Paso 4: 15m fully aligned bullish
         ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
-        SMAIndicator sma20_15m = new SMAIndicator(close15m, 20);
+        SMAIndicator sma20_15m       = new SMAIndicator(close15m, 20);
+        final double currentPrice15m = close15m.getValue(idx15m).doubleValue();
+        final double currentSma15m   = sma20_15m.getValue(idx15m).doubleValue();
+        final double prevSma15m      = sma20_15m.getValue(idx15m - 1).doubleValue();
+        final boolean isUptrend15m   = (currentPrice15m > currentSma15m) && (currentSma15m > prevSma15m);
 
-        double currentPrice15m = close15m.getValue(idx15m).doubleValue();
-        double currentSma15m = sma20_15m.getValue(idx15m).doubleValue();
-        double prevSma15m = sma20_15m.getValue(idx15m - 1).doubleValue();
+        BollingerBandsUtil bb15m        = new BollingerBandsUtil(series15m, 20);
+        final boolean isBullishBBTrend  = bb15m.isBullishTrend(idx15m, 10);
 
-        // 15m must be accompanying the uptrend
-        boolean isUptrend15m = (currentPrice15m > currentSma15m) && (currentSma15m > prevSma15m);
+        // ---- Four-step condition array (mapped to reference book) ----
 
-        // Book requirement: Verify bullish trend in Bollinger Bands context
-        BollingerBandsUtil bb15m = new BollingerBandsUtil(series15m, 20);
-        boolean isBullishBBTrend = bb15m.isBullishTrend(idx15m, 10); // 70% of last 10 candles above middle band
-        boolean priceAboveMiddleBB = currentPrice15m > bb15m.getMiddle(idx15m);
+        final List<Condition> conditions = List.of(
+            new Condition() {
+                public boolean test() { return isDailyUptrend && capturedWasAboveSma; }
+                public String label()  { return "Línea de tendencia bordeando puntos de la tendencia previa"; }
+                public String value()  {
+                    return String.format("1D close %.4f>%.4f=%b; 1H bars-below-sma20=%d/3",
+                            dailyClose1, dailyClose2, isDailyUptrend, capturedBarsBelowSma);
+                }
+            },
+            new Condition() {
+                public boolean test() { return touchedSupport && rejectedSupport; }
+                public String label()  { return "El precio rompe la línea de tendencia"; }
+                public String value()  {
+                    return String.format("low %.4f <= SMA20*1.005 %.4f=%b; close %.4f > SMA20 %.4f=%b",
+                            currentLow1h, currentSma1h * 1.005, touchedSupport,
+                            currentClose1h, currentSma1h, rejectedSupport);
+                }
+            },
+            new Condition() {
+                public boolean test() { return isBullishCandle && closedNearHigh && hasVolume; }
+                public String label()  { return "El precio rompe la SMA20 + vela de confirmación alcista"; }
+                public String value()  {
+                    return String.format("bullish=%b; closedNearHigh=%b (%.1f%%); vol %.0f>=90%%avg %.0f=%b",
+                            isBullishCandle, closedNearHigh,
+                            candleRange > 0 ? ((currentHigh1h - currentClose1h) / candleRange * 100) : 0,
+                            currentVol, avgVol * 0.90, hasVolume);
+                }
+            },
+            new Condition() {
+                public boolean test() { return isUptrend15m && isBullishBBTrend; }
+                public String label()  { return "En 15m la tendencia alcista debe estar totalmente alineada"; }
+                public String value()  {
+                    return String.format("15m price %.4f>SMA %.4f && SMA>prevSMA %.4f=%b; BB bullish=%b",
+                            currentPrice15m, currentSma15m, prevSma15m, isUptrend15m, isBullishBBTrend);
+                }
+            }
+        );
 
-        // Signal confirmed if BOTH: SMA uptrend AND BB bullish context
-        // priceAboveMiddleBB removed: it is logically implied by isUptrend15m (both use SMA20 of 15m closes)
-        if (isUptrend15m && isBullishBBTrend) {
-            lastTriggerMap.put(ticker, currentTime);
-            return true;
+        final int total = conditions.size();
+        for (int step = 0; step < total; step++) {
+            final Condition c = conditions.get(step);
+            if (log.isDebugEnabled()) {
+                final String stepPrefix = String.format("[C2] %s @ %s — Paso %d/%d \"%s\" → %s",
+                        ticker, currentTime.toLocalTime(), step + 1, total, c.label(), c.value());
+                if (!c.test()) {
+                    log.debug("{} ❌ STOP", stepPrefix);
+                    return false;
+                }
+                log.debug("{} ✅", stepPrefix);
+            } else if (!c.test()) {
+                return false;
+            }
         }
 
-        return false;
+        lastTriggerMap.put(ticker, currentTime);
+        return true;
     }
 }
