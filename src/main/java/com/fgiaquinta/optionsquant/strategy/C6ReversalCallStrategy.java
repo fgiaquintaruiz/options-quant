@@ -65,24 +65,24 @@ public class C6ReversalCallStrategy implements TradingStrategy, TimeframeRequire
     @Override
     public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {
 
-        ZonedDateTime nyTime = currentTime.withZoneSameInstant(ZoneId.of("America/New_York"));
+        final ZonedDateTime nyTime = currentTime.withZoneSameInstant(ZoneId.of("America/New_York"));
         if (nyTime.getHour() == 9) return false;
 
-        ZonedDateTime lastTrigger = lastTriggerMap.get(ticker);
+        final ZonedDateTime lastTrigger = lastTriggerMap.get(ticker);
         if (lastTrigger != null && Duration.between(lastTrigger, currentTime).toHours() < 2) return false;
 
-        BarSeries series1D = data.getSeries(TimeFrame.DAY_1);
-        BarSeries series1h = data.getSeries(TimeFrame.HOUR_1);
-        BarSeries series15m = data.getSeries(TimeFrame.MIN_15);
+        final BarSeries series1D = data.getSeries(TimeFrame.DAY_1);
+        final BarSeries series1h = data.getSeries(TimeFrame.HOUR_1);
+        final BarSeries series15m = data.getSeries(TimeFrame.MIN_15);
 
         if (series1D == null || series1h == null || series15m == null ||
                 series1D.isEmpty() || series1h.isEmpty() || series15m.isEmpty()) {
             return false;
         }
 
-        int idx1D = data.getIndexForTime(series1D, currentTime);
-        int idx1h = data.getIndexForTime(series1h, currentTime);
-        int idx15m = data.getIndexForTime(series15m, currentTime);
+        final int idx1D = data.getIndexForTime(series1D, currentTime);
+        final int idx1h = data.getIndexForTime(series1h, currentTime);
+        final int idx15m = data.getIndexForTime(series15m, currentTime);
 
         if (idx1D < 20 || idx1h < 20 || idx15m < 20) return false;
 
