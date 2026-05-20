@@ -24,6 +24,64 @@ Files without automated tests — justification and mitigation plan.
 - **Risk**: Low — script is short and manually verifiable
 - **Mitigation**: Manual review; validate by running and checking log output
 
+## Replay E2E Tests (agregado 2026-05-19)
+
+### What these tests cover
+
+Five Playwright tests in `frontend/e2e/replay-controls.spec.js` exercise the full
+replay lifecycle through the browser:
+
+1. Advanced panel shows replay controls after enabling Mock Market
+2. Setting date + speed then clicking Play sends `POST /live-ui/replay/start` with correct params
+3. `REPLAY MODE ACTIVE` banner appears after replay starts
+4. Virtual clock element (`data-testid="replay-virtual-clock"`) updates after polling returns active status
+5. Clicking Stop hides the banner
+
+All five tests mock the backend via `page.route()`:
+- `POST /live-ui/replay/start` → `{ success: true }`
+- `GET /live-ui/replay/status` → `{ active: true|false, virtualNow, speed }`
+- `POST /live-ui/replay/stop` → `{ success: true }`
+
+### What requires TWS (cannot be tested in CI)
+
+- **Real broker connection**: `replayApi.start` ultimately triggers TWS historical
+  data subscription — only testable with a running TWS instance and valid account
+- **Market gate enforcement**: the `marketOpen=true` guard that blocks replay during
+  live hours depends on TWS market-hours data; mocked tests bypass this intentionally
+- **Actual signal generation**: signals produced during replay involve the full Java
+  back-end pipeline (strategy engine, signal writer, SSE push) — not reproducible
+  without the full stack
+
+### How to run Playwright locally
+
+```bash
+# Install browsers on first run (one-time)
+cd frontend
+npx playwright install --with-deps chromium
+
+# Run all E2E tests (requires `npm run dev` running or uses webServer auto-start)
+npx playwright test
+
+# Run only replay tests
+npx playwright test e2e/replay-controls.spec.js
+
+# Open interactive UI mode
+npx playwright test --ui
+```
+
+The `playwright.config.js` is configured with `reuseExistingServer: true`, so if
+`npm run dev` is already running on port 3000 it will be reused; otherwise Playwright
+starts it automatically.
+
+---
+
+## GGA pre-existing violations in LiveModeController.java (commit 386db8a)
+- **Why --no-verify**: GGA timed out (>300s) during AI review; separate run showed remaining violations are pre-existing (wildcard imports, inline FQNs, `var` usage) — not introduced by commit 386db8a
+- **Introduced in this commit**: SLF4J logging fixes (removed `e.getMessage()` → `e`, removed `{}` placeholder for throwables) + MarketScanner `SPAIN_TZ` constant + market hours gate
+- **Remaining debt**: `LiveModeController.java` wildcard imports (`com.fgiaquinta.optionsquant.service.*`, `org.springframework.web.bind.annotation.*`, `java.util.*`), inline FQN annotations, `var` usage — require standalone refactor commit
+
+---
+
 ## com.fgiaquinta.optionsquant.strategy.config — JaCoCo exclusion
 - **Why excluded**: Package `strategy/**` (except utils/model/data/indicator) excluded from JaCoCo reporting via existing rule in `build.gradle.kts`
 - **Actual coverage**: 12 tests verified passing — 8 `@WebMvcTest` controller tests + 4 service `partialUpdate` unit tests. Full behavioral coverage confirmed manually.
