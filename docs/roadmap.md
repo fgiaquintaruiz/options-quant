@@ -1,7 +1,7 @@
 # Roadmap — Options Quant Engine
 
 > Plan estratégico vivo. Se actualiza al final de cada sesión.
-> Última actualización: 2026-05-19 (evening)
+> Última actualización: 2026-05-20
 
 ## Estado actual
 
@@ -77,6 +77,19 @@
 - [ ] **Investigar c4/p4 opening** — BacktestEngine fuerza entry window 9:45 ET, c4/p4 requieren 9:30 ET; posiblemente nunca se evalúan en backtest. Verificar y corregir.
 - [ ] **Implementar Condition logging en 12 estrategias** — POC completado en P1Squeeze; extender a todas. Permite debug de qué condición falla por ticker.
 - [ ] **Visualización profunda por señal** — 2 charts (daily+1h, 1h+15m) con SMA/BB/TP/SL. Diseño pendiente.
+
+### P1 — Pendientes operativos (2026-05-20)
+
+- ⏸️ **Backtest c4/p4 opening con entry window 9:30-9:36 ET** — script listo en `scripts/run-backtest-c4-p4.ps1`, Fabio ejecuta manualmente
+- [ ] **Decidir sobre SignalQualityFilter** — no proviene del libro de the course author, sin tests, estrategias ya tienen filtros propios; opciones: (a) remover de live/replay, (b) agregar al backtest también, (c) mover inside cada estrategia
+- [ ] **Extender Condition logging a las 11 estrategias restantes** — POC listo en P1/C1 Squeeze
+- [ ] **Implementar MultiTimeframeChart 1h+15m side-by-side**
+
+### P1 CRÍTICO — Pricing de opciones (2026-05-20)
+
+- [ ] **Validar gap de pricing** — backtest usa `(exitPrice - entryPrice) * qty * 100` (delta=1 implícito) vs opciones reales; sobreestima ganancias/pérdidas, ignora theta decay y spread bid/ask [`BacktestEngine.java:1114-1117`, `RiskCalculator.java:15-16`]
+- [ ] **Validar divergencia estructural** — backtest mueve precio del subyacente, live ejecuta contratos reales con strike/expiry via IBKR [`OrderExecutionService.java:296-340`]; los P&L del backtest no son directamente comparables con live
+- [ ] **Investigar fuentes de datos reales de opciones** — Polygon options API, IBKR históricas; evaluar costo, granularidad y cobertura para el universo de 16 tickers
 
 ### P2 — Próximas 2 semanas
 
