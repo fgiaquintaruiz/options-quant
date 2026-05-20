@@ -91,6 +91,9 @@ public class BacktestEngine {
         this.generateTradeCharts = generateTradeCharts;
         this.maxConcurrentScans = new AtomicInteger(
                 Math.max(1, Math.min(Runtime.getRuntime().availableProcessors(), defaultMaxConcurrentScans)));
+        // TODO(architecture): declare strategies as @Component beans and inject
+        //   List<TradingStrategy> via this constructor to let Spring manage their lifecycle.
+        //   Current direct instantiation works but prevents strategies from having Spring dependencies.
         this.strategies = List.of(
                 new com.fgiaquinta.optionsquant.strategy.C1SqueezeCallStrategy(),
                 new com.fgiaquinta.optionsquant.strategy.C2TrendCallStrategy(),
@@ -774,17 +777,23 @@ public class BacktestEngine {
             for (int i = 1; i < lines.size(); i++) { // Skip header
                 String line = lines.get(i).trim();
                 if (line.isEmpty()) continue;
-                String[] parts = line.split(",");
+                // Split into exactly 20 columns (the CSV format has a fixed schema written by
+                // formatTradeCsv). String fields (strategy, pattern, marketTrend) must not contain
+                // commas — enforced by String.format in formatTradeCsv.
+                String[] parts = line.split(",", 20);
                 if (parts.length >= 20) {
                     String ticker = parts[0].trim();
                     if (tickers.contains(ticker)) {
+                        // TS_FMT ("yyyy-MM-dd HH:mm:ss") has no zone offset; reconstruct as NY time.
+                        ZonedDateTime entryTime = java.time.LocalDateTime.parse(parts[5].trim(), TS_FMT).atZone(NY);
+                        ZonedDateTime exitTime  = java.time.LocalDateTime.parse(parts[7].trim(), TS_FMT).atZone(NY);
                         TradeRecord trade = new TradeRecord(
                                 ticker, parts[1].trim(), parts[2].trim(),
                                 Integer.parseInt(parts[3].trim()),
                                 Double.parseDouble(parts[4].trim()),
-                                ZonedDateTime.parse(parts[5].trim(), TS_FMT),
+                                entryTime,
                                 Double.parseDouble(parts[6].trim()),
-                                ZonedDateTime.parse(parts[7].trim(), TS_FMT),
+                                exitTime,
                                 parts[8].trim(),
                                 Double.parseDouble(parts[9].trim()),
                                 Double.parseDouble(parts[10].trim()),
@@ -993,6 +1002,10 @@ public class BacktestEngine {
 
         for (TradingStrategy strategy : strategies) {
             try {
+                if (config.strategyFilter() != null &&
+                        !config.strategyFilter().contains(strategy.getClass().getSimpleName())) {
+                    continue;
+                }
                 if (!strategy.isTriggered(ticker, data, nyTime)) continue;
 
                 boolean isCall = strategy.getClass().getSimpleName().toLowerCase().contains("call");
@@ -1031,19 +1044,6 @@ public class BacktestEngine {
                 // Chart data (chartCandles) is stored in OpenPosition and will be used
                 // to generate charts only when explicitly requested via API after backtest completes.
                 // This avoids significant temporary string objects and disk I/O during scanning.
-                /*
-                if (chartCandles != null && !chartCandles.isEmpty()) {
-                    Path chartsDir = Path.of("backtest/charts");
-                    Path chartPath = SignalChartGenerator.generateChart(
-                            ticker, strategy.getName(), candle.timestamp(),
-                            entryFill.fillPrice(), plan.takeProfit, plan.stopLoss,
-                            isCall, chartCandles, chartsDir,
-                            null, null, null, combinedPattern);
-                    if (chartPath != null) {
-                        log.debug("Chart generated: {}", chartPath);
-                    }
-                }
-                */
 
                 log.debug("Signal: {} {} at {} entry={} qty={} pattern={}", ticker, pos.direction,
                         time.format(TS_FMT), entryFill.fillPrice(), qty, candlestickPattern);

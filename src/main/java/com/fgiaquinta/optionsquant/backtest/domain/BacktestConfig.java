@@ -45,7 +45,14 @@ public record BacktestConfig(
          * ET time at which all open positions are force-closed.
          * Default: 1:00 PM ET (the course author's method — avoid afternoon chop and IV collapse).
          */
-        LocalTime forcedCloseTime
+        LocalTime forcedCloseTime,
+        /**
+         * Optional whitelist of strategy simple class names to evaluate.
+         * When non-null, the engine skips any strategy whose {@code getClass().getSimpleName()}
+         * is NOT in this list. {@code null} means run all strategies (backward-compatible default).
+         * Example: {@code List.of("C4OpeningCallStrategy", "P4OpeningPutStrategy")}
+         */
+        List<String> strategyFilter
 ) {
     /**
      * Delta approximation for ITM options (≈0.60). Used in PnL calculation.
@@ -90,7 +97,8 @@ public record BacktestConfig(
                 null,       // no callback
                 LocalTime.of(9, 45),   // entryWindowStart
                 LocalTime.of(10, 30),  // entryWindowEnd
-                LocalTime.of(13, 0)    // forcedCloseTime
+                LocalTime.of(13, 0),   // forcedCloseTime
+                null        // strategyFilter — run all strategies
         );
     }
 
@@ -118,7 +126,8 @@ public record BacktestConfig(
                 callback,
                 LocalTime.of(9, 45),   // entryWindowStart
                 LocalTime.of(10, 30),  // entryWindowEnd
-                LocalTime.of(13, 0)    // forcedCloseTime
+                LocalTime.of(13, 0),   // forcedCloseTime
+                null        // strategyFilter — run all strategies
         );
     }
 }

@@ -88,3 +88,17 @@ starts it automatically.
 - **Pending decision**: Include `strategy.config` in JaCoCo reporting? Current exclusion may be intentional (strategy logic is complex/volatile). Revisit when package stabilizes.
 - **Risk**: Medium — excluded from automated coverage gate; rely on test count + manual review
 - **Mitigation**: All new code in this package requires TDD (test-first) as standing policy
+
+---
+
+### BacktestEngine.java — Pre-existing architectural debt (2026-05-20)
+
+- **isCall derived from class name string matching** — `runStrategies()` uses
+  `strategy.getClass().getSimpleName().startsWith("C")` (or similar) to determine
+  isCall. Should be `TradingStrategy.isCall()` method on the interface.
+
+- **runCore SRP violation** — ~400-line method. Violates Single Responsibility.
+  Should be decomposed into: loadData(), evaluateStrategies(), buildReport().
+
+- **buildReportFromResumedData duplicates statistics loop** — same computation
+  as runCore. Extract shared `computeStats(List<TradeRecord>)` helper.
