@@ -88,11 +88,11 @@ public class C6ReversalCallStrategy implements TradingStrategy, TimeframeRequire
 
         // ---- Pre-compute all values needed by conditions ----
 
-        ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
-        OpenPriceIndicator open1h = new OpenPriceIndicator(series1h);
-        HighPriceIndicator high1h = new HighPriceIndicator(series1h);
-        LowPriceIndicator low1h = new LowPriceIndicator(series1h);
-        SMAIndicator sma20_1h = new SMAIndicator(close1h, 20);
+        final ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
+        final OpenPriceIndicator open1h = new OpenPriceIndicator(series1h);
+        final HighPriceIndicator high1h = new HighPriceIndicator(series1h);
+        final LowPriceIndicator low1h = new LowPriceIndicator(series1h);
+        final SMAIndicator sma20_1h = new SMAIndicator(close1h, 20);
 
         // Paso 1: prior downtrend — 3 bars below SMA20
         boolean wasClearDowntrend = true;
@@ -118,15 +118,15 @@ public class C6ReversalCallStrategy implements TradingStrategy, TimeframeRequire
         final double candleRange       = currentHigh1h - currentLow1h;
         final boolean closedNearHigh   = candleRange > 0 && (currentHigh1h - currentClose1h) <= (candleRange * 0.35);
 
-        VolumeIndicator vol1h   = new VolumeIndicator(series1h);
-        SMAIndicator avgVol1h   = new SMAIndicator(vol1h, 10);
+        final VolumeIndicator vol1h   = new VolumeIndicator(series1h);
+        final SMAIndicator avgVol1h   = new SMAIndicator(vol1h, 10);
         final double currentVol = vol1h.getValue(idx1h).doubleValue();
         final double avgVol     = avgVol1h.getValue(idx1h).doubleValue();
         final boolean hasVolume = currentVol >= (avgVol * 0.90);
 
         // Paso 4: 15m uptrend confirmation
-        ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
-        SMAIndicator sma20_15m       = new SMAIndicator(close15m, 20);
+        final ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
+        final SMAIndicator sma20_15m       = new SMAIndicator(close15m, 20);
         final double currentPrice15m = close15m.getValue(idx15m).doubleValue();
         final double currentSma15m   = sma20_15m.getValue(idx15m).doubleValue();
         final double prevSma15m      = sma20_15m.getValue(idx15m - 1).doubleValue();

@@ -14,7 +14,6 @@ import org.ta4j.core.indicators.helpers.VolumeIndicator;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -33,20 +32,20 @@ import java.util.Set;
 @Slf4j
 public class C5ContinuationCallStrategy implements TradingStrategy, TimeframeRequirements {
 
-    private final Optional<WordenStochasticIndicator> wordenStochastic;
+    private final WordenStochasticIndicator wordenStochastic;
 
     /**
      * Constructor with WordenStochasticIndicator for confirmation.
      */
     public C5ContinuationCallStrategy(WordenStochasticIndicator wordenStochastic) {
-        this.wordenStochastic = Optional.of(wordenStochastic);
+        this.wordenStochastic = wordenStochastic;
     }
 
     /**
      * Default constructor using volume surge as fallback (legacy behavior).
      */
     public C5ContinuationCallStrategy() {
-        this.wordenStochastic = Optional.empty();
+        this.wordenStochastic = null;
     }
 
     @Override
@@ -105,20 +104,20 @@ public class C5ContinuationCallStrategy implements TradingStrategy, TimeframeReq
         // =========================================================================
         // Pre-compute all values needed by conditions (capture for lambda closures)
         // =========================================================================
-        ClosePriceIndicator close1D = new ClosePriceIndicator(series1D);
+        final ClosePriceIndicator close1D = new ClosePriceIndicator(series1D);
         final double prevClose1D  = close1D.getValue(idx1D - 1).doubleValue();
         final double prev2Close1D = close1D.getValue(idx1D - 2).doubleValue();
         final double prev3Close1D = close1D.getValue(idx1D - 3).doubleValue();
 
-        ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
-        SMAIndicator sma20_1h = new SMAIndicator(close1h, 20);
+        final ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
+        final SMAIndicator sma20_1h = new SMAIndicator(close1h, 20);
         final double currentSma1h = sma20_1h.getValue(idx1h).doubleValue();
 
         final int firstCandle15mIdx = idx15m - 1; // The 9:30–9:45 candle
         final double first15mOpen = series15m.getBar(firstCandle15mIdx).getOpenPrice().doubleValue();
         final double first15mHigh = series15m.getBar(firstCandle15mIdx).getHighPrice().doubleValue();
 
-        BollingerBandsUtil bb = new BollingerBandsUtil(series15m, 20);
+        final BollingerBandsUtil bb = new BollingerBandsUtil(series15m, 20);
         final double lowerBand15m = bb.getLower(firstCandle15mIdx - 1);
 
         final double currentPrice = series15m.getBar(idx15m).getClosePrice().doubleValue();
@@ -126,10 +125,9 @@ public class C5ContinuationCallStrategy implements TradingStrategy, TimeframeReq
         final boolean isReversingUp = currentPrice > currentOpen;
 
         final boolean confirmation;
-        if (wordenStochastic.isPresent()) {
-            WordenStochasticIndicator ws = wordenStochastic.get();
-            double currentWorden = ws.getValue(idx15m).doubleValue();
-            double prevWorden    = ws.getValue(idx15m - 1).doubleValue();
+        if (wordenStochastic != null) {
+            double currentWorden = wordenStochastic.getValue(idx15m).doubleValue();
+            double prevWorden    = wordenStochastic.getValue(idx15m - 1).doubleValue();
             confirmation = prevWorden <= 20 && currentWorden > 20;
         } else {
             VolumeIndicator vol15m = new VolumeIndicator(series15m);

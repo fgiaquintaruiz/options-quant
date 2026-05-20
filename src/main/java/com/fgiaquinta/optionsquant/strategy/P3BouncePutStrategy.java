@@ -18,6 +18,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * P3 - REBOTE BAJISTA EN PUNTO MEDIO (Bearish Bounce Put).
+ *
+ * Bearish mirror of C3: price bounces down from SMA20 after overextending into the upper
+ * Bollinger Band on the 1H timeframe, with 15m confirmation of the reversal.
+ *
+ * REQUIREMENTS (from the course author's book, libro 3/4 — bearish variant):
+ * 1. "Tendencia bajista clara en Bollinger temporalidad hora"           — 1D downtrend + 1H price broke above upper BB
+ * 2. "Precio acercándose a SMA20 diaria como punto de rebote bajista"  — 1H high touches SMA20 resistance (within 0.2%)
+ * 3. "Precio respeta el punto, en 15m comienza a rebotar a la baja"    — 15m price crosses below SMA20
+ * 4. "En hora, vela de confirmación bajista → entrada"                  — 1H close below SMA20 (bearish rejection candle)
+ *
+ * Cooldown: 2 hours between triggers per ticker. Excluded: before 10 AM NY.
+ */
 @Slf4j
 public class P3BouncePutStrategy implements TradingStrategy, TimeframeRequirements {
 
@@ -54,7 +68,7 @@ public class P3BouncePutStrategy implements TradingStrategy, TimeframeRequiremen
         // =========================================================================
         // RULE 0.1: OPENING FILTER (Don't operate P3 in the first 30 min)
         // =========================================================================
-        ZonedDateTime nyTime = currentTime.withZoneSameInstant(ZoneId.of("America/New_York"));
+        final ZonedDateTime nyTime = currentTime.withZoneSameInstant(ZoneId.of("America/New_York"));
         if (nyTime.getHour() < 10) {
             return false;
         }
@@ -62,39 +76,39 @@ public class P3BouncePutStrategy implements TradingStrategy, TimeframeRequiremen
         // =========================================================================
         // RULE 0.3: 2-HOUR COOLDOWN (Re-entry blocker)
         // =========================================================================
-        ZonedDateTime lastTrigger = lastTriggerMap.get(ticker);
+        final ZonedDateTime lastTrigger = lastTriggerMap.get(ticker);
         if (lastTrigger != null && Duration.between(lastTrigger, currentTime).toHours() < 2) {
             return false;
         }
 
-        BarSeries series1D = data.getSeries(TimeFrame.DAY_1);
-        BarSeries series1h = data.getSeries(TimeFrame.HOUR_1);
-        BarSeries series15m = data.getSeries(TimeFrame.MIN_15);
+        final BarSeries series1D = data.getSeries(TimeFrame.DAY_1);
+        final BarSeries series1h = data.getSeries(TimeFrame.HOUR_1);
+        final BarSeries series15m = data.getSeries(TimeFrame.MIN_15);
 
         if (series1D == null || series1h == null || series15m == null ||
                 series1D.isEmpty() || series1h.isEmpty() || series15m.isEmpty()) {
             return false;
         }
 
-        int idx1D = data.getIndexForTime(series1D, currentTime);
-        int idx1h = data.getIndexForTime(series1h, currentTime);
-        int idx15m = data.getIndexForTime(series15m, currentTime);
+        final int idx1D = data.getIndexForTime(series1D, currentTime);
+        final int idx1h = data.getIndexForTime(series1h, currentTime);
+        final int idx15m = data.getIndexForTime(series15m, currentTime);
 
         if (idx1D < 20 || idx1h < 20 || idx15m < 20) return false;
 
         // ---- Pre-compute all values needed by conditions ----
 
-        ClosePriceIndicator close1D = new ClosePriceIndicator(series1D);
+        final ClosePriceIndicator close1D = new ClosePriceIndicator(series1D);
         final double dailyClose1 = close1D.getValue(idx1D - 1).doubleValue();
         final double dailyClose2 = close1D.getValue(idx1D - 2).doubleValue();
         final boolean isDowntrend = dailyClose1 < dailyClose2;
 
-        BollingerBandsUtil bb1h = new BollingerBandsUtil(series1h, 20);
+        final BollingerBandsUtil bb1h = new BollingerBandsUtil(series1h, 20);
         final boolean wasInBullishBBContext = bb1h.brokeAboveUpperBand(idx1h - 1, 10);
 
-        ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
-        HighPriceIndicator high1h = new HighPriceIndicator(series1h);
-        SMAIndicator sma20_1h = new SMAIndicator(close1h, 20);
+        final ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
+        final HighPriceIndicator high1h = new HighPriceIndicator(series1h);
+        final SMAIndicator sma20_1h = new SMAIndicator(close1h, 20);
 
         final double currentHigh1h = high1h.getValue(idx1h).doubleValue();
         final double currentClose1h = close1h.getValue(idx1h).doubleValue();
@@ -103,8 +117,8 @@ public class P3BouncePutStrategy implements TradingStrategy, TimeframeRequiremen
         final boolean touchedResistance = currentHigh1h >= (sma20Val1h * 0.998);
         final boolean rejectedResistance = currentClose1h < sma20Val1h;
 
-        ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
-        SMAIndicator sma20_15m = new SMAIndicator(close15m, 20);
+        final ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
+        final SMAIndicator sma20_15m = new SMAIndicator(close15m, 20);
 
         final double currentPrice15m = close15m.getValue(idx15m).doubleValue();
         final double sma20Val15m = sma20_15m.getValue(idx15m).doubleValue();

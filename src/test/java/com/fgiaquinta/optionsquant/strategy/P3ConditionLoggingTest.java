@@ -20,6 +20,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
+import static com.fgiaquinta.optionsquant.strategy.CandleTestFactory.candle;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -61,10 +62,6 @@ class P3ConditionLoggingTest {
     // =========================================================================
     // Data builders
     // =========================================================================
-
-    private Candle candle(ZonedDateTime time, double open, double high, double low, double close, long volume) {
-        return new Candle(time, open, high, low, close, volume);
-    }
 
     /**
      * Builds StrategyData that causes P3 to FAIL at Paso 1/4 (no 1D downtrend).
