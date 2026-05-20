@@ -1,14 +1,14 @@
 # Roadmap — Options Quant Engine
 
 > Plan estratégico vivo. Se actualiza al final de cada sesión.
-> Última actualización: 2026-05-19
+> Última actualización: 2026-05-19 (evening)
 
 ## Estado actual
 
 **Fase**: Paper trading activo (arrancó 2026-05-18)
 **Universo HOT**: NVDA, AMD, AMDL, TSLA, META, AVGO, COIN, MSTR, AMZN, SPY
 **Universo táctico**: AAPL, URA, MU, SMH, OXY, GLD
-**Estrategias activas**: 11 estrategias activadas para paper trading (2026-05-19)
+**Estrategias activas**: 12 estrategias activadas para paper trading (2026-05-19)
 **Capital paper**: $968 USD — cuenta DUN598216 (2026-05-18)
 **Instrumento**: Opciones (CALL/PUT)
 **Stack**: SQLite + Spring Boot 4.0.5 + Java 25 + React frontend + IBKR TWS
@@ -57,12 +57,32 @@
 - ✅ scripts/run-live.ps1 — script PowerShell de arranque: UTF-8 logging, port 9090, log con timestamp, sin DevTools. Creado 2026-05-18.
 - ✅ p2 trend activado en live (2026-05-19, SQL directo)
 - ✅ 11 estrategias activadas para paper trading (2026-05-19) — c3/c4/p4/p5 activadas para recolección de datos — pendiente análisis post paper trading
-- [ ] Análisis de los primeros días de paper trades
-- [ ] Bajar 2 años de tickers tácticos via Polygon (URA, MU, etc.)
-- [ ] Implementar filtro por fecha en BacktestBatchRunner (--start-date, --end-date)
+- ✅ c1 squeeze, c2 trend, p3 bounce, p4 opening, c3 bounce, p5 continuation, c4 opening, c5 continuation activadas en live (2026-05-19)
+- ✅ GLD/SMH agregadas al universo
+- ✅ ticker-memory.json rolling backup
+- ✅ Play button fix replay UI
+- ✅ Market hours gate en replay (virtual clock)
+- ✅ Signal timestamp fix (virtual clock during replay)
+- ✅ Virtual clock UI + progress bar
+- ✅ Playwright E2E para replay controls
+- ✅ Banner replay state fix (useReplayStatus direct)
+- ✅ Replay auto-disable macro filter during replay
+- ✅ Replay TradePlan en JSONL + on-complete summary
+- ✅ Replay auto-stop en virtual clock = now
+- ✅ ReplayScheduler @Autowired fix
+
+### P1 — Esta semana (nuevas, 2026-05-19 evening)
+
+- [ ] **Investigar y decidir SignalQualityFilter** — backtest no lo aplica, replay/live sí; puede explicar 0 señales en replay. Decidir: agregar al backtest o quitar del replay.
+- [ ] **Investigar c4/p4 opening** — BacktestEngine fuerza entry window 9:45 ET, c4/p4 requieren 9:30 ET; posiblemente nunca se evalúan en backtest. Verificar y corregir.
+- [ ] **Implementar Condition logging en 12 estrategias** — POC completado en P1Squeeze; extender a todas. Permite debug de qué condición falla por ticker.
+- [ ] **Visualización profunda por señal** — 2 charts (daily+1h, 1h+15m) con SMA/BB/TP/SL. Diseño pendiente.
 
 ### P2 — Próximas 2 semanas
 
+- [ ] Filtro --start-date/--end-date en BacktestBatchRunner
+- [ ] Backfill completo Polygon para SMH/GLD (2 años)
+- [ ] Análisis primeros días paper trades (con parámetros actuales)
 - [ ] Investigar c4 opening / p4 opening: ¿por qué no generan trades? (0 trades en backtest — revisar detección de señales o umbrales de parámetros)
 - [ ] Investigar bug MIN_5 0 bars — algunos tickers devuelven 0 bars en timeframe MIN_5; no es crítico pero afecta completeness
 - [ ] Evaluar habilitar MIN_5 para tickers tácticos (c4/p4) — considerar MIN_5 específicamente para estrategias de apertura
