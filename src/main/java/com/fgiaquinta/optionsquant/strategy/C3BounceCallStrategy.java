@@ -3,6 +3,7 @@ package com.fgiaquinta.optionsquant.strategy;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.utils.BollingerBandsUtil;
+import com.fgiaquinta.optionsquant.strategy.utils.ConditionEvaluator;
 import lombok.extern.slf4j.Slf4j;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
@@ -17,6 +18,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * C3 - REBOTE EN SOPORTE (Support Bounce Call).
+ *
+ * REQUIREMENTS (from the course author's book):
+ * 1. "Tendencia alcista establecida"           — daily uptrend + 1H SMA20 rising
+ * 2. "Retroceso hacia soporte clave"           — 1H price touches lower Bollinger Band
+ * 3. "Señal de reversión / rechazo del soporte" — bullish 1H candle closes above SMA20
+ * 4. "15m tendencia alcista total alineada"    — 15m price above rising SMA20
+ *
+ * Cooldown: 2 hours between triggers per ticker. Excluded: 9h NY.
+ */
 @Slf4j
 public class C3BounceCallStrategy implements TradingStrategy, TimeframeRequirements {
 
@@ -146,20 +158,8 @@ public class C3BounceCallStrategy implements TradingStrategy, TimeframeRequireme
             }
         );
 
-        final int total = conditions.size();
-        for (int step = 0; step < total; step++) {
-            final Condition c = conditions.get(step);
-            if (log.isDebugEnabled()) {
-                final String stepPrefix = String.format("[C3] %s @ %s — Paso %d/%d \"%s\" → %s",
-                        ticker, currentTime.toLocalTime(), step + 1, total, c.label(), c.value());
-                if (!c.test()) {
-                    log.debug("{} ❌ STOP", stepPrefix);
-                    return false;
-                }
-                log.debug("{} ✅", stepPrefix);
-            } else if (!c.test()) {
-                return false;
-            }
+        if (!ConditionEvaluator.evaluate("[C3]", ticker, currentTime, conditions, log)) {
+            return false;
         }
 
         lastTriggerMap.put(ticker, currentTime);

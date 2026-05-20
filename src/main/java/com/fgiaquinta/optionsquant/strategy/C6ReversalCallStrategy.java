@@ -2,6 +2,7 @@ package com.fgiaquinta.optionsquant.strategy;
 
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
+import com.fgiaquinta.optionsquant.strategy.utils.ConditionEvaluator;
 import lombok.extern.slf4j.Slf4j;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
@@ -27,7 +28,7 @@ import java.util.Set;
  * EVALUATION STEPS (derived from code):
  * 1. Tendencia bajista previa en 1H  — 3 prior 1H closes below SMA20
  * 2. Ruptura alcista de SMA20        — current close crosses above SMA20 with bullish candle
- * 3. Cierre en tercio superior       — candle closes in top 35% of range, volume &ge; 90% avg
+ * 3. Cierre en 35% superior          — candle closes in top 35% of range, volume &ge; 90% avg
  * 4. Confirmación alcista en 15m     — price above and SMA20 rising on 15m
  *
  * Cooldown: 2 hours between triggers per ticker. Excluded: 9h NY.
@@ -49,7 +50,7 @@ public class C6ReversalCallStrategy implements TradingStrategy, TimeframeRequire
      * <ol>
      *   <li>Tendencia bajista previa en 1H — 3 prior 1H closes below SMA20</li>
      *   <li>Ruptura alcista de SMA20 en 1H con vela verde — close crosses above SMA20 with bullish candle</li>
-     *   <li>Cierre en tercio superior y volumen suficiente — close in top 35% of range, volume &ge; 90% avg</li>
+     *   <li>Cierre en 35% superior y volumen suficiente — close in top 35% of range, volume &ge; 90% avg</li>
      *   <li>Confirmación de tendencia alcista en 15m — price above rising SMA20 on 15m</li>
      * </ol>
      *
@@ -152,7 +153,7 @@ public class C6ReversalCallStrategy implements TradingStrategy, TimeframeRequire
             },
             new Condition() {
                 @Override public boolean test() { return closedNearHigh && hasVolume; }
-                @Override public String label() { return "Cierre en tercio superior y volumen suficiente (sin referencia libro)"; }
+                @Override public String label() { return "Cierre en 35% superior y volumen suficiente (sin referencia libro)"; }
                 @Override public String value() {
                     return String.format("closedNearHigh=%b (%.1f%% from top); vol %.0f>=90%%avg %.0f=%b",
                             closedNearHigh,
@@ -170,20 +171,8 @@ public class C6ReversalCallStrategy implements TradingStrategy, TimeframeRequire
             }
         );
 
-        final int total = conditions.size();
-        for (int step = 0; step < total; step++) {
-            final Condition c = conditions.get(step);
-            if (log.isDebugEnabled()) {
-                final String stepPrefix = String.format("[C6] %s @ %s — Paso %d/%d \"%s\" → %s",
-                        ticker, currentTime.toLocalTime(), step + 1, total, c.label(), c.value());
-                if (!c.test()) {
-                    log.debug("{} ❌ STOP", stepPrefix);
-                    return false;
-                }
-                log.debug("{} ✅", stepPrefix);
-            } else if (!c.test()) {
-                return false;
-            }
+        if (!ConditionEvaluator.evaluate("[C6]", ticker, nyTime, conditions, log)) {
+            return false;
         }
 
         lastTriggerMap.put(ticker, currentTime);

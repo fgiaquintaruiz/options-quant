@@ -4,15 +4,17 @@ import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.indicator.WordenStochasticIndicator;
 import com.fgiaquinta.optionsquant.strategy.utils.BollingerBandsUtil;
+import com.fgiaquinta.optionsquant.strategy.utils.ConditionEvaluator;
 import lombok.extern.slf4j.Slf4j;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
 import org.ta4j.core.indicators.helpers.VolumeIndicator;
 
-import java.time.ZonedDateTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -31,20 +33,20 @@ import java.util.Set;
 @Slf4j
 public class C5ContinuationCallStrategy implements TradingStrategy, TimeframeRequirements {
 
-    private final WordenStochasticIndicator wordenStochastic;
+    private final Optional<WordenStochasticIndicator> wordenStochastic;
 
     /**
      * Constructor with WordenStochasticIndicator for confirmation.
      */
     public C5ContinuationCallStrategy(WordenStochasticIndicator wordenStochastic) {
-        this.wordenStochastic = wordenStochastic;
+        this.wordenStochastic = Optional.of(wordenStochastic);
     }
 
     /**
      * Default constructor using volume surge as fallback (legacy behavior).
      */
     public C5ContinuationCallStrategy() {
-        this.wordenStochastic = null;
+        this.wordenStochastic = Optional.empty();
     }
 
     @Override
@@ -124,9 +126,10 @@ public class C5ContinuationCallStrategy implements TradingStrategy, TimeframeReq
         final boolean isReversingUp = currentPrice > currentOpen;
 
         final boolean confirmation;
-        if (wordenStochastic != null) {
-            double currentWorden = wordenStochastic.getValue(idx15m).doubleValue();
-            double prevWorden    = wordenStochastic.getValue(idx15m - 1).doubleValue();
+        if (wordenStochastic.isPresent()) {
+            WordenStochasticIndicator ws = wordenStochastic.get();
+            double currentWorden = ws.getValue(idx15m).doubleValue();
+            double prevWorden    = ws.getValue(idx15m - 1).doubleValue();
             confirmation = prevWorden <= 20 && currentWorden > 20;
         } else {
             VolumeIndicator vol15m = new VolumeIndicator(series15m);
@@ -165,21 +168,6 @@ public class C5ContinuationCallStrategy implements TradingStrategy, TimeframeReq
             }
         );
 
-        final int total = conditions.size();
-        for (int step = 0; step < total; step++) {
-            final Condition c = conditions.get(step);
-            if (log.isDebugEnabled()) {
-                final String stepPrefix = String.format("[C5] %s @ %s — Paso %d/%d \"%s\" → %s",
-                        ticker, nyTime.toLocalTime(), step + 1, total, c.label(), c.value());
-                if (!c.test()) {
-                    log.debug("{} ❌ STOP", stepPrefix);
-                    return false;
-                }
-                log.debug("{} ✅", stepPrefix);
-            } else if (!c.test()) {
-                return false;
-            }
-        }
-        return true;
+        return ConditionEvaluator.evaluate("[C5]", ticker, nyTime, conditions, log);
     }
 }

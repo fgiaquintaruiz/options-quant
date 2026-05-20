@@ -20,6 +20,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
+import static com.fgiaquinta.optionsquant.strategy.CandleTestFactory.candle;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -62,9 +63,7 @@ class C5ConditionLoggingTest {
     // Shared data builders
     // =========================================================================
 
-    private Candle candle(ZonedDateTime time, double open, double high, double low, double close, long volume) {
-        return new Candle(time, open, high, low, close, volume);
-    }
+
 
     /**
      * Builds StrategyData where:
@@ -96,17 +95,11 @@ class C5ConditionLoggingTest {
         hourly.add(candle(currentTime, 99.0, 99.5, 98.5, 99.0, 2000000L));
 
         // --- MIN_15: 22 bars so idx15m >= 20 ---
-        // 20 lateral bars around 103.0 (these establish the Bollinger Bands with std dev ~0)
+        // 20 lateral bars at price=99.0 (std dev≈0, Bollinger mean≈99.0, lower BB≈99.0).
         // Then the "first 15m candle" (idx = 20, i.e. firstCandle15mIdx = idx15m - 1):
-        //   - Open below prevClose1D (101.0) → gap down passes
-        //   - Open well below SMA20 (~103) by >3% → 99.0 < 103.0 * 0.97 = 99.91 → passes
-        //   - High = 100.5 — we need this ABOVE the lower BB to FAIL step 3
-        //     Lower BB ≈ 103.0 - 2*0 ≈ 103.0 (lateral data), so high(100.5) < 103.0 → that would PASS
-        //
-        // To make step 3 FAIL: we need first15mHigh >= lowerBand15m.
-        // Use lateral data slightly below the BB level so the lower band is around 99.0,
-        // then make the candle high = 100.0 which would be above the band.
-        // Strategy: 20 bars at price=99.0 (std dev=0, mean=99, lower BB=99), first candle high=100.0 >= 99.0 → FAIL
+        //   - Open=97.5 below prevClose1D=101.0 → gap down passes (step 2 part 1)
+        //   - Open=97.5 < SMA20(1H)=103.0 * 0.97=99.91 → SMA distance passes (step 2 part 2)
+        //   - High=100.0 >= lowerBand≈99.0 → step 3 FAILS (candle is NOT fully outside the band) ✓
 
         List<Candle> candles15m = new ArrayList<>();
         ZonedDateTime m15Base = currentTime.minusMinutes(22L * 15);

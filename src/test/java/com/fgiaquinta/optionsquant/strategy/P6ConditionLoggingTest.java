@@ -26,35 +26,35 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * TDD — FAILING FIRST.
  *
- * Verifies that C6ReversalCallStrategy emits per-condition DEBUG log lines in the format:
- *   [C6] <ticker> @ <time> — Paso X/4 "<description (sin referencia libro)>" → <value> ✅  (or ❌ STOP)
+ * Verifies that P6ReversalPutStrategy emits per-condition DEBUG log lines in the format:
+ *   [P6] <ticker> @ <time> — Paso X/4 "<description (sin referencia libro)>" → <value> ✅  (or ❌ STOP)
  *
- * C6 has 4 conditions derived from the code logic (no reference book reference):
- *   Paso 1/4 — "Tendencia bajista previa en 1H (sin referencia libro)"
- *   Paso 2/4 — "Ruptura alcista de SMA20 en 1H con vela verde (sin referencia libro)"
- *   Paso 3/4 — "Cierre en tercio superior y volumen suficiente (sin referencia libro)"
- *   Paso 4/4 — "Confirmación de tendencia alcista en 15m (sin referencia libro)"
+ * P6 has 4 conditions derived from the code logic (no reference book reference):
+ *   Paso 1/4 — "Tendencia alcista previa en 1H (sin referencia libro)"
+ *   Paso 2/4 — "Ruptura bajista de SMA20 en 1H con vela roja (sin referencia libro)"
+ *   Paso 3/4 — "Cierre en tercio inferior y volumen suficiente (sin referencia libro)"
+ *   Paso 4/4 — "Confirmación de tendencia bajista en 15m (sin referencia libro)"
  */
-class C6ConditionLoggingTest {
+class P6ConditionLoggingTest {
 
     private static final ZoneId NY = ZoneId.of("America/New_York");
 
     private ListAppender<ILoggingEvent> logAppender;
-    private Logger c6Logger;
+    private Logger p6Logger;
 
     @BeforeEach
     void setUp() {
         logAppender = new ListAppender<>();
-        c6Logger = (Logger) LoggerFactory.getLogger(C6ReversalCallStrategy.class);
+        p6Logger = (Logger) LoggerFactory.getLogger(P6ReversalPutStrategy.class);
         logAppender.start();
-        c6Logger.addAppender(logAppender);
-        c6Logger.setLevel(Level.DEBUG);
+        p6Logger.addAppender(logAppender);
+        p6Logger.setLevel(Level.DEBUG);
     }
 
     @AfterEach
     void tearDown() {
-        if (c6Logger != null && logAppender != null) {
-            c6Logger.detachAppender(logAppender);
+        if (p6Logger != null && logAppender != null) {
+            p6Logger.detachAppender(logAppender);
             logAppender.stop();
         }
     }
@@ -64,29 +64,28 @@ class C6ConditionLoggingTest {
     // =========================================================================
 
     /**
-     * Builds StrategyData that FAILS at Paso 1/4 (no prior downtrend).
+     * Builds StrategyData that FAILS at Paso 1/4 (no prior uptrend).
      *
-     * 1H: 25 bars, all closing ABOVE SMA20 → wasClearDowntrend = false.
-     * The last 3 prior closes are above SMA20, so Paso 1 fails immediately.
-     *
-     * SMA20 with all closes at 100.0: SMA20 = 100.0.
-     * Prior bars 22, 21, 20: close = 101.0 (above SMA20) → FAIL.
+     * 1H: 25 bars, last 3 prior closes are BELOW SMA20 → wasClearUptrend = false.
+     * - Bars 0–19: close = 100.0 (anchor SMA20 = 100.0)
+     * - Bars 20–22: close = 98.0 (below SMA20 → no prior uptrend)
+     * - Current bar: bearish candle below SMA20
      */
-    private StrategyData buildDataThatFailsStep1_NoDowntrend(ZonedDateTime currentTime) {
+    private StrategyData buildDataThatFailsStep1_NoUptrend(ZonedDateTime currentTime) {
         List<Candle> hourly = new ArrayList<>();
         ZonedDateTime hourBase = currentTime.minusHours(25);
-        // 20 anchor bars at 100.0
+        // 20 anchor bars
         for (int i = 0; i < 20; i++) {
             hourly.add(candle(hourBase.plusHours(i), 100.0, 100.5, 99.5, 100.0, 1000000L));
         }
-        // 4 bars ABOVE SMA20 (uptrend — no downtrend)
-        for (int i = 20; i < 24; i++) {
-            hourly.add(candle(hourBase.plusHours(i), 101.0, 101.5, 100.5, 101.0, 1000000L));
+        // 3 bars BELOW SMA20 (no prior uptrend — fails step 1)
+        for (int i = 20; i < 23; i++) {
+            hourly.add(candle(hourBase.plusHours(i), 98.5, 99.0, 97.5, 98.0, 1000000L));
         }
-        // Current bar: bullish breakout above SMA20
-        hourly.add(candle(currentTime, 100.5, 102.0, 100.0, 101.8, 2000000L));
+        // Current bar: bearish candle
+        hourly.add(candle(currentTime, 99.0, 99.5, 96.5, 97.0, 2000000L));
 
-        // 1D: 25 flat bars (not relevant — Paso 1 stops first)
+        // 1D: 25 flat bars
         List<Candle> daily = new ArrayList<>();
         ZonedDateTime dayBase = currentTime.minusDays(25);
         for (int i = 0; i < 25; i++) {
@@ -108,30 +107,30 @@ class C6ConditionLoggingTest {
     }
 
     /**
-     * Builds StrategyData that PASSES Paso 1 but FAILS at Paso 2/4 (bearish candle, not bullish).
+     * Builds StrategyData that PASSES Paso 1 but FAILS at Paso 2/4 (close stays above SMA20).
      *
      * 1H setup:
-     *   - Bars 0–19: close = 102.0 (SMA20 anchor ≈ 102.0)
-     *   - Bars 20–22: close = 99.0 (below SMA20 → wasClearDowntrend passes for last 3 prior bars)
-     *   - Current bar (idx=23): open = 103.0, close = 99.5 → bearish (close < open) → Paso 2 fails.
-     *     crossedAboveSma: close(99.5) > SMA20 ≈ 100.875 → FALSE → also fails step 2.
+     *   - Bars 0–19: close = 98.0 (SMA20 anchor ≈ 98.0)
+     *   - Bars 20–22: close = 101.0 (above SMA20 → wasClearUptrend passes)
+     *   - Current bar (idx=23):
+     *       close = 99.5, open = 98.0 → bullish (close > open) AND close > SMA20 → crossedBelowSma = false
      *
-     * SMA20 at idx=23: bars[4..23] = 16×102 + 3×99 + 99.5 = 1632 + 297 + 99.5 = 2028.5 / 20 = 101.425
-     * crossedAboveSma: 99.5 > 101.425 → FALSE → Paso 2 fails.
+     * SMA20 at idx=23: bars[4..23] = 16×98 + 3×101 + 99.5 = 1568 + 303 + 99.5 = 1970.5 / 20 = 98.525
+     * crossedBelowSma: 99.5 < 98.525 → FALSE → Paso 2 fails.
      */
-    private StrategyData buildDataThatFailsStep2_NoCrossAboveSma(ZonedDateTime currentTime) {
+    private StrategyData buildDataThatFailsStep2_NoCrossBelowSma(ZonedDateTime currentTime) {
         List<Candle> hourly = new ArrayList<>();
         ZonedDateTime hourBase = currentTime.minusHours(25);
-        // 20 anchor bars above
+        // 20 anchor bars below
         for (int i = 0; i < 20; i++) {
-            hourly.add(candle(hourBase.plusHours(i), 102.0, 102.5, 101.5, 102.0, 1000000L));
+            hourly.add(candle(hourBase.plusHours(i), 98.0, 98.5, 97.5, 98.0, 1000000L));
         }
-        // 3 bars below SMA20 (prior downtrend — Paso 1 passes)
+        // 3 bars ABOVE SMA20 (prior uptrend — Paso 1 passes)
         for (int i = 20; i < 23; i++) {
-            hourly.add(candle(hourBase.plusHours(i), 99.5, 100.0, 98.5, 99.0, 1000000L));
+            hourly.add(candle(hourBase.plusHours(i), 100.5, 101.5, 100.0, 101.0, 1000000L));
         }
-        // Current bar: close still below SMA20 → crossedAboveSma = false → Paso 2 FAILS
-        hourly.add(candle(currentTime, 103.0, 103.5, 99.0, 99.5, 2000000L));
+        // Current bar: close still ABOVE SMA20 → crossedBelowSma = false → Paso 2 FAILS
+        hourly.add(candle(currentTime, 98.0, 100.0, 97.5, 99.5, 2000000L));
 
         List<Candle> daily = new ArrayList<>();
         ZonedDateTime dayBase = currentTime.minusDays(25);
@@ -157,11 +156,11 @@ class C6ConditionLoggingTest {
     // =========================================================================
 
     @Test
-    @DisplayName("When prior downtrend condition fails (Paso 1), log contains [C6] prefix, Paso 1/4, and ❌ STOP")
-    void whenDowntrendFails_logContainsPaso1WithStopMarker() {
+    @DisplayName("When prior uptrend condition fails (Paso 1), log contains [P6] prefix, Paso 1/4, and ❌ STOP")
+    void whenUptrendFails_logContainsPaso1WithStopMarker() {
         ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 14, 0, 0, 0, NY);
-        StrategyData data = buildDataThatFailsStep1_NoDowntrend(testTime);
-        C6ReversalCallStrategy strategy = new C6ReversalCallStrategy();
+        StrategyData data = buildDataThatFailsStep1_NoUptrend(testTime);
+        P6ReversalPutStrategy strategy = new P6ReversalPutStrategy();
 
         boolean triggered = strategy.isTriggered("AAPL", data, testTime);
 
@@ -171,10 +170,10 @@ class C6ConditionLoggingTest {
                 .map(ILoggingEvent::getFormattedMessage)
                 .toList();
 
-        // Must emit at least one [C6] DEBUG line
+        // Must emit at least one [P6] DEBUG line
         assertThat(logMessages)
-                .as("Expected at least one [C6] DEBUG log line")
-                .anyMatch(msg -> msg.startsWith("[C6]"));
+                .as("Expected at least one [P6] DEBUG log line")
+                .anyMatch(msg -> msg.startsWith("[P6]"));
 
         // Must contain ❌ STOP
         assertThat(logMessages)
@@ -201,18 +200,18 @@ class C6ConditionLoggingTest {
                 .as("Paso 1/4 line must contain ❌ STOP marker")
                 .anyMatch(msg -> msg.contains("Paso 1/4") && msg.contains("❌ STOP"));
 
-        // No Paso 2/4 or beyond — execution stopped at 1
+        // No Paso 2/4 — execution stopped at 1
         assertThat(logMessages)
                 .as("No Paso 2/4 lines should appear — execution stopped at step 1")
                 .noneMatch(msg -> msg.contains("Paso 2/4"));
     }
 
     @Test
-    @DisplayName("When SMA20 cross fails (Paso 2), Paso 1 is ✅ and Paso 2 is ❌ STOP, no Paso 3")
-    void whenCrossAboveSmAFails_logShowsStep1PassedAndStep2Stopped() {
+    @DisplayName("When SMA20 cross-below fails (Paso 2), Paso 1 is ✅ and Paso 2 is ❌ STOP, no Paso 3")
+    void whenCrossBelowSmsFails_logShowsStep1PassedAndStep2Stopped() {
         ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 14, 0, 0, 0, NY);
-        StrategyData data = buildDataThatFailsStep2_NoCrossAboveSma(testTime);
-        C6ReversalCallStrategy strategy = new C6ReversalCallStrategy();
+        StrategyData data = buildDataThatFailsStep2_NoCrossBelowSma(testTime);
+        P6ReversalPutStrategy strategy = new P6ReversalPutStrategy();
 
         boolean triggered = strategy.isTriggered("SPY", data, testTime);
 
@@ -222,19 +221,19 @@ class C6ConditionLoggingTest {
                 .map(ILoggingEvent::getFormattedMessage)
                 .toList();
 
-        // [C6] lines emitted
+        // [P6] lines emitted
         assertThat(logMessages)
-                .as("Expected [C6] DEBUG log lines")
-                .anyMatch(msg -> msg.startsWith("[C6]"));
+                .as("Expected [P6] DEBUG log lines")
+                .anyMatch(msg -> msg.startsWith("[P6]"));
 
         // Paso 1/4 must be ✅
         assertThat(logMessages)
-                .as("Paso 1/4 must be ✅ (prior downtrend passed)")
+                .as("Paso 1/4 must be ✅ (prior uptrend passed)")
                 .anyMatch(msg -> msg.contains("Paso 1/4") && msg.contains("✅"));
 
         // Paso 2/4 must be ❌ STOP
         assertThat(logMessages)
-                .as("Paso 2/4 must be ❌ STOP (no cross above SMA20)")
+                .as("Paso 2/4 must be ❌ STOP (no cross below SMA20)")
                 .anyMatch(msg -> msg.contains("Paso 2/4") && msg.contains("❌ STOP"));
 
         // No Paso 3/4
@@ -242,22 +241,22 @@ class C6ConditionLoggingTest {
                 .as("No Paso 3/4 lines should appear — execution stopped at step 2")
                 .noneMatch(msg -> msg.contains("Paso 3/4"));
 
-        // All [C6] lines use Paso X/4 format
+        // All [P6] lines use Paso X/4 format
         assertThat(logMessages)
-                .as("All [C6] lines must use 'Paso X/4' format")
-                .filteredOn(msg -> msg.startsWith("[C6]"))
+                .as("All [P6] lines must use 'Paso X/4' format")
+                .filteredOn(msg -> msg.startsWith("[P6]"))
                 .allMatch(msg -> msg.matches(".*Paso \\d/4.*"));
 
-        // All [C6] lines have quoted description
+        // All [P6] lines have quoted description
         assertThat(logMessages)
-                .as("All [C6] lines must have description in double quotes")
-                .filteredOn(msg -> msg.startsWith("[C6]"))
+                .as("All [P6] lines must have description in double quotes")
+                .filteredOn(msg -> msg.startsWith("[P6]"))
                 .allMatch(msg -> msg.matches(".*\"[^\"]+\".*"));
 
-        // All [C6] lines use → separator
+        // All [P6] lines use → separator
         assertThat(logMessages)
-                .as("All [C6] lines must use → arrow separator")
-                .filteredOn(msg -> msg.startsWith("[C6]"))
+                .as("All [P6] lines must use → arrow separator")
+                .filteredOn(msg -> msg.startsWith("[P6]"))
                 .allMatch(msg -> msg.contains(" → "));
     }
 }
