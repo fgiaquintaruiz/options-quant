@@ -153,8 +153,8 @@ class P1ConditionLoggingTest {
     // =========================================================================
 
     @Test
-    @DisplayName("When SMA spread condition fails, log contains ❌ line for that condition")
-    void whenSmaSpreadFails_logContainsFailureLineWithActualValue() {
+    @DisplayName("When SMA spread condition fails, log contains step number, quoted description, and ❌ STOP")
+    void whenSmaSpreadFails_logContainsStepFormatWithQuotedDescriptionAndActualValue() {
         ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 14, 0, 0, 0, NY);
         StrategyData data = buildDataThatFailsSmaSpread(testTime);
         P1SqueezePutStrategy strategy = new P1SqueezePutStrategy();
@@ -172,20 +172,35 @@ class P1ConditionLoggingTest {
                 .as("Expected at least one [P1] DEBUG log line")
                 .anyMatch(msg -> msg.startsWith("[P1]"));
 
-        // The failing condition must include ❌
+        // The failing condition must include ❌ STOP
         assertThat(logMessages)
-                .as("Expected a ❌ log line for the failed condition")
-                .anyMatch(msg -> msg.contains("❌"));
+                .as("Expected a ❌ STOP log line for the failed condition")
+                .anyMatch(msg -> msg.contains("❌ STOP"));
 
-        // The description must contain an actual numeric value (not just a label)
+        // Format: [P1] TEST @ 14:00 — Paso 1/6 "Squeeze SMAs (sin referencia libro)" → ... ❌ STOP
         assertThat(logMessages)
-                .as("Condition description must include the computed spread value (e.g. 'spread 0.12 > 0.04')")
-                .anyMatch(msg -> msg.contains("❌") && msg.matches(".*\\d+\\.\\d+.*"));
+                .as("Log line must contain 'Paso X/6' step counter (6 total conditions)")
+                .anyMatch(msg -> msg.matches(".*Paso \\d/6.*"));
+
+        // The description must be quoted with double quotes
+        assertThat(logMessages)
+                .as("Condition description must be enclosed in double quotes")
+                .anyMatch(msg -> msg.matches(".*\"[^\"]+\".*"));
+
+        // Arrow separator → must precede the actual value
+        assertThat(logMessages)
+                .as("Log line must use → arrow before the condition value")
+                .anyMatch(msg -> msg.contains(" → "));
+
+        // The description must contain an actual numeric value after the arrow
+        assertThat(logMessages)
+                .as("Condition description must include the computed spread value after →")
+                .anyMatch(msg -> msg.contains("❌") && msg.contains(" → ") && msg.matches(".*\\d+\\.\\d+.*"));
     }
 
     @Test
-    @DisplayName("When all conditions pass, every log line contains ✅ and none contain ❌")
-    void whenAllConditionsPass_allLogLinesShowCheckmark() {
+    @DisplayName("When all conditions pass, every log line has Paso X/6 format with quoted description and ✅")
+    void whenAllConditionsPass_allLogLinesHaveStepFormatAndCheckmark() {
         ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 14, 0, 0, 0, NY);
         StrategyData data = buildDataThatTriggers(testTime);
         P1SqueezePutStrategy strategy = new P1SqueezePutStrategy(0.003);
@@ -206,9 +221,33 @@ class P1ConditionLoggingTest {
                 .as("No ❌ lines should appear when strategy triggers successfully")
                 .noneMatch(msg -> msg.startsWith("[P1]") && msg.contains("❌"));
 
+        // All 6 conditions must appear, each with Paso N/6 format
+        assertThat(logMessages)
+                .as("All [P1] lines must contain 'Paso X/6' step counter")
+                .filteredOn(msg -> msg.startsWith("[P1]"))
+                .allMatch(msg -> msg.matches(".*Paso \\d/6.*"));
+
+        // All lines must use double-quoted descriptions
+        assertThat(logMessages)
+                .as("All [P1] lines must have description in double quotes")
+                .filteredOn(msg -> msg.startsWith("[P1]"))
+                .allMatch(msg -> msg.matches(".*\"[^\"]+\".*"));
+
+        // All lines must use → arrow separator
+        assertThat(logMessages)
+                .as("All [P1] lines must use → arrow separator")
+                .filteredOn(msg -> msg.startsWith("[P1]"))
+                .allMatch(msg -> msg.contains(" → "));
+
         assertThat(logMessages)
                 .as("All [P1] lines should contain ✅ when strategy triggers")
                 .filteredOn(msg -> msg.startsWith("[P1]"))
                 .allMatch(msg -> msg.contains("✅"));
+
+        // Exactly 6 P1 log lines — one per condition
+        assertThat(logMessages)
+                .as("Exactly 6 [P1] log lines expected (one per condition)")
+                .filteredOn(msg -> msg.startsWith("[P1]"))
+                .hasSize(6);
     }
 }
