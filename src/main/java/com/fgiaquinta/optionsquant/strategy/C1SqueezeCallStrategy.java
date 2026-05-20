@@ -4,13 +4,19 @@ import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.utils.BollingerBandsUtil;
 import com.fgiaquinta.optionsquant.strategy.utils.ChannelAnalyzer;
+import com.fgiaquinta.optionsquant.strategy.utils.ConditionEvaluator;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
 
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.Set;
 
+@Slf4j
+@Component
 public class C1SqueezeCallStrategy implements TradingStrategy, TimeframeRequirements {
 
     private static final double DEFAULT_BREAKOUT_BUFFER_PCT = 0.003;
@@ -45,44 +51,61 @@ public class C1SqueezeCallStrategy implements TradingStrategy, TimeframeRequirem
     }
 
     @Override
+    public boolean isCall() {
+        return true;
+    }
+
+    /**
+     * Evaluates the C1 Squeeze Call strategy against the provided market data at {@code currentTime}.
+     *
+     * <p>The evaluation proceeds through six sequential conditions (short-circuit on first failure):
+     * <ol>
+     *   <li>SMA compression (20/40/100/200 spread &le; 4% of min SMA)</li>
+     *   <li>1h lateral channel confirmed by {@link com.fgiaquinta.optionsquant.strategy.utils.ChannelAnalyzer}</li>
+     *   <li>Bullish 1h breakout above the 10-day ceiling with buffer</li>
+     *   <li>Bullish 15m candle body &ge; {@code minBodyPct}</li>
+     *   <li>Bollinger Band expansion on 15m ({@code current width >= avg * threshold})</li>
+     *   <li>Price riding the upper Bollinger Band on 15m</li>
+     * </ol>
+     *
+     * <p>When DEBUG logging is enabled, each condition emits a structured log line with step
+     * counter, quoted label, computed value, and a ✅ / ❌ STOP marker.
+     *
+     * @param ticker      the instrument symbol being evaluated
+     * @param data        multi-timeframe market data container
+     * @param currentTime the virtual or wall-clock time of evaluation
+     * @return {@code true} if all six conditions are satisfied; {@code false} on the first failure
+     */
+    @Override
     public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {
-        BarSeries series1h = data.getSeries(TimeFrame.HOUR_1);
-        BarSeries series15m = data.getSeries(TimeFrame.MIN_15);
+        final BarSeries series1h = data.getSeries(TimeFrame.HOUR_1);
+        final BarSeries series15m = data.getSeries(TimeFrame.MIN_15);
 
         if (series1h == null || series15m == null || series1h.isEmpty() || series15m.isEmpty()) return false;
 
-        int idx1h = data.getIndexForTime(series1h, currentTime);
-        int idx15m = data.getIndexForTime(series15m, currentTime);
+        final int idx1h = data.getIndexForTime(series1h, currentTime);
+        final int idx15m = data.getIndexForTime(series15m, currentTime);
 
         // Need 200 hours of history for SMA 200
         if (idx1h < 200 || idx15m < 20) return false;
 
-        ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
+        final ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
 
-        // =========================================================================
-        // RULE 1 and 2: LATERAL CHANNEL AND INTERLACED AVERAGES (10 DAYS / ~70 BARS)
-        // =========================================================================
-        SMAIndicator sma20 = new SMAIndicator(close1h, 20);
-        SMAIndicator sma40 = new SMAIndicator(close1h, 40);
-        SMAIndicator sma100 = new SMAIndicator(close1h, 100);
-        SMAIndicator sma200 = new SMAIndicator(close1h, 200);
+        final SMAIndicator sma20 = new SMAIndicator(close1h, 20);
+        final SMAIndicator sma40 = new SMAIndicator(close1h, 40);
+        final SMAIndicator sma100 = new SMAIndicator(close1h, 100);
+        final SMAIndicator sma200 = new SMAIndicator(close1h, 200);
 
         // Evaluate state right BEFORE the current bar (the breakout bar)
-        int prevIdx = idx1h - 1;
-        double s20 = sma20.getValue(prevIdx).doubleValue();
-        double s40 = sma40.getValue(prevIdx).doubleValue();
-        double s100 = sma100.getValue(prevIdx).doubleValue();
-        double s200 = sma200.getValue(prevIdx).doubleValue();
+        final int prevIdx = idx1h - 1;
+        final double s20 = sma20.getValue(prevIdx).doubleValue();
+        final double s40 = sma40.getValue(prevIdx).doubleValue();
+        final double s100 = sma100.getValue(prevIdx).doubleValue();
+        final double s200 = sma200.getValue(prevIdx).doubleValue();
 
-        // Calculate how tightly packed the 4 averages are (difference between max and min)
-        double maxSma = Math.max(Math.max(s20, s40), Math.max(s100, s200));
-        double minSma = Math.min(Math.min(s20, s40), Math.min(s100, s200));
-
-        // If averages are separated by more than 4%, they are NOT laterally interlaced
-        if ((maxSma - minSma) / minSma > 0.04) return false;
-
-        // RULE 1b: MULTI-BAR COMPRESSION CONFIRMATION (ChannelAnalyzer)
-        if (!ChannelAnalyzer.isSmaLateralChannel(series1h, prevIdx, 70, 4.0)) return false;
+        final double maxSma = Math.max(Math.max(s20, s40), Math.max(s100, s200));
+        final double minSma = Math.min(Math.min(s20, s40), Math.min(s100, s200));
+        final double smaSpread = (maxSma - minSma) / minSma;
 
         // Find the ceiling of the channel over last 10 days (70 bars)
         double maxPriceLast10Days = 0;
@@ -91,50 +114,59 @@ public class C1SqueezeCallStrategy implements TradingStrategy, TimeframeRequirem
             if (high > maxPriceLast10Days) maxPriceLast10Days = high;
         }
 
-        // =========================================================================
-        // RULE 3: THE BREAKOUT (Jump or Extreme Candle)
-        // =========================================================================
-        double currentClose1h = close1h.getValue(idx1h).doubleValue();
-        double currentOpen1h = series1h.getBar(idx1h).getOpenPrice().doubleValue();
+        final double currentClose1h = close1h.getValue(idx1h).doubleValue();
+        final double currentOpen1h = series1h.getBar(idx1h).getOpenPrice().doubleValue();
+        final double breakoutThreshold = maxPriceLast10Days * (1.0 + breakoutBufferPct);
 
-        // Current price must forcefully break the 10-day ceiling with a buffer to avoid false breakouts
-        double breakoutThreshold = maxPriceLast10Days * (1.0 + breakoutBufferPct);
-        boolean isBreakoutUp = currentClose1h > breakoutThreshold && currentClose1h > currentOpen1h;
-        if (!isBreakoutUp) return false;
+        final double currentOpen15m = series15m.getBar(idx15m).getOpenPrice().doubleValue();
+        final double currentClose15m = series15m.getBar(idx15m).getClosePrice().doubleValue();
+        final double bodyPct15m = (currentClose15m - currentOpen15m) / currentOpen15m;
 
-        // =========================================================================
-        // RULE 3b: MIN_15 BODY FILTER (bullish confirmation on 15-min timeframe)
-        // Body filter moved to MIN_15 — HOUR_1 breakout direction is already verified above.
-        // =========================================================================
-        double currentOpen15m = series15m.getBar(idx15m).getOpenPrice().doubleValue();
-        double currentClose15m = series15m.getBar(idx15m).getClosePrice().doubleValue();
-        double bodyPct15m = (currentClose15m - currentOpen15m) / currentOpen15m;
-        if (bodyPct15m < minBodyPct) return false;
+        final BollingerBandsUtil bb15m = new BollingerBandsUtil(series15m, 20);
+        final double bbWidthCurrent = bb15m.getWidthPercent(idx15m);
+        final double bbWidthAvg = BollingerBandsUtil.computeBBWidthAvg(bb15m, idx15m, 20);
+        final double bbWidthMinRequired = bbWidthAvg * bbVolatilityThreshold;
 
-        // =========================================================================
-        // RULE 4: HIGH VOLATILITY CONFIRMATION ON 15-MIN BOLLINGER BAND
-        // Book: "confirmacion con vela final alcista en Bollinger Bands en periodo de 15 minutos con alta volatilidad"
-        // =========================================================================
-        BollingerBandsUtil bb15m = new BollingerBandsUtil(series15m, 20);
+        final double capturedMaxPrice = maxPriceLast10Days;
 
-        // BB width must exceed the 20-bar average by the volatility threshold — confirms expansion, not squeeze
-        double bbWidthCurrent = bb15m.getWidthPercent(idx15m);
-        double bbWidthAvg = computeBBWidthAvg(bb15m, idx15m, 20);
-        if (bbWidthCurrent < bbWidthAvg * bbVolatilityThreshold) return false;
+        final List<Condition> conditions = List.of(
+            new Condition() {
+                @Override public boolean test()  { return smaSpread <= 0.04; }
+                @Override public String label()  { return "Squeeze SMAs (sin referencia libro)"; }
+                @Override public String value()  { return String.format("SMA spread %.4f <= 0.04", smaSpread); }
+            },
+            new Condition() {
+                @Override public boolean test()  { return ChannelAnalyzer.isSmaLateralChannel(series1h, prevIdx, 70, 4.0); }
+                @Override public String label()  { return "Canal lateral SMAs (sin referencia libro)"; }
+                @Override public String value()  { return String.format("ChannelAnalyzer lateral (70 bars, 4.0%% threshold)"); }
+            },
+            new Condition() {
+                @Override public boolean test()  { return currentClose1h > breakoutThreshold && currentClose1h > currentOpen1h; }
+                @Override public String label()  { return "Breakout alcista con buffer (sin referencia libro)"; }
+                @Override public String value()  {
+                    return String.format("close %.4f > threshold %.4f (ceiling %.4f + %.1f%%)",
+                            currentClose1h, breakoutThreshold, capturedMaxPrice, breakoutBufferPct * 100);
+                }
+            },
+            new Condition() {
+                @Override public boolean test()  { return bodyPct15m >= minBodyPct; }
+                @Override public String label()  { return "Vela alcista en 15m (sin referencia libro)"; }
+                @Override public String value()  { return String.format("15m body %.4f >= %.4f", bodyPct15m, minBodyPct); }
+            },
+            new Condition() {
+                @Override public boolean test()  { return bbWidthCurrent >= bbWidthMinRequired; }
+                @Override public String label()  { return "Expansión Bollinger 15m (sin referencia libro)"; }
+                @Override public String value()  {
+                    return String.format("BB width %.4f >= avg*threshold %.4f", bbWidthCurrent, bbWidthMinRequired);
+                }
+            },
+            new Condition() {
+                @Override public boolean test()  { return bb15m.isRidingUpperBand(idx15m, 0.005); }
+                @Override public String label()  { return "Precio riding upper BB 15m (sin referencia libro)"; }
+                @Override public String value()  { return "15m riding upper BB (within 0.5%)"; }
+            }
+        );
 
-        // 15m candle must be "riding" the upper band (pushing volatility)
-        boolean isRidingUpperBand = bb15m.isRidingUpperBand(idx15m, 0.005); // Within 0.5% of upper band
-
-        return isRidingUpperBand;
-    }
-
-    private double computeBBWidthAvg(BollingerBandsUtil bb, int currentIndex, int lookback) {
-        double sum = 0;
-        int count = 0;
-        for (int i = currentIndex - 1; i >= Math.max(0, currentIndex - lookback); i--) {
-            sum += bb.getWidthPercent(i);
-            count++;
-        }
-        return count == 0 ? 0 : sum / count;
+        return ConditionEvaluator.evaluate("[C1]", ticker, currentTime, conditions, log);
     }
 }

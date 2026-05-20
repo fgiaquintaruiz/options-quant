@@ -8,6 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -74,9 +76,9 @@ public class ContinuousLearningLoop {
         }
 
         LearningLoopResult result = new LearningLoopResult();
-        result.tickers = tickers;
-        result.maxIterations = maxIterations;
-        result.startTime = System.currentTimeMillis();
+        result.setTickers(tickers);
+        result.setMaxIterations(maxIterations);
+        result.setStartTime(System.currentTimeMillis());
 
         double previousWinRate = 0;
         double previousPnl = 0;
@@ -99,9 +101,10 @@ public class ContinuousLearningLoop {
                         initialCapital, riskPct, 0.0008, 0.65,
                         3, TimeFrame.MIN_15, true, false,
                         0.0, 0.0, null,
-                        java.time.LocalTime.of(9, 45),
-                        java.time.LocalTime.of(10, 30),
-                        java.time.LocalTime.of(13, 0)
+                        LocalTime.of(9, 45),
+                        LocalTime.of(10, 30),
+                        LocalTime.of(13, 0),
+                        null  // strategyFilter — run all strategies
                 );
 
                 log.info("📊 Running backtest...");
@@ -113,30 +116,31 @@ public class ContinuousLearningLoop {
                 }
 
                 // Step 2: Record iteration results
-                IterationResult iterResult = new IterationResult();
-                iterResult.iteration = currentIteration;
-                iterResult.totalTrades = report.totalTrades();
-                iterResult.winRate = report.winRate();
-                iterResult.totalPnl = report.finalCapital() - report.initialCapital();
-                iterResult.maxDrawdown = report.maxDrawdown();
-                iterResult.profitFactor = report.profitFactor();
-                iterResult.avgWin = report.avgWin();
-                iterResult.avgLoss = report.avgLoss();
-                result.iterations.add(iterResult);
+                IterationResult iterResult = new IterationResult(
+                        currentIteration,
+                        report.totalTrades(),
+                        report.winRate(),
+                        report.finalCapital() - report.initialCapital(),
+                        report.maxDrawdown(),
+                        report.profitFactor(),
+                        report.avgWin(),
+                        report.avgLoss()
+                );
+                result.getIterations().add(iterResult);
 
                 log.info("✅ Iteration {} complete: {} trades, {}% WR, ${} PnL, PF={}",
-                        currentIteration, iterResult.totalTrades, 
-                        String.format("%.1f", iterResult.winRate * 100),
-                        String.format("%.2f", iterResult.totalPnl),
-                        String.format("%.2f", iterResult.profitFactor));
+                        currentIteration, iterResult.getTotalTrades(),
+                        String.format("%.1f", iterResult.getWinRate() * 100),
+                        String.format("%.2f", iterResult.getTotalPnl()),
+                        String.format("%.2f", iterResult.getProfitFactor()));
 
                 // Step 3: Analyze and learn
                 log.info("🧠 [Learning] Analyzing results...");
-                var learningReport = learningAnalyzer.analyze(report);
+                learningAnalyzer.analyze(report);
 
                 // Step 4: Check for convergence
                 double winRateImprovement = Math.abs(report.winRate() - previousWinRate);
-                double pnlImprovement = Math.abs(iterResult.totalPnl - previousPnl);
+                double pnlImprovement = Math.abs(iterResult.getTotalPnl() - previousPnl);
 
                 if (currentIteration > 1 &&
                     winRateImprovement < convergenceThreshold &&
@@ -149,9 +153,9 @@ public class ContinuousLearningLoop {
                     if (noImprovementCount >= 3) {
                         log.info("🎯 [Convergence] Reached optimal performance after {} iterations!", currentIteration);
                         log.info("   Final Win Rate: {}%", String.format("%.1f", report.winRate() * 100));
-                        log.info("   Final PnL: ${}", String.format("%.2f", iterResult.totalPnl));
-                        result.convergenceReason = "No improvement for 3 consecutive iterations";
-                        result.convergedAtIteration = currentIteration;
+                        log.info("   Final PnL: ${}", String.format("%.2f", iterResult.getTotalPnl()));
+                        result.setConvergenceReason("No improvement for 3 consecutive iterations");
+                        result.setConvergedAtIteration(currentIteration);
                         break;
                     }
                 } else {
@@ -159,7 +163,7 @@ public class ContinuousLearningLoop {
                 }
 
                 previousWinRate = report.winRate();
-                previousPnl = iterResult.totalPnl;
+                previousPnl = iterResult.getTotalPnl();
 
                 // Step 5: Log current ticker memory status
                 if (currentIteration % 5 == 0 || currentIteration == maxIterations) {
@@ -179,43 +183,44 @@ public class ContinuousLearningLoop {
             }
 
             // Final summary
-            result.endTime = System.currentTimeMillis();
-            result.elapsedMs = result.endTime - result.startTime;
-            result.completedIterations = currentIteration - 1;
+            long endTime = System.currentTimeMillis();
+            result.setEndTime(endTime);
+            result.setElapsedMs(endTime - result.getStartTime());
+            result.setCompletedIterations(currentIteration - 1);
 
-            if (result.convergedAtIteration == null) {
-                result.convergenceReason = "Reached maximum iterations";
+            if (result.getConvergedAtIteration() == null) {
+                result.setConvergenceReason("Reached maximum iterations");
             }
 
             log.info("\n" + "═".repeat(100));
             log.info("🎓 [Learning Loop] TRAINING COMPLETE!");
             log.info("═".repeat(100));
             log.info("📊 RESULTS:");
-            log.info("   Iterations: {}", result.completedIterations);
-            log.info("   Reason: {}", result.convergenceReason);
-            log.info("   Elapsed: {} ms ({} minutes)", result.elapsedMs, 
-                    String.format("%.1f", result.elapsedMs / 60000.0));
+            log.info("   Iterations: {}", result.getCompletedIterations());
+            log.info("   Reason: {}", result.getConvergenceReason());
+            log.info("   Elapsed: {} ms ({} minutes)", result.getElapsedMs(),
+                    String.format("%.1f", result.getElapsedMs() / 60000.0));
 
-            if (!result.iterations.isEmpty()) {
-                IterationResult first = result.iterations.get(0);
-                IterationResult last = result.iterations.get(result.iterations.size() - 1);
+            if (!result.getIterations().isEmpty()) {
+                IterationResult first = result.getIterations().get(0);
+                IterationResult last = result.getIterations().get(result.getIterations().size() - 1);
 
                 log.info("\n📈 IMPROVEMENT:");
                 log.info("   First: {} trades, {}% WR, ${} PnL",
-                        first.totalTrades, String.format("%.1f", first.winRate * 100), 
-                        String.format("%.2f", first.totalPnl));
+                        first.getTotalTrades(), String.format("%.1f", first.getWinRate() * 100),
+                        String.format("%.2f", first.getTotalPnl()));
                 log.info("   Last:  {} trades, {}% WR, ${} PnL",
-                        last.totalTrades, String.format("%.1f", last.winRate * 100), 
-                        String.format("%.2f", last.totalPnl));
-                log.info("   Δ Win Rate: {}%", String.format("%+.1f", (last.winRate - first.winRate) * 100));
-                log.info("   Δ PnL: ${}", String.format("%+.2f", last.totalPnl - first.totalPnl));
+                        last.getTotalTrades(), String.format("%.1f", last.getWinRate() * 100),
+                        String.format("%.2f", last.getTotalPnl()));
+                log.info("   Δ Win Rate: {}%", String.format("%+.1f", (last.getWinRate() - first.getWinRate()) * 100));
+                log.info("   Δ PnL: ${}", String.format("%+.2f", last.getTotalPnl() - first.getTotalPnl()));
             }
 
             log.info("\n{}", tickerMemory.getLearningReport());
 
         } catch (Exception e) {
             log.error("❌ [Learning Loop] Error at iteration {}: {}", currentIteration, e.getMessage(), e);
-            result.error = e.getMessage();
+            result.setError(e.getMessage());
         } finally {
             running.set(false);
         }
@@ -240,29 +245,72 @@ public class ContinuousLearningLoop {
     }
 
     /**
-     * Response record for the learning loop.
+     * Response value type for the learning loop. Mutable during construction; read-only after return.
      */
     public static class LearningLoopResult {
-        public List<String> tickers;
-        public int maxIterations;
-        public int completedIterations;
-        public long startTime;
-        public long endTime;
-        public long elapsedMs;
-        public List<IterationResult> iterations = new java.util.ArrayList<>();
-        public String convergenceReason;
-        public Integer convergedAtIteration;
-        public String error;
+        private List<String> tickers;
+        private int maxIterations;
+        private int completedIterations;
+        private long startTime;
+        private long endTime;
+        private long elapsedMs;
+        private final List<IterationResult> iterations = new ArrayList<>();
+        private String convergenceReason;
+        private Integer convergedAtIteration;
+        private String error;
+
+        public List<String> getTickers() { return tickers; }
+        public int getMaxIterations() { return maxIterations; }
+        public int getCompletedIterations() { return completedIterations; }
+        public long getStartTime() { return startTime; }
+        public long getEndTime() { return endTime; }
+        public long getElapsedMs() { return elapsedMs; }
+        public List<IterationResult> getIterations() { return iterations; }
+        public String getConvergenceReason() { return convergenceReason; }
+        public Integer getConvergedAtIteration() { return convergedAtIteration; }
+        public String getError() { return error; }
+
+        // package-private setters — used only by ContinuousLearningLoop
+        void setTickers(List<String> v) { this.tickers = v; }
+        void setMaxIterations(int v) { this.maxIterations = v; }
+        void setCompletedIterations(int v) { this.completedIterations = v; }
+        void setStartTime(long v) { this.startTime = v; }
+        void setEndTime(long v) { this.endTime = v; }
+        void setElapsedMs(long v) { this.elapsedMs = v; }
+        void setConvergenceReason(String v) { this.convergenceReason = v; }
+        void setConvergedAtIteration(Integer v) { this.convergedAtIteration = v; }
+        void setError(String v) { this.error = v; }
     }
 
     public static class IterationResult {
-        public int iteration;
-        public int totalTrades;
-        public double winRate;
-        public double totalPnl;
-        public double maxDrawdown;
-        public double profitFactor;
-        public double avgWin;
-        public double avgLoss;
+        private final int iteration;
+        private final int totalTrades;
+        private final double winRate;
+        private final double totalPnl;
+        private final double maxDrawdown;
+        private final double profitFactor;
+        private final double avgWin;
+        private final double avgLoss;
+
+        public IterationResult(int iteration, int totalTrades, double winRate, double totalPnl,
+                               double maxDrawdown, double profitFactor, double avgWin, double avgLoss) {
+            this.iteration = iteration;
+            this.totalTrades = totalTrades;
+            this.winRate = winRate;
+            this.totalPnl = totalPnl;
+            this.maxDrawdown = maxDrawdown;
+            this.profitFactor = profitFactor;
+            this.avgWin = avgWin;
+            this.avgLoss = avgLoss;
+        }
+
+        public int getIteration() { return iteration; }
+        public int getTotalTrades() { return totalTrades; }
+        public double getWinRate() { return winRate; }
+        public double getTotalPnl() { return totalPnl; }
+        public double getMaxDrawdown() { return maxDrawdown; }
+        public double getProfitFactor() { return profitFactor; }
+        public double getAvgWin() { return avgWin; }
+        public double getAvgLoss() { return avgLoss; }
     }
 }

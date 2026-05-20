@@ -4,7 +4,9 @@ import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.utils.BollingerBandsUtil;
 import com.fgiaquinta.optionsquant.strategy.utils.ChannelAnalyzer;
+import com.fgiaquinta.optionsquant.strategy.utils.ConditionEvaluator;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
@@ -14,6 +16,7 @@ import java.util.List;
 import java.util.Set;
 
 @Slf4j
+@Component
 public class P1SqueezePutStrategy implements TradingStrategy, TimeframeRequirements {
 
     private static final double DEFAULT_BREAKOUT_BUFFER_PCT = 0.003;
@@ -92,6 +95,11 @@ public class P1SqueezePutStrategy implements TradingStrategy, TimeframeRequireme
      * @return {@code true} if all six conditions are satisfied; {@code false} on the first failure
      */
     @Override
+    public boolean isCall() {
+        return false;
+    }
+
+    @Override
     public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {
         final BarSeries series1h = data.getSeries(TimeFrame.HOUR_1);
         final BarSeries series15m = data.getSeries(TimeFrame.MIN_15);
@@ -136,69 +144,44 @@ public class P1SqueezePutStrategy implements TradingStrategy, TimeframeRequireme
 
         final BollingerBandsUtil bb15m = new BollingerBandsUtil(series15m, 20);
         final double bbWidthCurrent = bb15m.getWidthPercent(idx15m);
-        final double bbWidthAvg = computeBBWidthAvg(bb15m, idx15m, 20);
+        final double bbWidthAvg = BollingerBandsUtil.computeBBWidthAvg(bb15m, idx15m, 20);
         final double bbWidthMinRequired = bbWidthAvg * bbVolatilityThreshold;
 
         final double capturedMinPrice = minPriceLast10Days;
 
         final List<Condition> conditions = List.of(
             new Condition() {
-                public boolean test() { return smaSpread <= 0.04; }
-                public String label() { return "Squeeze SMAs (sin referencia libro)"; }
-                public String value() { return String.format("SMA spread %.4f <= 0.04", smaSpread); }
+                @Override public boolean test() { return smaSpread <= 0.04; }
+                @Override public String label() { return "Squeeze SMAs (sin referencia libro)"; }
+                @Override public String value() { return String.format("SMA spread %.4f <= 0.04", smaSpread); }
             },
             new Condition() {
-                public boolean test() { return ChannelAnalyzer.isSmaLateralChannel(series1h, prevIdx, 70, 4.0); }
-                public String label() { return "Canal lateral SMAs (sin referencia libro)"; }
-                public String value() { return String.format("ChannelAnalyzer lateral (70 bars, 4.0%% threshold)"); }
+                @Override public boolean test() { return ChannelAnalyzer.isSmaLateralChannel(series1h, prevIdx, 70, 4.0); }
+                @Override public String label() { return "Canal lateral SMAs (sin referencia libro)"; }
+                @Override public String value() { return String.format("ChannelAnalyzer lateral (70 bars, 4.0%% threshold)"); }
             },
             new Condition() {
-                public boolean test() { return currentClose1h < breakoutThreshold && currentClose1h < currentOpen1h; }
-                public String label() { return "Breakout bajista con buffer (sin referencia libro)"; }
-                public String value() { return String.format("close %.4f < threshold %.4f (floor %.4f - %.1f%%)", currentClose1h, breakoutThreshold, capturedMinPrice, breakoutBufferPct * 100); }
+                @Override public boolean test() { return currentClose1h < breakoutThreshold && currentClose1h < currentOpen1h; }
+                @Override public String label() { return "Breakout bajista con buffer (sin referencia libro)"; }
+                @Override public String value() { return String.format("close %.4f < threshold %.4f (floor %.4f - %.1f%%)", currentClose1h, breakoutThreshold, capturedMinPrice, breakoutBufferPct * 100); }
             },
             new Condition() {
-                public boolean test() { return bodyPct15m <= -minBodyPct; }
-                public String label() { return "Vela bajista en 15m (sin referencia libro)"; }
-                public String value() { return String.format("15m body %.4f <= -%.4f", bodyPct15m, minBodyPct); }
+                @Override public boolean test() { return bodyPct15m <= -minBodyPct; }
+                @Override public String label() { return "Vela bajista en 15m (sin referencia libro)"; }
+                @Override public String value() { return String.format("15m body %.4f <= -%.4f", bodyPct15m, minBodyPct); }
             },
             new Condition() {
-                public boolean test() { return bbWidthCurrent >= bbWidthMinRequired; }
-                public String label() { return "Expansión Bollinger 15m (sin referencia libro)"; }
-                public String value() { return String.format("BB width %.4f >= avg*threshold %.4f", bbWidthCurrent, bbWidthMinRequired); }
+                @Override public boolean test() { return bbWidthCurrent >= bbWidthMinRequired; }
+                @Override public String label() { return "Expansión Bollinger 15m (sin referencia libro)"; }
+                @Override public String value() { return String.format("BB width %.4f >= avg*threshold %.4f", bbWidthCurrent, bbWidthMinRequired); }
             },
             new Condition() {
-                public boolean test() { return bb15m.isRidingLowerBand(idx15m, 0.005); }
-                public String label() { return "Precio riding lower BB 15m (sin referencia libro)"; }
-                public String value() { return "15m riding lower BB (within 0.5%)"; }
+                @Override public boolean test() { return bb15m.isRidingLowerBand(idx15m, 0.005); }
+                @Override public String label() { return "Precio riding lower BB 15m (sin referencia libro)"; }
+                @Override public String value() { return "15m riding lower BB (within 0.5%)"; }
             }
         );
 
-        final int total = conditions.size();
-        for (int step = 0; step < total; step++) {
-            final Condition c = conditions.get(step);
-            if (log.isDebugEnabled()) {
-                final String stepPrefix = String.format("[P1] %s @ %s — Paso %d/%d \"%s\" → %s",
-                        ticker, currentTime.toLocalTime(), step + 1, total, c.label(), c.value());
-                if (!c.test()) {
-                    log.debug("{} ❌ STOP", stepPrefix);
-                    return false;
-                }
-                log.debug("{} ✅", stepPrefix);
-            } else if (!c.test()) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private double computeBBWidthAvg(BollingerBandsUtil bb, int currentIndex, int lookback) {
-        double sum = 0;
-        int count = 0;
-        for (int i = currentIndex - 1; i >= Math.max(0, currentIndex - lookback); i--) {
-            sum += bb.getWidthPercent(i);
-            count++;
-        }
-        return count == 0 ? 0 : sum / count;
+        return ConditionEvaluator.evaluate("[P1]", ticker, currentTime, conditions, log);
     }
 }

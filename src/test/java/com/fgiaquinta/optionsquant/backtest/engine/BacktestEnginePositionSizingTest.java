@@ -2,7 +2,6 @@ package com.fgiaquinta.optionsquant.backtest.engine;
 
 import com.fgiaquinta.optionsquant.backtest.domain.BacktestConfig;
 import com.fgiaquinta.optionsquant.backtest.domain.BacktestReport;
-import com.fgiaquinta.optionsquant.backtest.domain.TradeRecord;
 import com.fgiaquinta.optionsquant.candle.CandleRepository;
 import com.fgiaquinta.optionsquant.domain.Candle;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
@@ -89,7 +88,8 @@ class BacktestEnginePositionSizingTest {
                 10, TimeFrame.MIN_15, false, true, 0.0, 0.0, null,
                 java.time.LocalTime.of(9, 45),
                 java.time.LocalTime.of(10, 30),
-                java.time.LocalTime.of(13, 0)
+                java.time.LocalTime.of(13, 0),
+                null    // strategyFilter — run all strategies
         );
 
         // Provide synthetic data: tight ATR candles so riskPerContract ≈ $200
@@ -236,35 +236,22 @@ class BacktestEnginePositionSizingTest {
 
     private static final class AlwaysTriggerCallStrategy implements TradingStrategy {
         @Override
+        public boolean isCall() { return true; }
+
+        @Override
         public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {
             return true;
         }
 
-        /** Name contains "call" so BacktestEngine sets isCall = true. */
         @Override
         public String getName() {
             return "c1 squeeze";
-        }
-
-        /** Class simple name must contain "call" for BacktestEngine's isCall check. */
-        @Override
-        public String toString() {
-            return "AlwaysTriggerCallStrategy";
         }
     }
 
     // =========================================================================
     // CandleRepository stubs
     // =========================================================================
-
-    private static final class NoOpCandleRepository implements CandleRepository {
-        @Override public List<Candle> load(String ticker, TimeFrame tf) { return List.of(); }
-        @Override public List<Candle> loadRange(String ticker, TimeFrame tf, ZonedDateTime from, ZonedDateTime to) { return List.of(); }
-        @Override public Optional<ZonedDateTime> lastTimestamp(String ticker, TimeFrame tf) { return Optional.empty(); }
-        @Override public void upsert(String ticker, TimeFrame tf, List<Candle> candles) {}
-        @Override public boolean hasLocalData(String ticker, TimeFrame tf) { return false; }
-        @Override public Stream<Candle> stream(String ticker, TimeFrame tf) { return Stream.empty(); }
-    }
 
     private static final class StubCandleRepository implements CandleRepository {
         private final String ticker;

@@ -231,7 +231,8 @@ class BacktestEngineTimeFilterTest {
                 0.0, 0.0, null,
                 LocalTime.of(9, 45),   // entryWindowStart
                 LocalTime.of(10, 30),  // entryWindowEnd
-                LocalTime.of(13, 0)    // forcedCloseTime
+                LocalTime.of(13, 0),   // forcedCloseTime
+                null    // strategyFilter — run all strategies
         );
     }
 
@@ -317,6 +318,8 @@ class BacktestEngineTimeFilterTest {
     // =========================================================================
 
     private static final class AlwaysTriggerCallStrategy implements TradingStrategy {
+        @Override
+        public boolean isCall() { return true; }
         @Override
         public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {
             return true;

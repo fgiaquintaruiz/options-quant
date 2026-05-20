@@ -6,6 +6,7 @@ import com.fgiaquinta.optionsquant.strategy.indicator.WordenStochasticIndicator;
 import com.fgiaquinta.optionsquant.strategy.utils.BollingerBandsUtil;
 import com.fgiaquinta.optionsquant.strategy.utils.ConditionEvaluator;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
@@ -30,6 +31,7 @@ import java.util.Set;
  * Time window: 9:45 AM - 9:55 AM NY (after the first 15m candle closes)
  */
 @Slf4j
+@Component
 public class C5ContinuationCallStrategy implements TradingStrategy, TimeframeRequirements {
 
     private final WordenStochasticIndicator wordenStochastic;
@@ -76,6 +78,11 @@ public class C5ContinuationCallStrategy implements TradingStrategy, TimeframeReq
      * @param currentTime the virtual or wall-clock time of evaluation
      * @return {@code true} if all four steps are satisfied; {@code false} on the first failure
      */
+    @Override
+    public boolean isCall() {
+        return true;
+    }
+
     @Override
     public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {
         final ZonedDateTime nyTime = currentTime.withZoneSameInstant(ZoneId.of("America/New_York"));

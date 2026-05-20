@@ -256,7 +256,8 @@ public class GridSearchService {
                         null,
                         java.time.LocalTime.of(9, 45),
                         java.time.LocalTime.of(10, 30),
-                        java.time.LocalTime.of(13, 0)
+                        java.time.LocalTime.of(13, 0),
+                        null  // strategyFilter — run all strategies
                 );
                 long t0 = System.currentTimeMillis();
                 BacktestReport oosRep = backtestEngine.run(oosCfg, false, null);
@@ -408,7 +409,8 @@ public class GridSearchService {
                         null,
                         java.time.LocalTime.of(9, 45),
                         java.time.LocalTime.of(10, 30),
-                        java.time.LocalTime.of(13, 0)
+                        java.time.LocalTime.of(13, 0),
+                        null  // strategyFilter — run all strategies
                 );
 
                 long t0 = System.currentTimeMillis();

@@ -4,15 +4,25 @@ import com.fgiaquinta.optionsquant.backtest.domain.BacktestConfig;
 import com.fgiaquinta.optionsquant.backtest.domain.BacktestReport;
 import com.fgiaquinta.optionsquant.backtest.engine.BacktestEngine;
 import com.fgiaquinta.optionsquant.config.IbkrProperties;
+import com.fgiaquinta.optionsquant.domain.TickerInfo;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
+import com.fgiaquinta.optionsquant.service.BacktestAnalyzer;
+import com.fgiaquinta.optionsquant.service.ContinuousLearningLoop;
+import com.fgiaquinta.optionsquant.service.NewsFilterService;
+import com.fgiaquinta.optionsquant.service.OllamaService;
+import com.fgiaquinta.optionsquant.service.StrategyScreenerService;
+import com.fgiaquinta.optionsquant.service.TickerMemory;
 import com.fgiaquinta.optionsquant.service.TickerService;
+import com.fgiaquinta.optionsquant.service.TradingLearningAnalyzer;
 import io.micrometer.core.annotation.Timed;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 
@@ -28,13 +38,13 @@ public class BacktestController {
     private final BacktestEngine backtestEngine;
     private final IbkrProperties ibkrProperties;
     private final TickerService tickerService;
-    private final com.fgiaquinta.optionsquant.service.BacktestAnalyzer backtestAnalyzer;
-    private final com.fgiaquinta.optionsquant.service.NewsFilterService newsFilterService;
-    private final com.fgiaquinta.optionsquant.service.StrategyScreenerService screenerService;
-    private final com.fgiaquinta.optionsquant.service.TradingLearningAnalyzer learningAnalyzer;
-    private final com.fgiaquinta.optionsquant.service.TickerMemory tickerMemory;
-    private final com.fgiaquinta.optionsquant.service.OllamaService ollamaService;
-    private final com.fgiaquinta.optionsquant.service.ContinuousLearningLoop continuousLearningLoop;
+    private final BacktestAnalyzer backtestAnalyzer;
+    private final NewsFilterService newsFilterService;
+    private final StrategyScreenerService screenerService;
+    private final TradingLearningAnalyzer learningAnalyzer;
+    private final TickerMemory tickerMemory;
+    private final OllamaService ollamaService;
+    private final ContinuousLearningLoop continuousLearningLoop;
 
     /**
      * Run a backtest with default parameters.
@@ -67,9 +77,10 @@ public class BacktestController {
                 initialCapital, riskPct, slippagePct, commission,
                 maxConcurrent, execTimeframe, true, false,
                 0.0, 0.0, null,
-                java.time.LocalTime.of(9, 45),
-                java.time.LocalTime.of(10, 30),
-                java.time.LocalTime.of(13, 0)
+                LocalTime.of(9, 45),
+                LocalTime.of(10, 30),
+                LocalTime.of(13, 0),
+                null  // strategyFilter — run all strategies
         );
 
         BacktestReport report = backtestEngine.run(config);
@@ -77,8 +88,8 @@ public class BacktestController {
         // === LEARNING SYSTEM: Analyze and learn from the backtest ===
         if (report.totalTrades() > 0) {
             log.info("🧠 [Learning] Analyzing backtest results for automated learning...");
-            var learningReport = learningAnalyzer.analyze(report);
-            
+            learningAnalyzer.analyze(report);
+
             // Log ticker memory status
             log.info("\n{}", tickerMemory.getLearningReport());
         }
@@ -145,7 +156,7 @@ public class BacktestController {
      * POST /api/backtest/learn?from=2025-01-01&to=2026-04-01&tickers=AMZN,NVDA,GOOGL&maxIterations=20
      */
     @PostMapping("/learn")
-    public ResponseEntity<com.fgiaquinta.optionsquant.service.ContinuousLearningLoop.LearningLoopResult> startLearningLoop(
+    public ResponseEntity<Void> startLearningLoop(
             @RequestParam String from,
             @RequestParam String to,
             @RequestParam String tickers,
@@ -161,13 +172,15 @@ public class BacktestController {
         LocalDate toDate = LocalDate.parse(to);
         List<String> tickerList = List.of(tickers.split(","));
 
-        // Run in a separate thread to avoid blocking
-        new Thread(() -> {
-            var result = continuousLearningLoop.startLoop(
-                    tickerList, fromDate, toDate, initialCapital, riskPct, 
+        // Run in a named daemon thread to avoid blocking the request
+        Thread learningThread = new Thread(() -> {
+            ContinuousLearningLoop.LearningLoopResult result = continuousLearningLoop.startLoop(
+                    tickerList, fromDate, toDate, initialCapital, riskPct,
                     maxIterations, convergenceThreshold);
-            log.info("<<< Learning loop completed: {} iterations", result.completedIterations);
-        }).start();
+            log.info("<<< Learning loop completed: {} iterations", result.getCompletedIterations());
+        }, "learning-loop");
+        learningThread.setDaemon(true);
+        learningThread.start();
 
         return ResponseEntity.accepted().build();
     }
@@ -201,11 +214,11 @@ public class BacktestController {
      * POST /api/backtest/analyze
      */
     @PostMapping("/analyze")
-    public ResponseEntity<com.fgiaquinta.optionsquant.service.BacktestAnalyzer.AnalysisReport> analyze() {
+    public ResponseEntity<BacktestAnalyzer.AnalysisReport> analyze() {
         log.info(">>> POST /api/backtest/analyze");
 
-        com.fgiaquinta.optionsquant.service.BacktestAnalyzer.AnalysisReport analysis = 
-                backtestAnalyzer.analyzeTrades(java.nio.file.Path.of("backtest/trades.csv"));
+        BacktestAnalyzer.AnalysisReport analysis =
+                backtestAnalyzer.analyzeTrades(Path.of("backtest/trades.csv"));
 
         log.info("<<< POST /api/backtest/analyze - {} suggestions", analysis.getSuggestionCount());
         return ResponseEntity.ok(analysis);
@@ -216,14 +229,14 @@ public class BacktestController {
      * GET /api/backtest/tickers?sector=Technology&minMarketCap=50
      */
     @GetMapping("/tickers")
-    public ResponseEntity<List<com.fgiaquinta.optionsquant.domain.TickerInfo>> getTickers(
+    public ResponseEntity<List<TickerInfo>> getTickers(
             @RequestParam(required = false) String sector,
             @RequestParam(required = false) Long minMarketCap,
             @RequestParam(required = false) Long maxMarketCap,
             @RequestParam(defaultValue = "false") boolean highQuality,
             @RequestParam(defaultValue = "false") boolean highGrowth
     ) {
-        List<com.fgiaquinta.optionsquant.domain.TickerInfo> tickers;
+        List<TickerInfo> tickers;
 
         if (highQuality) {
             tickers = tickerService.getHighQualityTickers();
@@ -268,14 +281,14 @@ public class BacktestController {
      * POST /api/backtest/screen?count=10
      */
     @PostMapping("/screen")
-    public ResponseEntity<com.fgiaquinta.optionsquant.service.StrategyScreenerService.ScreeningResult> screen(
+    public ResponseEntity<StrategyScreenerService.ScreeningResult> screen(
             @RequestParam(defaultValue = "10") int count
     ) {
         log.info(">>> POST /api/backtest/screen count={}", count);
-        
+
         // TODO: Load candle data for all tickers
         // For now, return empty - this needs candle data integration
-        var result = new com.fgiaquinta.optionsquant.service.StrategyScreenerService.ScreeningResult(
+        StrategyScreenerService.ScreeningResult result = new StrategyScreenerService.ScreeningResult(
                 List.of(),
                 0,
                 "Screener requires candle data - use live trading mode"

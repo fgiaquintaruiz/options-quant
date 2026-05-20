@@ -4,6 +4,7 @@ import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.utils.ConditionEvaluator;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
@@ -15,9 +16,9 @@ import org.ta4j.core.indicators.helpers.VolumeIndicator;
 import java.time.Duration;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Set;
 
 /**
@@ -34,8 +35,9 @@ import java.util.Set;
  * Cooldown: 2 hours between triggers per ticker. Excluded: 9h NY.
  */
 @Slf4j
+@Component
 public class C6ReversalCallStrategy implements TradingStrategy, TimeframeRequirements {
-    private final Map<String, ZonedDateTime> lastTriggerMap = new HashMap<>();
+    private final Map<String, ZonedDateTime> lastTriggerMap = new ConcurrentHashMap<>();
 
     @Override
     public Set<TimeFrame> requiredTimeframes() {
@@ -62,6 +64,11 @@ public class C6ReversalCallStrategy implements TradingStrategy, TimeframeRequire
      * @param currentTime the virtual or wall-clock time of evaluation
      * @return {@code true} if all four conditions are satisfied; {@code false} on the first failure
      */
+    @Override
+    public boolean isCall() {
+        return true;
+    }
+
     @Override
     public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {
 

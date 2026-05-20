@@ -266,7 +266,8 @@ class BacktestEngineWinLossTest {
                 10, TimeFrame.MIN_15, false, true, 0.0, 0.0, null,
                 java.time.LocalTime.of(9, 45),
                 java.time.LocalTime.of(10, 30),
-                java.time.LocalTime.of(13, 0)
+                java.time.LocalTime.of(13, 0),
+                null    // strategyFilter — run all strategies
         );
     }
 
@@ -282,7 +283,8 @@ class BacktestEngineWinLossTest {
                 10, TimeFrame.MIN_15, false, true, 0.0, 0.0, null,
                 java.time.LocalTime.of(9, 45),
                 java.time.LocalTime.of(10, 30),
-                java.time.LocalTime.of(13, 0)
+                java.time.LocalTime.of(13, 0),
+                null    // strategyFilter — run all strategies
         );
     }
 
@@ -351,6 +353,8 @@ class BacktestEngineWinLossTest {
 
     private static final class AlwaysTriggerCallStrategy implements TradingStrategy {
         @Override
+        public boolean isCall() { return true; }
+        @Override
         public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {
             return true;
         }
@@ -359,6 +363,8 @@ class BacktestEngineWinLossTest {
     }
 
     private static final class AlwaysTriggerPutStrategy implements TradingStrategy {
+        @Override
+        public boolean isCall() { return false; }
         @Override
         public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {
             return true;

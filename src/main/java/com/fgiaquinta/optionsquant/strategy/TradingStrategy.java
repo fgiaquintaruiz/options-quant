@@ -27,4 +27,10 @@ public interface TradingStrategy {
      * @return true if all rules are met, false otherwise
      */
     boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime);
+
+    /**
+     * Returns true if this strategy trades call options, false for puts.
+     * Used to determine option direction without fragile string matching on class names.
+     */
+    boolean isCall();
 }

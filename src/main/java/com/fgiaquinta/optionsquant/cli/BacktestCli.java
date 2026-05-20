@@ -51,12 +51,8 @@ public class BacktestCli implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        try {
-            System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
-            System.setErr(new PrintStream(System.err, true, StandardCharsets.UTF_8));
-        } catch (Exception e) {
-            // Ignore if already set
-        }
+        System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
+        System.setErr(new PrintStream(System.err, true, StandardCharsets.UTF_8));
 
         log.info("Options Quant Backtest CLI started");
         Scanner scanner = new Scanner(System.in);
@@ -153,39 +149,39 @@ public class BacktestCli implements CommandLineRunner {
                         defaultFrom, defaultTo, initialCapital,
                         riskPct * 100, maxIterations, convergenceThreshold * 100));
 
-        var result = learningLoop.startLoop(tickers, defaultFrom, defaultTo,
+        ContinuousLearningLoop.LearningLoopResult result = learningLoop.startLoop(tickers, defaultFrom, defaultTo,
                 initialCapital, riskPct, maxIterations, convergenceThreshold);
 
         System.out.println("\n" + "=".repeat(80));
         System.out.println(Emoji.BRAIN() + " TRAINING COMPLETE");
         System.out.println("=".repeat(80));
 
-        if (result.error != null) {
-            System.out.println(Emoji.CROSS() + " Error: " + result.error);
+        if (result.getError() != null) {
+            System.out.println(Emoji.CROSS() + " Error: " + result.getError());
             printMainMenu();
             return;
         }
 
         System.out.println(Emoji.CHART() + " RESULTS:");
-        System.out.println("   Iterations: " + result.completedIterations);
-        System.out.println("   Reason: " + result.convergenceReason);
-        System.out.println("   Elapsed: " + (result.elapsedMs / 1000) + " seconds");
+        System.out.println("   Iterations: " + result.getCompletedIterations());
+        System.out.println("   Reason: " + result.getConvergenceReason());
+        System.out.println("   Elapsed: " + (result.getElapsedMs() / 1000) + " seconds");
 
-        if (!result.iterations.isEmpty()) {
-            var first = result.iterations.get(0);
-            var last = result.iterations.get(result.iterations.size() - 1);
+        if (!result.getIterations().isEmpty()) {
+            ContinuousLearningLoop.IterationResult first = result.getIterations().get(0);
+            ContinuousLearningLoop.IterationResult last = result.getIterations().get(result.getIterations().size() - 1);
 
             System.out.println("\n" + Emoji.TREND_UP() + " IMPROVEMENT:");
-            System.out.println("   First: " + first.totalTrades + " trades, " +
-                    String.format("%.1f%%", first.winRate * 100) + " WR, $" +
-                    String.format("%.2f", first.totalPnl) + " PnL");
-            System.out.println("   Last:  " + last.totalTrades + " trades, " +
-                    String.format("%.1f%%", last.winRate * 100) + " WR, $" +
-                    String.format("%.2f", last.totalPnl) + " PnL");
+            System.out.println("   First: " + first.getTotalTrades() + " trades, " +
+                    String.format("%.1f%%", first.getWinRate() * 100) + " WR, $" +
+                    String.format("%.2f", first.getTotalPnl()) + " PnL");
+            System.out.println("   Last:  " + last.getTotalTrades() + " trades, " +
+                    String.format("%.1f%%", last.getWinRate() * 100) + " WR, $" +
+                    String.format("%.2f", last.getTotalPnl()) + " PnL");
             System.out.println("   Delta Win Rate: " + String.format("%+.1f%%",
-                    (last.winRate - first.winRate) * 100));
+                    (last.getWinRate() - first.getWinRate()) * 100));
             System.out.println("   Delta PnL: $" + String.format("%+.2f",
-                    last.totalPnl - first.totalPnl));
+                    last.getTotalPnl() - first.getTotalPnl()));
         }
 
         System.out.println("\n" + "=".repeat(80));
@@ -262,7 +258,7 @@ public class BacktestCli implements CommandLineRunner {
         System.out.println("\nThis will take several minutes. Watch the logs for progress!\n");
 
         // Run the learning loop
-        var result = learningLoop.startLoop(
+        ContinuousLearningLoop.LearningLoopResult result = learningLoop.startLoop(
                 tickers,
                 LocalDate.parse(from),
                 LocalDate.parse(to),
@@ -277,31 +273,31 @@ public class BacktestCli implements CommandLineRunner {
         System.out.println("LEARNING LOOP COMPLETE!");
         System.out.println("=".repeat(80));
 
-        if (result.error != null) {
-            System.out.println(Emoji.CROSS() + " Error: " + result.error);
+        if (result.getError() != null) {
+            System.out.println(Emoji.CROSS() + " Error: " + result.getError());
             return;
         }
 
         System.out.println(Emoji.CHART() + " RESULTS:");
-        System.out.println("   Iterations: " + result.completedIterations);
-        System.out.println("   Reason: " + result.convergenceReason);
-        System.out.println("   Elapsed: " + (result.elapsedMs / 1000) + " seconds");
+        System.out.println("   Iterations: " + result.getCompletedIterations());
+        System.out.println("   Reason: " + result.getConvergenceReason());
+        System.out.println("   Elapsed: " + (result.getElapsedMs() / 1000) + " seconds");
 
-        if (!result.iterations.isEmpty()) {
-            var first = result.iterations.get(0);
-            var last = result.iterations.get(result.iterations.size() - 1);
+        if (!result.getIterations().isEmpty()) {
+            ContinuousLearningLoop.IterationResult first = result.getIterations().get(0);
+            ContinuousLearningLoop.IterationResult last = result.getIterations().get(result.getIterations().size() - 1);
 
             System.out.println("\n" + Emoji.TREND_UP() + " IMPROVEMENT:");
-            System.out.println("   First: " + first.totalTrades + " trades, " +
-                    String.format("%.1f%%", first.winRate * 100) + " WR, $" +
-                    String.format("%.2f", first.totalPnl) + " PnL");
-            System.out.println("   Last:  " + last.totalTrades + " trades, " +
-                    String.format("%.1f%%", last.winRate * 100) + " WR, $" +
-                    String.format("%.2f", last.totalPnl) + " PnL");
+            System.out.println("   First: " + first.getTotalTrades() + " trades, " +
+                    String.format("%.1f%%", first.getWinRate() * 100) + " WR, $" +
+                    String.format("%.2f", first.getTotalPnl()) + " PnL");
+            System.out.println("   Last:  " + last.getTotalTrades() + " trades, " +
+                    String.format("%.1f%%", last.getWinRate() * 100) + " WR, $" +
+                    String.format("%.2f", last.getTotalPnl()) + " PnL");
             System.out.println("   Delta Win Rate: " + String.format("%+.1f%%",
-                    (last.winRate - first.winRate) * 100));
+                    (last.getWinRate() - first.getWinRate()) * 100));
             System.out.println("   Delta PnL: $" + String.format("%+.2f",
-                    last.totalPnl - first.totalPnl));
+                    last.getTotalPnl() - first.getTotalPnl()));
         }
 
         System.out.println("\n" + "=".repeat(80));

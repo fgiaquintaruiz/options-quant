@@ -25,7 +25,9 @@ import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -84,6 +86,7 @@ public class BacktestEngine {
     public BacktestEngine(
             CandleRepository candleRepository,
             TickerMemory tickerMemory,
+            List<TradingStrategy> strategies,
             @Value("${backtest.default-max-concurrent-scans:4}") int defaultMaxConcurrentScans,
             @Value("${backtest.generate-trade-charts:true}") boolean generateTradeCharts) {
         this.candleRepository = candleRepository;
@@ -91,23 +94,7 @@ public class BacktestEngine {
         this.generateTradeCharts = generateTradeCharts;
         this.maxConcurrentScans = new AtomicInteger(
                 Math.max(1, Math.min(Runtime.getRuntime().availableProcessors(), defaultMaxConcurrentScans)));
-        // TODO(architecture): declare strategies as @Component beans and inject
-        //   List<TradingStrategy> via this constructor to let Spring manage their lifecycle.
-        //   Current direct instantiation works but prevents strategies from having Spring dependencies.
-        this.strategies = List.of(
-                new com.fgiaquinta.optionsquant.strategy.C1SqueezeCallStrategy(),
-                new com.fgiaquinta.optionsquant.strategy.C2TrendCallStrategy(),
-                new com.fgiaquinta.optionsquant.strategy.C3BounceCallStrategy(),
-                new com.fgiaquinta.optionsquant.strategy.C4OpeningCallStrategy(),
-                new com.fgiaquinta.optionsquant.strategy.C5ContinuationCallStrategy(),
-                new com.fgiaquinta.optionsquant.strategy.C6ReversalCallStrategy(),
-                new com.fgiaquinta.optionsquant.strategy.P1SqueezePutStrategy(),
-                new com.fgiaquinta.optionsquant.strategy.P2TrendPutStrategy(),
-                new com.fgiaquinta.optionsquant.strategy.P3BouncePutStrategy(),
-                new com.fgiaquinta.optionsquant.strategy.P4OpeningPutStrategy(),
-                new com.fgiaquinta.optionsquant.strategy.P5ContinuationPutStrategy(),
-                new com.fgiaquinta.optionsquant.strategy.P6ReversalPutStrategy()
-        );
+        this.strategies = List.copyOf(strategies);
     }
 
     /**
@@ -124,6 +111,17 @@ public class BacktestEngine {
         this.generateTradeCharts = generateTradeCharts;
         this.maxConcurrentScans = new AtomicInteger(Math.max(1, maxConcurrentScans));
         this.strategies = List.copyOf(strategies);
+    }
+
+    /**
+     * Test constructor for cases that do not exercise strategy evaluation.
+     * Uses an empty strategy list. Kept public so tests in sibling packages can access it.
+     */
+    public BacktestEngine(CandleRepository candleRepository,
+                          TickerMemory tickerMemory,
+                          int maxConcurrentScans,
+                          boolean generateTradeCharts) {
+        this(candleRepository, tickerMemory, maxConcurrentScans, generateTradeCharts, List.of());
     }
 
     /**
@@ -159,7 +157,7 @@ public class BacktestEngine {
             }
             log.info("💾 Checkpoint saved: {} tickers processed", processedTickers.size());
         } catch (Exception e) {
-            log.warn("Failed to save checkpoint: {}", e.getMessage());
+            log.warn("Failed to save checkpoint: {}", e.getMessage(), e);
         }
     }
 
@@ -179,7 +177,7 @@ public class BacktestEngine {
                 log.info("📂 Checkpoint loaded: {} tickers already processed", processed.size());
             }
         } catch (Exception e) {
-            log.warn("Failed to load checkpoint: {}", e.getMessage());
+            log.warn("Failed to load checkpoint: {}", e.getMessage(), e);
         }
         return processed;
     }
@@ -194,7 +192,7 @@ public class BacktestEngine {
                 log.info("🗑️ Checkpoint cleared");
             }
         } catch (Exception e) {
-            log.warn("Failed to clear checkpoint: {}", e.getMessage());
+            log.warn("Failed to clear checkpoint: {}", e.getMessage(), e);
         }
     }
 
@@ -278,7 +276,6 @@ public class BacktestEngine {
         // ============================================================
         final Set<String> alreadyProcessed = new LinkedHashSet<>();
         List<TradeRecord> resumedTrades = new ArrayList<>();
-        Map<String, TickerResult> resumedResults = new LinkedHashMap<>();
 
         if (resumeFromCheckpoint && hasCheckpoint()) {
             alreadyProcessed.addAll(loadCheckpoint());
@@ -329,7 +326,7 @@ public class BacktestEngine {
                     writer.newLine();
                 }
             } catch (Exception e) {
-                log.error("CSV writer thread error: {}", e.getMessage());
+                log.error("CSV writer thread error: {}", e.getMessage(), e);
             }
         }, "backtest-csv-writer");
         csvWriterThread.setDaemon(true);
@@ -344,7 +341,7 @@ public class BacktestEngine {
                     pw.println("Ticker,Strategy,Direction,Qty,EntryPrice,EntryTime,ExitPrice,ExitTime,ExitReason,GrossPnl,Commission,Slippage,NetPnl,MaxDD,MaxRunup,Pattern,ATR,VIX,EntryHour,MarketTrend");
                 }
             } catch (Exception e) {
-                log.warn("Could not initialize CSV output: {}", e.getMessage());
+                log.warn("Could not initialize CSV output: {}", e.getMessage(), e);
             }
         }
 
@@ -508,56 +505,15 @@ public class BacktestEngine {
         // Portfolio equity curve: cumulative PnL by trade exit time (per-ticker curves are not additive)
         List<BacktestReport.EquityPoint> portfolioEquity = buildPortfolioEquityCurve(config, allTrades);
 
-        // Single-pass statistics computation
-        double totalPnl = 0, totalProfit = 0, totalLoss = 0, sharpeSum = 0, sharpeSqSum = 0;
-        int wins = 0, losses = 0;
-        double avgDurationSum = 0;
-        Map<String, int[]> strategyCounts = new HashMap<>();      // [trades, wins]
-        Map<String, double[]> strategyPnl = new HashMap<>();       // [profit, loss]
-        Map<String, int[]> tickerCounts = new HashMap<>();         // [trades, wins]
-        Map<String, double[]> tickerPnl = new HashMap<>();         // [profit, loss]
+        final ComputedStats stats = computeStats(allTrades, config.initialCapital());
 
-        for (TradeRecord t : allTrades) {
-            double pnl = t.netPnl();
-            totalPnl += pnl;
-
-            if (pnl > 0) {
-                wins++;
-                totalProfit += pnl;
-                strategyPnl.computeIfAbsent(t.strategy(), k -> new double[2])[0] += pnl;
-                tickerPnl.computeIfAbsent(t.ticker(), k -> new double[2])[0] += pnl;
-            } else if (pnl < 0) {
-                losses++;
-                double absLoss = Math.abs(pnl);
-                totalLoss += absLoss;
-                strategyPnl.computeIfAbsent(t.strategy(), k -> new double[2])[1] += absLoss;
-                tickerPnl.computeIfAbsent(t.ticker(), k -> new double[2])[1] += absLoss;
-            }
-
-            strategyCounts.computeIfAbsent(t.strategy(), k -> new int[2])[0]++;
-            if (pnl > 0) strategyCounts.get(t.strategy())[1]++;
-
-            tickerCounts.computeIfAbsent(t.ticker(), k -> new int[2])[0]++;
-            if (pnl > 0) tickerCounts.get(t.ticker())[1]++;
-
-            avgDurationSum += java.time.Duration.between(t.entryTime(), t.exitTime()).toMinutes() / 60.0;
-
-            // Sharpe components
-            double ret = pnl / config.initialCapital();
-            sharpeSum += ret;
-            sharpeSqSum += ret * ret;
-        }
-
-        double finalCapital = config.initialCapital() + totalPnl;
-        double winRate = allTrades.isEmpty() ? 0 : (double) wins / allTrades.size();
-        double profitFactor = totalLoss == 0 ? (totalProfit > 0 ? Double.POSITIVE_INFINITY : 0) : totalProfit / totalLoss;
-        double avgWin = wins > 0 ? totalProfit / wins : 0;
-        double avgLoss = losses > 0 ? totalLoss / losses : 0;
-        double avgDuration = allTrades.isEmpty() ? 0 : avgDurationSum / allTrades.size();
-
-        // Sharpe ratio
-        double n = allTrades.size();
-        double sharpe = n < 2 ? 0 : (sharpeSum / n) / Math.sqrt((sharpeSqSum / n) - (sharpeSum / n) * (sharpeSum / n) + 1e-10) * Math.sqrt(252);
+        double finalCapital = config.initialCapital() + stats.totalPnl();
+        double winRate = allTrades.isEmpty() ? 0 : (double) stats.wins() / allTrades.size();
+        double profitFactor = stats.totalLoss() == 0
+                ? (stats.totalProfit() > 0 ? Double.POSITIVE_INFINITY : 0)
+                : stats.totalProfit() / stats.totalLoss();
+        double avgWin = stats.wins() > 0 ? stats.totalProfit() / stats.wins() : 0;
+        double avgLoss = stats.losses() > 0 ? stats.totalLoss() / stats.losses() : 0;
 
         // Max drawdown from portfolio equity curve
         double maxDrawdown = 0, maxDrawdownPct = 0;
@@ -568,34 +524,12 @@ public class BacktestEngine {
             if (dd > maxDrawdown) { maxDrawdown = dd; maxDrawdownPct = dd / peak; }
         }
 
-        // Build byStrategy stats
-        Map<String, BacktestReport.StrategyStats> byStrategy = new LinkedHashMap<>();
-        for (Map.Entry<String, int[]> e : strategyCounts.entrySet()) {
-            String name = e.getKey();
-            int[] counts = e.getValue();
-            double[] pnl = strategyPnl.getOrDefault(name, new double[2]);
-            double pf = pnl[1] == 0 ? (pnl[0] > 0 ? Double.POSITIVE_INFINITY : 0) : pnl[0] / pnl[1];
-            byStrategy.put(name, new BacktestReport.StrategyStats(counts[0], counts[1],
-                    counts[0] == 0 ? 0 : (double) counts[1] / counts[0], pnl[0] - pnl[1], pf, 0));
-        }
-
-        // Build byTicker stats
-        Map<String, BacktestReport.StrategyStats> byTicker = new LinkedHashMap<>();
-        for (Map.Entry<String, int[]> e : tickerCounts.entrySet()) {
-            String name = e.getKey();
-            int[] counts = e.getValue();
-            double[] pnl = tickerPnl.getOrDefault(name, new double[2]);
-            double pf = pnl[1] == 0 ? (pnl[0] > 0 ? Double.POSITIVE_INFINITY : 0) : pnl[0] / pnl[1];
-            byTicker.put(name, new BacktestReport.StrategyStats(counts[0], counts[1],
-                    counts[0] == 0 ? 0 : (double) counts[1] / counts[0], pnl[0] - pnl[1], pf, 0));
-        }
-
         BacktestReport report = new BacktestReport(
-                config.initialCapital(), finalCapital, totalPnl,
-                totalPnl / config.initialCapital(),
-                allTrades.size(), wins, losses, winRate, profitFactor,
-                maxDrawdown, maxDrawdownPct, sharpe, avgWin, avgLoss, avgDuration,
-                byStrategy, byTicker, portfolioEquity, allTrades, elapsed);
+                config.initialCapital(), finalCapital, stats.totalPnl(),
+                stats.totalPnl() / config.initialCapital(),
+                allTrades.size(), stats.wins(), stats.losses(), winRate, profitFactor,
+                maxDrawdown, maxDrawdownPct, stats.sharpe(), avgWin, avgLoss, stats.avgDuration(),
+                stats.byStrategy(), stats.byTicker(), portfolioEquity, allTrades, elapsed);
 
         // Write summary and equity CSV
         writeSummaryReport(report);
@@ -785,8 +719,8 @@ public class BacktestEngine {
                     String ticker = parts[0].trim();
                     if (tickers.contains(ticker)) {
                         // TS_FMT ("yyyy-MM-dd HH:mm:ss") has no zone offset; reconstruct as NY time.
-                        ZonedDateTime entryTime = java.time.LocalDateTime.parse(parts[5].trim(), TS_FMT).atZone(NY);
-                        ZonedDateTime exitTime  = java.time.LocalDateTime.parse(parts[7].trim(), TS_FMT).atZone(NY);
+                        ZonedDateTime entryTime = LocalDateTime.parse(parts[5].trim(), TS_FMT).atZone(NY);
+                        ZonedDateTime exitTime  = LocalDateTime.parse(parts[7].trim(), TS_FMT).atZone(NY);
                         TradeRecord trade = new TradeRecord(
                                 ticker, parts[1].trim(), parts[2].trim(),
                                 Integer.parseInt(parts[3].trim()),
@@ -814,7 +748,7 @@ public class BacktestEngine {
             }
             log.debug("Loaded {} resumed trades for {} tickers", trades.size(), tickers.size());
         } catch (Exception e) {
-            log.warn("Failed to load resumed trades: {}", e.getMessage());
+            log.warn("Failed to load resumed trades: {}", e.getMessage(), e);
         }
         return trades;
     }
@@ -860,48 +794,15 @@ public class BacktestEngine {
         long elapsed = System.currentTimeMillis() - startTime;
         List<BacktestReport.EquityPoint> equityCurve = buildPortfolioEquityCurve(config, allTrades);
 
-        // Single-pass statistics computation
-        double localTotalPnl = 0, localTotalProfit = 0, localTotalLoss = 0, localSharpeSum = 0, localSharpeSqSum = 0;
-        int localWins = 0, localLosses = 0;
-        double localAvgDurationSum = 0;
-        Map<String, int[]> localStrategyCounts = new HashMap<>();
-        Map<String, double[]> localStrategyPnl = new HashMap<>();
-        Map<String, int[]> localTickerCounts = new HashMap<>();
-        Map<String, double[]> localTickerPnl = new HashMap<>();
+        final ComputedStats stats = computeStats(allTrades, config.initialCapital());
 
-        for (TradeRecord t : allTrades) {
-            double pnl = t.netPnl();
-            localTotalPnl += pnl;
-            if (pnl > 0) {
-                localWins++;
-                localTotalProfit += pnl;
-                localStrategyPnl.computeIfAbsent(t.strategy(), k -> new double[2])[0] += pnl;
-                localTickerPnl.computeIfAbsent(t.ticker(), k -> new double[2])[0] += pnl;
-            } else if (pnl < 0) {
-                localLosses++;
-                double absLoss = Math.abs(pnl);
-                localTotalLoss += absLoss;
-                localStrategyPnl.computeIfAbsent(t.strategy(), k -> new double[2])[1] += absLoss;
-                localTickerPnl.computeIfAbsent(t.ticker(), k -> new double[2])[1] += absLoss;
-            }
-            localStrategyCounts.computeIfAbsent(t.strategy(), k -> new int[2])[0]++;
-            if (pnl > 0) localStrategyCounts.get(t.strategy())[1]++;
-            localTickerCounts.computeIfAbsent(t.ticker(), k -> new int[2])[0]++;
-            if (pnl > 0) localTickerCounts.get(t.ticker())[1]++;
-            localAvgDurationSum += java.time.Duration.between(t.entryTime(), t.exitTime()).toMinutes() / 60.0;
-            double ret = pnl / config.initialCapital();
-            localSharpeSum += ret;
-            localSharpeSqSum += ret * ret;
-        }
-
-        double finalCapital = config.initialCapital() + localTotalPnl;
-        double winRate = allTrades.isEmpty() ? 0 : (double) localWins / allTrades.size();
-        double profitFactor = localTotalLoss == 0 ? (localTotalProfit > 0 ? Double.POSITIVE_INFINITY : 0) : localTotalProfit / localTotalLoss;
-        double avgWin = localWins > 0 ? localTotalProfit / localWins : 0;
-        double avgLoss = localLosses > 0 ? localTotalLoss / localLosses : 0;
-        double avgDuration = allTrades.isEmpty() ? 0 : localAvgDurationSum / allTrades.size();
-        double n = allTrades.size();
-        double sharpe = n < 2 ? 0 : (localSharpeSum / n) / Math.sqrt((localSharpeSqSum / n) - (localSharpeSum / n) * (localSharpeSum / n) + 1e-10) * Math.sqrt(252);
+        double finalCapital = config.initialCapital() + stats.totalPnl();
+        double winRate = allTrades.isEmpty() ? 0 : (double) stats.wins() / allTrades.size();
+        double profitFactor = stats.totalLoss() == 0
+                ? (stats.totalProfit() > 0 ? Double.POSITIVE_INFINITY : 0)
+                : stats.totalProfit() / stats.totalLoss();
+        double avgWin = stats.wins() > 0 ? stats.totalProfit() / stats.wins() : 0;
+        double avgLoss = stats.losses() > 0 ? stats.totalLoss() / stats.losses() : 0;
 
         double maxDrawdown = 0, maxDrawdownPct = 0;
         double peak = config.initialCapital();
@@ -911,31 +812,12 @@ public class BacktestEngine {
             if (dd > maxDrawdown) { maxDrawdown = dd; maxDrawdownPct = dd / peak; }
         }
 
-        Map<String, BacktestReport.StrategyStats> byStrategy = new LinkedHashMap<>();
-        for (Map.Entry<String, int[]> e : localStrategyCounts.entrySet()) {
-            String name = e.getKey();
-            int[] counts = e.getValue();
-            double[] pnl = localStrategyPnl.getOrDefault(name, new double[2]);
-            double pf = pnl[1] == 0 ? (pnl[0] > 0 ? Double.POSITIVE_INFINITY : 0) : pnl[0] / pnl[1];
-            byStrategy.put(name, new BacktestReport.StrategyStats(counts[0], counts[1],
-                    counts[0] == 0 ? 0 : (double) counts[1] / counts[0], pnl[0] - pnl[1], pf, 0));
-        }
-        Map<String, BacktestReport.StrategyStats> byTicker = new LinkedHashMap<>();
-        for (Map.Entry<String, int[]> e : localTickerCounts.entrySet()) {
-            String name = e.getKey();
-            int[] counts = e.getValue();
-            double[] pnl = localTickerPnl.getOrDefault(name, new double[2]);
-            double pf = pnl[1] == 0 ? (pnl[0] > 0 ? Double.POSITIVE_INFINITY : 0) : pnl[0] / pnl[1];
-            byTicker.put(name, new BacktestReport.StrategyStats(counts[0], counts[1],
-                    counts[0] == 0 ? 0 : (double) counts[1] / counts[0], pnl[0] - pnl[1], pf, 0));
-        }
-
         BacktestReport report = new BacktestReport(
-                config.initialCapital(), finalCapital, localTotalPnl,
-                localTotalPnl / config.initialCapital(),
-                allTrades.size(), localWins, localLosses, winRate, profitFactor,
-                maxDrawdown, maxDrawdownPct, sharpe, avgWin, avgLoss, avgDuration,
-                byStrategy, byTicker, equityCurve, allTrades, elapsed);
+                config.initialCapital(), finalCapital, stats.totalPnl(),
+                stats.totalPnl() / config.initialCapital(),
+                allTrades.size(), stats.wins(), stats.losses(), winRate, profitFactor,
+                maxDrawdown, maxDrawdownPct, stats.sharpe(), avgWin, avgLoss, stats.avgDuration(),
+                stats.byStrategy(), stats.byTicker(), equityCurve, allTrades, elapsed);
 
         writeSummaryReport(report);
         writeEquityCsv(equityCurve);
@@ -971,7 +853,7 @@ public class BacktestEngine {
                             t, s.trades(), s.winRate() * 100, s.totalPnl(), s.profitFactor()));
             pw.printf("\nElapsed: %d ms%n", r.elapsedMs());
         } catch (Exception e) {
-            log.warn("Failed to write summary: {}", e.getMessage());
+            log.warn("Failed to write summary: {}", e.getMessage(), e);
         }
     }
 
@@ -1008,7 +890,7 @@ public class BacktestEngine {
                 }
                 if (!strategy.isTriggered(ticker, data, nyTime)) continue;
 
-                boolean isCall = strategy.getClass().getSimpleName().toLowerCase().contains("call");
+                boolean isCall = strategy.isCall();
                 double entryPrice = candle.close();
 
                 TickerStrategyProfile profile = tickerMemory.getStrategyProfile(ticker, strategy.getName());
@@ -1106,7 +988,7 @@ public class BacktestEngine {
                 Map.of("exitReason", reason, "grossPnl", grossPnl));
 
         if (generateTradeCharts && pos.chartCandles != null && !pos.chartCandles.isEmpty()) {
-            long minutesHeld = java.time.Duration.between(pos.entryTime, exitTime).toMinutes();
+            long minutesHeld = Duration.between(pos.entryTime, exitTime).toMinutes();
             int candlesHeld = Math.max(1, (int) Math.round(minutesHeld / 15.0));
 
             Path chartsDir = Path.of("backtest/charts");
@@ -1138,6 +1020,92 @@ public class BacktestEngine {
             case "reversal" -> "reversal";
             default -> base.isEmpty() ? "unknown" : base;
         };
+    }
+
+    /**
+     * Computed statistics for a trade list. Returned by {@link #computeStats}.
+     */
+    private record ComputedStats(
+            double totalPnl,
+            double totalProfit,
+            double totalLoss,
+            int wins,
+            int losses,
+            double avgDuration,
+            double sharpe,
+            Map<String, BacktestReport.StrategyStats> byStrategy,
+            Map<String, BacktestReport.StrategyStats> byTicker
+    ) {}
+
+    /**
+     * Single-pass statistics computation over a trade list.
+     *
+     * <p>Extracted to eliminate the ~70-line duplication between {@code runCore}
+     * and {@code buildReportFromResumedData}.
+     *
+     * @param trades         all trades to aggregate
+     * @param initialCapital used to normalise returns for Sharpe computation
+     * @return computed statistics ready to be passed to {@link BacktestReport}
+     */
+    private ComputedStats computeStats(List<TradeRecord> trades, double initialCapital) {
+        double totalPnl = 0, totalProfit = 0, totalLoss = 0, sharpeSum = 0, sharpeSqSum = 0;
+        int wins = 0, losses = 0;
+        double avgDurationSum = 0;
+        Map<String, int[]> strategyCounts = new HashMap<>();
+        Map<String, double[]> strategyPnl = new HashMap<>();
+        Map<String, int[]> tickerCounts = new HashMap<>();
+        Map<String, double[]> tickerPnl = new HashMap<>();
+
+        for (TradeRecord t : trades) {
+            double pnl = t.netPnl();
+            totalPnl += pnl;
+            if (pnl > 0) {
+                wins++;
+                totalProfit += pnl;
+                strategyPnl.computeIfAbsent(t.strategy(), k -> new double[2])[0] += pnl;
+                tickerPnl.computeIfAbsent(t.ticker(), k -> new double[2])[0] += pnl;
+            } else if (pnl < 0) {
+                losses++;
+                double absLoss = Math.abs(pnl);
+                totalLoss += absLoss;
+                strategyPnl.computeIfAbsent(t.strategy(), k -> new double[2])[1] += absLoss;
+                tickerPnl.computeIfAbsent(t.ticker(), k -> new double[2])[1] += absLoss;
+            }
+            strategyCounts.computeIfAbsent(t.strategy(), k -> new int[2])[0]++;
+            if (pnl > 0) strategyCounts.get(t.strategy())[1]++;
+            tickerCounts.computeIfAbsent(t.ticker(), k -> new int[2])[0]++;
+            if (pnl > 0) tickerCounts.get(t.ticker())[1]++;
+            avgDurationSum += Duration.between(t.entryTime(), t.exitTime()).toMinutes() / 60.0;
+            double ret = pnl / initialCapital;
+            sharpeSum += ret;
+            sharpeSqSum += ret * ret;
+        }
+
+        double avgDuration = trades.isEmpty() ? 0 : avgDurationSum / trades.size();
+        double n = trades.size();
+        double sharpe = n < 2 ? 0
+                : (sharpeSum / n) / Math.sqrt((sharpeSqSum / n) - (sharpeSum / n) * (sharpeSum / n) + 1e-10) * Math.sqrt(252);
+
+        Map<String, BacktestReport.StrategyStats> byStrategy = new LinkedHashMap<>();
+        for (Map.Entry<String, int[]> e : strategyCounts.entrySet()) {
+            String name = e.getKey();
+            int[] counts = e.getValue();
+            double[] pnl = strategyPnl.getOrDefault(name, new double[2]);
+            double pf = pnl[1] == 0 ? (pnl[0] > 0 ? Double.POSITIVE_INFINITY : 0) : pnl[0] / pnl[1];
+            byStrategy.put(name, new BacktestReport.StrategyStats(counts[0], counts[1],
+                    counts[0] == 0 ? 0 : (double) counts[1] / counts[0], pnl[0] - pnl[1], pf, 0));
+        }
+        Map<String, BacktestReport.StrategyStats> byTicker = new LinkedHashMap<>();
+        for (Map.Entry<String, int[]> e : tickerCounts.entrySet()) {
+            String name = e.getKey();
+            int[] counts = e.getValue();
+            double[] pnl = tickerPnl.getOrDefault(name, new double[2]);
+            double pf = pnl[1] == 0 ? (pnl[0] > 0 ? Double.POSITIVE_INFINITY : 0) : pnl[0] / pnl[1];
+            byTicker.put(name, new BacktestReport.StrategyStats(counts[0], counts[1],
+                    counts[0] == 0 ? 0 : (double) counts[1] / counts[0], pnl[0] - pnl[1], pf, 0));
+        }
+
+        return new ComputedStats(totalPnl, totalProfit, totalLoss, wins, losses, avgDuration, sharpe, byStrategy, byTicker);
     }
 
     /**

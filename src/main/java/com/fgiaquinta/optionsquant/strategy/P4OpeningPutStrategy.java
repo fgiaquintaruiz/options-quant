@@ -3,7 +3,9 @@ package com.fgiaquinta.optionsquant.strategy;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.utils.BollingerBandsUtil;
+import com.fgiaquinta.optionsquant.strategy.utils.ConditionEvaluator;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 import org.ta4j.core.BarSeries;
 
 import java.time.ZonedDateTime;
@@ -12,6 +14,7 @@ import java.util.List;
 import java.util.Set;
 
 @Slf4j
+@Component
 public class P4OpeningPutStrategy implements TradingStrategy, TimeframeRequirements {
 
     @Override
@@ -38,21 +41,26 @@ public class P4OpeningPutStrategy implements TradingStrategy, TimeframeRequireme
      * @return {@code true} if all three steps are satisfied; {@code false} on the first failure
      */
     @Override
+    public boolean isCall() {
+        return false;
+    }
+
+    @Override
     public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {
-        ZonedDateTime nyTime = currentTime.withZoneSameInstant(ZoneId.of("America/New_York"));
+        final ZonedDateTime nyTime = currentTime.withZoneSameInstant(ZoneId.of("America/New_York"));
 
         // Time gate: only 9:30–9:35 AM NY (evaluated before conditions so no logging needed)
         if (nyTime.getHour() != 9 || nyTime.getMinute() < 30 || nyTime.getMinute() > 35) {
             return false;
         }
 
-        BarSeries series15m = data.getSeries(TimeFrame.MIN_15);
-        BarSeries series5m = data.getSeries(TimeFrame.MIN_5);
+        final BarSeries series15m = data.getSeries(TimeFrame.MIN_15);
+        final BarSeries series5m = data.getSeries(TimeFrame.MIN_5);
 
         if (series15m == null || series5m == null || series15m.isEmpty() || series5m.isEmpty()) return false;
 
-        int idx15m = data.getIndexForTime(series15m, currentTime);
-        int idx5m = data.getIndexForTime(series5m, currentTime);
+        final int idx15m = data.getIndexForTime(series15m, currentTime);
+        final int idx5m = data.getIndexForTime(series5m, currentTime);
         if (idx15m < 20 || idx5m < 1) return false;
 
         // ---- Pre-compute all values needed by conditions ----
@@ -76,43 +84,28 @@ public class P4OpeningPutStrategy implements TradingStrategy, TimeframeRequireme
 
         final List<Condition> conditions = List.of(
             new Condition() {
-                public boolean test() { return isLateral; }
-                public String label()  { return "Tendencia totalmente lateral y sin volatilidad en 15m"; }
-                public String value()  { return String.format("BB width %.4f%% < 2.0%% lateral=%b", bbWidthPrev, isLateral); }
+                @Override public boolean test() { return isLateral; }
+                @Override public String label()  { return "Tendencia totalmente lateral y sin volatilidad en 15m"; }
+                @Override public String value()  { return String.format("BB width %.4f%% < 2.0%% lateral=%b", bbWidthPrev, isLateral); }
             },
             new Condition() {
-                public boolean test() { return isExtremeGapUp && gapInRange; }
-                public String label()  { return "Apertura con salto, precio en zona de sobreventa"; }
-                public String value()  {
+                @Override public boolean test() { return isExtremeGapUp && gapInRange; }
+                @Override public String label()  { return "Apertura con salto, precio en zona de sobreventa"; }
+                @Override public String value()  {
                     return String.format("open %.4f > upperBB %.4f=%b; gap %.2f%% in [+1.5%% +6%%]=%b",
                             openToday, upperBB, isExtremeGapUp, gapPct * 100, gapInRange);
                 }
             },
             new Condition() {
-                public boolean test() { return isRedCandle; }
-                public String label()  { return "Ejecutar en los primeros 5 minutos de apertura"; }
-                public String value()  {
+                @Override public boolean test() { return isRedCandle; }
+                @Override public String label()  { return "Ejecutar en los primeros 5 minutos de apertura"; }
+                @Override public String value()  {
                     return String.format("close %.4f < open %.4f red=%b; time %s",
                             currentClose, openToday, isRedCandle, nyTime.toLocalTime());
                 }
             }
         );
 
-        final int total = conditions.size();
-        for (int step = 0; step < total; step++) {
-            final Condition c = conditions.get(step);
-            if (log.isDebugEnabled()) {
-                final String stepPrefix = String.format("[P4] %s @ %s — Paso %d/%d \"%s\" → %s",
-                        ticker, currentTime.toLocalTime(), step + 1, total, c.label(), c.value());
-                if (!c.test()) {
-                    log.debug("{} ❌ STOP", stepPrefix);
-                    return false;
-                }
-                log.debug("{} ✅", stepPrefix);
-            } else if (!c.test()) {
-                return false;
-            }
-        }
-        return true;
+        return ConditionEvaluator.evaluate("[P4]", ticker, currentTime, conditions, log);
     }
 }

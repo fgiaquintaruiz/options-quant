@@ -4,6 +4,7 @@ import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.utils.ConditionEvaluator;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
@@ -15,10 +16,10 @@ import org.ta4j.core.indicators.helpers.VolumeIndicator;
 import java.time.Duration;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * P6 - REVERSIÓN BAJISTA (Reversal Put) — sin referencia libro.
@@ -34,8 +35,9 @@ import java.util.Set;
  * Cooldown: 2 hours between triggers per ticker. Excluded: 9h NY.
  */
 @Slf4j
+@Component
 public class P6ReversalPutStrategy implements TradingStrategy, TimeframeRequirements {
-    private final Map<String, ZonedDateTime> lastTriggerMap = new HashMap<>();
+    private final Map<String, ZonedDateTime> lastTriggerMap = new ConcurrentHashMap<>();
 
     @Override
     public Set<TimeFrame> requiredTimeframes() {
@@ -63,36 +65,41 @@ public class P6ReversalPutStrategy implements TradingStrategy, TimeframeRequirem
      * @return {@code true} if all four conditions are satisfied; {@code false} on the first failure
      */
     @Override
+    public boolean isCall() {
+        return false;
+    }
+
+    @Override
     public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {
 
-        ZonedDateTime nyTime = currentTime.withZoneSameInstant(ZoneId.of("America/New_York"));
+        final ZonedDateTime nyTime = currentTime.withZoneSameInstant(ZoneId.of("America/New_York"));
         if (nyTime.getHour() == 9) return false;
 
-        ZonedDateTime lastTrigger = lastTriggerMap.get(ticker);
+        final ZonedDateTime lastTrigger = lastTriggerMap.get(ticker);
         if (lastTrigger != null && Duration.between(lastTrigger, currentTime).toHours() < 2) return false;
 
-        BarSeries series1D = data.getSeries(TimeFrame.DAY_1);
-        BarSeries series1h = data.getSeries(TimeFrame.HOUR_1);
-        BarSeries series15m = data.getSeries(TimeFrame.MIN_15);
+        final BarSeries series1D = data.getSeries(TimeFrame.DAY_1);
+        final BarSeries series1h = data.getSeries(TimeFrame.HOUR_1);
+        final BarSeries series15m = data.getSeries(TimeFrame.MIN_15);
 
         if (series1D == null || series1h == null || series15m == null ||
                 series1D.isEmpty() || series1h.isEmpty() || series15m.isEmpty()) {
             return false;
         }
 
-        int idx1D = data.getIndexForTime(series1D, currentTime);
-        int idx1h = data.getIndexForTime(series1h, currentTime);
-        int idx15m = data.getIndexForTime(series15m, currentTime);
+        final int idx1D = data.getIndexForTime(series1D, currentTime);
+        final int idx1h = data.getIndexForTime(series1h, currentTime);
+        final int idx15m = data.getIndexForTime(series15m, currentTime);
 
         if (idx1D < 20 || idx1h < 20 || idx15m < 20) return false;
 
         // ---- Pre-compute all values needed by conditions ----
 
-        ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
-        OpenPriceIndicator open1h   = new OpenPriceIndicator(series1h);
-        HighPriceIndicator high1h   = new HighPriceIndicator(series1h);
-        LowPriceIndicator low1h     = new LowPriceIndicator(series1h);
-        SMAIndicator sma20_1h       = new SMAIndicator(close1h, 20);
+        final ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
+        final OpenPriceIndicator open1h   = new OpenPriceIndicator(series1h);
+        final HighPriceIndicator high1h   = new HighPriceIndicator(series1h);
+        final LowPriceIndicator low1h     = new LowPriceIndicator(series1h);
+        final SMAIndicator sma20_1h       = new SMAIndicator(close1h, 20);
 
         // Paso 1: prior uptrend — 3 bars above SMA20
         boolean wasClearUptrend = true;
@@ -118,15 +125,15 @@ public class P6ReversalPutStrategy implements TradingStrategy, TimeframeRequirem
         final double candleRange       = currentHigh1h - currentLow1h;
         final boolean closedNearLow    = candleRange > 0 && (currentClose1h - currentLow1h) <= (candleRange * 0.35);
 
-        VolumeIndicator vol1h   = new VolumeIndicator(series1h);
-        SMAIndicator avgVol1h   = new SMAIndicator(vol1h, 10);
+        final VolumeIndicator vol1h = new VolumeIndicator(series1h);
+        final SMAIndicator avgVol1h = new SMAIndicator(vol1h, 10);
         final double currentVol = vol1h.getValue(idx1h).doubleValue();
         final double avgVol     = avgVol1h.getValue(idx1h).doubleValue();
         final boolean hasVolume = currentVol >= (avgVol * 0.90);
 
         // Paso 4: 15m downtrend confirmation
-        ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
-        SMAIndicator sma20_15m       = new SMAIndicator(close15m, 20);
+        final ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
+        final SMAIndicator sma20_15m       = new SMAIndicator(close15m, 20);
         final double currentPrice15m = close15m.getValue(idx15m).doubleValue();
         final double currentSma15m   = sma20_15m.getValue(idx15m).doubleValue();
         final double prevSma15m      = sma20_15m.getValue(idx15m - 1).doubleValue();

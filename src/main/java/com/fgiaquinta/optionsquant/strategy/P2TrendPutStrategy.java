@@ -3,7 +3,9 @@ package com.fgiaquinta.optionsquant.strategy;
 import com.fgiaquinta.optionsquant.domain.TimeFrame;
 import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.utils.BollingerBandsUtil;
+import com.fgiaquinta.optionsquant.strategy.utils.ConditionEvaluator;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.*;
@@ -17,6 +19,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
+@Component
 public class P2TrendPutStrategy implements TradingStrategy, TimeframeRequirements {
     private final Map<String, ZonedDateTime> lastTriggerMap = new ConcurrentHashMap<>();
 
@@ -45,12 +48,17 @@ public class P2TrendPutStrategy implements TradingStrategy, TimeframeRequirement
      * @return {@code true} if all four steps are satisfied; {@code false} on the first failure
      */
     @Override
+    public boolean isCall() {
+        return false;
+    }
+
+    @Override
     public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {
 
-        ZonedDateTime nyTime = currentTime.withZoneSameInstant(ZoneId.of("America/New_York"));
+        final ZonedDateTime nyTime = currentTime.withZoneSameInstant(ZoneId.of("America/New_York"));
         if (nyTime.getHour() == 9) return false;
 
-        ZonedDateTime lastTrigger = lastTriggerMap.get(ticker);
+        final ZonedDateTime lastTrigger = lastTriggerMap.get(ticker);
         if (lastTrigger != null && Duration.between(lastTrigger, currentTime).toHours() < 2) return false;
 
         final BarSeries series1D = data.getSeries(TimeFrame.DAY_1);
@@ -70,16 +78,16 @@ public class P2TrendPutStrategy implements TradingStrategy, TimeframeRequirement
 
         // ---- Pre-compute all values needed by conditions ----
 
-        ClosePriceIndicator close1D = new ClosePriceIndicator(series1D);
+        final ClosePriceIndicator close1D = new ClosePriceIndicator(series1D);
         final double dailyClose1    = close1D.getValue(idx1D - 1).doubleValue();
         final double dailyClose2    = close1D.getValue(idx1D - 2).doubleValue();
         final boolean isDailyDowntrend = dailyClose1 < dailyClose2;
 
-        ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
-        OpenPriceIndicator open1h   = new OpenPriceIndicator(series1h);
-        HighPriceIndicator high1h   = new HighPriceIndicator(series1h);
-        LowPriceIndicator low1h     = new LowPriceIndicator(series1h);
-        SMAIndicator sma20_1h       = new SMAIndicator(close1h, 20);
+        final ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
+        final OpenPriceIndicator open1h   = new OpenPriceIndicator(series1h);
+        final HighPriceIndicator high1h   = new HighPriceIndicator(series1h);
+        final LowPriceIndicator low1h     = new LowPriceIndicator(series1h);
+        final SMAIndicator sma20_1h       = new SMAIndicator(close1h, 20);
 
         // Last 3 bars below SMA20
         boolean wasBelowSma = true;
@@ -106,46 +114,46 @@ public class P2TrendPutStrategy implements TradingStrategy, TimeframeRequirement
         final double candleRange      = currentHigh1h - currentLow1h;
         final boolean closedNearLow   = candleRange > 0 && (currentClose1h - currentLow1h) <= (candleRange * 0.35);
 
-        VolumeIndicator vol1h = new VolumeIndicator(series1h);
-        SMAIndicator avgVol1h = new SMAIndicator(vol1h, 10);
+        final VolumeIndicator vol1h = new VolumeIndicator(series1h);
+        final SMAIndicator avgVol1h = new SMAIndicator(vol1h, 10);
         final double currentVol = vol1h.getValue(idx1h).doubleValue();
         final double avgVol     = avgVol1h.getValue(idx1h).doubleValue();
         final boolean hasVolume = currentVol >= (avgVol * 0.90);
 
-        ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
-        SMAIndicator sma20_15m       = new SMAIndicator(close15m, 20);
+        final ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
+        final SMAIndicator sma20_15m       = new SMAIndicator(close15m, 20);
         final double currentPrice15m = close15m.getValue(idx15m).doubleValue();
         final double currentSma15m   = sma20_15m.getValue(idx15m).doubleValue();
         final double prevSma15m      = sma20_15m.getValue(idx15m - 1).doubleValue();
         final boolean isDowntrend15m = (currentPrice15m < currentSma15m) && (currentSma15m < prevSma15m);
 
-        BollingerBandsUtil bb15m    = new BollingerBandsUtil(series15m, 20);
+        final BollingerBandsUtil bb15m = new BollingerBandsUtil(series15m, 20);
         final boolean isBearishBBTrend = bb15m.isBearishTrend(idx15m, 10);
 
         // ---- Four-step condition array (mapped to reference book) ----
 
         final List<Condition> conditions = List.of(
             new Condition() {
-                public boolean test() { return isDailyDowntrend && capturedWasBelowSma; }
-                public String label()  { return "Tendencia bajista establecida (1D + 1H bajo SMA20)"; }
-                public String value()  {
+                @Override public boolean test() { return isDailyDowntrend && capturedWasBelowSma; }
+                @Override public String label()  { return "Tendencia bajista establecida (1D + 1H bajo SMA20)"; }
+                @Override public String value()  {
                     return String.format("1D close %.4f<%.4f=%b; 1H bars-above-sma20=%d/3",
                             dailyClose1, dailyClose2, isDailyDowntrend, capturedBarsAboveSma);
                 }
             },
             new Condition() {
-                public boolean test() { return touchedResistance && rejectedResistance; }
-                public String label()  { return "Pullback rechazado en SMA20 (toca y cierra por debajo)"; }
-                public String value()  {
+                @Override public boolean test() { return touchedResistance && rejectedResistance; }
+                @Override public String label()  { return "Pullback rechazado en SMA20 (toca y cierra por debajo)"; }
+                @Override public String value()  {
                     return String.format("high %.4f >= SMA20*0.995 %.4f=%b; close %.4f < SMA20 %.4f=%b",
                             currentHigh1h, currentSma1h * 0.995, touchedResistance,
                             currentClose1h, currentSma1h, rejectedResistance);
                 }
             },
             new Condition() {
-                public boolean test() { return isBearishCandle && closedNearLow && hasVolume; }
-                public String label()  { return "Vela bajista con presión vendedora (cuerpo + mecha + volumen)"; }
-                public String value()  {
+                @Override public boolean test() { return isBearishCandle && closedNearLow && hasVolume; }
+                @Override public String label()  { return "Vela bajista con presión vendedora (cuerpo + mecha + volumen)"; }
+                @Override public String value()  {
                     return String.format("bearish=%b; closedNearLow=%b (%.1f%%); vol %.0f>=90%%avg %.0f=%b",
                             isBearishCandle, closedNearLow,
                             candleRange > 0 ? ((currentClose1h - currentLow1h) / candleRange * 100) : 0,
@@ -153,29 +161,17 @@ public class P2TrendPutStrategy implements TradingStrategy, TimeframeRequirement
                 }
             },
             new Condition() {
-                public boolean test() { return isDowntrend15m && isBearishBBTrend; }
-                public String label()  { return "Tendencia bajista total en 15m (SMA + Bollinger)"; }
-                public String value()  {
+                @Override public boolean test() { return isDowntrend15m && isBearishBBTrend; }
+                @Override public String label()  { return "Tendencia bajista total en 15m (SMA + Bollinger)"; }
+                @Override public String value()  {
                     return String.format("15m price %.4f<SMA %.4f && SMA<prevSMA %.4f=%b; BB bearish=%b",
                             currentPrice15m, currentSma15m, prevSma15m, isDowntrend15m, isBearishBBTrend);
                 }
             }
         );
 
-        final int total = conditions.size();
-        for (int step = 0; step < total; step++) {
-            final Condition c = conditions.get(step);
-            if (log.isDebugEnabled()) {
-                final String stepPrefix = String.format("[P2] %s @ %s — Paso %d/%d \"%s\" → %s",
-                        ticker, currentTime.toLocalTime(), step + 1, total, c.label(), c.value());
-                if (!c.test()) {
-                    log.debug("{} ❌ STOP", stepPrefix);
-                    return false;
-                }
-                log.debug("{} ✅", stepPrefix);
-            } else if (!c.test()) {
-                return false;
-            }
+        if (!ConditionEvaluator.evaluate("[P2]", ticker, currentTime, conditions, log)) {
+            return false;
         }
 
         lastTriggerMap.put(ticker, currentTime);

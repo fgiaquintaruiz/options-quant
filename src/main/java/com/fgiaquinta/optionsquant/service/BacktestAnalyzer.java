@@ -8,6 +8,10 @@ import org.springframework.stereotype.Service;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -352,7 +356,7 @@ public class BacktestAnalyzer {
                 }
             }
         } catch (Exception e) {
-            log.error("Failed to read CSV: {}", e.getMessage());
+            log.error("Failed to read CSV: {}", e.getMessage(), e);
         }
         
         return trades;
@@ -363,15 +367,18 @@ public class BacktestAnalyzer {
         if (parts.length < 15) return null;
         
         try {
+            final ZonedDateTime entryTime = parseTimestamp(parts[5].trim());
+            final ZonedDateTime exitTime = parseTimestamp(parts[7].trim());
+            if (entryTime == null || exitTime == null) return null;
             return new TradeRecord(
                     parts[0].trim(),                                           // ticker
                     parts[1].trim(),                                           // strategy
                     parts[2].trim(),                                           // direction
                     Integer.parseInt(parts[3].trim()),                         // qty
                     Double.parseDouble(parts[4].trim()),                       // entryPrice
-                    parseTimestamp(parts[5].trim()),                           // entryTime
+                    entryTime,                                                 // entryTime
                     Double.parseDouble(parts[6].trim()),                       // exitPrice
-                    parseTimestamp(parts[7].trim()),                           // exitTime
+                    exitTime,                                                  // exitTime
                     parts[8].trim(),                                           // exitReason
                     Double.parseDouble(parts[9].trim()),                       // grossPnl
                     Double.parseDouble(parts[10].trim()),                      // commission
@@ -381,19 +388,21 @@ public class BacktestAnalyzer {
                     Double.parseDouble(parts[14].trim())                       // maxRunup
             );
         } catch (Exception e) {
+            log.warn("Failed to parse trade line '{}' — skipping record", line, e);
             return null;
         }
     }
 
-    private java.time.ZonedDateTime parseTimestamp(String timestamp) {
+    private ZonedDateTime parseTimestamp(String timestamp) {
         try {
-            java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(
-                    timestamp, 
-                    java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+            final LocalDateTime ldt = LocalDateTime.parse(
+                    timestamp,
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
             );
-            return ldt.atZone(java.time.ZoneId.systemDefault());
+            return ldt.atZone(ZoneId.of("America/New_York"));
         } catch (Exception e) {
-            return java.time.ZonedDateTime.now();
+            log.warn("Failed to parse timestamp '{}' — skipping record", timestamp, e);
+            return null;
         }
     }
 
@@ -428,12 +437,129 @@ public class BacktestAnalyzer {
             sb.append(String.format("Total Suggestions: %d\n", suggestions.size()));
             sb.append(String.format("Critical Issues: %d\n", getCriticalSuggestions().size()));
             sb.append(String.format("Optimization Tips: %d\n\n", getOptimizationSuggestions().size()));
-            
+
             for (int i = 0; i < suggestions.size(); i++) {
                 sb.append(String.format("%d. %s\n", i + 1, suggestions.get(i)));
             }
-            
+
             return sb.toString();
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Dashboard-facing analysis methods (work with Map-based trade data)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Computes performance stats and generates recommendations for a list of
+     * pre-filtered strategy trades (as {@code Map<String, Object>} rows from the
+     * dashboard's in-memory trade cache).
+     *
+     * @param trades   strategy trades, already filtered by strategy name (and optionally ticker)
+     * @return map with keys: wins, losses, winRate, totalPnl, avgWin, avgLoss,
+     *         exitReasons, recommendations, suggestedParams
+     */
+    public Map<String, Object> analyzeStrategyTrades(List<Map<String, Object>> trades) {
+        final long wins = trades.stream().filter(t -> (double) t.getOrDefault("netPnl", 0.0) > 0).count();
+        final long losses = trades.size() - wins;
+        final double totalPnl = trades.stream().mapToDouble(t -> (double) t.getOrDefault("netPnl", 0.0)).sum();
+        final double winRate = (double) wins / trades.size();
+        final double avgWin = wins > 0 ? trades.stream().filter(t -> (double) t.get("netPnl") > 0)
+                .mapToDouble(t -> (double) t.get("netPnl")).average().orElse(0) : 0;
+        final double avgLoss = losses > 0 ? trades.stream().filter(t -> (double) t.get("netPnl") <= 0)
+                .mapToDouble(t -> Math.abs((double) t.get("netPnl"))).average().orElse(0) : 0;
+
+        final Map<String, Long> exitReasons = new LinkedHashMap<>();
+        for (Map<String, Object> trade : trades) {
+            final String reason = (String) trade.getOrDefault("exitReason", "unknown");
+            exitReasons.merge(reason, 1L, Long::sum);
+        }
+
+        final List<String> recommendations = new ArrayList<>();
+        final List<String> suggestedParams = new ArrayList<>();
+
+        if (winRate < 0.40 && trades.size() >= 3) {
+            recommendations.add("Win rate is low (" + String.format("%.1f%%", winRate * 100) + ") — consider widening SL ATR multiplier by 0.3");
+            suggestedParams.add("SL ATR: increase by 0.3 (e.g., 2.0 → 2.3)");
+            recommendations.add("Review entry conditions: may be entering too early/late");
+            recommendations.add("Consider disabling this strategy for current market conditions");
+        }
+        if (totalPnl < -500 && trades.size() >= 3) {
+            recommendations.add("Strategy is losing money — reduce position size by 50%");
+            suggestedParams.add("Position size: reduce by 50%");
+            recommendations.add("Check if market regime has changed (trending vs ranging)");
+        }
+        if (avgLoss > avgWin * 1.5 && losses > 2) {
+            recommendations.add("Average loss is " + String.format("%.0f%%", (avgLoss / avgWin - 1) * 100) + " larger than average win — tighten SL or reduce risk");
+            suggestedParams.add("Risk per trade: reduce from 2% to 1%");
+        }
+        if (winRate >= 0.60 && totalPnl > 0 && trades.size() >= 3) {
+            recommendations.add("Strategy is performing well — consider increasing position size");
+            suggestedParams.add("Position size: increase by 25%");
+            recommendations.add("This strategy is a winner — allocate more capital");
+        }
+
+        final long slHits = exitReasons.getOrDefault("SL", 0L);
+        final long tpHits = exitReasons.getOrDefault("TP", 0L);
+        if (slHits > tpHits && trades.size() >= 3) {
+            recommendations.add("More SL hits (" + slHits + ") than TP hits (" + tpHits + ") — SL might be too tight");
+            suggestedParams.add("SL ATR: widen by 0.2-0.5");
+        }
+
+        final Map<String, Object> result = new LinkedHashMap<>();
+        result.put("wins", wins);
+        result.put("losses", losses);
+        result.put("winRate", winRate * 100);
+        result.put("totalPnl", totalPnl);
+        result.put("avgWin", avgWin);
+        result.put("avgLoss", avgLoss);
+        result.put("exitReasons", exitReasons);
+        result.put("recommendations", recommendations);
+        result.put("suggestedParams", suggestedParams);
+        return result;
+    }
+
+    /**
+     * Builds a before/after comparison map for strategy retest results.
+     *
+     * @param previousTrades trades from the last completed run
+     * @param currentStats   strategy stats from the new backtest report
+     * @return map with keys: previous, current, improvement
+     */
+    public Map<String, Object> buildStrategyComparison(
+            List<Map<String, Object>> previousTrades,
+            BacktestReport.StrategyStats currentStats) {
+
+        final double previousPnl = previousTrades.stream()
+                .mapToDouble(t -> (double) t.getOrDefault("netPnl", 0.0)).sum();
+        final long previousWins = previousTrades.stream()
+                .filter(t -> (double) t.getOrDefault("netPnl", 0.0) > 0).count();
+        final double previousWinRate = previousTrades.isEmpty() ? 0 :
+                (double) previousWins / previousTrades.size();
+
+        final double currentPnl = currentStats != null ? currentStats.totalPnl() : 0;
+        final double currentWinRate = currentStats != null ? currentStats.winRate() : 0;
+        final int currentTradeCount = currentStats != null ? currentStats.trades() : 0;
+
+        final Map<String, Object> previous = new LinkedHashMap<>();
+        previous.put("trades", previousTrades.size());
+        previous.put("winRate", previousWinRate * 100);
+        previous.put("totalPnl", previousPnl);
+
+        final Map<String, Object> current = new LinkedHashMap<>();
+        current.put("trades", currentTradeCount);
+        current.put("winRate", currentWinRate * 100);
+        current.put("totalPnl", currentPnl);
+
+        final Map<String, Object> improvement = new LinkedHashMap<>();
+        improvement.put("pnlDiff", currentPnl - previousPnl);
+        improvement.put("winRateDiff", (currentWinRate - previousWinRate) * 100);
+        improvement.put("improved", currentPnl > previousPnl);
+
+        final Map<String, Object> result = new LinkedHashMap<>();
+        result.put("previous", previous);
+        result.put("current", current);
+        result.put("improvement", improvement);
+        return result;
     }
 }

@@ -168,6 +168,8 @@ class BacktestEngineStrategyFilterTest {
 
     private static final class StrategyA implements TradingStrategy {
         @Override
+        public boolean isCall() { return true; }
+        @Override
         public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {
             return true;
         }
@@ -176,6 +178,8 @@ class BacktestEngineStrategyFilterTest {
     }
 
     private static final class StrategyB implements TradingStrategy {
+        @Override
+        public boolean isCall() { return true; }
         @Override
         public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {
             return true;

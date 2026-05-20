@@ -5,6 +5,7 @@ import com.fgiaquinta.optionsquant.strategy.data.StrategyData;
 import com.fgiaquinta.optionsquant.strategy.utils.BollingerBandsUtil;
 import com.fgiaquinta.optionsquant.strategy.utils.ConditionEvaluator;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
@@ -13,10 +14,10 @@ import org.ta4j.core.indicators.helpers.LowPriceIndicator;
 import java.time.Duration;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * C3 - REBOTE EN SOPORTE (Support Bounce Call).
@@ -30,10 +31,11 @@ import java.util.Set;
  * Cooldown: 2 hours between triggers per ticker. Excluded: 9h NY.
  */
 @Slf4j
+@Component
 public class C3BounceCallStrategy implements TradingStrategy, TimeframeRequirements {
 
     // ANTI-MACHINE-GUN: 2-hour cooldown
-    private final Map<String, ZonedDateTime> lastTriggerMap = new HashMap<>();
+    private final Map<String, ZonedDateTime> lastTriggerMap = new ConcurrentHashMap<>();
 
     @Override
     public Set<TimeFrame> requiredTimeframes() {
@@ -60,12 +62,17 @@ public class C3BounceCallStrategy implements TradingStrategy, TimeframeRequireme
      * @return {@code true} if all four steps are satisfied; {@code false} on the first failure
      */
     @Override
+    public boolean isCall() {
+        return true;
+    }
+
+    @Override
     public boolean isTriggered(String ticker, StrategyData data, ZonedDateTime currentTime) {
 
         // =========================================================================
         // RULE 0.1: OPENING FILTER (Block 9 AM NY)
         // =========================================================================
-        ZonedDateTime nyTime = currentTime.withZoneSameInstant(ZoneId.of("America/New_York"));
+        final ZonedDateTime nyTime = currentTime.withZoneSameInstant(ZoneId.of("America/New_York"));
         if (nyTime.getHour() == 9) {
             return false;
         }
@@ -73,39 +80,39 @@ public class C3BounceCallStrategy implements TradingStrategy, TimeframeRequireme
         // =========================================================================
         // RULE 0.2: 2-HOUR COOLDOWN (Re-entry blocker)
         // =========================================================================
-        ZonedDateTime lastTrigger = lastTriggerMap.get(ticker);
+        final ZonedDateTime lastTrigger = lastTriggerMap.get(ticker);
         if (lastTrigger != null && Duration.between(lastTrigger, currentTime).toHours() < 2) {
             return false;
         }
 
-        BarSeries series1D = data.getSeries(TimeFrame.DAY_1);
-        BarSeries series1h = data.getSeries(TimeFrame.HOUR_1);
-        BarSeries series15m = data.getSeries(TimeFrame.MIN_15);
+        final BarSeries series1D = data.getSeries(TimeFrame.DAY_1);
+        final BarSeries series1h = data.getSeries(TimeFrame.HOUR_1);
+        final BarSeries series15m = data.getSeries(TimeFrame.MIN_15);
 
         if (series1D == null || series1h == null || series15m == null ||
                 series1D.isEmpty() || series1h.isEmpty() || series15m.isEmpty()) {
             return false;
         }
 
-        int idx1D = data.getIndexForTime(series1D, currentTime);
-        int idx1h = data.getIndexForTime(series1h, currentTime);
-        int idx15m = data.getIndexForTime(series15m, currentTime);
+        final int idx1D = data.getIndexForTime(series1D, currentTime);
+        final int idx1h = data.getIndexForTime(series1h, currentTime);
+        final int idx15m = data.getIndexForTime(series15m, currentTime);
 
         if (idx1D < 20 || idx1h < 20 || idx15m < 20) return false;
 
         // ---- Pre-compute all values needed by conditions ----
 
-        ClosePriceIndicator close1D = new ClosePriceIndicator(series1D);
+        final ClosePriceIndicator close1D = new ClosePriceIndicator(series1D);
         final double dailyClose1 = close1D.getValue(idx1D - 1).doubleValue();
         final double dailyClose2 = close1D.getValue(idx1D - 2).doubleValue();
         final boolean isUptrend = dailyClose1 > dailyClose2;
 
-        BollingerBandsUtil bb1h = new BollingerBandsUtil(series1h, 20);
+        final BollingerBandsUtil bb1h = new BollingerBandsUtil(series1h, 20);
         final boolean wasInBearishBBContext = bb1h.brokeBelowLowerBand(idx1h - 1, 5);
 
-        ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
-        LowPriceIndicator low1h = new LowPriceIndicator(series1h);
-        SMAIndicator sma20_1h = new SMAIndicator(close1h, 20);
+        final ClosePriceIndicator close1h = new ClosePriceIndicator(series1h);
+        final LowPriceIndicator low1h = new LowPriceIndicator(series1h);
+        final SMAIndicator sma20_1h = new SMAIndicator(close1h, 20);
 
         final double currentLow1h = low1h.getValue(idx1h).doubleValue();
         final double currentClose1h = close1h.getValue(idx1h).doubleValue();
@@ -114,8 +121,8 @@ public class C3BounceCallStrategy implements TradingStrategy, TimeframeRequireme
         final boolean touchedSupport = currentLow1h <= (sma20Val1h * 1.002);
         final boolean rejectedSupport = currentClose1h > sma20Val1h;
 
-        ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
-        SMAIndicator sma20_15m = new SMAIndicator(close15m, 20);
+        final ClosePriceIndicator close15m = new ClosePriceIndicator(series15m);
+        final SMAIndicator sma20_15m = new SMAIndicator(close15m, 20);
 
         final double currentPrice15m = close15m.getValue(idx15m).doubleValue();
         final double sma20Val15m = sma20_15m.getValue(idx15m).doubleValue();

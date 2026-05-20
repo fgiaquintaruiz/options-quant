@@ -15,12 +15,16 @@ public class BollingerBandsUtil {
     private final ClosePriceIndicator closePrice;
     private final int period;
     private final double k; // standard deviations (default 2)
+    private final SMAIndicator smaIndicator;
+    private final StandardDeviationIndicator stdDevIndicator;
 
     public BollingerBandsUtil(BarSeries series, int period, double k) {
         this.series = series;
         this.closePrice = new ClosePriceIndicator(series);
         this.period = period;
         this.k = k;
+        this.smaIndicator = new SMAIndicator(closePrice, period);
+        this.stdDevIndicator = new StandardDeviationIndicator(closePrice, period);
     }
 
     public BollingerBandsUtil(BarSeries series, int period) {
@@ -31,7 +35,7 @@ public class BollingerBandsUtil {
      * Gets the middle band (SMA of close prices).
      */
     public double getMiddle(int index) {
-        return new SMAIndicator(closePrice, period).getValue(index).doubleValue();
+        return smaIndicator.getValue(index).doubleValue();
     }
 
     /**
@@ -56,7 +60,7 @@ public class BollingerBandsUtil {
      * Gets the standard deviation at the given index.
      */
     public double getStandardDeviation(int index) {
-        return new StandardDeviationIndicator(closePrice, period).getValue(index).doubleValue();
+        return stdDevIndicator.getValue(index).doubleValue();
     }
 
     /**
@@ -164,6 +168,28 @@ public class BollingerBandsUtil {
         }
         // Bullish if >70% of candles are above middle band
         return (double) aboveMiddleCount / (lookback + 1) > 0.7;
+    }
+
+    /**
+     * Computes the average BB width percentage over the {@code lookback} bars preceding {@code currentIndex}.
+     *
+     * <p>Used by squeeze strategies (C1, P1) to detect Bollinger Band expansion relative to
+     * recent compression. The current bar ({@code currentIndex}) is excluded from the average —
+     * only the {@code lookback} prior bars are considered.
+     *
+     * @param bb           the BollingerBandsUtil instance for the relevant series and period
+     * @param currentIndex the bar index to start looking back from (exclusive)
+     * @param lookback     number of prior bars to include in the average
+     * @return average BB width as a percentage, or {@code 0.0} if no bars are available
+     */
+    public static double computeBBWidthAvg(BollingerBandsUtil bb, int currentIndex, int lookback) {
+        double sum = 0;
+        int count = 0;
+        for (int i = currentIndex - 1; i >= Math.max(0, currentIndex - lookback); i--) {
+            sum += bb.getWidthPercent(i);
+            count++;
+        }
+        return count == 0 ? 0 : sum / count;
     }
 
     /**

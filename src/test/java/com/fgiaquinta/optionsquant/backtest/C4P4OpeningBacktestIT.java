@@ -125,7 +125,8 @@ class C4P4OpeningBacktestIT {
             },
             LocalTime.of(9, 30), // entryWindowStart — override to allow C4/P4
             LocalTime.of(9, 36), // entryWindowEnd   — exclusive upper bound
-            LocalTime.of(13, 0)  // forcedCloseTime
+            LocalTime.of(13, 0), // forcedCloseTime
+            null                 // strategyFilter — run all strategies
         );
 
         // --- Run ---
