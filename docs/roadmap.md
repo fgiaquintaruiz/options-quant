@@ -73,7 +73,7 @@
 
 ### P1 — Esta semana (nuevas, 2026-05-19 evening)
 
-- [ ] **Investigar y decidir SignalQualityFilter** — backtest no lo aplica, replay/live sí; puede explicar 0 señales en replay. Decidir: agregar al backtest o quitar del replay.
+- ✅ **Investigar y decidir SignalQualityFilter** — backtest no lo aplica, replay/live sí; puede explicar 0 señales en replay. Decidir: agregar al backtest o quitar del replay.
 - [ ] **Investigar c4/p4 opening** — BacktestEngine fuerza entry window 9:45 ET, c4/p4 requieren 9:30 ET; posiblemente nunca se evalúan en backtest. Verificar y corregir.
 - [ ] **Implementar Condition logging en 12 estrategias** — POC completado en P1Squeeze; extender a todas. Permite debug de qué condición falla por ticker.
 - [ ] **Visualización profunda por señal** — 2 charts (daily+1h, 1h+15m) con SMA/BB/TP/SL. Diseño pendiente.
@@ -81,13 +81,13 @@
 ### P1 — Pendientes operativos (2026-05-20)
 
 - ⏸️ **Backtest c4/p4 opening con entry window 9:30-9:36 ET** — script listo en `scripts/run-backtest-c4-p4.ps1`, Fabio ejecuta manualmente
-- [ ] **Decidir sobre SignalQualityFilter** — no proviene del libro de the course author, sin tests, estrategias ya tienen filtros propios; opciones: (a) remover de live/replay, (b) agregar al backtest también, (c) mover inside cada estrategia
+- ✅ **Decidir sobre SignalQualityFilter** — no proviene del libro de the course author, sin tests, estrategias ya tienen filtros propios; opciones: (a) remover de live/replay, (b) agregar al backtest también, (c) mover inside cada estrategia — removido de live/replay path (f63b0b0, 8d9fd78)
 - [ ] **Extender Condition logging a las 11 estrategias restantes** — POC listo en P1/C1 Squeeze
 - [ ] **Implementar MultiTimeframeChart 1h+15m side-by-side**
 
 ### P1 CRÍTICO — Pricing de opciones (2026-05-20)
 
-- [ ] **Validar gap de pricing** — backtest usa `(exitPrice - entryPrice) * qty * 100` (delta=1 implícito) vs opciones reales; sobreestima ganancias/pérdidas, ignora theta decay y spread bid/ask [`BacktestEngine.java:1114-1117`, `RiskCalculator.java:15-16`]
+- ✅ **Validar gap de pricing** — backtest usa `(exitPrice - entryPrice) * qty * 100` (delta=1 implícito) vs opciones reales; sobreestima ganancias/pérdidas, ignora theta decay y spread bid/ask [`BacktestEngine.java:1114-1117`, `RiskCalculator.java:15-16`] — delta=0.60 aplicado (d5e3a41). Pending: theta decay, IV crush, datos reales de contratos.
 - [ ] **Validar divergencia estructural** — backtest mueve precio del subyacente, live ejecuta contratos reales con strike/expiry via IBKR [`OrderExecutionService.java:296-340`]; los P&L del backtest no son directamente comparables con live
 - [ ] **Investigar fuentes de datos reales de opciones** — Polygon options API, IBKR históricas; evaluar costo, granularidad y cobertura para el universo de 16 tickers
 
