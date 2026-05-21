@@ -2,10 +2,13 @@ package com.fgiaquinta.optionsquant.service;
 
 import com.fgiaquinta.optionsquant.config.IbkrProperties;
 import com.fgiaquinta.optionsquant.config.ScannerProperties;
+import com.fgiaquinta.optionsquant.controller.LiveModeController;
+import com.fgiaquinta.optionsquant.options.OptionChainRecorderService;
 import com.fgiaquinta.optionsquant.service.StrategyScannerService.ScanResult;
 import com.fgiaquinta.optionsquant.service.StrategyScannerService.Signal;
 import com.fgiaquinta.optionsquant.strategy.model.TradePlan;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -15,6 +18,8 @@ import org.springframework.stereotype.Component;
 import java.time.ZonedDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -40,22 +45,23 @@ public class MarketScanner {
 
     private final StrategyScannerService scannerService;
     private final IbkrProperties ibkrProperties;
-    private final com.fgiaquinta.optionsquant.service.OrderExecutionService orderExecutionService;
+    private final OrderExecutionService orderExecutionService;
     private final MacroEnvironmentFilter macroFilter;
     private final TelegramService telegramService;
     private final TrailingStopMonitor trailingStopMonitor;
-    private final com.fgiaquinta.optionsquant.controller.LiveModeController liveModeController;
+    private final LiveModeController liveModeController;
     private final MarketCalendarService marketCalendar;
     private final ScannerProperties scannerProperties;
     private final ScanPrioritizationService scanPrioritizationService;
+    /** Optional: present when the option-chain feature is wired; absent otherwise. */
+    private final OptionChainRecorderService optionChainRecorderService;
 
     // Live-replay-mode hooks — optional; null when feature not wired in the context.
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private ReplayClock replayClock;
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private ReplayOrderGate replayOrderGate;
+    private final ReplayClock replayClock;
+    private final ReplayOrderGate replayOrderGate;
 
     private static final ZoneId SPAIN_TZ = ZoneId.of("Europe/Madrid");
+    private static final int MAX_HOLD_MINUTES = 90;
 
     /** When false, scheduled scans are skipped (user can toggle from UI). */
     private final AtomicBoolean schedulerEnabled = new AtomicBoolean(true);
@@ -63,16 +69,25 @@ public class MarketScanner {
     public boolean isSchedulerEnabled() { return schedulerEnabled.get(); }
     public void setSchedulerEnabled(boolean enabled) { schedulerEnabled.set(enabled); }
 
+    /**
+     * Primary constructor — wires all dependencies including the option chain recorder.
+     * {@code replayClock} and {@code replayOrderGate} are optional beans; Spring injects
+     * {@code Optional.empty()} when the beans are not present in the context.
+     */
+    @Autowired
     public MarketScanner(StrategyScannerService scannerService,
                          IbkrProperties ibkrProperties,
-                         com.fgiaquinta.optionsquant.service.OrderExecutionService orderExecutionService,
+                         OrderExecutionService orderExecutionService,
                          MacroEnvironmentFilter macroFilter,
                          TelegramService telegramService,
                          TrailingStopMonitor trailingStopMonitor,
-                         com.fgiaquinta.optionsquant.controller.LiveModeController liveModeController,
+                         LiveModeController liveModeController,
                          MarketCalendarService marketCalendar,
                          ScannerProperties scannerProperties,
-                         ScanPrioritizationService scanPrioritizationService) {
+                         ScanPrioritizationService scanPrioritizationService,
+                         Optional<OptionChainRecorderService> optionChainRecorderService,
+                         Optional<ReplayClock> replayClock,
+                         Optional<ReplayOrderGate> replayOrderGate) {
         this.scannerService = scannerService;
         this.ibkrProperties = ibkrProperties;
         this.orderExecutionService = orderExecutionService;
@@ -83,13 +98,37 @@ public class MarketScanner {
         this.marketCalendar = marketCalendar;
         this.scannerProperties = scannerProperties;
         this.scanPrioritizationService = scanPrioritizationService;
+        this.optionChainRecorderService = optionChainRecorderService.orElse(null);
+        this.replayClock = replayClock.orElse(null);
+        this.replayOrderGate = replayOrderGate.orElse(null);
         log.info("🤖 MarketScanner initialized - Spain timezone, 15-min synchronized");
+
         log.info("   Auto-execute: {}", ibkrProperties.autoExecute());
         log.info("   Macro filter: ENABLED (multi-factor: SPY 50-SMA + short-term momentum)");
-        log.info("   Trailing stop monitor: ENABLED ({} min max hold, SMA20 trailing)", 90);
+        log.info("   Trailing stop monitor: ENABLED ({} min max hold, SMA20 trailing)", MAX_HOLD_MINUTES);
         log.info("   Order execution: REGULAR MARKET HOURS ONLY (9:30 AM - 4:00 PM ET)");
         log.info("   Exclusive scan lock: scheduler try {}ms, live preempt {}ms",
                 scannerProperties.exclusiveScanSchedulerLockWaitMs(), scannerProperties.livePreemptWaitMs());
+    }
+
+    /**
+     * Backward-compatible constructor for existing tests that don't inject
+     * {@link OptionChainRecorderService}. The option chain hook is a no-op when
+     * the service is not provided.
+     */
+    public MarketScanner(StrategyScannerService scannerService,
+                         IbkrProperties ibkrProperties,
+                         OrderExecutionService orderExecutionService,
+                         MacroEnvironmentFilter macroFilter,
+                         TelegramService telegramService,
+                         TrailingStopMonitor trailingStopMonitor,
+                         LiveModeController liveModeController,
+                         MarketCalendarService marketCalendar,
+                         ScannerProperties scannerProperties,
+                         ScanPrioritizationService scanPrioritizationService) {
+        this(scannerService, ibkrProperties, orderExecutionService, macroFilter, telegramService,
+                trailingStopMonitor, liveModeController, marketCalendar, scannerProperties,
+                scanPrioritizationService, Optional.empty(), Optional.empty(), Optional.empty());
     }
 
     /**
@@ -244,6 +283,17 @@ public class MarketScanner {
                 signal.timestamp());
 
         sendTelegramForScanSignal(signal);
+
+        // Fire-and-forget: record option chain at signal time (never blocks the signal path)
+        if (optionChainRecorderService != null) {
+            optionChainRecorderService.snapshotAsync(
+                    signal.ticker(),
+                    UUID.randomUUID().toString(),
+                    signal.strategy(),
+                    signal.direction(),
+                    "SIGNAL"
+            );
+        }
 
         if (!ibkrProperties.autoExecute()) {
             log.info("    ℹ️ Auto-execute disabled in application.yml");
