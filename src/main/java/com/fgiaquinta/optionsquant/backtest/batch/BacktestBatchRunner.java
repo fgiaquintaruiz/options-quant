@@ -24,6 +24,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +60,12 @@ public class BacktestBatchRunner implements ApplicationRunner {
 
     /** Execution timeframe — defined once so it's consistent across config + persistence. */
     private static final TimeFrame EXECUTION_TIMEFRAME = TimeFrame.MIN_15;
+
+    /** All 12 recognized strategy codes accepted by the --strategies flag. */
+    private static final Set<String> VALID_CODES = Set.of(
+            "c1", "c2", "c3", "c4", "c5", "c6",
+            "p1", "p2", "p3", "p4", "p5", "p6"
+    );
 
     /**
      * Statuses that indicate a ticker has real candle data worth backtesting.
@@ -263,7 +270,8 @@ public class BacktestBatchRunner implements ApplicationRunner {
 
         log.info("[backtest] {} tickers with valid candles — running 12 strategies", tickers.size());
 
-        BacktestConfig config = buildConfig(tickers, runId);
+        List<String> strategyFilter = parseStrategyFilter(args);
+        BacktestConfig config = buildConfig(tickers, runId, strategyFilter);
         List<BacktestBatchResult> results = new ArrayList<>();
         BacktestReport report = null;
 
@@ -428,18 +436,68 @@ public class BacktestBatchRunner implements ApplicationRunner {
      * each ticker completes, rather than in a single batch at the end.
      * The callback is safe to call from multiple worker threads concurrently.
      */
-    private BacktestConfig buildConfig(List<String> tickers, String runId) {
+    private BacktestConfig buildConfig(List<String> tickers, String runId, List<String> strategyFilter) {
         LocalDate from = LocalDate.of(2018, 1, 1);
         LocalDate to = LocalDate.now(ZoneOffset.UTC);
         if (persistenceService != null) {
-            return BacktestConfig.withCallback(tickers, from, to,
+            BacktestConfig base = BacktestConfig.withCallback(tickers, from, to,
                     (ticker, trades) -> {
                         persistenceService.persistTickerResult(
                                 runId, ticker, EXECUTION_TIMEFRAME.name(), trades);
                         log.info("[backtest] Persisted {} ({} trades)", ticker, trades.size());
                     });
+            return new BacktestConfig(
+                    base.tickers(), base.fromDate(), base.toDate(),
+                    base.initialCapital(), base.riskPerTradePct(), base.slippagePct(),
+                    base.commissionPerContract(), base.maxConcurrentTrades(),
+                    base.executionTimeframe(), base.includeTradePlans(), base.deterministicMode(),
+                    base.tpMultiplierDelta(), base.slMultiplierDelta(),
+                    base.onTickerComplete(),
+                    base.entryWindowStart(), base.entryWindowEnd(), base.forcedCloseTime(),
+                    strategyFilter
+            );
         }
-        return BacktestConfig.defaults(tickers, from, to);
+        BacktestConfig base = BacktestConfig.defaults(tickers, from, to);
+        return new BacktestConfig(
+                base.tickers(), base.fromDate(), base.toDate(),
+                base.initialCapital(), base.riskPerTradePct(), base.slippagePct(),
+                base.commissionPerContract(), base.maxConcurrentTrades(),
+                base.executionTimeframe(), base.includeTradePlans(), base.deterministicMode(),
+                base.tpMultiplierDelta(), base.slMultiplierDelta(),
+                base.onTickerComplete(),
+                base.entryWindowStart(), base.entryWindowEnd(), base.forcedCloseTime(),
+                strategyFilter
+        );
+    }
+
+    /**
+     * Parses the {@code --strategies} CLI flag into a validated list of strategy codes.
+     *
+     * <p>Accepts a comma-separated value (e.g. {@code --strategies=c4,p4}).
+     * All codes are lowercased and trimmed before validation.
+     *
+     * @param args the application arguments
+     * @return list of strategy codes, or {@code null} when the flag is absent (run all)
+     * @throws IllegalArgumentException if any code is not in {@link #VALID_CODES}
+     */
+    private List<String> parseStrategyFilter(ApplicationArguments args) {
+        List<String> values = args.getOptionValues("strategies");
+        if (values == null || values.isEmpty()) return null;
+        List<String> codes = Arrays.stream(values.get(0).split(","))
+                .map(String::trim)
+                .map(String::toLowerCase)
+                .filter(s -> !s.isEmpty())
+                .toList();
+        List<String> invalid = codes.stream()
+                .filter(c -> !VALID_CODES.contains(c))
+                .toList();
+        if (!invalid.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Invalid strategy codes: " + invalid +
+                    ". Valid codes: " + VALID_CODES.stream().sorted().toList()
+            );
+        }
+        return codes;
     }
 
     /**
