@@ -16,7 +16,8 @@ $argsList = @("--backtest-all", "--server.port=-1", "--spring.devtools.restart.e
 if ($CompleteTickers) { $argsList += "--complete-tickers" }
 if ($Fresh) { $argsList += "--backtest-fresh" }
 if ($Resume) { $argsList += "--backtest-resume" }
-if ($Strategies) { $argsList += "--strategies=$Strategies" }
+# Spring expects --strategies=c4,p4 (comma-separated, no spaces)
+if ($Strategies) { $argsList += "--strategies=$(($Strategies -split '[,\s]+' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) -join ',')" }
 $argsString = $argsList -join " "
 
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
