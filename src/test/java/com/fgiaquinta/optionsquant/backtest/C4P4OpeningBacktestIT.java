@@ -25,7 +25,6 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -42,8 +41,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * by the default global entry gate (9:45–10:30 AM). This test overrides that gate
  * to 9:30–9:36 AM so C4 and P4 can actually fire.
  *
- * <p>Uses the {@code onTickerComplete} callback to collect ONLY C4/P4 trades per
- * ticker, avoiding loading all 12 strategies' trades into memory simultaneously.
+ * <p>Uses {@code strategyFilter = List.of("c4", "p4")} so that only C4/P4 strategies
+ * run in the engine — no post-hoc filtering needed in the callback.
  *
  * <p>Tickers: 16-ticker universe (HOT + Tactical)
  * Date range: 2018-01-01 → today
@@ -94,11 +93,11 @@ class C4P4OpeningBacktestIT {
     @DisplayName("C4/P4 Opening strategies — full backtest 2018–today with 9:30 entry gate")
     void c4P4OpeningBacktest_producesTradesAndSavesReport() throws IOException {
         // Thread-safe lists to collect C4/P4 trades via callback (avoids loading all trades into memory)
-        List<TradeRecord> c4Trades = new CopyOnWriteArrayList<>();
-        List<TradeRecord> p4Trades = new CopyOnWriteArrayList<>();
+        final List<TradeRecord> c4Trades = new CopyOnWriteArrayList<>();
+        final List<TradeRecord> p4Trades = new CopyOnWriteArrayList<>();
 
         // --- Config: override entry window to 9:30–9:36 AM ET so C4/P4 can fire ---
-        BacktestConfig config = new BacktestConfig(
+        final BacktestConfig config = new BacktestConfig(
             TICKERS,
             LocalDate.of(2018, 1, 1),
             LocalDate.now(),
@@ -112,27 +111,26 @@ class C4P4OpeningBacktestIT {
             false,               // deterministicMode
             0.0,                 // tpMultiplierDelta
             0.0,                 // slMultiplierDelta
-            // Per-ticker callback: collect only C4/P4 trades, discard the rest immediately
+            // Per-ticker callback: strategyFilter ensures only c4/p4 trades arrive here
             (ticker, trades) -> {
                 for (TradeRecord t : trades) {
-                    if ("C4OpeningCallStrategy".equals(t.strategy())) {
+                    if (t.strategy().startsWith("c4")) {
                         c4Trades.add(t);
-                    } else if ("P4OpeningPutStrategy".equals(t.strategy())) {
+                    } else {
                         p4Trades.add(t);
                     }
-                    // All other strategies' trades are discarded — saves memory
                 }
             },
             LocalTime.of(9, 30), // entryWindowStart — override to allow C4/P4
             LocalTime.of(9, 36), // entryWindowEnd   — exclusive upper bound
             LocalTime.of(13, 0), // forcedCloseTime
-            null                 // strategyFilter — run all strategies
+            List.of("c4", "p4") // strategyFilter — run only C4 and P4
         );
 
         // --- Run ---
-        long startMs = System.currentTimeMillis();
-        BacktestReport report = backtestEngine.run(config, false, null);
-        long elapsedMs = System.currentTimeMillis() - startMs;
+        final long startMs = System.currentTimeMillis();
+        final BacktestReport report = backtestEngine.run(config, false, null);
+        final long elapsedMs = System.currentTimeMillis() - startMs;
 
         assertThat(report).isNotNull();
 
@@ -141,14 +139,14 @@ class C4P4OpeningBacktestIT {
         p4Trades.sort(Comparator.comparing(TradeRecord::entryTime));
 
         // --- Compute stats ---
-        StrategyStats c4Stats = computeStats(c4Trades);
-        StrategyStats p4Stats = computeStats(p4Trades);
+        final StrategyStats c4Stats = computeStats(c4Trades);
+        final StrategyStats p4Stats = computeStats(p4Trades);
 
         // --- Print to console ---
         log.info("\n========== C4/P4 OPENING STRATEGIES BACKTEST ==========");
-        log.info(String.format("Date range : 2018-01-01 → %s", LocalDate.now()));
-        log.info(String.format("Tickers    : %d", TICKERS.size()));
-        log.info(String.format("Elapsed    : %d ms", elapsedMs));
+        log.info("Date range : 2018-01-01 → {}", LocalDate.now());
+        log.info("Tickers    : {}", TICKERS.size());
+        log.info("Elapsed    : {} ms", elapsedMs);
 
         log.info("--- C4 (Opening Call) ---");
         printStats("C4", c4Stats);
@@ -199,29 +197,29 @@ class C4P4OpeningBacktestIT {
             return new StrategyStats(0, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, null, null);
         }
 
-        int wins = (int) trades.stream().filter(TradeRecord::isWin).count();
-        int losses = trades.size() - wins;
-        double winRate = (double) wins / trades.size();
-        double totalPnl = trades.stream().mapToDouble(TradeRecord::netPnl).sum();
-        double avgPnl = totalPnl / trades.size();
-        double avgWin = trades.stream()
+        final int wins = (int) trades.stream().filter(TradeRecord::isWin).count();
+        final int losses = trades.size() - wins;
+        final double winRate = (double) wins / trades.size();
+        final double totalPnl = trades.stream().mapToDouble(TradeRecord::netPnl).sum();
+        final double avgPnl = totalPnl / trades.size();
+        final double avgWin = trades.stream()
             .filter(TradeRecord::isWin)
             .mapToDouble(TradeRecord::netPnl)
             .average()
             .orElse(0.0);
-        double avgLoss = trades.stream()
+        final double avgLoss = trades.stream()
             .filter(t -> !t.isWin())
             .mapToDouble(TradeRecord::netPnl)
             .average()
             .orElse(0.0);
 
-        LocalDate firstDate = trades.stream()
+        final LocalDate firstDate = trades.stream()
             .filter(t -> t.entryTime() != null)
             .map(t -> t.entryTime().withZoneSameInstant(ZoneId.of("America/New_York")).toLocalDate())
             .min(Comparator.naturalOrder())
             .orElse(null);
 
-        LocalDate lastDate = trades.stream()
+        final LocalDate lastDate = trades.stream()
             .filter(t -> t.entryTime() != null)
             .map(t -> t.entryTime().withZoneSameInstant(ZoneId.of("America/New_York")).toLocalDate())
             .max(Comparator.naturalOrder())
@@ -232,12 +230,12 @@ class C4P4OpeningBacktestIT {
     }
 
     private void printStats(String label, StrategyStats s) {
-        log.info(String.format("  Trades    : %d (wins=%d, losses=%d)", s.totalTrades(), s.wins(), s.losses()));
-        log.info(String.format("  Win rate  : %.1f%%", s.winRate() * 100));
-        log.info(String.format("  Total PnL : $%.2f", s.totalPnl()));
-        log.info(String.format("  Avg PnL   : $%.2f per trade", s.avgPnl()));
-        log.info(String.format("  Avg Win   : $%.2f / Avg Loss: $%.2f", s.avgWin(), s.avgLoss()));
-        log.info(String.format("  Date range: %s → %s", s.firstDate(), s.lastDate()));
+        log.info("  Trades    : {} (wins={}, losses={})", s.totalTrades(), s.wins(), s.losses());
+        log.info("  Win rate  : {}%", String.format("%.1f", s.winRate() * 100));
+        log.info("  Total PnL : ${}", String.format("%.2f", s.totalPnl()));
+        log.info("  Avg PnL   : ${} per trade", String.format("%.2f", s.avgPnl()));
+        log.info("  Avg Win   : ${} / Avg Loss: ${}", String.format("%.2f", s.avgWin()), String.format("%.2f", s.avgLoss()));
+        log.info("  Date range: {} → {}", s.firstDate(), s.lastDate());
     }
 
     // =========================================================================
@@ -245,7 +243,7 @@ class C4P4OpeningBacktestIT {
     // =========================================================================
 
     private void saveSummary(StrategyStats c4, StrategyStats p4, long elapsedMs) throws IOException {
-        StringBuilder sb = new StringBuilder();
+        final StringBuilder sb = new StringBuilder();
         sb.append("# C4/P4 Opening Strategies Backtest\n\n");
         sb.append("Date range : 2018-01-01 → ").append(LocalDate.now()).append("\n");
         sb.append("Tickers    : ").append(TICKERS.size()).append(" (").append(String.join(", ", TICKERS)).append(")\n");
@@ -273,7 +271,7 @@ class C4P4OpeningBacktestIT {
     }
 
     private void saveTrades(String label, List<TradeRecord> trades) throws IOException {
-        StringBuilder sb = new StringBuilder();
+        final StringBuilder sb = new StringBuilder();
         sb.append("ticker\tstrategy\tdirection\tentryTime\texitTime\texitReason\tnetPnl\tgrossPnl\tisWin\n");
         for (TradeRecord t : trades) {
             sb.append(t.ticker()).append('\t')
@@ -291,17 +289,17 @@ class C4P4OpeningBacktestIT {
 
     private void saveYearlyBreakdown(String label, List<TradeRecord> trades) throws IOException {
         // Group by year
-        Map<Integer, List<TradeRecord>> byYear = new TreeMap<>(
+        final Map<Integer, List<TradeRecord>> byYear = new TreeMap<>(
             trades.stream()
                 .filter(t -> t.entryTime() != null)
                 .collect(Collectors.groupingBy(t ->
                     t.entryTime().withZoneSameInstant(ZoneId.of("America/New_York")).getYear()))
         );
 
-        StringBuilder sb = new StringBuilder();
+        final StringBuilder sb = new StringBuilder();
         sb.append("year\ttrades\twins\twin_rate\ttotal_pnl\n");
         for (Map.Entry<Integer, List<TradeRecord>> entry : byYear.entrySet()) {
-            StrategyStats s = computeStats(entry.getValue());
+            final StrategyStats s = computeStats(entry.getValue());
             sb.append(entry.getKey()).append('\t')
               .append(s.totalTrades()).append('\t')
               .append(s.wins()).append('\t')
@@ -312,14 +310,14 @@ class C4P4OpeningBacktestIT {
     }
 
     private void saveTickerBreakdown(String label, List<TradeRecord> trades) throws IOException {
-        Map<String, List<TradeRecord>> byTicker = new TreeMap<>(
+        final Map<String, List<TradeRecord>> byTicker = new TreeMap<>(
             trades.stream().collect(Collectors.groupingBy(TradeRecord::ticker))
         );
 
-        StringBuilder sb = new StringBuilder();
+        final StringBuilder sb = new StringBuilder();
         sb.append("ticker\ttrades\twins\twin_rate\ttotal_pnl\n");
         for (Map.Entry<String, List<TradeRecord>> entry : byTicker.entrySet()) {
-            StrategyStats s = computeStats(entry.getValue());
+            final StrategyStats s = computeStats(entry.getValue());
             sb.append(entry.getKey()).append('\t')
               .append(s.totalTrades()).append('\t')
               .append(s.wins()).append('\t')
