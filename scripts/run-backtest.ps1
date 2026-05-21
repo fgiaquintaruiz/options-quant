@@ -28,11 +28,17 @@ if (-not (Test-Path $logsDir)) {
 $scriptName = [System.IO.Path]::GetFileNameWithoutExtension($MyInvocation.MyCommand.Name)
 $logFile = Join-Path $logsDir "${scriptName}_${timestamp}.log"
 
+function Write-AndLog {
+    param([string]$msg)
+    Write-Host $msg
+    $msg | Out-File -FilePath $logFile -Append -Encoding utf8
+}
+
 Write-Host "Log: $logFile"
 Write-Host "Follow: Get-Content '$logFile' -Tail 50 -Wait"
 Write-Host ""
 
-Write-Host "Corriendo: ./gradlew bootRun --args=`"$argsString`""
+Write-AndLog "Corriendo: ./gradlew bootRun --args=`"$argsString`""
 
 # Ejecutar linea a linea: cada linea se escribe de inmediato, sobrevive Ctrl+C
 & ./gradlew bootRun --args="$argsString" 2>&1 | ForEach-Object {
