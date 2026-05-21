@@ -7,6 +7,17 @@ import java.time.ZonedDateTime;
 public interface TradingStrategy {
 
     /**
+     * Returns the short strategy code (e.g., "c1", "c2", "p4").
+     * Extracted from the class simple name by keeping only the leading direction+digit.
+     * Examples: C4OpeningCallStrategy → "c4", P1SqueezePutStrategy → "p1"
+     */
+    default String getCode() {
+        return this.getClass().getSimpleName()
+                .toLowerCase()
+                .replaceAll("(c\\d|p\\d).*", "$1");
+    }
+
+    /**
      * Returns the strategy name (e.g., "c1 squeeze", "c2 trend", "p1 squeeze")
      * Strips direction suffix (call/put) and adds space between number and name.
      */
