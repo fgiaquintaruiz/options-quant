@@ -943,11 +943,14 @@ public class LiveModeController {
             if (ok) {
                 executedTrades.put(ticker, new ExecutedTradeInfo(ticker, exTime, true, "Executed", orderResult.parentId(), orderResult.tpOrderId(), orderResult.slOrderId()));
                 log.info("✅ Manual trade sent to TWS: {} {} @ ${} | orderId={}", ticker, direction, price, orderResult.parentId());
+                if (telegramService != null) {
+                    telegramService.sendTradeConfirmation(ticker, strategy, direction, 1, price, orderResult.parentId());
+                }
             } else {
                 executedTrades.put(ticker, new ExecutedTradeInfo(ticker, exTime, false, "Failed", null, null, null));
                 log.error("❌ Manual trade failed: No order ID returned from execution service.");
             }
-            
+
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("success", ok);
             result.put("message", ok ? "Order sent to TWS successfully." : "Trade execution failed in IBKR service.");
@@ -982,7 +985,13 @@ public class LiveModeController {
             @RequestParam(required = false) Integer slOrderId) {
         
         log.info("Close trade requested for {} @ {} | tpId={}, slId={}", ticker, price, tpOrderId, slOrderId);
-        
+
+        if (!executedTrades.containsKey(ticker)) {
+            log.warn("Close-trade rejected for {}: no open trade found in executedTrades", ticker);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("success", false, "error", "No open trade found for " + ticker));
+        }
+
         // If we have TP/SL order IDs, cancel them to trigger OCA group cancellation
         // This effectively closes the position since both conditional orders are cancelled
         if (tpOrderId != null || slOrderId != null) {

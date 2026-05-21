@@ -9,6 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.ZonedDateTime;
 import java.util.Map;
@@ -203,5 +204,73 @@ class LiveModeControllerExecuteTradeTest {
         assertThat(body).containsEntry("success", false);
         assertThat(body).containsEntry("error", "Market is closed");
         verify(tradingService, never()).executeManualTrade(any(), any(), any(), anyDouble());
+    }
+
+    // ── Bug 2: Telegram called after successful manual execution ─────────────
+
+    @Test
+    @DisplayName("executeTrade — successful execution → sendTradeConfirmation called once with correct args")
+    void whenExecuteSucceeds_telegramSendTradeConfirmationCalled() {
+        final TelegramService telegramService = mock(TelegramService.class);
+        ReflectionTestUtils.setField(controller, "telegramService", telegramService);
+
+        when(ibkrService.isConnected()).thenReturn(true);
+        final OrderExecutionService.OrderResult orderResult =
+                new OrderExecutionService.OrderResult(77, 78, 79, 0.0, null, null);
+        when(tradingService.executeManualTrade("AAPL", "manual", "BUY", 150.0))
+                .thenReturn(orderResult);
+
+        final ResponseEntity<Map<String, Object>> res = controller.executeTrade("AAPL", "BUY", 150.0, "manual");
+
+        assertThat(res.getBody()).containsEntry("success", true);
+        verify(telegramService).sendTradeConfirmation(eq("AAPL"), eq("manual"), eq("BUY"), anyInt(), eq(150.0), eq(77));
+    }
+
+    @Test
+    @DisplayName("executeTrade — failed execution (null OrderResult) → sendTradeConfirmation NOT called")
+    void whenExecuteFails_telegramNotCalled() {
+        final TelegramService telegramService = mock(TelegramService.class);
+        ReflectionTestUtils.setField(controller, "telegramService", telegramService);
+
+        when(ibkrService.isConnected()).thenReturn(true);
+        when(tradingService.executeManualTrade(anyString(), anyString(), anyString(), anyDouble()))
+                .thenReturn(null);
+
+        controller.executeTrade("AAPL", "BUY", 150.0, "manual");
+
+        verify(telegramService, never()).sendTradeConfirmation(anyString(), anyString(), anyString(), anyInt(), anyDouble(), anyInt());
+    }
+
+    // ── Bug 3: closeTrade guard — ticker must have been executed ─────────────
+
+    @Test
+    @DisplayName("closeTrade — ticker never executed → 400, success=false, error='No open trade found'")
+    void closeTrade_tickerNotExecuted_returns400() {
+        final ResponseEntity<Map<String, Object>> res =
+                controller.closeTrade("AAPL", 152.0, null, null);
+
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        final Map<String, Object> body = res.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body).containsEntry("success", false);
+        assertThat((String) body.get("error")).containsIgnoringCase("No open trade");
+    }
+
+    @Test
+    @DisplayName("closeTrade — ticker was executed → 200, success=true")
+    void closeTrade_tickerWasExecuted_succeeds() {
+        // simulate a prior successful execution
+        when(ibkrService.isConnected()).thenReturn(true);
+        final OrderExecutionService.OrderResult orderResult =
+                new OrderExecutionService.OrderResult(10, 11, 12, 0.0, null, null);
+        when(tradingService.executeManualTrade("AAPL", "manual", "BUY", 150.0))
+                .thenReturn(orderResult);
+        controller.executeTrade("AAPL", "BUY", 150.0, "manual");
+
+        final ResponseEntity<Map<String, Object>> res =
+                controller.closeTrade("AAPL", 155.0, null, null);
+
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(res.getBody()).containsEntry("success", true);
     }
 }
