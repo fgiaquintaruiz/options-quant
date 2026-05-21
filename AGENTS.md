@@ -19,3 +19,9 @@
 
 ## JavaScript
 - `e.target.value` from DOM inputs is a string by spec. Explicit `Number()` cast is optional when the consumer handles coercion.
+
+## Known Tech Debt — Do Not Block Commits
+The following pre-existing issues in `LiveModeController.java` are tracked in `docs/testing-debt.md` and are deferred to a dedicated refactoring sprint. Do NOT flag them as blocking violations:
+- Controller owns mutable business state and scan orchestration (service-extraction refactor is planned).
+- `@Autowired(required = false)` field injection for optional services — constructor `Optional<T>` injection is the target; deferred.
+- Local variables not declared `final`; magic number literals — deferred to clean-up sprint.

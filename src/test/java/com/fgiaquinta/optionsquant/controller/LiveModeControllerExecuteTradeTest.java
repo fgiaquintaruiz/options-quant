@@ -23,18 +23,19 @@ class LiveModeControllerExecuteTradeTest {
     private TradingService tradingService;
     private IbkrService ibkrService;
     private AccountManager accountManager;
+    private MarketCalendarService marketCalendarService;
 
     @BeforeEach
     void setUp() {
         tradingService = mock(TradingService.class);
         ibkrService = mock(IbkrService.class);
         accountManager = mock(AccountManager.class);
+        marketCalendarService = mock(MarketCalendarService.class);
 
         final StrategyScannerService scannerService = mock(StrategyScannerService.class);
         final IbkrProperties ibkrProperties = mock(IbkrProperties.class);
         final TickerService tickerService = mock(TickerService.class);
         final OrderExecutionService orderExecutionService = mock(OrderExecutionService.class);
-        final MarketCalendarService marketCalendarService = mock(MarketCalendarService.class);
         final MarketScanner marketScanner = mock(MarketScanner.class);
         final MacroEnvironmentFilter macroFilter = mock(MacroEnvironmentFilter.class);
 
@@ -45,6 +46,9 @@ class LiveModeControllerExecuteTradeTest {
         when(scannerProperties.hybridMemoryWeight()).thenReturn(0.35);
         when(scannerProperties.exclusiveScanSchedulerLockWaitMs()).thenReturn(5000L);
         when(scannerProperties.livePreemptWaitMs()).thenReturn(60_000L);
+
+        // Default: market is open so existing tests continue to pass
+        when(marketCalendarService.isMarketOpenNow()).thenReturn(true);
 
         controller = new LiveModeController(
                 scannerService, ibkrProperties, tradingService, tickerService,
@@ -182,5 +186,22 @@ class LiveModeControllerExecuteTradeTest {
         assertThat(bodyStr).doesNotContain("localhost");
         assertThat(bodyStr).doesNotContain("at com.fgiaquinta.optionsquant");
         assertThat(bodyStr).doesNotContain("StackTrace");
+    }
+
+    // ── Bug 1: market closed blocks execution ────────────────────────────────
+
+    @Test
+    @DisplayName("executeTrade — market closed → 400, success=false, error='Market is closed'")
+    void whenMarketClosed_executeSignal_returns400WithClearMessage() {
+        when(marketCalendarService.isMarketOpenNow()).thenReturn(false);
+
+        ResponseEntity<Map<String, Object>> res = controller.executeTrade("AAPL", "BUY", 150.0, "manual");
+
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        Map<String, Object> body = res.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body).containsEntry("success", false);
+        assertThat(body).containsEntry("error", "Market is closed");
+        verify(tradingService, never()).executeManualTrade(any(), any(), any(), anyDouble());
     }
 }

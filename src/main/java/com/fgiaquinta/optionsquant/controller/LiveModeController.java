@@ -8,27 +8,68 @@ import com.fgiaquinta.optionsquant.dto.ExternalPositionDto;
 import com.fgiaquinta.optionsquant.dto.PositionSnapshot;
 import com.fgiaquinta.optionsquant.dto.ScanScoreBreakdown;
 import com.fgiaquinta.optionsquant.dto.ScanScoresResponse;
-import com.fgiaquinta.optionsquant.service.*;
+import com.fgiaquinta.optionsquant.service.AccountManager;
+import com.fgiaquinta.optionsquant.service.IbkrService;
+import com.fgiaquinta.optionsquant.service.MacroEnvironmentFilter;
+import com.fgiaquinta.optionsquant.service.MarketCalendarService;
+import com.fgiaquinta.optionsquant.service.MarketScanner;
+import com.fgiaquinta.optionsquant.service.OrderExecutionService;
+import com.fgiaquinta.optionsquant.service.ReplayClock;
+import com.fgiaquinta.optionsquant.service.ReplayService;
+import com.fgiaquinta.optionsquant.service.ScanPrioritizationService;
+import com.fgiaquinta.optionsquant.service.StrategyScannerService;
 import com.fgiaquinta.optionsquant.service.StrategyScannerService.ScanResult;
 import com.fgiaquinta.optionsquant.service.StrategyScannerService.Signal;
+import com.fgiaquinta.optionsquant.service.TelegramService;
+import com.fgiaquinta.optionsquant.service.TickerService;
+import com.fgiaquinta.optionsquant.service.TradingService;
 import com.fgiaquinta.optionsquant.strategy.model.TradePlan;
 import com.fgiaquinta.optionsquant.trading.ConditionBuilder;
 import com.fgiaquinta.optionsquant.trading.OrderFactory;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.ModelAndView;
 
-import java.time.ZonedDateTime;
-import java.time.ZoneId;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZonedDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 /**
  * Live Mode Dashboard and API.
@@ -41,7 +82,7 @@ public class LiveModeController {
 
     private static final Duration LIVE_SIGNAL_MAX_AGE = Duration.ofMinutes(30);
     private static final ZoneId SPAIN_TZ = ZoneId.of("Europe/Madrid");
-    private static final java.time.format.DateTimeFormatter SPAIN_TIME_FMT = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final DateTimeFormatter SPAIN_TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     private final StrategyScannerService scannerService;
     private final IbkrProperties ibkrProperties;
@@ -51,29 +92,39 @@ public class LiveModeController {
     private final IbkrService ibkrService;
     private final OrderExecutionService orderExecutionService;
     private final MarketCalendarService marketCalendarService;
-    private final com.fgiaquinta.optionsquant.service.MarketScanner marketScanner;
+    private final MarketScanner marketScanner;
     private final ScannerProperties scannerProperties;
     private final MacroEnvironmentFilter macroFilter;
     private final ScanPrioritizationService scanPrioritizationService;
 
     /** Base directory for replay-signal JSONL files. Overridable in tests via ReflectionTestUtils. */
-    @org.springframework.beans.factory.annotation.Value("${replay.signal-dir:data}")
-    String replaySignalDir = "data";
+    @Value("${replay.signal-dir:data}")
+    private String replaySignalDir = "data";
 
     /** Filename pattern for replay-signal JSONL files. Args: date, runId. Overridable in tests via ReflectionTestUtils. */
-    @org.springframework.beans.factory.annotation.Value("${replay.signals-file-pattern:replay-signals-%s-%s.jsonl}")
-    String replaySignalsFilePattern = "replay-signals-%s-%s.jsonl";
+    @Value("${replay.signals-file-pattern:replay-signals-%s-%s.jsonl}")
+    private String replaySignalsFilePattern = "replay-signals-%s-%s.jsonl";
 
     // Live-replay-mode — optional; null until services are wired in the context.
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @Autowired(required = false)
     private ReplayService replayService;
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @Autowired(required = false)
     private ReplayClock replayClock;
+
+    // Telegram notifications — optional; null when telegram is disabled or not wired.
+    @Autowired(required = false)
+    private TelegramService telegramService;
+
+    // Jackson mapper for safe JSON serialization (avoids manual string escaping).
+    // required=false so unit tests that construct the controller directly without a Spring context
+    // do not get a NullPointerException; appendReplaySignalToJsonl falls back to new ObjectMapper().
+    @Autowired(required = false)
+    private ObjectMapper objectMapper;
 
     /**
      * Envelope holding the latest scan-score breakdown and the instant it was computed.
      * Computed at scan-start by both entrypoints ({@link #triggerScan()} and
-     * {@link com.fgiaquinta.optionsquant.service.MarketScanner#scanAndExecute()}).
+     * {@link MarketScanner#scanAndExecute()}).
      * Single-writer pattern: both scan threads write before the scan loop runs; reads are lock-free.
      * Pattern A: both call sites invoke {@link #setScanScores(java.util.Map)} before their scan loop.
      * {@code scanStartedAt} is {@code null} until the first scan runs.
@@ -98,22 +149,23 @@ public class LiveModeController {
     /** Separate bucket for signals emitted during live-replay-mode — keeps live grid frozen during replay. */
     private final CopyOnWriteArrayList<Signal> replaySignals = new CopyOnWriteArrayList<>();
     /** Wall-clock instant when each ticker row was last added/replaced in {@link #liveSignals} (for UI "signal found"). */
-    private final java.util.concurrent.ConcurrentHashMap<String, Instant> signalFoundAt = new java.util.concurrent.ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Instant> signalFoundAt = new ConcurrentHashMap<>();
     // Manual close requests: ticker → ClosedTradeInfo
-    private final java.util.concurrent.ConcurrentHashMap<String, ClosedTradeInfo> closedTrades = new java.util.concurrent.ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ClosedTradeInfo> closedTrades = new ConcurrentHashMap<>();
     // Manual executions: ticker → ExecutedTradeInfo
-    private final java.util.concurrent.ConcurrentHashMap<String, ExecutedTradeInfo> executedTrades = new java.util.concurrent.ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ExecutedTradeInfo> executedTrades = new ConcurrentHashMap<>();
     /**
      * Tickers for which a 14:50 ET conditional close has already been scheduled.
      * ConcurrentHashMap.newKeySet() is used — NOT HashSet — to be safe under concurrent UI polling.
      * Cleared on restart (not persisted); idempotency guard prevents duplicate TWS orders.
      */
-    private final java.util.Set<String> scheduled1450Tickers = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final Set<String> scheduled1450Tickers = ConcurrentHashMap.newKeySet();
     // Per-ticker scan timing for SCAN STARTED / SCAN FINISHED columns
-    private final java.util.concurrent.ConcurrentHashMap<String, Instant> tickerScanStartTimes = new java.util.concurrent.ConcurrentHashMap<>();
-    private final java.util.concurrent.ConcurrentHashMap<String, String> tickerScanEndTimes = new java.util.concurrent.ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Instant> tickerScanStartTimes = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, String> tickerScanEndTimes = new ConcurrentHashMap<>();
     // Scan activity log: shows what's being scanned in real-time
-    private final CopyOnWriteArrayList<ScanActivity> scanActivity = new CopyOnWriteArrayList<>();
+    // All writes are already wrapped in synchronized(scanActivity) blocks; plain ArrayList is sufficient.
+    private final List<ScanActivity> scanActivity = new ArrayList<>();
     private final AtomicLong lastScanTime = new AtomicLong(0);
     private final AtomicLong lastScanDuration = new AtomicLong(0);
     private final AtomicInteger signalsToday = new AtomicInteger(0);
@@ -124,7 +176,7 @@ public class LiveModeController {
     private volatile double runtimeRiskPct;
     private final AtomicReference<String> liveTickerFilter = new AtomicReference<>("");
     private final AtomicReference<String> liveTickerScope  = new AtomicReference<>("HOT");
-    private Thread scanThread = null;
+    private final AtomicReference<Thread> scanThread = new AtomicReference<>(null);
 
     public record ScanActivity(String time, String ticker, String status, String detail, String scanStarted, String scanEnded, String duration) {}
     public record ClosedTradeInfo(String ticker, double closePrice, String closeTime, String exitReason) {}
@@ -140,7 +192,7 @@ public class LiveModeController {
                               IbkrService ibkrService,
                               OrderExecutionService orderExecutionService,
                               MarketCalendarService marketCalendarService,
-                              @Lazy com.fgiaquinta.optionsquant.service.MarketScanner marketScanner,
+                              @Lazy MarketScanner marketScanner,
                               ScannerProperties scannerProperties,
                               MacroEnvironmentFilter macroFilter,
                               ScanPrioritizationService scanPrioritizationService) {
@@ -167,7 +219,7 @@ public class LiveModeController {
         currentTicker.set("");
         currentTickerIndex.set(0);
         totalTickers.set(0);
-        scanActivity.clear();
+        synchronized (scanActivity) { scanActivity.clear(); }
         liveSignals.clear();
         signalsToday.set(0);
         // Also reset scanner service progress counters to avoid stale data in /status
@@ -221,7 +273,7 @@ public class LiveModeController {
                 .entrySet().stream()
                 .filter(e -> !executedTrades.containsKey(e.getKey()))
                 .map(e -> {
-                    var snap = e.getValue();
+                    PositionSnapshot snap = e.getValue();
                     return new ExternalPositionDto(
                             snap.symbol(),
                             snap.secType(),
@@ -342,8 +394,8 @@ public class LiveModeController {
     }
 
     @GetMapping
-    public org.springframework.web.servlet.ModelAndView dashboard() {
-        return new org.springframework.web.servlet.ModelAndView("redirect:/");
+    public ModelAndView dashboard() {
+        return new ModelAndView("redirect:/");
     }
 
     @GetMapping("/status")
@@ -394,7 +446,7 @@ public class LiveModeController {
         int currentHour = nowSpain.getHour();
         boolean isMarketHours = currentHour >= 10 && currentHour < 22 && nowSpain.getDayOfWeek().getValue() <= 5;
         status.put("marketHours", isMarketHours);
-        status.put("currentTime", nowSpain.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")));
+        status.put("currentTime", nowSpain.format(DateTimeFormatter.ofPattern("HH:mm:ss")));
         status.put("timezone", "Europe/Madrid");
         status.put("macroRegime", macroFilter.getRegime().name());
         status.put("macroMomentum", macroFilter.getMomentum().name());
@@ -472,9 +524,9 @@ public class LiveModeController {
     }
 
     @GetMapping("/news-tickers")
-    public ResponseEntity<java.util.List<Map<String, Object>>> getNewsTickers() {
+    public ResponseEntity<List<Map<String, Object>>> getNewsTickers() {
         // Stub: returns empty list until TWS reqNewsBulletins integration is wired
-        return ResponseEntity.ok(java.util.List.of());
+        return ResponseEntity.ok(List.of());
     }
 
     @PostMapping("/scan-now")
@@ -499,7 +551,7 @@ public class LiveModeController {
         }
         
         // Only block a second *manual* scan thread; scheduled scans may run concurrently until preempt below.
-        if (scanThread != null && scanThread.isAlive()) {
+        if (scanThread.get() != null && scanThread.get().isAlive()) {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("success", false);
             result.put("message", "Manual scan already in progress");
@@ -510,25 +562,25 @@ public class LiveModeController {
         isAutoScan.set(false);
         // Preserve scan-activity history across manual starts (same as scheduled scans).
         final boolean isMockScan = mock;
-        scanThread = new Thread(() -> {
+        Thread newScanThread = new Thread(() -> {
             preemptExclusiveScanForLive();
             isScanning.set(true);
             // Keep open positions visible: do not clear executedTrades / closedTrades.
             // Preserve Signal rows for tickers that still have a successful execution and are not closed.
-            java.util.Set<String> openPositionTickers = new java.util.HashSet<>();
-            for (java.util.Map.Entry<String, ExecutedTradeInfo> e : executedTrades.entrySet()) {
+            Set<String> openPositionTickers = new HashSet<>();
+            for (Map.Entry<String, ExecutedTradeInfo> e : executedTrades.entrySet()) {
                 if (e.getValue().success() && !closedTrades.containsKey(e.getKey())) {
                     openPositionTickers.add(e.getKey());
                 }
             }
-            java.util.List<Signal> preservedSignals = liveSignals.stream()
+            List<Signal> preservedSignals = liveSignals.stream()
                     .filter(s -> openPositionTickers.contains(s.ticker()))
                     .toList();
             liveSignals.clear();
             liveSignals.addAll(preservedSignals);
-            java.util.Set<String> preservedKeys = preservedSignals.stream()
+            Set<String> preservedKeys = preservedSignals.stream()
                     .map(s -> s.ticker().toUpperCase(Locale.ROOT))
-                    .collect(java.util.stream.Collectors.toSet());
+                    .collect(Collectors.toSet());
             signalFoundAt.keySet().retainAll(preservedKeys);
 
             tickerScanStartTimes.clear();
@@ -579,7 +631,7 @@ public class LiveModeController {
                             try {
                                 OrderExecutionService.OrderResult orderResult = tradingService.executeManualTrade(signal.ticker(), signal.strategy(), signal.direction(), signal.currentPrice());
                                 boolean ok = orderResult != null;
-                                String exTime = java.time.LocalTime.now(SPAIN_TZ).format(SPAIN_TIME_FMT);
+                                String exTime = LocalTime.now(SPAIN_TZ).format(SPAIN_TIME_FMT);
                                 executedTrades.put(signal.ticker(), new ExecutedTradeInfo(signal.ticker(), exTime, ok, ok ? "Auto-executed" : "Failed", ok ? orderResult.parentId() : null, ok ? orderResult.tpOrderId() : null, ok ? orderResult.slOrderId() : null));
                                 log.info("Auto-executed mock signal {} {}: {}", signal.ticker(), signal.direction(), ok ? "OK (orderId=" + orderResult.parentId() + ")" : "FAILED");
                             } catch (Exception ex) {
@@ -601,10 +653,11 @@ public class LiveModeController {
                 lastScanTime.set(System.currentTimeMillis());
                 currentTicker.set("");
                 scannerService.clearTickerOverride();
-                scanThread = null;
+                scanThread.set(null);
             }
         });
-        scanThread.start();
+        scanThread.set(newScanThread);
+        newScanThread.start();
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", true);
@@ -623,8 +676,9 @@ public class LiveModeController {
 
         stopScanRequested.set(true);
         // Interrupt the main scan thread AND all in-flight download threads
-        if (scanThread != null) {
-            scanThread.interrupt();
+        Thread current = scanThread.get();
+        if (current != null) {
+            current.interrupt();
         }
         scannerService.stopDownloads();
 
@@ -646,8 +700,9 @@ public class LiveModeController {
         stopScanRequested.set(true);
         
         // Interrupt scan thread if running
-        if (scanThread != null && scanThread.isAlive()) {
-            scanThread.interrupt();
+        Thread runningThread = scanThread.get();
+        if (runningThread != null && runningThread.isAlive()) {
+            runningThread.interrupt();
             log.info("Force-stopped scan thread (was scanning: {})", wasScanning);
         }
         // Same as /stop-scan: interrupt in-flight IBKR download threads so scanAll can exit and release the exclusive lock
@@ -659,8 +714,8 @@ public class LiveModeController {
         currentTicker.set("");
         currentTickerIndex.set(0);
         totalTickers.set(0);
-        scanActivity.clear();
-        
+        synchronized (scanActivity) { scanActivity.clear(); }
+
         // Also reset scanner service state
         scannerService.clearStopRequest();
         
@@ -761,7 +816,7 @@ public class LiveModeController {
         "P1 Squeeze Breakdown", "P2 Trend Rejection", "P3 Resistance Rejection",
         "P4 Opening Trap", "P5 Continuation", "P6 Reversal"
     );
-    private final java.util.concurrent.atomic.AtomicInteger mockSignalIdx = new java.util.concurrent.atomic.AtomicInteger(0);
+    private final AtomicInteger mockSignalIdx = new AtomicInteger(0);
 
     @PostMapping("/inject-mock-signal")
     public ResponseEntity<Map<String, Object>> injectMockSignal(
@@ -786,7 +841,7 @@ public class LiveModeController {
         double tp = isCall ? price + atr * 3.0 : price - atr * 3.0;
         double sl = isCall ? price - atr * 2.0 : price + atr * 2.0;
 
-        TradePlan plan = new TradePlan(price, tp, sl, isCall, java.time.LocalTime.of(21, 55), atr);
+        TradePlan plan = new TradePlan(price, tp, sl, isCall, LocalTime.of(21, 55), atr);
         Signal mockSignal = new Signal(ticker, strat, dir, price, ZonedDateTime.now(), plan, "mock_signal + hammer");
         addLiveSignal(mockSignal);
 
@@ -800,7 +855,7 @@ public class LiveModeController {
             try {
                 OrderExecutionService.OrderResult orderResult = tradingService.executeManualTrade(ticker, strat, dir, price);
                 boolean ok = orderResult != null;
-                String exTime = java.time.LocalTime.now(SPAIN_TZ).format(SPAIN_TIME_FMT);
+                String exTime = LocalTime.now(SPAIN_TZ).format(SPAIN_TIME_FMT);
                 executedTrades.put(ticker, new ExecutedTradeInfo(ticker, exTime, ok, ok ? "Auto-executed" : "Failed", ok ? orderResult.parentId() : null, ok ? orderResult.tpOrderId() : null, ok ? orderResult.slOrderId() : null));
                 autoExec = ok;
                 log.info("Auto-executed injected signal {} {}: {}", ticker, dir, ok ? "OK (orderId=" + orderResult.parentId() + ")" : "FAILED");
@@ -852,6 +907,11 @@ public class LiveModeController {
             @RequestParam(defaultValue = "manual") String strategy) {
         log.info("🎯 Manual execute request received for {} {} @ ${} (strategy: {})", ticker, direction, price, strategy);
 
+        if (!mockMarketOpen.get() && !marketCalendarService.isMarketOpenNow()) {
+            log.warn("Rejecting execute for {}: market is closed", ticker);
+            return ResponseEntity.status(400).body(Map.of("success", false, "error", "Market is closed"));
+        }
+
         Signal liveForExecute = findLiveSignalForExecute(ticker, strategy);
         if (liveForExecute != null && isLiveSignalOlderThanMaxAge(liveForExecute)) {
             log.warn("Rejecting execute for {}: signal timestamp {} is older than {} minutes",
@@ -878,7 +938,7 @@ public class LiveModeController {
         try {
             OrderExecutionService.OrderResult orderResult = tradingService.executeManualTrade(ticker, strategy, direction, price);
             boolean ok = orderResult != null;
-            String exTime = java.time.LocalTime.now(SPAIN_TZ).format(SPAIN_TIME_FMT);
+            String exTime = LocalTime.now(SPAIN_TZ).format(SPAIN_TIME_FMT);
             
             if (ok) {
                 executedTrades.put(ticker, new ExecutedTradeInfo(ticker, exTime, true, "Executed", orderResult.parentId(), orderResult.tpOrderId(), orderResult.slOrderId()));
@@ -939,7 +999,7 @@ public class LiveModeController {
                 }
                 
                 // Mark as closed in our local state
-                String closeTime = java.time.LocalTime.now(SPAIN_TZ).format(SPAIN_TIME_FMT);
+                String closeTime = LocalTime.now(SPAIN_TZ).format(SPAIN_TIME_FMT);
                 closedTrades.put(ticker, new ClosedTradeInfo(ticker, price, closeTime, "CONDITIONAL_CANCEL"));
                 
                 Map<String, Object> result = new LinkedHashMap<>();
@@ -957,7 +1017,7 @@ public class LiveModeController {
         }
         
         // Fallback: simple local close (original behavior)
-        String closeTime = java.time.LocalTime.now(SPAIN_TZ).format(SPAIN_TIME_FMT);
+        String closeTime = LocalTime.now(SPAIN_TZ).format(SPAIN_TIME_FMT);
         closedTrades.put(ticker, new ClosedTradeInfo(ticker, price, closeTime, "MANUAL_CLOSE"));
         log.info("Manual close requested for {} at price {}", ticker, price);
         Map<String, Object> result = new LinkedHashMap<>();
@@ -976,7 +1036,7 @@ public class LiveModeController {
         log.info("Manual cancel requested for {} (orderId={})", ticker, orderId);
         boolean success = tradingService.cancelTrade(orderId);
         if (success) {
-            String closeTime = java.time.LocalTime.now(SPAIN_TZ).format(SPAIN_TIME_FMT);
+            String closeTime = LocalTime.now(SPAIN_TZ).format(SPAIN_TIME_FMT);
             closedTrades.put(ticker, new ClosedTradeInfo(ticker, 0.0, closeTime, "CANCELLED"));
         }
         Map<String, Object> result = new LinkedHashMap<>();
@@ -1026,12 +1086,12 @@ public class LiveModeController {
     // ===== Public Methods for Internal State Updates =====
 
     /**
-     * Same universe + HOT/ALL scope + comma filter as manual "Scan now" — used by scheduled {@link com.fgiaquinta.optionsquant.service.MarketScanner} too.
+     * Same universe + HOT/ALL scope + comma filter as manual "Scan now" — used by scheduled {@link MarketScanner} too.
      */
     public List<String> resolveTickersForLiveScan() {
         List<String> allTickers = tickerService.getTickerSymbols();
         List<String> hotList = tickerService.getHotTickers();
-        java.util.Set<String> hotSet = new java.util.HashSet<>(hotList);
+        Set<String> hotSet = new HashSet<>(hotList);
 
         String scope = liveTickerScope.get();
         if ("HOT".equals(scope)) {
@@ -1039,9 +1099,9 @@ public class LiveModeController {
         }
         String filter = liveTickerFilter.get();
         if (filter != null && !filter.isBlank()) {
-            java.util.Set<String> filterSet = java.util.Arrays.stream(filter.split("[,\\s]+"))
+            Set<String> filterSet = Arrays.stream(filter.split("[,\\s]+"))
                     .map(String::trim).map(String::toUpperCase)
-                    .filter(s -> !s.isEmpty()).collect(java.util.stream.Collectors.toSet());
+                    .filter(s -> !s.isEmpty()).collect(Collectors.toSet());
             if (!filterSet.isEmpty()) {
                 allTickers = allTickers.stream().filter(filterSet::contains).toList();
             }
@@ -1058,7 +1118,7 @@ public class LiveModeController {
      * Stores an immutable copy of the latest scan-score breakdown together with the
      * wall-clock instant at which the scan started.
      * Called at scan-start by BOTH entrypoints ({@code triggerScan()} and
-     * {@link com.fgiaquinta.optionsquant.service.MarketScanner#scanAndExecute()}) before the scan loop runs.
+     * {@link MarketScanner#scanAndExecute()}) before the scan loop runs.
      * Thread-safe: single {@link AtomicReference} write.
      */
     public void setScanScores(Map<String, ScanScoreBreakdown> scores) {
@@ -1108,7 +1168,7 @@ public class LiveModeController {
         }
     }
 
-    /** Public for {@link com.fgiaquinta.optionsquant.service.MarketScanner} auto-exec guard. */
+    /** Public for {@link MarketScanner} auto-exec guard. */
     public boolean isLiveSignalOlderThanMaxAge(Signal s) {
         if (s == null || s.timestamp() == null) {
             return false;
@@ -1181,35 +1241,41 @@ public class LiveModeController {
 
     private void appendReplaySignalToJsonl(Signal signal) {
         try {
-            java.nio.file.Path dir = java.nio.file.Path.of(replaySignalDir);
-            if (!java.nio.file.Files.exists(dir)) java.nio.file.Files.createDirectories(dir);
+            Path dir = Path.of(replaySignalDir);
+            if (!Files.exists(dir)) Files.createDirectories(dir);
             String date = signal.timestamp().toLocalDate().toString();
             String runId = (replayClock != null && replayClock.isActive())
                     ? replayClock.snapshot().runId()
                     : null;
             String filename = (runId != null)
-                    ? String.format(java.util.Locale.ROOT, replaySignalsFilePattern, date, runId)
+                    ? String.format(Locale.ROOT, replaySignalsFilePattern, date, runId)
                     : "replay-signals-" + date + ".jsonl";
-            java.nio.file.Path file = dir.resolve(filename);
-            String tradePlanJson = buildTradePlanJson(signal.tradePlan());
-            String line = String.format(java.util.Locale.ROOT,
-                    "{\"ticker\":\"%s\",\"strategy\":\"%s\",\"direction\":\"%s\",\"price\":%.4f,\"timestamp\":\"%s\",\"pattern\":\"%s\",\"tradePlan\":%s}%n",
-                    signal.ticker(), signal.strategy(), signal.direction(),
-                    signal.currentPrice(), signal.timestamp(), signal.candlestickPattern(),
-                    tradePlanJson);
-            java.nio.file.Files.writeString(file, line,
-                    java.nio.file.StandardOpenOption.CREATE,
-                    java.nio.file.StandardOpenOption.APPEND);
-        } catch (java.io.IOException e) {
+            Path file = dir.resolve(filename);
+            Map<String, Object> record = new LinkedHashMap<>();
+            record.put("ticker", signal.ticker());
+            record.put("strategy", signal.strategy());
+            record.put("direction", signal.direction());
+            record.put("price", new BigDecimal(String.format(Locale.ROOT, "%.4f", signal.currentPrice())));
+            record.put("timestamp", signal.timestamp().toString());
+            record.put("pattern", signal.candlestickPattern());
+            record.put("tradePlan", buildTradePlanMap(signal.tradePlan()));
+            final ObjectMapper mapper = this.objectMapper != null ? this.objectMapper : new ObjectMapper();
+            String line = mapper.writeValueAsString(record) + System.lineSeparator();
+            Files.writeString(file, line,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.APPEND);
+        } catch (IOException e) {
             log.warn("Failed to persist replay signal to JSONL", e);
         }
     }
 
-    private String buildTradePlanJson(TradePlan plan) {
-        if (plan == null) return "null";
-        return String.format(java.util.Locale.ROOT,
-                "{\"entry\":%.4f,\"tp\":%.4f,\"sl\":%.4f}",
-                plan.entryPrice, plan.takeProfit, plan.stopLoss);
+    private Map<String, Object> buildTradePlanMap(TradePlan plan) {
+        if (plan == null) return null;
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("entry", plan.entryPrice);
+        m.put("tp", plan.takeProfit);
+        m.put("sl", plan.stopLoss);
+        return m;
     }
 
     public ReplaySummary computeReplaySummary() {
@@ -1219,7 +1285,7 @@ public class LiveModeController {
         }
         long uniqueTickerCount = signals.stream()
                 .map(Signal::ticker)
-                .map(t -> t.toUpperCase(java.util.Locale.ROOT))
+                .map(t -> t.toUpperCase(Locale.ROOT))
                 .distinct()
                 .count();
         ZonedDateTime first = signals.stream()
@@ -1320,13 +1386,13 @@ public class LiveModeController {
     // ===== EOD scheduler accessors =====
 
     /** Unmodifiable view of executed trades for the EOD close scheduler. */
-    public java.util.Map<String, ExecutedTradeInfo> getExecutedTrades() {
-        return java.util.Collections.unmodifiableMap(executedTrades);
+    public Map<String, ExecutedTradeInfo> getExecutedTrades() {
+        return Collections.unmodifiableMap(executedTrades);
     }
 
     /** Unmodifiable view of closed trades for the EOD close scheduler. */
-    public java.util.Map<String, ClosedTradeInfo> getClosedTrades() {
-        return java.util.Collections.unmodifiableMap(closedTrades);
+    public Map<String, ClosedTradeInfo> getClosedTrades() {
+        return Collections.unmodifiableMap(closedTrades);
     }
 
     /** Marks a trade as closed. Used by the EOD close scheduler. */
@@ -1363,7 +1429,10 @@ public class LiveModeController {
         for (int i = 0; i < hotOrder.size(); i++) {
             hotIndex.put(hotOrder.get(i).toUpperCase(Locale.ROOT), i);
         }
-        List<ScanActivity> copy = new ArrayList<>(scanActivity);
+        List<ScanActivity> copy;
+        synchronized (scanActivity) {
+            copy = new ArrayList<>(scanActivity);
+        }
         copy.sort(Comparator
                 .comparingInt((ScanActivity a) -> hotIndex.getOrDefault(a.ticker().toUpperCase(Locale.ROOT), 10_000))
                 .thenComparing(ScanActivity::ticker));
@@ -1423,14 +1492,14 @@ public class LiveModeController {
     void addTickerScanComplete(String ticker, int signalCount) {
         if (ticker.equals("---")) return;
 
-        String time = java.time.LocalTime.now(SPAIN_TZ).format(SPAIN_TIME_FMT);
+        String time = LocalTime.now(SPAIN_TZ).format(SPAIN_TIME_FMT);
         String status = signalCount < 0 ? "ERROR" : (signalCount > 0 ? "SIGNAL" : "OK");
         String detail = signalCount < 0 ? "Scan failed" : (signalCount > 0 ? signalCount + " signal(s) found" : "No signals");
         
         Instant startInstant = tickerScanStartTimes.get(ticker);
         String started = startInstant != null ? startInstant.atZone(SPAIN_TZ).format(SPAIN_TIME_FMT) : time;
         String duration = startInstant != null
-            ? String.format("%.1fs", java.time.Duration.between(startInstant, Instant.now()).toMillis() / 1000.0)
+            ? String.format("%.1fs", Duration.between(startInstant, Instant.now()).toMillis() / 1000.0)
             : "-";
         
         tickerScanEndTimes.put(ticker, time);
@@ -1488,7 +1557,7 @@ public class LiveModeController {
         }
         Map<String, Object> body = new LinkedHashMap<>();
         try {
-            java.time.LocalDate d = java.time.LocalDate.parse(date);
+            LocalDate d = LocalDate.parse(date);
             ReplayService.StartResult r = replayService.start(d, speed);
             body.put("success", true);
             body.put("runId", r.runId());
@@ -1499,7 +1568,7 @@ public class LiveModeController {
             String errorId = UUID.randomUUID().toString();
             log.error("❌ Replay start rejected [{}]: {}", errorId, e.getMessage(), e);
             return ResponseEntity.status(409).body(errorBody("error", "Replay start failed — see logs.", errorId));
-        } catch (java.time.format.DateTimeParseException e) {
+        } catch (DateTimeParseException e) {
             body.put("success", false);
             body.put("error", "invalid-date: " + date);
             return ResponseEntity.badRequest().body(body);
