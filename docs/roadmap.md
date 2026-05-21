@@ -89,6 +89,17 @@
 
 ### P1 IMMEDIATE — Live trading bugs + Option Chain Recorder
 
+- [ ] **Investigate OptionChainRecorder silent failure**
+  **Status**: TODO
+
+  - Schedulers fire correctly at 15:30, 15:35, 15:40 ES (verified live_session log 2026-05-21)
+  - `snapshotAsync` invoked for all 16 tickers (log: "OptionChainRecorderService.snapshotAsync: ticker=X, signalId=Y, …")
+  - `option_chain_snapshot` table has **0 rows** after multiple snapshot cycles
+  - Schema: nullable `bid`/`ask`; NOT NULL on `signal_id`, `ticker`, `direction`, `trigger`, `expiry`, `strike`, `right`, `snapshot_ts`, `is_paper`, `created_at`
+  - No "snapshot complete" or "persist" log line visible after "starting" log
+  - **Suspects**: IBKR request fails silently / exception swallowed in async future / required fields (`expiry`/`strike`/`right`) not resolved at runtime / validation rejecting before persist
+  - **Entry point**: `OptionChainRecorderService.snapshotAsync()` — trace what happens AFTER the "starting" log, before any persistence call
+
 - ✅ **Bug Fix: manual execute silently fails on stale signals** — isMarketHours() guard added (75082d0)
 - ✅ **Bug Fix: no Telegram notification on manual order execution** — Telegram injection in execute path (80ce1bf)
 - ✅ **Bug Fix: EXITED status without Entry timestamp** — guard close-trade against unknown tickers (80ce1bf)
@@ -102,6 +113,7 @@
 ### P1 PENDING — Validation (Fabio runs)
 
 - [ ] **Run `.\scripts\run-backtest.ps1 -Strategies c4,p4`** — verify only [C4] and [P4] logs appear, ~83% perf improvement expected (strategyFilter active)
+  > **Pending** — diagnostic log added (commits `9ba85e5` + `00872aa`); needs fresh run with both `Corriendo:` line and `[backtest] Strategy filter:` visible in log to confirm end-to-end.
 - [ ] **Verify OptionChainRecorder on first market open** — confirm `option_chain_snapshot` is populated on first open (15:30 ET / 9:30 ET) on 2026-05-21
 
 ### P1 CRITICAL — Options pricing (2026-05-20)
