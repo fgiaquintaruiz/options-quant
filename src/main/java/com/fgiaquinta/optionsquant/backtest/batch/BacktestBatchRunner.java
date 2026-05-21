@@ -271,6 +271,7 @@ public class BacktestBatchRunner implements ApplicationRunner {
         log.info("[backtest] {} tickers with valid candles — running 12 strategies", tickers.size());
 
         List<String> strategyFilter = parseStrategyFilter(args);
+        log.info("[backtest] Strategy filter: {}", strategyFilter != null ? strategyFilter : "none — running all 12 strategies");
         BacktestConfig config = buildConfig(tickers, runId, strategyFilter);
         List<BacktestBatchResult> results = new ArrayList<>();
         BacktestReport report = null;
@@ -384,7 +385,7 @@ public class BacktestBatchRunner implements ApplicationRunner {
      * @return the trimmed answer string, or {@code null} if no console is available
      */
     private String readConfirmation() {
-        System.out.println("About to DELETE all backtest data. Type 'yes' to continue:");
+        log.info("About to DELETE all backtest data. Type 'yes' to continue:");
         java.io.Console console = System.console();
         if (console != null) {
             String line = console.readLine();
