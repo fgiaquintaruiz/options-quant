@@ -1,13 +1,13 @@
-# 🚀 Options Quant Engine v1.3.30
+# Options Quant Engine v1.3.30
 
 ### "The Vanilla Quant" - Java 25+ High-Performance Trading Bot
 
-Un motor de trading algorítmico híbrido diseñado para Interactive Brokers (TWS/Gateway). Diseñado para una ejecución ultrarrápida, gestión de riesgo estricta, análisis automatizado de backtests y filtrado inteligente de tickers.
+A hybrid algorithmic trading engine designed for Interactive Brokers (TWS/Gateway). Built for ultra-fast execution, strict risk management, automated backtest analysis, and intelligent ticker filtering.
 
 
 ---
 
-## 🚀 Quick Start: How to Run
+## Quick Start: How to Run
 
 ### 1. Prerequisites
 - **Java 25** installed and in PATH.
@@ -207,7 +207,7 @@ curl http://localhost:8001/health
 
 ---
 
-## 🏗️ Project Architecture
+## Project Architecture
 
 ### Tech Stack
 - **Java 25** (latest LTS)
@@ -264,137 +264,137 @@ src/main/java/com/fgiaquinta/optionsquant/
 
 ---
 
-## 🌟 Características Avanzadas (Core Architecture)
+## Advanced Features (Core Architecture)
 
-- **Delta Fetching Híbrido & Anti-Deadlock:** El bot prioriza la lectura de datos históricos desde archivos CSV locales. Calcula dinámicamente el tiempo transcurrido desde la última vela y solicita a IBKR solo el Delta faltante. Incluye un sistema **Anti-Deadlock con Timeout de 45 segundos** que evita congelamientos si la API de IBKR pierde peticiones.
-- **Hard Caps Anti-Error 162:** Limitación inteligente de peticiones de datos históricos. Previene baneos automáticos de IBKR limitando descargas máximas según el marco temporal.
-- **Ticker Sanitization & Smart Routing:** Limpieza extrema de símbolos (`replaceAll("[^a-zA-Z]", "")`) y enrutamiento dinámico de `primaryExch` (NASDAQ vs NYSE) para garantizar un rechazo del 0% por "Error 200: No security definition".
-- **Opciones "Exchange-Aware":** Selección dinámica del *Strike Price* validado directamente por la exchange. El bot no adivina el strike, lo machea con las opciones reales disponibles.
-- **Sincronización de Equidad en Tiempo Real:** El `AccountManager` detiene la ejecución de simulaciones hasta que el balance real de la cuenta (NetLiquidation) se sincronice, calculando con precisión matemática la cantidad de contratos permitidos según el riesgo por trade (Options Multiplier Aware).
-- **Position Size Safety Cap:** Límite máximo de **10 contratos por trade** para prevenir bugs de dimensionamiento (como el P6 Reversal PUT de 96 contratos que perdió -$18,972).
-- **Per-Strategy ATR Multiplier Tuning:** Stops y targets personalizados por estrategia basados en análisis de backtest (CALL: 1.2-1.5x SL, PUT: 1.1-1.3x SL).
-- **Advanced Bracket Orders (OCA):** Enrutamiento institucional de órdenes. La entrada se lanza directamente a mercado (MKT/LMT) sin bloqueos condicionales, mientras que el riesgo se delega 100% a los servidores de IBKR usando algoritmos "One-Cancels-All" con lógica condicional híbrida (Precio OR Tiempo "Golden Rule").
-- **Backtest Analyzer Automatizado:** Servicio que lee `trades.csv` y genera recomendaciones de optimización (win rate, riesgo/recompensa, patrones horarios, concentración).
-- **CSV-Based Ticker Management:** 356 tickers con datos fundamentales completos (P/E, ROIC, Beta, EPS Growth) en `data/tickers.csv`.
-- **News Filter & Priority Tickers:** Top 10 tickers priorizados por fundamentos para escaneo enfocado.
-- **Strategy Screener:** Escaneo automático de los 356 tickers con relajación incremental de criterios si no se encuentran candidatos.
+- **Hybrid Delta Fetching & Anti-Deadlock:** The bot prioritizes reading historical data from local CSV files. It dynamically calculates the time elapsed since the last candle and requests only the missing delta from IBKR. Includes a **45-second Anti-Deadlock Timeout** that prevents freezes if the IBKR API drops requests.
+- **Hard Caps Against Error 162:** Intelligent rate-limiting for historical data requests. Prevents automatic IBKR bans by capping max downloads per timeframe.
+- **Ticker Sanitization & Smart Routing:** Aggressive symbol cleanup (`replaceAll("[^a-zA-Z]", "")`) and dynamic `primaryExch` routing (NASDAQ vs NYSE) to guarantee 0% rejection from "Error 200: No security definition".
+- **Exchange-Aware Options:** Dynamic Strike Price selection validated directly against the exchange. The bot does not guess the strike — it matches against real available options.
+- **Real-Time Equity Sync:** `AccountManager` pauses simulation execution until the real account balance (NetLiquidation) is synchronized, then mathematically calculates the number of allowed contracts based on per-trade risk (Options Multiplier Aware).
+- **Position Size Safety Cap:** Hard cap of **10 contracts per trade** to prevent sizing bugs (e.g., P6 Reversal PUT with 96 contracts that lost -$18,972).
+- **Per-Strategy ATR Multiplier Tuning:** Custom stops and targets per strategy based on backtest analysis (CALL: 1.2-1.5x SL, PUT: 1.1-1.3x SL).
+- **Advanced Bracket Orders (OCA):** Institutional order routing. Entry is fired directly to market (MKT/LMT) without conditional blocks, while risk is fully delegated to IBKR servers using One-Cancels-All algorithms with hybrid conditional logic (Price OR Time "Golden Rule").
+- **Automated Backtest Analyzer:** Service that reads `trades.csv` and generates optimization recommendations (win rate, risk/reward, time patterns, concentration).
+- **CSV-Based Ticker Management:** 356 tickers with full fundamental data (P/E, ROIC, Beta, EPS Growth) in `data/tickers.csv`.
+- **News Filter & Priority Tickers:** Top 10 tickers prioritized by fundamentals for focused scanning.
+- **Strategy Screener:** Automatic scan of all 356 tickers with incremental criteria relaxation when no candidates are found.
 
 ---
 
-## 📟 Consola de Control Remoto & Telegram
+## Remote Control Console & Telegram
 
-El bot incluye dos vías de control remoto sin necesidad de detener el motor:
+The bot includes two remote control channels without needing to stop the engine:
 
-### 1. Servidor de Comandos Local (Puerto `7070`)
-Ideal para testing desde la terminal. Cómo conectar (Git Bash / Linux / macOS):
+### 1. Local Command Server (Port `7070`)
+Ideal for terminal-based testing. How to connect (Git Bash / Linux / macOS):
 ```bash
 curl telnet://localhost:7070
 ```
 
-| Comando | Descripción |
+| Command | Description |
 |---------|-------------|
-| `skip` | Hace un bypass del análisis Pre-Market de la IA y pone el bot en estado "LIVE" instantáneamente |
-| `macro green` | Fuerza los filtros macroeconómicos (MarketRadar) a estado FAVORABLE. Ideal para testing |
-| `trigger <TICKER> <PRICE>` | [Quick Test] Dispara automáticamente la C1SqueezeCallStrategy para el ticker indicado |
-| `trigger <TICK> <STRAT> <PRICE>` | Ejecuta manualmente una estrategia específica saltándose las condiciones de tiempo |
-| `exit` | Cierra la conexión de la consola remota |
+| `skip` | Bypasses the AI Pre-Market analysis and immediately puts the bot into "LIVE" state |
+| `macro green` | Forces macroeconomic filters (MarketRadar) to FAVORABLE state. Ideal for testing |
+| `trigger <TICKER> <PRICE>` | [Quick Test] Automatically fires C1SqueezeCallStrategy for the given ticker |
+| `trigger <TICK> <STRAT> <PRICE>` | Manually executes a specific strategy, bypassing time conditions |
+| `exit` | Closes the remote console connection |
 
-### 2. CLI Interactivo (Modo Línea de Comandos)
+### 2. Interactive CLI (Command-Line Mode)
 
 #### A. Trading CLI (General Purpose)
-Para escaneo de estrategias y trading en vivo:
+For strategy scanning and live trading:
 ```bash
 ./gradlew bootRun --args='--cli.enabled=true'
 ```
 
-Menú interactivo:
-- **1:** Ejecutar backtest completo con análisis
-- **2:** Backtest rápido (últimos 30 días)
-- **3:** Analizar resultados del último backtest
-- **4:** Listar tickers de alta calidad
-- **5:** Listar tickers por sector
-- **6:** Salir
+Interactive menu:
+- **1:** Run full backtest with analysis
+- **2:** Quick backtest (last 30 days)
+- **3:** Analyze last backtest results
+- **4:** List high-quality tickers
+- **5:** List tickers by sector
+- **6:** Exit
 
 #### B. Backtest Analyzer CLI (Advanced)
-Para ejecutar backtests con análisis detallado y guardar resultados en JSON para ajuste de estrategias:
+For running backtests with detailed analysis and saving results to JSON for strategy tuning:
 ```bash
 ./gradlew bootRun --args='--backtest-cli.enabled=true'
 ```
 
-Menú interactivo:
-- **1:** Ejecutar backtest + análisis (guardar en JSON)
-- **2:** Comparar dos resultados de backtest
-- **3:** Analizar resultados existentes
-- **4:** Ver historial de rendimiento por estrategia
-- **5:** Generar recomendaciones de ajuste de estrategias
-- **6:** Salir
+Interactive menu:
+- **1:** Run backtest + analysis (save to JSON)
+- **2:** Compare two backtest results
+- **3:** Analyze existing results
+- **4:** View performance history by strategy
+- **5:** Generate strategy tuning recommendations
+- **6:** Exit
 
 **Output Files:**
-- `backtest/results/{testName}.json` - Resultado completo con análisis
-- `backtest/trades.csv` - Registro detallado de operaciones
-- `backtest/equity.csv` - Curva de equidad
-- `backtest/summary.txt` - Resumen ejecutivo
+- `backtest/results/{testName}.json` - Complete result with analysis
+- `backtest/trades.csv` - Detailed trade log
+- `backtest/equity.csv` - Equity curve
+- `backtest/summary.txt` - Executive summary
 
-**Ejemplo de uso:**
+**Usage Example:**
 ```bash
-# Ejecutar y guardar resultado
+# Run and save result
 java -jar target/options-quant.jar --backtest-cli.enabled=true
 # Enter: 1
 # Test name: test_april_sweep
 
-# Comparar dos tests
+# Compare two tests
 # Enter: 2
 # First test: test_april_sweep
 # Second test: test_march_baseline
 
-# Generar recomendaciones
+# Generate recommendations
 # Enter: 5
 ```
 
-### 3. Telegram Integration (Legacy - Pendiente de Migrar)
-- Inline keyboard con callback data para ejecución one-tap desde móvil
-- Auto-webhook registration vía Cloudflare tunnel
-- Bounce-back UX: HTTP server devuelve HTML/JS que ejecuta `window.location.href = "tg://"` para cerrar pestañas Chrome
+### 3. Telegram Integration (Legacy - Pending Migration)
+- Inline keyboard with callback data for one-tap mobile execution
+- Auto-webhook registration via Cloudflare tunnel
+- Bounce-back UX: HTTP server returns HTML/JS that executes `window.location.href = "tg://"` to close Chrome tabs
 
 ---
 
-## 🤖 MarketScanner (Automatic Trading)
+## MarketScanner (Automatic Trading)
 
-El **MarketScanner** se ejecuta automáticamente en segundo plano cuando inicias la aplicación Spring Boot.
+The **MarketScanner** runs automatically in the background when you start the Spring Boot application.
 
-### Horario de Escaneo (España, CEST = UTC+2)
+### Scan Schedule (Spain time, CEST = UTC+2)
 
-| Período | Hora España | Actividad |
-|---------|-------------|-----------|
-| **Pre-market** | 10:00 - 15:30 | Escaneo de 50 tickers prioritarios |
-| **Market hours** | 15:30 - 22:00 | Escaneo de los 512 tickers |
-| **After hours** | 22:00 - 10:00 | Escáner pausado |
+| Period | Spain Time | Activity |
+|--------|------------|----------|
+| **Pre-market** | 10:00 - 15:30 | Scans 50 priority tickers |
+| **Market hours** | 15:30 - 22:00 | Scans all 512 tickers |
+| **After hours** | 22:00 - 10:00 | Scanner paused |
 
-### Sincronización con Velas de 15 Minutos
+### Sync with 15-Minute Candles
 
-El escáner se ejecuta **2 segundos después de que cierra cada vela de 15 minutos**:
+The scanner runs **2 seconds after each 15-minute candle closes**:
 - 10:00:02, 10:15:02, 10:30:02, 10:45:02, ...
 - 15:30:02, 15:45:02, 16:00:02, ...
-- 21:30:02, 21:45:02 (último escaneo)
+- 21:30:02, 21:45:02 (last scan)
 
-### Cómo Funciona
+### How It Works
 
-1. **Carga de datos automática** - Si los CSV están desactualizados, descarga datos frescos de IBKR
-2. **Escanea las 12 estrategias** - C1-C6 (CALL) + P1-P6 (PUT) contra cada ticker
-3. **Detecta señales** - Loggea cada señal encontrada
-4. **Ejecución automática** - Si `auto-execute: true` en application.yml, coloca la orden
+1. **Automatic data loading** - If CSVs are stale, downloads fresh data from IBKR
+2. **Scans all 12 strategies** - C1-C6 (CALL) + P1-P6 (PUT) against each ticker
+3. **Detects signals** - Logs every signal found
+4. **Auto-execution** - If `auto-execute: true` in application.yml, places the order
 
-### Logs del MarketScanner
+### MarketScanner Logs
 
-Verás logs como estos cada 15 minutos durante el horario de mercado:
+You will see logs like these every 15 minutes during market hours:
 
 ```
-🔍 === MARKET SCAN === 15:30:02 (Spain) ===
-🎯 SIGNAL: AAPL CALL @ $175.50 - C1SqueezeCall at 2026-04-10T15:30:02
+=== MARKET SCAN === 15:30:02 (Spain) ===
+SIGNAL: AAPL CALL @ $175.50 - C1SqueezeCall at 2026-04-10T15:30:02
   TP: $178.20 | SL: $173.80 | Entry: $175.50
-  🚀 AUTO-EXECUTING...
+  AUTO-EXECUTING...
 
-📈 === SCAN SUMMARY ===
+=== SCAN SUMMARY ===
   Time: 15:30:02 (Spain)
   Tickers scanned: 512
   Signals found: 3
@@ -402,18 +402,18 @@ Verás logs como estos cada 15 minutos durante el horario de mercado:
 ======================
 ```
 
-### Configuración
+### Configuration
 
 ```yaml
 ibkr:
-  auto-execute: true   # Cambiar a false para solo escanear sin ejecutar órdenes
+  auto-execute: true   # Set to false to scan only without placing orders
 ```
 
-**Importante:**
-- El MarketScanner **reemplaza al Trading CLI** - ya no necesitas interactuar manualmente
-- Solo inicia la aplicación Spring Boot y escanea automáticamente
-- Para deshabilitar la ejecución automática, pon `auto-execute: false`
-- Los escaneos solo ocurren de lunes a viernes
+**Important:**
+- The MarketScanner **replaces the Trading CLI** — you no longer need to interact manually
+- Just start the Spring Boot application and it scans automatically
+- To disable auto-execution, set `auto-execute: false`
+- Scans only run Monday through Friday
 
 ### Hot Tickers (Priority Scanning)
 
@@ -449,14 +449,14 @@ ibkr:
 **Example Output:**
 ```
 >>> Scanning 512 tickers (15 hot first, 497 remaining) against 12 strategies (autoRefresh=true)
-🔥 Scanning 15 HOT tickers first: [SPY, QQQ, AAPL, MSFT, NVDA, TSLA, AMZN, META, GOOGL, AMD, JPM, V, BRK.B, XOM, JNJ]
-✅ SPY analyzed - 1 signal(s) found (245ms)
+Scanning 15 HOT tickers first: [SPY, QQQ, AAPL, MSFT, NVDA, TSLA, AMZN, META, GOOGL, AMD, JPM, V, BRK.B, XOM, JNJ]
+SPY analyzed - 1 signal(s) found (245ms)
    SPY CALL @ $665.50 - C1SqueezeCall (TP: $670.00, SL: $660.00)
-✅ NVDA analyzed - 2 signal(s) found (312ms)
+NVDA analyzed - 2 signal(s) found (312ms)
    NVDA PUT @ $890.00 - P2TrendPut (TP: $880.00, SL: $900.00)
    NVDA PUT @ $890.00 - P6ReversalPut (TP: $875.00, SL: $905.00)
-✅ Hot tickers scan complete - 3 signals found
-📊 Scanning 497 remaining tickers...
+Hot tickers scan complete - 3 signals found
+Scanning 497 remaining tickers...
 ... (continues with remaining tickers)
 ```
 
@@ -465,265 +465,265 @@ Edit the `hot-tickers` list in `application.yml` with your preferred tickers. Th
 
 ---
 
-## 📡 REST API Completa (Puerto `9090`)
+## REST API (Port `9090`)
 
-### Datos Históricos
-| Método | Endpoint | Descripción |
+### Historical Data
+| Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/candles/download` | Descarga velas de un ticker/timeframe específico |
-| `POST` | `/api/candles/download-all` | Descarga todos los timeframes de un ticker |
-| `POST` | `/api/candles/download-all-tickers` | Descarga masiva de los 356 tickers configurados |
-| `GET` | `/api/candles/local/{ticker}/{timeframe}` | Lee datos CSV locales |
+| `POST` | `/api/candles/download` | Downloads candles for a specific ticker/timeframe |
+| `POST` | `/api/candles/download-all` | Downloads all timeframes for a ticker |
+| `POST` | `/api/candles/download-all-tickers` | Bulk download for all 356 configured tickers |
+| `GET` | `/api/candles/local/{ticker}/{timeframe}` | Reads local CSV data |
 
-### Escaneo de Estrategias
-| Método | Endpoint | Descripción |
+### Strategy Scanning
+| Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/strategies/scan` | Escanea los 356 tickers contra las 12 estrategias |
-| `POST` | `/api/strategies/scan/{ticker}` | Escanea un ticker específico (con `includeTradePlans` param) |
+| `POST` | `/api/strategies/scan` | Scans all 356 tickers against all 12 strategies |
+| `POST` | `/api/strategies/scan/{ticker}` | Scans a specific ticker (with `includeTradePlans` param) |
 
-### Ejecución de Trades
-| Método | Endpoint | Descripción |
+### Trade Execution
+| Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/trading/scan-and-execute` | Escaneo + ejecución automática con gestión de riesgo |
-| `POST` | `/api/trading/execute` | Ejecuta un trade manual con bracket orders |
-| `GET` | `/api/trading/check-options` | Verifica cadena de opciones disponible |
-| `GET` | `/api/trading/account-status` | Estado de la cuenta IBKR en tiempo real |
+| `POST` | `/api/trading/scan-and-execute` | Scan + auto-execution with risk management |
+| `POST` | `/api/trading/execute` | Executes a manual trade with bracket orders |
+| `GET` | `/api/trading/check-options` | Checks available option chain |
+| `GET` | `/api/trading/account-status` | Real-time IBKR account status |
 
 ### Backtesting & Analysis
-| Método | Endpoint | Descripción |
+| Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/backtest/run?from=YYYY-MM-DD&to=YYYY-MM-DD&tickers=SPY,AAPL` | Ejecuta backtest con parámetros custom |
-| `POST` | `/api/backtest/run-all?from=YYYY-MM-DD&to=YYYY-MM-DD` | Backtest completo de todos los tickers |
-| `POST` | `/api/backtest/analyze` | **Analiza trades.csv y genera sugerencias de mejora** |
-| `GET` | `/api/backtest/tickers?sector=Technology&highQuality=true` | Query ticker database con filtros |
-| `GET` | `/api/backtest/priority-tickers?refresh=true` | Top 10 tickers por fundamentos |
-| `GET` | `/api/backtest/ticker-score/{ticker}` | Score detallado de un ticker |
-| `POST` | `/api/backtest/screen?count=10` | Strategy screener con criteria relaxation |
+| `POST` | `/api/backtest/run?from=YYYY-MM-DD&to=YYYY-MM-DD&tickers=SPY,AAPL` | Runs backtest with custom parameters |
+| `POST` | `/api/backtest/run-all?from=YYYY-MM-DD&to=YYYY-MM-DD` | Full backtest across all tickers |
+| `POST` | `/api/backtest/analyze` | **Analyzes trades.csv and generates improvement suggestions** |
+| `GET` | `/api/backtest/tickers?sector=Technology&highQuality=true` | Query ticker database with filters |
+| `GET` | `/api/backtest/priority-tickers?refresh=true` | Top 10 tickers by fundamentals |
+| `GET` | `/api/backtest/ticker-score/{ticker}` | Detailed score for a ticker |
+| `POST` | `/api/backtest/screen?count=10` | Strategy screener with criteria relaxation |
 
-### Monitoreo (Actuator)
-| Método | Endpoint | Descripción |
+### Monitoring (Actuator)
+| Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/actuator/health` | Estado de salud del bot |
-| `GET` | `/actuator/metrics` | Métricas de rendimiento |
-| `GET` | `/actuator/prometheus` | Exportación de métricas en formato Prometheus |
+| `GET` | `/actuator/health` | Bot health status |
+| `GET` | `/actuator/metrics` | Performance metrics |
+| `GET` | `/actuator/prometheus` | Metrics export in Prometheus format |
 
-#### Ejemplos de Uso
+#### Usage Examples
 
-**1. Ejecutar backtest y analizar resultados:**
+**1. Run backtest and analyze results:**
 ```bash
-# Ejecutar backtest
+# Run backtest
 curl -X POST "http://localhost:9090/api/backtest/run?from=2026-01-01&to=2026-04-10&tickers=SPY,AAPL" \
   -H "Content-Type: application/json"
 
-# Analizar resultados
+# Analyze results
 curl -X POST http://localhost:9090/api/backtest/analyze
 ```
 
-**2. Obtener tickers de alta calidad:**
+**2. Get high-quality tickers:**
 ```bash
 curl "http://localhost:9090/api/backtest/tickers?highQuality=true"
 ```
 
-**3. Obtener top 10 tickers por fundamentos:**
+**3. Get top 10 tickers by fundamentals:**
 ```bash
 curl "http://localhost:9090/api/backtest/priority-tickers?refresh=true"
 ```
 
 ---
 
-## 📊 Backtesting & Analytics
+## Backtesting & Analytics
 
-### Output de Backtest
-Cada ejecución genera 3 archivos en el directorio `backtest/`:
+### Backtest Output
+Each run generates 3 files in the `backtest/` directory:
 
-| Archivo | Contenido |
-|---------|-----------|
-| `trades.csv` | Registro detallado: entry/exit prices, PnL, comisiones, slippage, max drawdown, max runup |
-| `equity.csv` | Curva de equidad timestampada |
-| `summary.txt` | Resumen ejecutivo con Sharpe ratio, profit factor, win rate |
+| File | Contents |
+|------|----------|
+| `trades.csv` | Detailed log: entry/exit prices, PnL, commissions, slippage, max drawdown, max runup |
+| `equity.csv` | Timestamped equity curve |
+| `summary.txt` | Executive summary with Sharpe ratio, profit factor, win rate |
 
 ### Backtest Analyzer Service
-Lee automáticamente `trades.csv` y detecta:
-- 🚨 **Position sizing bugs** (ej: 96 contratos en una operación)
-- 📉 **Low win rate strategies** (<40% en 20+ trades)
-- ⚖️ **Poor risk/reward ratios** (avg win < avg loss)
-- 🛑 **High SL rates** (>60% de trades hitting stops)
-- 🕐 **Poor time patterns** (horas con bajo rendimiento)
-- ⚠️ **Consecutive losses** (rachas de 5+ pérdidas)
-- 📊 **Ticker underperformance** (tickers con <35% win rate en 5+ trades)
-- 🔄 **Direction bias** (CALL vs PUT win rate disparity >20%)
+Automatically reads `trades.csv` and detects:
+- **Position sizing bugs** (e.g., 96 contracts in one trade)
+- **Low win rate strategies** (<40% on 20+ trades)
+- **Poor risk/reward ratios** (avg win < avg loss)
+- **High SL rates** (>60% of trades hitting stops)
+- **Poor time patterns** (hours with low performance)
+- **Consecutive losses** (streaks of 5+ losses)
+- **Ticker underperformance** (tickers with <35% win rate on 5+ trades)
+- **Direction bias** (CALL vs PUT win rate disparity >20%)
 
-### Métricas Calculadas
-- **Profit Factor:** Ganancias totales / Pérdidas totales (objetivo > 1.5)
-- **Sharpe Ratio:** Rendimiento ajustado al riesgo (anualizado, base 252 días)
-- **Max Drawdown:** Pérdida máxima desde pico histórico (absoluto y %)
-- **Win Rate:** Porcentaje de trades ganadores
-- **Avg Duration:** Duración promedio de trades en horas
-
----
-
-## 🎯 Estrategias Implementadas (12 Total)
-
-### Estrategias CALL (Alcistas)
-
-| Estrategia | Concepto | Ventana Horaria | Condición Clave |
-|------------|----------|-----------------|-----------------|
-| **C1 Squeeze Call** | Breakout de compresión de volatilidad | Cualquier hora | 4 SMAs (20/40/100/200) dentro de 4% + quiebre de máximo 10 días |
-| **C2 Trend Call** | Continuación de tendencia en pullback | Después 10 AM | Pullback a SMA20 + vela alcista de confirmación |
-| **C3 Bounce Call** | Rebote en soporte SMA20 (1H) | Después 10 AM | Tendencia diaria alcista + mínimo toca SMA20 (1H) + confirmación 15m |
-| **C4 Opening Call** | Reversal de gap-down en apertura | 9:30-9:35 AM | Día lateral previo + gap -1.5% a -6% + primera vela 5min verde |
-| **C5 Efecto Imán** | Gap extremo + breakout de Bollinger | 9:45-9:55 AM | Worden Stochastic cruza arriba de 20 |
-| **C6 Reversal Call** | Reversal de tendencia bear-to-bull | Después 10 AM | Precio bajo SMA20 por 3+ horas, cruza arriba con volumen |
-
-### Estrategias PUT (Bajistas)
-
-| Estrategia | Concepto | Ventana Horaria | Condición Clave |
-|------------|----------|-----------------|-----------------|
-| **P1 Squeeze Put** | Breakout lateral a la baja | Cualquier hora | Compresión de volatilidad + ruptura descendente |
-| **P2 Trend Put** | Rechazo en pullback (tendencia bajista) | Después 10 AM | Pullback a SMA20 + vela bajista de confirmación |
-| **P3 Bounce Put** | Rechazo en resistencia SMA20 (1H) | Después 10 AM | Tendencia diaria bajista + máximo toca SMA20 (1H) |
-| **P4 Opening Put** | Trampa de gap-up en apertura | 9:30-9:35 AM | Gap-up excesivo + reversión inmediata |
-| **P5 Efecto Imán** | Gap extremo arriba + breakout de Bollinger | 9:45-9:55 AM | Worden Stochastic cruza abajo de 80 |
-| **P6 Reversal Put** | Reversal de tendencia bull-to-bear | Después 10 AM | Precio sobre SMA20 por 3+ horas, cruza abajo con volumen |
-
-### Indicador Personalizado: Worden Stochastic
-- **Implementación:** `WordenStochasticIndicator.java`
-- **Cálculo:** Percentil del precio de cierre dentro del período de lookback
-- **Uso:** Confirmación en estrategias C5/P5 (Efecto Imán)
-- **Fallback:** Si no está disponible, usa surgimiento de volumen (1.5x promedio)
+### Calculated Metrics
+- **Profit Factor:** Total gains / Total losses (target > 1.5)
+- **Sharpe Ratio:** Risk-adjusted return (annualized, 252-day basis)
+- **Max Drawdown:** Maximum loss from historical peak (absolute and %)
+- **Win Rate:** Percentage of winning trades
+- **Avg Duration:** Average trade duration in hours
 
 ---
 
-## 📈 News Filter & Priority Tickers
+## Implemented Strategies (12 Total)
 
-El sistema filtra y prioriza los 356 tickers para enfocarse en los 10 mejores basados en:
+### CALL Strategies (Bullish)
 
-### Criterios de Scoring (0-100 puntos)
+| Strategy | Concept | Time Window | Key Condition |
+|----------|---------|-------------|---------------|
+| **C1 Squeeze Call** | Volatility compression breakout | Anytime | 4 SMAs (20/40/100/200) within 4% + 10-day high break |
+| **C2 Trend Call** | Trend continuation on pullback | After 10 AM | Pullback to SMA20 + bullish confirmation candle |
+| **C3 Bounce Call** | Bounce off SMA20 support (1H) | After 10 AM | Daily bullish trend + low touches SMA20 (1H) + 15m confirmation |
+| **C4 Opening Call** | Gap-down reversal at open | 9:30-9:35 AM | Lateral prior day + gap -1.5% to -6% + first 5m green candle |
+| **C5 Magnet Effect** | Extreme gap + Bollinger breakout | 9:45-9:55 AM | Worden Stochastic crosses above 20 |
+| **C6 Reversal Call** | Bear-to-bull trend reversal | After 10 AM | Price below SMA20 for 3+ hours, crosses above with volume |
+
+### PUT Strategies (Bearish)
+
+| Strategy | Concept | Time Window | Key Condition |
+|----------|---------|-------------|---------------|
+| **P1 Squeeze Put** | Lateral breakdown | Anytime | Volatility compression + downside break |
+| **P2 Trend Put** | Pullback rejection (bearish trend) | After 10 AM | Pullback to SMA20 + bearish confirmation candle |
+| **P3 Bounce Put** | Rejection at SMA20 resistance (1H) | After 10 AM | Daily bearish trend + high touches SMA20 (1H) |
+| **P4 Opening Put** | Gap-up trap at open | 9:30-9:35 AM | Excessive gap-up + immediate reversal |
+| **P5 Magnet Effect** | Extreme gap up + Bollinger breakout | 9:45-9:55 AM | Worden Stochastic crosses below 80 |
+| **P6 Reversal Put** | Bull-to-bear trend reversal | After 10 AM | Price above SMA20 for 3+ hours, crosses below with volume |
+
+### Custom Indicator: Worden Stochastic
+- **Implementation:** `WordenStochasticIndicator.java`
+- **Calculation:** Percentile rank of close price within the lookback period
+- **Usage:** Confirmation in C5/P5 strategies (Magnet Effect)
+- **Fallback:** If unavailable, uses volume surge (1.5x average)
+
+---
+
+## News Filter & Priority Tickers
+
+The system filters and prioritizes all 356 tickers to focus on the top 10 based on:
+
+### Scoring Criteria (0-100 points)
 - **ROIC (0-15 pts):** >15% = 15pts, >10% = 10pts, >5% = 5pts
 - **EPS Growth (0-15 pts):** >15% = 15pts, >10% = 10pts, >5% = 5pts
 - **Debt/Equity (0-20 pts):** <0.3 = 20pts, <0.5 = 15pts, <1.0 = 10pts
 - **P/E Ratio (0-20 pts):** 0-15 = 20pts, <25 = 15pts, <35 = 10pts
 - **Market Cap (0-20 pts):** >$50B = 20pts, >$20B = 15pts, >$10B = 10pts
-- **Beta (0-10 pts):** 0.8-1.3 = 10pts, 0.6-1.5 = 7pts, otro = 3pts
+- **Beta (0-10 pts):** 0.8-1.3 = 10pts, 0.6-1.5 = 7pts, other = 3pts
 
-### Uso
+### Usage
 ```bash
-# Obtener top 10
+# Get top 10
 GET /api/backtest/priority-tickers
 
-# Refrescar lista
+# Refresh list
 GET /api/backtest/priority-tickers?refresh=true
 
-# Ver score detallado
+# View detailed score
 GET /api/backtest/ticker-score/AAPL
 ```
 
 ---
 
-## 🔍 Strategy Screener
+## Strategy Screener
 
-Escanea los 356 tickers y encuentra candidatos ideales para las 12 estrategias.
+Scans all 356 tickers and finds ideal candidates for the 12 strategies.
 
-### Criteria Relaxment Automático
-Si no se encuentran candidatos con criterios estrictos, el sistema relaja incrementalmente:
+### Automatic Criteria Relaxation
+If no candidates are found with strict criteria, the system incrementally relaxes:
 
-| Nivel | Min Volume Change | Min Price Change | Min Market Cap | Min Volatility |
+| Level | Min Volume Change | Min Price Change | Min Market Cap | Min Volatility |
 |-------|------------------|------------------|----------------|----------------|
 | 1 (Strict) | 2% | 1.5% | $50M | 2% |
 | 2 (Moderate) | 1.5% | 1.2% | $20M | 1.5% |
 | 3 (Relaxed) | 1% | 1.0% | $10M | 1% |
 | 4 (Very Relaxed) | 0.5% | 0.8% | $5M | 0.5% |
 
-### Uso
+### Usage
 ```bash
 POST /api/backtest/screen?count=10
 ```
 
 ---
 
-## ⚙️ Configuración
+## Configuration
 
-### Parámetros Principales (`application.yml`)
+### Main Parameters (`application.yml`)
 
 ```yaml
 ibkr:
   host: 127.0.0.1              # TWS/IB Gateway host
   port: 7497                   # 7497 (paper), 7496 (live), 4002 (Gateway paper)
-  sync-timeout: 30             # Timeout de conexión (segundos)
-  auto-execute: true           # DEBE ser true para órdenes reales
-  account-id: DUN598126        # ID de cuenta IBKR
-  default-qty: 10              # Contratos por defecto
-  risk-per-trade-pct: 0.02     # Riesgo por trade (2% del balance)
-  use-csv-tickers: true        # Usar tickers.csv en vez de lista YAML
-  tickers: []                  # Legacy - ver data/tickers.csv
+  sync-timeout: 30             # Connection timeout (seconds)
+  auto-execute: true           # Must be true for real orders
+  account-id: DUN598126        # IBKR account ID
+  default-qty: 10              # Default contracts
+  risk-per-trade-pct: 0.02     # Risk per trade (2% of balance)
+  use-csv-tickers: true        # Use tickers.csv instead of YAML list
+  tickers: []                  # Legacy - see data/tickers.csv
 ```
 
-### Escaneo en vivo (`scanner`)
+### Live Scanning (`scanner`)
 
-Controla cuántos tickers se analizan en paralelo durante el escaneo de estrategias en vivo y en qué orden se recorren los símbolos que no son “hot”. Los valores viven bajo el prefijo `scanner` en `application.yml`.
+Controls how many tickers are analyzed in parallel during live strategy scans and the traversal order for non-hot symbols. Values live under the `scanner` prefix in `application.yml`.
 
 ```yaml
 scanner:
   concurrent-mode: AUTO              # AUTO | FIXED
-  fixed-max-concurrent: 4            # Usado solo si concurrent-mode: FIXED
-  auto-reserve-logical-cpus: 4       # CPUs lógicos a dejar libres (IDE, SO, etc.)
-  auto-min-concurrent: 1             # Piso de paralelismo en AUTO
-  auto-max-concurrent-cap: 6         # Techo de paralelismo en AUTO
+  fixed-max-concurrent: 4            # Used only when concurrent-mode: FIXED
+  auto-reserve-logical-cpus: 4       # Logical CPUs to leave free (IDE, OS, etc.)
+  auto-min-concurrent: 1             # Parallelism floor in AUTO mode
+  auto-max-concurrent-cap: 6         # Parallelism ceiling in AUTO mode
   prioritization-mode: HYBRID        # HYBRID | NATURAL
-  hybrid-fundamental-weight: 0.65    # Peso relativo (se normaliza con memory)
+  hybrid-fundamental-weight: 0.65    # Relative weight (normalized with memory)
   hybrid-memory-weight: 0.35
 ```
 
-**Paralelismo**
+**Parallelism**
 
-- **FIXED:** usa siempre `fixed-max-concurrent` workers concurrentes.
-- **AUTO:** calcula un máximo según `Runtime.getRuntime().availableProcessors()`:  
-  `effective = min(auto-max-concurrent-cap, max(auto-min-concurrent, availableProcessors - auto-reserve-logical-cpus))`.  
-  Así se limita la carga en portátiles y se reserva capacidad para el entorno.
+- **FIXED:** always uses `fixed-max-concurrent` concurrent workers.
+- **AUTO:** calculates a maximum based on `Runtime.getRuntime().availableProcessors()`:
+  `effective = min(auto-max-concurrent-cap, max(auto-min-concurrent, availableProcessors - auto-reserve-logical-cpus))`.
+  This limits load on laptops and reserves capacity for the environment.
 
-**Orden de tickers (después de la lista hot y `ibkr.hot-tickers`)**
+**Ticker order (after hot list and `ibkr.hot-tickers`)**
 
-- **NATURAL:** se respeta el orden en que vienen del CSV / configuración.
-- **HYBRID:** primero el tier de prioridad (top fundamentos del `NewsFilterService`, típicamente hasta ~10 símbolos), luego el resto. Dentro de cada grupo se ordena por una puntuación híbrida: pesos normalizados de `hybrid-fundamental-weight` × score de fundamentos (CSV) más `hybrid-memory-weight` × score aprendido en `TickerMemory`. Si ambos pesos son ≤ 0 en configuración, el código aplica valores por defecto (0.65 / 0.35).
+- **NATURAL:** respects the order tickers appear in from CSV / configuration.
+- **HYBRID:** priority tier first (top fundamentals from `NewsFilterService`, typically ~10 symbols), then the rest. Within each group, ordered by a hybrid score: normalized weights of `hybrid-fundamental-weight` × fundamentals score (CSV) plus `hybrid-memory-weight` × learned score in `TickerMemory`. If both weights are <= 0 in config, the code applies defaults (0.65 / 0.35).
 
-**Observabilidad:** la respuesta de `GET /live-ui/status` incluye `scannerConcurrentMode`, `scannerPrioritizationMode`, `scannerHybridFundamentalWeight`, `scannerHybridMemoryWeight`, además de `maxConcurrentScans` y contadores de progreso del escaneo.
+**Observability:** the `GET /live-ui/status` response includes `scannerConcurrentMode`, `scannerPrioritizationMode`, `scannerHybridFundamentalWeight`, `scannerHybridMemoryWeight`, along with `maxConcurrentScans` and scan progress counters.
 
-### Gestión de Riesgo Automática
+### Automatic Risk Management
 
-**Fórmula de Posición:**
+**Position Formula:**
 ```
 qty = (balance * riskPct) / (|entry - SL| * 100)
-qty = Math.max(1, Math.min(qty, 10))  # CAPADO A 10 CONTRATOS MAX
+qty = Math.max(1, Math.min(qty, 10))  # HARD CAP AT 10 CONTRACTS MAX
 ```
 
-- **Balance en tiempo real:** Streaming de NetLiquidation desde IBKR
-- **ATR-based Stops:** TP = 1.5x ATR, SL = 1.0x ATR (14-período en 1H)
-- **Cap del 0.9%:** Distancia máxima TP/SL limitada a 0.9% del precio para opciones
-- **Mínimo $0.25:** Distancia mínima absoluta para evitar stops demasiado ajustados
-- **Hora de salida:** Por defecto 15:55 ET (antes del cierre)
+- **Real-time balance:** NetLiquidation streaming from IBKR
+- **ATR-based Stops:** TP = 1.5x ATR, SL = 1.0x ATR (14-period on 1H)
+- **0.9% cap:** Maximum TP/SL distance capped at 0.9% of price for options
+- **$0.25 minimum:** Minimum absolute distance to avoid overly tight stops
+- **Exit time:** Default 15:55 ET (before close)
 
 ### Per-Strategy ATR Multipliers
 
-| Estrategia | SL Multiplier | TP Multiplier | Razón |
-|------------|--------------|--------------|-------|
-| c1squeezecall | 1.3x | 1.6x | Squeeze necesita más room |
-| c2trendcall | 1.2x | 1.5x | Trend pullbacks pueden ser profundos |
-| c3bouncecall | 1.4x | 1.4x | Bounce necesita stops amplios |
-| c4openingcall | 1.5x | 1.3x | Volatilidad de apertura requiere stops anchos |
-| c5continuationcall | 1.4x | 1.4x | Gap reversals son volátiles |
-| c6reversalcall | 1.3x | 1.5x | Reversals necesitan room de confirmación |
-| p1squeezeput | 1.2x | 1.5x | Squeeze puts ligeramente más confiables |
-| p2trendput | 1.1x | 1.5x | Trend puts funcionan bien con stops estándar |
-| p3bounceput | 1.2x | 1.4x | Bounce puts similar a calls |
-| p4openingput | 1.3x | 1.4x | Opening puts volátiles |
+| Strategy | SL Multiplier | TP Multiplier | Reason |
+|----------|--------------|--------------|--------|
+| c1squeezecall | 1.3x | 1.6x | Squeeze needs more room |
+| c2trendcall | 1.2x | 1.5x | Trend pullbacks can be deep |
+| c3bouncecall | 1.4x | 1.4x | Bounce needs wider stops |
+| c4openingcall | 1.5x | 1.3x | Opening volatility requires wide stops |
+| c5continuationcall | 1.4x | 1.4x | Gap reversals are volatile |
+| c6reversalcall | 1.3x | 1.5x | Reversals need confirmation room |
+| p1squeezeput | 1.2x | 1.5x | Squeeze puts slightly more reliable |
+| p2trendput | 1.1x | 1.5x | Trend puts work well with standard stops |
+| p3bounceput | 1.2x | 1.4x | Bounce puts similar to calls |
+| p4openingput | 1.3x | 1.4x | Opening puts volatile |
 | p5continuationput | 1.2x | 1.5x | Gap continuation puts |
-| p6reversalput | 1.3x | 1.4x | Reversal puts necesitan room |
+| p6reversalput | 1.3x | 1.4x | Reversal puts need room |
 
-**Para ajustar:** Editar `src/main/java/com/fgiaquinta/optionsquant/strategy/utils/RiskCalculator.java` HashMaps.
+**To adjust:** Edit `src/main/java/com/fgiaquinta/optionsquant/strategy/utils/RiskCalculator.java` HashMaps.
 
 ---
 
-## 📡 Monitoreo & Métricas en Tiempo Real
+## Monitoring & Real-Time Metrics
 
 ### Prometheus Metrics Export
 ```yaml
@@ -734,77 +734,77 @@ management:
         include: health,info,metrics,prometheus
 ```
 
-| Métrica | Tipo | Descripción |
-|---------|------|-------------|
-| `ibkr_operation_duration_seconds` | Timer | Tiempo de cada operación IBKR |
-| `ibkr_errors_total` | Counter | Contador de errores IBKR |
-| `csv_operations_total` | Counter | Operaciones CSV (lectura/escritura) |
-| `http_requests_total` | Counter | Requests HTTP por endpoint |
+| Metric | Type | Description |
+|--------|------|-------------|
+| `ibkr_operation_duration_seconds` | Timer | Duration of each IBKR operation |
+| `ibkr_errors_total` | Counter | IBKR error counter |
+| `csv_operations_total` | Counter | CSV operations (read/write) |
+| `http_requests_total` | Counter | HTTP requests per endpoint |
 
-**Acceso:** `GET http://localhost:9090/actuator/prometheus`
+**Access:** `GET http://localhost:9090/actuator/prometheus`
 
 ### Cloudflare Tunnel Integration
-- **Auto-exposición:** El bot lanza `cloudflared.exe tunnel --url localhost:9090`
-- **Webhook automático:** Detecta URL `.trycloudflare.com` y registra webhook en Telegram
-- **Bounce-Back UX:** Tras confirmar orden desde móvil, cierra pestaña Chrome
+- **Auto-exposure:** The bot launches `cloudflared.exe tunnel --url localhost:9090`
+- **Automatic webhook:** Detects `.trycloudflare.com` URL and registers webhook in Telegram
+- **Bounce-Back UX:** After confirming an order from mobile, closes the Chrome tab
 
 ---
 
-## 🧪 Testing
+## Testing
 
-El proyecto incluye 5 suites de tests:
+The project includes 5 test suites:
 
-| Test | Cobertura |
-|------|-----------|
-| `RiskCalculatorTest` | Generación de TP/SL, cap del 0.9%, mínimos |
-| `AccountManagerTest` | Balance tracking, cálculo de riesgo 2%, límites concurrentes, position cap |
-| `StrategyUnitTest` | Condiciones de trigger de estrategias + casos negativos |
-| `CandleCsvServiceTest` | Lectura/escritura CSV, detección de archivos |
-| `CandleTest` | Validaciones del modelo de dominio |
+| Test | Coverage |
+|------|----------|
+| `RiskCalculatorTest` | TP/SL generation, 0.9% cap, minimums |
+| `AccountManagerTest` | Balance tracking, 2% risk calculation, concurrent limits, position cap |
+| `StrategyUnitTest` | Strategy trigger conditions + negative cases |
+| `CandleCsvServiceTest` | CSV read/write, file detection |
+| `CandleTest` | Domain model validations |
 
-**Ejecutar tests:**
+**Run tests:**
 ```bash
 ./gradlew test
 ```
 
 ---
 
-## 🚨 Funcionalidades en Legacy (No Migradas aún)
+## Legacy Features (Not Yet Migrated)
 
-El paquete `com.fgiaquinta.optionsquant.legacy` contiene características funcionales pero excluidas de compilación:
+The `com.fgiaquinta.optionsquant.legacy` package contains functional features excluded from compilation:
 
-- **AI Strategy Optimizer:** Gemini analiza backtests y recomienda TP/SL óptimos por estrategia
-- **AI News Interpreter:** Análisis de sentimiento macroeconómico (BULLISH/BEARISH/NEUTRAL)
-- **Staircase Filter:** Bloquea re-entradas perdedoras si el precio no ha mejorado
-- **90-Minute Time Stop:** Fuerza salida tras 90 minutos en posición
-- **Trailing Stop Dinámico:** Usa SMA20 (5m/15m) cuando profit > 0.35%
+- **AI Strategy Optimizer:** Gemini analyzes backtests and recommends optimal TP/SL per strategy
+- **AI News Interpreter:** Macroeconomic sentiment analysis (BULLISH/BEARISH/NEUTRAL)
+- **Staircase Filter:** Blocks re-entries on losing trades if price has not improved
+- **90-Minute Time Stop:** Forces exit after 90 minutes in position
+- **Dynamic Trailing Stop:** Uses SMA20 (5m/15m) when profit > 0.35%
 - **Analyzers:** Channel, Gap, Trend, Volatility, Worden
 
 ---
 
-## 📖 Flujo de Trading
+## Trading Flow
 
-Consulta [`TRADING_FLOW.md`](TRADING_FLOW.md) para un diagrama detallado del ciclo de vida completo:
-1. Descarga de datos históricos → 2. Escaneo de estrategias → 3. Filtro macroeconómico → 4. Cálculo de riesgo → 5. Ejecución de bracket orders → 6. Monitoreo de posiciones → 7. Reporte de resultados → 8. **Análisis automatizado** (nuevo)
-
----
-
-## 📝 Changelog
-
-Consulta [`CHANGELOG.md`](CHANGELOG.md) para el historial completo de versiones y cambios.
-
-### Últimos Cambios (v1.3.30)
-- ✅ **Position Size Cap:** Máximo 10 contratos por trade (previene bugs como 96 contratos)
-- ✅ **Backtest Analyzer:** Análisis automatizado de trades.csv con sugerencias
-- ✅ **Per-Strategy ATR Tuning:** Stops/targets personalizados por estrategia
-- ✅ **CSV-Based Tickers:** 356 tickers con fundamentos en data/tickers.csv
-- ✅ **CLI Tool:** Interfaz de línea de comandos para backtests y análisis
-- ✅ **News Filter:** Top 10 tickers por fundamentos
-- ✅ **Strategy Screener:** Escaneo con criteria relaxation automático
+See [`TRADING_FLOW.md`](TRADING_FLOW.md) for a detailed diagram of the complete lifecycle:
+1. Historical data download → 2. Strategy scanning → 3. Macroeconomic filter → 4. Risk calculation → 5. Bracket order execution → 6. Position monitoring → 7. Results reporting → 8. **Automated analysis** (new)
 
 ---
 
-## 💻 IntelliJ Run Configuration Guide
+## Changelog
+
+See [`CHANGELOG.md`](CHANGELOG.md) for the full version history and changes.
+
+### Latest Changes (v1.3.30)
+- **Position Size Cap:** Maximum 10 contracts per trade (prevents bugs like 96 contracts)
+- **Backtest Analyzer:** Automated analysis of trades.csv with suggestions
+- **Per-Strategy ATR Tuning:** Custom stops/targets per strategy
+- **CSV-Based Tickers:** 356 tickers with fundamentals in data/tickers.csv
+- **CLI Tool:** Command-line interface for backtests and analysis
+- **News Filter:** Top 10 tickers by fundamentals
+- **Strategy Screener:** Scanning with automatic criteria relaxation
+
+---
+
+## IntelliJ Run Configuration Guide
 
 ### Option 1: Spring Boot Web Server (REST API)
 
@@ -832,7 +832,7 @@ curl http://localhost:9090/actuator/health
 
 **Purpose:** Advanced backtesting with comprehensive analysis, JSON export, test comparison, and strategy tuning recommendations
 
-**⚠️ IMPORTANT:** If the web server (MarketScanner) is already running on port 9090, you must use a different port or disable the web server:
+**IMPORTANT:** If the web server (MarketScanner) is already running on port 9090, you must use a different port or disable the web server:
 
 **IntelliJ Configuration:**
 1. `Run` → `Edit Configurations...`
@@ -878,7 +878,7 @@ curl http://localhost:9090/actuator/health
 
 ---
 
-## 🔄 Complete Trading Flow
+## Complete Trading Flow
 
 ### Phase 1: Data Download
 ```
@@ -891,7 +891,7 @@ POST /api/candles/download-all?ticker=SPY&saveToCsv=true
 ```
 POST /api/candles/download-all-tickers?saveToCsv=true
 ```
-Downloads all 356 configured tickers × 4 timeframes = 1,424 CSV files.
+Downloads all 356 configured tickers x 4 timeframes = 1,424 CSV files.
 
 ### Phase 2: Data Freshness Check (Automatic)
 When scanning strategies, the system checks CSV freshness:
@@ -931,7 +931,7 @@ GET /api/trading/account-status
 ```
 
 **Execution Flow:**
-1. Resolve option chain (find nearest expiration ≥ 48h away)
+1. Resolve option chain (find nearest expiration >= 48h away)
 2. Find best strike (closest to entry price)
 3. Calculate position size using 2% risk rule (or override with `qty`)
 4. Place 3-leg bracket order: Entry (MKT) + Take Profit + Stop Loss
@@ -939,7 +939,7 @@ GET /api/trading/account-status
 
 ---
 
-## 📊 Backtest Analysis & Strategy Tuning
+## Backtest Analysis & Strategy Tuning
 
 ### Step 1: Run Backtest with Analysis
 
@@ -953,24 +953,24 @@ Enter command (1-6): 1
 ```
 backtest/
 ├── results/
-│   └── april_baseline.json      ← Complete analysis
-├── trades.csv                   ← Trade-by-trade log
-├── equity.csv                   ← Equity curve
-└── summary.txt                  ← Executive summary
+│   └── april_baseline.json      <- Complete analysis
+├── trades.csv                   <- Trade-by-trade log
+├── equity.csv                   <- Equity curve
+└── summary.txt                  <- Executive summary
 ```
 
 ### Step 2: Review Analysis Report
 
 The CLI displays:
 ```
-📊 Performance Summary:
+Performance Summary:
   Return: $2,340.50 (4.68%)
   Trades: 24 (Win Rate: 45.5%)
   Profit Factor: 1.25
   Max Drawdown: 8.2%
   Sharpe Ratio: 0.85
 
-💡 Suggestions:
+Suggestions:
   Critical Issues: 2
   Optimization Tips: 9
 ```
@@ -979,15 +979,15 @@ The CLI displays:
 
 **Example Analysis Output:**
 ```
-⚠️ c3bouncecall has 0% win rate (0/8 trades)
-  → Recommendation: Widen SL ATR multiplier from 1.4x to 1.7x
+c3bouncecall has 0% win rate (0/8 trades)
+  -> Recommendation: Widen SL ATR multiplier from 1.4x to 1.7x
 
-⚖️ p6reversalput avg win $0 vs avg loss $-18,972
-  → CRITICAL: Position size bug detected (96 contracts)
-  → FIXED: Now capped at 10 contracts max
+p6reversalput avg win $0 vs avg loss $-18,972
+  -> CRITICAL: Position size bug detected (96 contracts)
+  -> FIXED: Now capped at 10 contracts max
 
-📉 AAPL has 0% win rate over 10 trades ($-21,339 PnL)
-  → Recommendation: Remove from watchlist or reduce position size
+AAPL has 0% win rate over 10 trades ($-21,339 PnL)
+  -> Recommendation: Remove from watchlist or reduce position size
 ```
 
 **Apply Tuning:**
@@ -1030,7 +1030,7 @@ Profit Factor           | 1.25               | 1.52
 Max Drawdown %          | 8.20%              | 6.80%
 Sharpe Ratio            | 0.85               | 1.12
 
-🏆 Better Return: april_tuned_v1 (7.78% vs 4.68%)
+Better Return: april_tuned_v1 (7.78% vs 4.68%)
 ```
 
 ### Step 6: Iterate Until Satisfied
@@ -1043,7 +1043,7 @@ Repeat steps 3-5 until:
 
 ---
 
-## 🎯 The 12 Strategies
+## The 12 Strategies
 
 ### Call Strategies (Bullish)
 
@@ -1053,7 +1053,7 @@ Repeat steps 3-5 until:
 | **C2 Trend Call** | Pullback continuation in uptrend | After 10 AM | Daily uptrend, pullback to SMA20, bullish candle, volume, **BB context** |
 | **C3 Bounce Call** | Bounce off 1H SMA20 support | After 10 AM | Daily uptrend, 1H low touches SMA20, 15m confirmation, **BB trend** |
 | **C4 Opening Call** | Gap-down reversal at open | 9:30-9:35 AM | Lateral prev day, gap -1.5% to -6%, first 5m green, **BB bands** |
-| **C5 Efecto Imán** | Magnet effect after extreme gap down | 9:45-9:55 AM | Bearish trend, 3% below SMA20, 15m below BB, **Worden Stochastic cross** |
+| **C5 Magnet Effect** | Magnet effect after extreme gap down | 9:45-9:55 AM | Bearish trend, 3% below SMA20, 15m below BB, **Worden Stochastic cross** |
 | **C6 Reversal Call** | Bear-to-bull trend reversal | After 10 AM | Was below SMA20 for 3h+, crosses above with volume |
 
 ### Put Strategies (Bearish)
@@ -1064,18 +1064,18 @@ Repeat steps 3-5 until:
 | **P2 Trend Put** | Pullback rejection in downtrend | After 10 AM | Daily downtrend, rally to SMA20 rejected, bearish candle, **BB context** |
 | **P3 Bounce Put** | Rejection at 1H SMA20 resistance | After 10 AM | Daily downtrend, 1H high touches SMA20, 15m confirmation, **BB trend** |
 | **P4 Opening Put** | Gap-up trap at open | 9:30-9:35 AM | Lateral prev day, gap +1.5% to +6%, first 5m red, **BB bands** |
-| **P5 Efecto Imán** | Magnet effect after extreme gap up | 9:45-9:55 AM | Bullish trend, 3% above SMA20, 15m above BB, **Worden Stochastic cross** |
+| **P5 Magnet Effect** | Magnet effect after extreme gap up | 9:45-9:55 AM | Bullish trend, 3% above SMA20, 15m above BB, **Worden Stochastic cross** |
 | **P6 Reversal Put** | Bull-to-bear trend reversal | After 10 AM | Was above SMA20 for 3h+, crosses below with volume |
 
 ---
 
-## 💰 Position Sizing (2% Risk Rule with 10-Contract Cap)
+## Position Sizing (2% Risk Rule with 10-Contract Cap)
 
 ```
-maxRiskDollars = accountBalance × riskPerTradePct    (default 2%)
-riskPerContract = |entryPrice - stopLoss| × 100      (options multiplier)
+maxRiskDollars = accountBalance x riskPerTradePct    (default 2%)
+riskPerContract = |entryPrice - stopLoss| x 100      (options multiplier)
 quantity = floor(maxRiskDollars / riskPerContract)
-quantity = Math.max(1, Math.min(quantity, 10))        ← HARD CAP AT 10
+quantity = Math.max(1, Math.min(quantity, 10))        <- HARD CAP AT 10
 ```
 
 **Example:** Account $50,000, 2% risk
@@ -1089,30 +1089,30 @@ Prevents catastrophic losses from position sizing bugs (e.g., P6 Reversal PUT wi
 
 ---
 
-## 📦 Bracket Order Structure
+## Bracket Order Structure
 
 Each options trade places 3 orders as an OCA (One-Cancels-All) group:
 
 ```
-┌─────────────────────────────────────────────────┐
-│ Parent Order (BUY, MKT, transmit=false)         │
-│   • Adaptive algo, Normal priority              │
-│                                                 │
-│ Take Profit (SELL, MKT, transmit=false)         │
-│   • Condition: underlying price >= TP (calls)   │
-│   • OR time >= 21:55 ET (Golden Rule)           │
-│                                                 │
-│ Stop Loss (SELL, MKT, transmit=true) ← fires    │
-│   • Condition: underlying price <= SL (calls)   │
-│   • OR time >= 21:55 ET (Golden Rule)           │
-└─────────────────────────────────────────────────┘
++-------------------------------------------------+
+| Parent Order (BUY, MKT, transmit=false)         |
+|   * Adaptive algo, Normal priority              |
+|                                                 |
+| Take Profit (SELL, MKT, transmit=false)         |
+|   * Condition: underlying price >= TP (calls)   |
+|   * OR time >= 21:55 ET (Golden Rule)           |
+|                                                 |
+| Stop Loss (SELL, MKT, transmit=true) <- fires   |
+|   * Condition: underlying price <= SL (calls)   |
+|   * OR time >= 21:55 ET (Golden Rule)           |
++-------------------------------------------------+
 ```
 
 When TP or SL triggers, the other is automatically cancelled. The Golden Rule ensures no options are held overnight.
 
 ---
 
-## ✅ Safety Checklist
+## Safety Checklist
 
 - [ ] `auto-execute: false` until ready for live trading
 - [ ] Test with TWS paper account first (port 7497)
@@ -1127,7 +1127,7 @@ When TP or SL triggers, the other is automatically cancelled. The Golden Rule en
 
 ---
 
-## 🧪 Tests
+## Tests
 
 45 tests cover:
 - **StrategyData**: Candle→BarSeries conversion, timeframe checks
@@ -1145,7 +1145,7 @@ When TP or SL triggers, the other is automatically cancelled. The Golden Rule en
 
 ---
 
-## 📁 Package Structure
+## Package Structure
 
 ### Build & Run
 ```bash
@@ -1165,35 +1165,35 @@ With TWS running on port 7497:
 curl -X POST "http://localhost:9090/api/candles/download?ticker=SPY&timeframe=DAY_1"
 ```
 
-### 1. Ejecutar Backtest con Análisis
+### 1. Run Backtest with Analysis
 ```bash
-# Opción A: CLI interactivo
+# Option A: Interactive CLI
 java -jar target/options-quant.jar --cli.enabled=true
-# Seleccionar opción 1
+# Select option 1
 
-# Opción B: REST API
+# Option B: REST API
 curl -X POST "http://localhost:9090/api/backtest/run?from=2026-01-01&to=2026-04-10"
 curl -X POST http://localhost:9090/api/backtest/analyze
 ```
 
-### 2. Obtener Tickers Prioritarios
+### 2. Get Priority Tickers
 ```bash
 curl "http://localhost:9090/api/backtest/priority-tickers?refresh=true"
 ```
 
-### 3. Ejecutar Strategy Screener
+### 3. Run Strategy Screener
 ```bash
 curl -X POST "http://localhost:9090/api/backtest/screen?count=10"
 ```
 
-### 4. Analizar Último Backtest
+### 4. Analyze Last Backtest
 ```bash
 curl -X POST http://localhost:9090/api/backtest/analyze
 ```
 
 ---
 
-## ⚠️ Known Issues & Troubleshooting
+## Known Issues & Troubleshooting
 
 ### TWS Competing Session Error
 
@@ -1208,7 +1208,7 @@ This happens when TWS already has an active market data session. Solutions:
 
 If you see unusually large position sizes (>10 contracts), the position cap should prevent execution. Check logs for:
 ```
-🚨 Position size cap triggered: 96 -> 10 contracts (strategy: p6reversalput)
+Position size cap triggered: 96 -> 10 contracts (strategy: p6reversalput)
 ```
 
 ### Backtest CSV Duplicates
@@ -1220,7 +1220,7 @@ rm backtest/trades.csv
 
 ---
 
-## 📝 Architecture Evolution
+## Architecture Evolution
 
 ### What Changed from v1.0.0
 
@@ -1242,12 +1242,12 @@ rm backtest/trades.csv
 
 The old code (strategies, backtester, etc.) is still in the project but excluded from compilation. Migration progress:
 
-1. ✅ Core IBKR service (DONE)
-2. ✅ Strategy engine (DONE - 12 strategies migrated)
-3. ✅ Backtest runner (DONE with CSV reporting)
-4. ✅ Live trading mode (DONE with bracket orders)
-5. ⏳ Telegram integration (Legacy - pending migration)
-6. ⏳ AI optimizer integration (Legacy - pending migration)
+1. Core IBKR service (DONE)
+2. Strategy engine (DONE - 12 strategies migrated)
+3. Backtest runner (DONE with CSV reporting)
+4. Live trading mode (DONE with bracket orders)
+5. Telegram integration (Legacy - pending migration)
+6. AI optimizer integration (Legacy - pending migration)
 
 ---
 
@@ -1255,7 +1255,7 @@ The old code (strategies, backtester, etc.) is still in the project but excluded
 
 | Source | Timeframes | Tickers | Period | Status |
 |--------|-----------|---------|--------|--------|
-| Polygon.io (massive_import.py) | MIN_5, MIN_15, HOUR_1 | 510 activos | 2024-05 → present | Active — note: free tier limits cause ~7-24 day lag in MIN_5 coverage |
+| Polygon.io (massive_import.py) | MIN_5, MIN_15, HOUR_1 | 510 active | 2024-05 → present | Active — note: free tier limits cause ~7-24 day lag in MIN_5 coverage |
 | TWS/IBKR (Java backfill) | DAY_1, HOUR_1, MIN_15, MIN_5 | 511 | 2023-01 → present | Active |
 | yfinance (sidecar) | DAY_1 | 511 | historical | Complete |
 | Stooq DAY_1 | DAY_1 | ~8000-10000 | historical | Pending migration to candles_stooq |
@@ -1265,6 +1265,6 @@ The old code (strategies, backtester, etc.) is still in the project but excluded
 
 ---
 
-## 📝 Changelog
+## Changelog
 
-Consulta [`CHANGELOG.md`](CHANGELOG.md) para el historial completo de versiones y cambios.
+See [`CHANGELOG.md`](CHANGELOG.md) for the full version history and changes.
