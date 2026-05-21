@@ -2,7 +2,7 @@
 
 ## Overview
 
-For **YAML tuning** of live scan throughput and ticker order (AUTO vs FIXED concurrency, HYBRID vs NATURAL prioritization, hybrid weights), see **README → Configuración → Escaneo en vivo (`scanner`)**.
+For **YAML tuning** of live scan throughput and ticker order (AUTO vs FIXED concurrency, HYBRID vs NATURAL prioritization, hybrid weights), see **README → Configuration → Live Scanning (`scanner`)**.
 
 The live market scanning system now has **TWO major improvements**:
 

@@ -9,7 +9,7 @@ Fixed
 P1 squeeze strategy fixture: bodyPct/threshold alignment in StrategyUnitTest
 
 Changed
-BackfillCheckpoint: Opción 3 chunk_origin filter implementation
+BackfillCheckpoint: Option 3 chunk_origin filter implementation
 HistoricalBackfillService: chunk_origin filtering logic
 application.yml: backfill period adjusted 2023-01 → 2024-05 for Polygon handoff
 
@@ -23,202 +23,202 @@ application.yml: backfill period adjusted 2023-01 → 2024-05 for Polygon handof
 
 [1.3.30] - 2026-04-10 (Spring Boot 4, Advanced CLIs & Strategy Tuning)
 Added
-Spring Boot 4.0.4 Migration: Actualizado de Spring Boot 3.5.0 a 4.0.4 (última versión estable). Incluye JUnit 6 vía spring-boot-starter-test y Gradle 9.3.0 con Version Catalog (gradle/libs.versions.toml).
+Spring Boot 4.0.4 Migration: Upgraded from Spring Boot 3.5.0 to 4.0.4 (latest stable release). Includes JUnit 6 via spring-boot-starter-test and Gradle 9.3.0 with Version Catalog (gradle/libs.versions.toml).
 
-Jackson JSON Dependencies: Añadidas dependencias jackson-databind, jackson-yaml, y jackson-datatype-jsr310 para serialización JSON en CLIs y reportes.
+Jackson JSON Dependencies: Added jackson-databind, jackson-yaml, and jackson-datatype-jsr310 dependencies for JSON serialization in CLIs and reports.
 
-Backtest Analyzer CLI (Advanced): Nueva interfaz de línea de comandos especializada para backtesting con análisis automatizado y guardado de resultados en JSON.
-  - Comando 1: Ejecutar backtest + análisis completo (guarda en backtest/results/{testName}.json)
-  - Comando 2: Comparar dos resultados de backtest lado a lado
-  - Comando 3: Analizar resultados históricos guardados
-  - Comando 4: Ver historial de rendimiento por estrategia (agregado de todos los tests)
-  - Comando 5: Generar recomendaciones automáticas de ajuste de estrategias
-  - Activación: java -jar app.jar --backtest-cli.enabled=true
+Backtest Analyzer CLI (Advanced): New specialized command-line interface for backtesting with automated analysis and JSON result persistence.
+  - Command 1: Run backtest + full analysis (saves to backtest/results/{testName}.json)
+  - Command 2: Compare two backtest results side by side
+  - Command 3: Analyze saved historical results
+  - Command 4: View strategy performance history (aggregated across all tests)
+  - Command 5: Generate automatic strategy tuning recommendations
+  - Activation: java -jar app.jar --backtest-cli.enabled=true
 
-Trading CLI (General Purpose): Interfaz de línea de comandos para operaciones diarias.
-  - Comando 1: Ejecutar backtest con análisis
-  - Comando 2: Backtest rápido (últimos 30 días)
-  - Comando 3: Analizar último backtest
-  - Comando 4: Listar tickers de alta calidad
-  - Comando 5: Listar tickers por sector
-  - Activación: java -jar app.jar --cli.enabled=true
+Trading CLI (General Purpose): Command-line interface for daily operations.
+  - Command 1: Run backtest with analysis
+  - Command 2: Quick backtest (last 30 days)
+  - Command 3: Analyze latest backtest
+  - Command 4: List high-quality tickers
+  - Command 5: List tickers by sector
+  - Activation: java -jar app.jar --cli.enabled=true
 
-JSON Results Export: Los backtests ahora exportan resultados completos a JSON con:
-  - Configuración utilizada (fechas, capital, riesgo, tickers)
-  - Métricas de rendimiento (return, win rate, profit factor, Sharpe, drawdown, avg duration)
-  - Desglose por estrategia (trades, win rate, PnL, profit factor, max DD)
-  - Desglose por ticker
-  - Reporte de análisis completo (critical issues, optimization tips)
-  - Estructura: backtest/results/{testName}.json
+JSON Results Export: Backtests now export complete results to JSON including:
+  - Configuration used (dates, capital, risk, tickers)
+  - Performance metrics (return, win rate, profit factor, Sharpe, drawdown, avg duration)
+  - Per-strategy breakdown (trades, win rate, PnL, profit factor, max DD)
+  - Per-ticker breakdown
+  - Full analysis report (critical issues, optimization tips)
+  - Structure: backtest/results/{testName}.json
 
-Strategy History Tracking: Sistema que agrega rendimiento de estrategias a través de múltiples backtests para identificar patrones de largo plazo.
+Strategy History Tracking: System that aggregates strategy performance across multiple backtests to identify long-term patterns.
 
-Strategy Tuning Recommendations: Motor automatizado de recomendaciones que analiza resultados JSON y sugiere:
-  - Widen SL ATR multiplier para estrategias con win rate <40%
-  - Increase risk allocation para estrategias con win rate >60% y PF >1.5
-  - Review TP/SL ratio para estrategias con profit factor <1.0
-  - Reduce position size para estrategias con pérdidas significativas
-  - Instrucciones específicas para editar RiskCalculator.java
+Strategy Tuning Recommendations: Automated recommendation engine that analyzes JSON results and suggests:
+  - Widen SL ATR multiplier for strategies with win rate < 40%
+  - Increase risk allocation for strategies with win rate > 60% and PF > 1.5
+  - Review TP/SL ratio for strategies with profit factor < 1.0
+  - Reduce position size for strategies with significant losses
+  - Specific instructions for editing RiskCalculator.java
 
-IntelliJ Run Configurations: Documentación completa para configurar ejecuciones en IDE:
-  - Spring Boot App (web server en puerto 9090)
+IntelliJ Run Configurations: Full documentation for configuring IDE run configs:
+  - Spring Boot App (web server on port 9090)
   - Trading CLI (general purpose)
-  - Backtest Analyzer CLI (advanced con JSON output)
-  - Custom backtest con parámetros específicos
+  - Backtest Analyzer CLI (advanced with JSON output)
+  - Custom backtest with specific parameters
 
-Updated README: Fusionado de REFACTORED_README.md y README.md en un único documento comprehensivo con:
-  - Tech Stack actualizado (Java 25, Spring Boot 4.0.4, JUnit 6)
-  - Estructura completa del proyecto (árbol de directorios)
-  - Documentación de ambos CLIs con ejemplos
+Updated README: Merged REFACTORED_README.md and README.md into a single comprehensive document with:
+  - Updated tech stack (Java 25, Spring Boot 4.0.4, JUnit 6)
+  - Full project structure (directory tree)
+  - Documentation for both CLIs with examples
   - Troubleshooting section (TWS competing session, position sizing, CSV duplicates)
   - Architecture Evolution (v1.0.0 vs v2.0.0+)
-  - Legacy Code Status con progreso de migración
+  - Legacy Code Status with migration progress
 
-Position Size Cap Enforcement: Corregido bug crítico en BacktestEngine donde el límite era 100 contratos en lugar de 10.
-  - Antes: qty = Math.max(1, Math.min(qty, 100))  ❌
-  - Ahora: qty = Math.max(1, Math.min(qty, 10))   ✅
-  - Impacto: Previene desastres como P6 Reversal PUT de 96 contratos (-$18,972)
+Position Size Cap Enforcement: Fixed critical bug in BacktestEngine where the limit was 100 contracts instead of 10.
+  - Before: qty = Math.max(1, Math.min(qty, 100))  ❌
+  - After:  qty = Math.max(1, Math.min(qty, 10))   ✅
+  - Impact: Prevents disasters like P6 Reversal PUT with 96 contracts (-$18,972)
 
-Per-Strategy ATR Multipliers in Backtest: BacktestEngine ahora pasa el nombre de estrategia a RiskCalculator.generatePlan() para usar multiplicadores personalizados.
+Per-Strategy ATR Multipliers in Backtest: BacktestEngine now passes strategy name to RiskCalculator.generatePlan() to use per-strategy custom multipliers.
 
-News Filter Service: Servicio que prioriza top 10 tickers por fundamentos (ROIC, EPS Growth, D/E, P/E, Market Cap, Beta).
+News Filter Service: Service that prioritizes top 10 tickers by fundamentals (ROIC, EPS Growth, D/E, P/E, Market Cap, Beta).
 
-Strategy Screener Service: Escaneo automático de 356 tickers con relajación incremental de criterios (4 niveles) para encontrar candidatos ideales.
+Strategy Screener Service: Automated scan of 356 tickers with incremental criteria relaxation (4 levels) to find ideal candidates.
 
-BacktestAnalyzer Service: Servicio REST que analiza trades.csv y genera sugerencias automatizadas (position sizing bugs, low win rate, poor risk/reward, high SL rate, poor time patterns, consecutive losses, ticker underperformance, direction bias).
+BacktestAnalyzer Service: REST service that analyzes trades.csv and generates automated suggestions (position sizing bugs, low win rate, poor risk/reward, high SL rate, poor time patterns, consecutive losses, ticker underperformance, direction bias).
 
 Fixed
-Backtest Position Sizing Bug: BacktestEngine.java usaba límite de 100 contratos en lugar de 10. Corregido a Math.min(qty, 10).
+Backtest Position Sizing Bug: BacktestEngine.java was using a 100-contract limit instead of 10. Fixed to Math.min(qty, 10).
 
-Map.of() Limit Issues: Reemplazados Map.of() con LinkedHashMap.put() en múltiples archivos para evitar límite de 10 pares clave-valor.
+Map.of() Limit Issues: Replaced Map.of() with LinkedHashMap.put() in multiple files to avoid the 10-entry key-value limit.
 
-AvgDuration Method Name: Corregido de report.avgDuration() a report.avgTradeDurationHours() para coincidir con BacktestReport record.
+AvgDuration Method Name: Fixed from report.avgDuration() to report.avgTradeDurationHours() to match the BacktestReport record.
 
-Redundant README Files: Eliminado REFACTORED_README.md y fusionado todo el contenido en README.md como única fuente de verdad.
+Redundant README Files: Removed REFACTORED_README.md and merged all content into README.md as single source of truth.
 
 Added
-Anti-Deadlock Backfill Barrier: Implementado un Timeout de 45 segundos en la carga de datos históricos (waitForBackfillCompletion) y una purga activa de IDs de peticiones fantasma en caso de errores de API, asegurando que el bot siempre arranque incluso si TWS pierde paquetes.
+Anti-Deadlock Backfill Barrier: Implemented a 45-second timeout on historical data loading (waitForBackfillCompletion) and active purging of ghost request IDs on API errors, ensuring the bot always starts even if TWS drops packets.
 
-Telegram Bounce-Back UX: Modificado el HttpServer (Puerto 9090) para devolver un payload HTML/JS que ejecuta window.location.href = "tg://";. Esto evita que la pestaña de Chrome se quede abierta inútilmente tras confirmar una orden desde el móvil.
+Telegram Bounce-Back UX: Modified HttpServer (port 9090) to return an HTML/JS payload that executes window.location.href = "tg://". This prevents the Chrome tab from staying open unnecessarily after confirming an order from mobile.
 
-REST API Completa: Implementados endpoints RESTful para integración con dashboards externos:
-  - Datos históricos: download, download-all, download-all-tickers, lectura local CSV
-  - Escaneo de estrategias: scan masivo (356 tickers) y por ticker individual
-  - Ejecución de trades: scan-and-execute, execute manual, account-status, check-options
-  - Backtesting: run con parámetros custom, run-all para todos los tickers
-  - Monitoreo: Spring Boot Actuator (/actuator/health, /metrics, /prometheus)
+Full REST API: Implemented RESTful endpoints for integration with external dashboards:
+  - Historical data: download, download-all, download-all-tickers, local CSV read
+  - Strategy scanning: bulk scan (356 tickers) and per-ticker
+  - Trade execution: scan-and-execute, manual execute, account-status, check-options
+  - Backtesting: run with custom parameters, run-all for all tickers
+  - Monitoring: Spring Boot Actuator (/actuator/health, /metrics, /prometheus)
 
-Backtesting Engine con CSV Reporting: Motor de backtesting completo con simulación realista:
-  - trades.csv: Registro detallado con entry/exit prices, PnL, comisiones, slippage, max drawdown, max runup
-  - equity.csv: Curva de equidad timestampada para visualización
-  - summary.txt: Resumen con win rate, profit factor, Sharpe ratio, estadísticas por estrategia y ticker
-  - SimulatedFillEngine: Slippage y comisiones configurables para realismo
-  - Métricas avanzadas: Sharpe Ratio (anualizado), Profit Factor, Max Drawdown %, Avg Duration
+Backtesting Engine with CSV Reporting: Full backtesting engine with realistic simulation:
+  - trades.csv: Detailed log with entry/exit prices, PnL, commissions, slippage, max drawdown, max runup
+  - equity.csv: Timestamped equity curve for visualization
+  - summary.txt: Summary with win rate, profit factor, Sharpe ratio, per-strategy and per-ticker stats
+  - SimulatedFillEngine: Configurable slippage and commissions for realism
+  - Advanced metrics: Sharpe Ratio (annualized), Profit Factor, Max Drawdown %, Avg Duration
 
-Backtest Analyzer Service: Servicio automatizado de análisis de backtests que lee trades.csv y genera recomendaciones:
-  - Detección de bugs de position sizing (ej: 96 contratos en una operación)
-  - Análisis de rendimiento por estrategia con sugerencias de optimización
-  - Detección de patrones de salida (SL vs TP rate)
-  - Análisis de patrones temporales (horas con bajo rendimiento)
-  - Métricas de riesgo: rachas de pérdidas consecutivas, drawdown promedio
-  - Análisis de concentración por ticker
-  - Endpoint POST /api/backtest/analyze para obtener reporte automatizado
+Backtest Analyzer Service: Automated backtest analysis service that reads trades.csv and generates recommendations:
+  - Position sizing bug detection (e.g. 96 contracts in a single trade)
+  - Per-strategy performance analysis with optimization suggestions
+  - Exit pattern detection (SL vs TP rate)
+  - Time pattern analysis (hours with poor performance)
+  - Risk metrics: consecutive loss streaks, average drawdown
+  - Ticker concentration analysis
+  - POST /api/backtest/analyze endpoint for automated report
 
-Position Size Safety Cap: Implementado límite máximo de 10 contratos por operación en AccountManager.calculateQuantity() para prevenir bugs de dimensionamiento como el P6 Reversal PUT (96 contratos, -$18,972).
+Position Size Safety Cap: Implemented hard cap of 10 contracts per trade in AccountManager.calculateQuantity() to prevent sizing bugs like P6 Reversal PUT (96 contracts, -$18,972).
 
-Per-Strategy ATR Multiplier Tuning: Sistema de ajuste fino de stops y targets basado en análisis de backtest:
-  - CALL strategies: SL multipliers 1.2-1.5x (más amplios por mayor volatilidad)
-  - PUT strategies: SL multipliers 1.1-1.3x (ligeramente más estrechos)
-  - TP multipliers personalizados por estrategia (1.3-1.6x ATR)
-  - Configuración en RiskCalculator con HashMaps editables
+Per-Strategy ATR Multiplier Tuning: Fine-tuning system for stops and targets based on backtest analysis:
+  - CALL strategies: SL multipliers 1.2–1.5x (wider due to higher volatility)
+  - PUT strategies: SL multipliers 1.1–1.3x (slightly tighter)
+  - Custom TP multipliers per strategy (1.3–1.6x ATR)
+  - Configuration in RiskCalculator with editable HashMaps
 
-CSV-Based Ticker Management: Migración de lista de tickers desde application.yml a data/tickers.csv:
-  - 356 tickers con datos fundamentales completos (nombre, sector, market cap, P/E, beta, EPS growth, ROIC, debt/equity)
-  - Filtros avanzados: por sector, market cap, calidad, crecimiento
-  - Endpoint GET /api/backtest/tickers con parámetros de filtro
-  - Backwards compatibility: use-csv-tickers flag para alternar entre YAML y CSV
-  - Configuración: ibkr.use-csv-tickers: true/false en application.yml
+CSV-Based Ticker Management: Migrated ticker list from application.yml to data/tickers.csv:
+  - 356 tickers with full fundamental data (name, sector, market cap, P/E, beta, EPS growth, ROIC, debt/equity)
+  - Advanced filters: by sector, market cap, quality, growth
+  - GET /api/backtest/tickers endpoint with filter parameters
+  - Backwards compatibility: use-csv-tickers flag to toggle between YAML and CSV
+  - Configuration: ibkr.use-csv-tickers: true/false in application.yml
 
-Strategy Performance Tracking: AccountManager ahora trackea rendimiento por estrategia en tiempo real:
-  - Win rate, total PnL, max position size por estrategia
-  - Método isStrategyUnderperforming() para deshabilitar estrategias con <40% win rate
-  - Integración con BacktestAnalyzer para sugerencias automatizadas
+Strategy Performance Tracking: AccountManager now tracks real-time per-strategy performance:
+  - Win rate, total PnL, max position size per strategy
+  - isStrategyUnderperforming() method to disable strategies with < 40% win rate
+  - Integration with BacktestAnalyzer for automated suggestions
 
-Worden Stochastic Indicator: Implementación personalizada de indicador Worden Stochastic (percentil de precio de cierre dentro de lookback period). Integrado en estrategias C5/P5 Efecto Imán como confirmación. Fallback a volumen surge (1.5x promedio) si no disponible.
+Worden Stochastic Indicator: Custom implementation of the Worden Stochastic indicator (closing price percentile within a lookback period). Integrated into C5/P5 Magnet Effect strategies as confirmation. Falls back to volume surge (1.5× average) if unavailable.
 
-12 Estrategias de Trading Completamente Documentadas:
-  - CALL: C1 Squeeze, C2 Trend, C3 Bounce, C4 Opening, C5 Efecto Imán, C6 Reversal
-  - PUT: P1 Squeeze, P2 Trend, P3 Bounce, P4 Opening, P5 Efecto Imán, P6 Reversal
-  - Cada estrategia con ventanas horarias específicas y condiciones de entrada multi-timeframe (5min, 15min, 1H, 1D)
+12 Trading Strategies Fully Documented:
+  - CALL: C1 Squeeze, C2 Trend, C3 Bounce, C4 Opening, C5 Magnet Effect, C6 Reversal
+  - PUT: P1 Squeeze, P2 Trend, P3 Bounce, P4 Opening, P5 Magnet Effect, P6 Reversal
+  - Each strategy with specific time windows and multi-timeframe entry conditions (5min, 15min, 1H, 1D)
 
-Prometheus Metrics Export: Integración con Micrometer para exportación de métricas en tiempo real:
-  - ibkr_operation_duration_seconds: Timers por operación IBKR
-  - ibkr_errors_total: Contador de errores por código y mensaje
-  - csv_operations_total: Operaciones CSV (lectura/escritura)
-  - http_requests_total: Requests HTTP por endpoint y método
-  - Acceso vía GET /actuator/prometheus
+Prometheus Metrics Export: Micrometer integration for real-time metrics export:
+  - ibkr_operation_duration_seconds: Timers per IBKR operation
+  - ibkr_errors_total: Error counter by code and message
+  - csv_operations_total: CSV operations (read/write)
+  - http_requests_total: HTTP requests by endpoint and method
+  - Access via GET /actuator/prometheus
 
-Cloudflare Tunnel Integration: Auto-exposición del bot a internet mediante cloudflared.exe:
-  - Lanzamiento automático de tunnel --url localhost:9090
-  - Detección automática de URL .trycloudflare.com
-  - Registro automático de webhook en Telegram
+Cloudflare Tunnel Integration: Auto-exposes the bot to the internet via cloudflared.exe:
+  - Automatic tunnel launch with --url localhost:9090
+  - Automatic .trycloudflare.com URL detection
+  - Automatic Telegram webhook registration
 
-Configuración Type-Safe: Implementación de IbkrProperties record para configuración tipada con validación. Soporte completo para 356 tickers en universo de trading.
+Type-Safe Configuration: Implementation of IbkrProperties record for typed configuration with validation. Full support for 356 tickers in the trading universe.
 
-Test Suite Completa: 5 suites de tests implementadas:
-  - RiskCalculatorTest: Validación de TP/SL, cap 0.9%, mínimos
-  - AccountManagerTest: Balance tracking, cálculo riesgo 2%, límites concurrentes
-  - StrategyUnitTest: Condiciones de trigger + casos negativos
-  - CandleCsvServiceTest: Lectura/escritura CSV, detección de archivos
-  - CandleTest: Validaciones del modelo de dominio
+Full Test Suite: 5 test suites implemented:
+  - RiskCalculatorTest: TP/SL validation, 0.9% cap, minimums
+  - AccountManagerTest: Balance tracking, 2% risk calculation, concurrent limits
+  - StrategyUnitTest: Trigger conditions + negative cases
+  - CandleCsvServiceTest: CSV read/write, file detection
+  - CandleTest: Domain model validations
 
-ATR-Based Risk Management: Sistema de gestión de riesgo con ATR (14-período en 1H):
+ATR-Based Risk Management: Risk management system using ATR (14-period on 1H):
   - TP = 1.5x ATR, SL = 1.0x ATR
-  - Cap del 0.9% de distancia máxima para opciones
-  - Mínimo absoluto de $0.25 para evitar stops demasiado ajustados
-  - Hora de salida por defecto 15:55 ET
+  - 0.9% maximum distance cap for options
+  - Absolute minimum of $0.25 to avoid excessively tight stops
+  - Default exit time 15:55 ET
 
-Options Exchange-Aware Strike Validation: Validación dinámica de strike prices directamente desde la exchange. El bot consulta la cadena de opciones de IBKR para encontrar strikes válidos, eliminando rechazos por strikes inválidos (0% Error 200).
+Options Exchange-Aware Strike Validation: Dynamic strike price validation directly from the exchange. The bot queries the IBKR option chain to find valid strikes, eliminating rejections from invalid strikes (0% Error 200).
 
-Smart Exchange Routing: Enrutamiento inteligente de contratos:
-  - NYSE para tickers específicos (SQ, NVO, TSM)
-  - ISLAND para el resto de acciones
-  - Reducción drástica de rechazos Error 200 "No security definition"
+Smart Exchange Routing: Intelligent contract routing:
+  - NYSE for specific tickers (SQ, NVO, TSM)
+  - ISLAND for all other stocks
+  - Dramatic reduction in Error 200 "No security definition" rejections
 
-Strategy Auto-Refresh con Staleness Detection: Escaneo automático de estrategias con thresholds de antigüedad:
-  - 5min timeframe: stale si > 15 minutos
-  - 15min timeframe: stale si > 30 minutos
-  - 1hour timeframe: stale si > 2 horas
-  - 1day timeframe: stale si > 26 horas
+Strategy Auto-Refresh with Staleness Detection: Automatic strategy scanning with staleness thresholds:
+  - 5min timeframe: stale if > 15 minutes
+  - 15min timeframe: stale if > 30 minutes
+  - 1hour timeframe: stale if > 2 hours
+  - 1day timeframe: stale if > 26 hours
 
 Fixed
-IBKR Error 135 (Bracket Rejection): Eliminada la condición de precio en la orden Padre (OrderType: MKT) dentro de OrderFactory. Esto soluciona el rechazo instantáneo que provocaba que las órdenes hijas (Take Profit / Stop Loss) fallaran por orfandad.
+IBKR Error 135 (Bracket Rejection): Removed the price condition from the parent order (OrderType: MKT) in OrderFactory. This fixes the instant rejection that caused child orders (Take Profit / Stop Loss) to fail as orphans.
 
-Bracket Logic (AND to OR): Corregido el ConditionBuilder seteando conjunctionConnection(false). Ahora IBKR entiende correctamente que el bot debe salir del trade si toca el Stop Loss/Take Profit O si se alcanza la hora límite de la Golden Rule (21:55), en lugar de exigir que ambas condiciones ocurran simultáneamente.
+Bracket Logic (AND to OR): Fixed ConditionBuilder by setting conjunctionConnection(false). IBKR now correctly understands that the bot should exit the trade if it hits the Stop Loss/Take Profit OR if the Golden Rule time limit (21:55) is reached, rather than requiring both conditions simultaneously.
 
 [1.3.28] - 2026-04-02
 Added
-Command Server V2: Añadido soporte para macro green y modo "Quick Trigger".
+Command Server V2: Added support for macro green and "Quick Trigger" mode.
 
-Account Latch: Barrera de sincronización en el arranque para garantizar capital neto real (NetLiquidation).
+Account Latch: Startup synchronization barrier to guarantee real net liquidation value (NetLiquidation).
 
 Changed
-Contract Factory: Mejorado enrutamiento asignando NYSE a tickers conocidos e ISLAND a los demás.
+Contract Factory: Improved routing by assigning NYSE to known tickers and ISLAND to all others.
 
-Account Manager: Corregido cálculo Qty integrando multiplicador de opciones (x100) vs USD/Riesgo.
+Account Manager: Fixed Qty calculation by integrating the options multiplier (×100) vs USD/risk.
 
-Data Infrastructure: Sistema completo de persistencia de velas en CSV (data/{TICKER}_{TIMEFRAME}.csv):
-  - CandleCsvService: Guardado/carga de velas con parsing de formatos IBKR (diario/intraday)
-  - CandleDownloadService: Descarga individual, por timeframe, o masiva de 356 tickers con tracking de errores
-  - IbkrCallbackHandler: Composición-based callback handler (no herencia) con filtros de error 366 espurios
+Data Infrastructure: Complete candle persistence system in CSV (data/{TICKER}_{TIMEFRAME}.csv):
+  - CandleCsvService: Candle save/load with IBKR format parsing (daily/intraday)
+  - CandleDownloadService: Individual, per-timeframe, or bulk download of 356 tickers with error tracking
+  - IbkrCallbackHandler: Composition-based callback handler (no inheritance) with spurious error-366 filters
 
-Strategy Scanner Service: Escaneo automático de 356 tickers contra 12 estrategias con auto-refresh y staleness detection.
+Strategy Scanner Service: Automatic scan of 356 tickers against 12 strategies with auto-refresh and staleness detection.
 
-Order Execution Service: Ejecución completa de opciones con resolución de cadena:
-  - Búsqueda de expiración más cercana >= 48 horas
-  - Selección de mejor strike desde strikes validados por exchange
-  - Colocación de bracket orders con tracking de estado vía EWrapper callbacks
+Order Execution Service: Full options execution with chain resolution:
+  - Search for nearest expiration >= 48 hours away
+  - Best strike selection from exchange-validated strikes
+  - Bracket order placement with status tracking via EWrapper callbacks
 
-Anti-Deadlock Backfill Barrier: Implementado un Timeout de 45 segundos en la carga de datos históricos (waitForBackfillCompletion) y una purga activa de IDs de peticiones fantasma en caso de errores de API, asegurando que el bot siempre arranque incluso si TWS pierde paquetes.
+Anti-Deadlock Backfill Barrier: Implemented a 45-second timeout on historical data loading (waitForBackfillCompletion) and active purging of ghost request IDs on API errors, ensuring the bot always starts even if TWS drops packets.
 
-Telegram Bounce-Back UX: Modificado el HttpServer (Puerto 9090) para devolver un payload HTML/JS que ejecuta window.location.href = "tg://";. Esto evita que la pestaña de Chrome se quede abierta inútilmente tras confirmar una orden desde el móvil.
+Telegram Bounce-Back UX: Modified HttpServer (port 9090) to return an HTML/JS payload that executes window.location.href = "tg://". This prevents the Chrome tab from staying open unnecessarily after confirming an order from mobile.

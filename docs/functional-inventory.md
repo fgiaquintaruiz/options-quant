@@ -1,136 +1,136 @@
-# Inventario Funcional — options-quant
+# Functional Inventory — options-quant
 
-> Última actualización: 2026-04-30 | Tests: 619/619 | Estado: todo verde
+> Last updated: 2026-04-30 | Tests: 619/619 | Status: all green
 
-## Cómo leer este documento
+## How to read this document
 
-| Ícono | Significado |
+| Icon | Meaning |
 |---|---|
-| ✅ Unit | Cubierto por tests unitarios (mocks, sin Spring context) |
-| ✅ Integration | Cubierto por tests de integración (`@SpringBootTest` o `@WebMvcTest`) |
-| ✅ E2E | Cubierto por tests Playwright (browser o HTTP contra app real) |
-| ⚠️ Parcial | Cubierto en algunos branches/paths pero no en todos |
-| ❌ Sin cobertura | Ningún test automatizado valida esta funcionalidad |
+| ✅ Unit | Covered by unit tests (mocks, no Spring context) |
+| ✅ Integration | Covered by integration tests (`@SpringBootTest` or `@WebMvcTest`) |
+| ✅ E2E | Covered by Playwright tests (browser or HTTP against real app) |
+| ⚠️ Partial | Covered in some branches/paths but not all |
+| ❌ No coverage | No automated test validates this functionality |
 
-Múltiples íconos = múltiples capas de cobertura activas.
+Multiple icons = multiple active coverage layers.
 
 ---
 
 ## FRONTEND
 
-### Live Dashboard — Visualización y Estado
+### Live Dashboard — Visualization and Status
 
-| Funcionalidad | Descripción usuario | Cobertura | Test files |
+| Feature | User description | Coverage | Test files |
 |---|---|---|---|
-| Carga de la página Live | El usuario navega a `/live` y ve el dashboard principal con toolbar y grid de señales | ✅ E2E | `src/test/java/com/fgiaquinta/optionsquant/e2e/LiveUiDashboardTest.java` |
-| Navegación SPA Live↔Backtest↔Health | El usuario usa los links del navbar para cambiar de sección sin recargar la página | ✅ E2E | `src/test/java/com/fgiaquinta/optionsquant/e2e/NavigationTest.java` |
-| Grid de señales en vivo (LiveTradeGrid) | El usuario ve las señales activas, trades ejecutados, posiciones externas y chips de scan activity | ✅ Unit | `frontend/src/components/LiveTradeGrid.test.jsx` (51 tests, 98.51%) |
-| Indicador PAPER/LIVE (AccountModeChip) | El usuario ve si está operando en cuenta paper o real | ✅ Unit | `frontend/src/components/AccountModeChip.test.jsx` (8 tests) |
-| Ticker tooltip con fundamentals | El usuario hace hover sobre un ticker y ve sus datos fundamentales (P/E, beta, etc.) | ✅ Unit | `frontend/src/components/TickerTooltip.test.jsx` (10 tests) |
-| Countdown al próximo scan | El usuario ve cuánto falta para el próximo scan de 15 minutos | ✅ Unit | `frontend/src/hooks/useScanCountdown.test.js` (100%) |
-| Estado de mercado abierto/cerrado | El usuario ve si el mercado está abierto (polling 30s) | ✅ Unit | `frontend/src/hooks/useMarketOpen.test.js` (100%) |
-| Polling de estado del scanner | El usuario ve el estado actual del scanner (isScanning, progreso, tickers) en tiempo real | ✅ Unit | `frontend/src/hooks/useLiveScanner.test.js` (25 tests, 100%) |
-| Columnas SCAN STARTED / SCAN FINISHED | El usuario ve cuándo empezó y terminó el análisis de cada ticker | ✅ Unit | `frontend/src/components/LiveTradeGrid.test.jsx` |
-| Stale signal indicator (>30min) | El usuario ve una advertencia visual cuando una señal lleva más de 30 minutos sin ejecutar | ✅ Unit | `frontend/src/utils/liveSignalUtils.test.js` (100%) |
+| Live page load | User navigates to `/live` and sees the main dashboard with toolbar and signals grid | ✅ E2E | `src/test/java/com/fgiaquinta/optionsquant/e2e/LiveUiDashboardTest.java` |
+| Live↔Backtest↔Health SPA navigation | User uses navbar links to switch sections without reloading the page | ✅ E2E | `src/test/java/com/fgiaquinta/optionsquant/e2e/NavigationTest.java` |
+| Live signals grid (LiveTradeGrid) | User sees active signals, executed trades, external positions and scan activity chips | ✅ Unit | `frontend/src/components/LiveTradeGrid.test.jsx` (51 tests, 98.51%) |
+| PAPER/LIVE indicator (AccountModeChip) | User sees whether they are trading on a paper or live account | ✅ Unit | `frontend/src/components/AccountModeChip.test.jsx` (8 tests) |
+| Ticker tooltip with fundamentals | User hovers over a ticker and sees its fundamental data (P/E, beta, etc.) | ✅ Unit | `frontend/src/components/TickerTooltip.test.jsx` (10 tests) |
+| Countdown to next scan | User sees how long until the next 15-minute scan | ✅ Unit | `frontend/src/hooks/useScanCountdown.test.js` (100%) |
+| Market open/closed status | User sees whether the market is open (30s polling) | ✅ Unit | `frontend/src/hooks/useMarketOpen.test.js` (100%) |
+| Scanner status polling | User sees the current scanner state (isScanning, progress, tickers) in real time | ✅ Unit | `frontend/src/hooks/useLiveScanner.test.js` (25 tests, 100%) |
+| SCAN STARTED / SCAN FINISHED columns | User sees when analysis started and ended for each ticker | ✅ Unit | `frontend/src/components/LiveTradeGrid.test.jsx` |
+| Stale signal indicator (>30min) | User sees a visual warning when a signal has been waiting more than 30 minutes | ✅ Unit | `frontend/src/utils/liveSignalUtils.test.js` (100%) |
 
 ### Live Dashboard — Scan Engine Controls
 
-| Funcionalidad | Descripción usuario | Cobertura | Test files |
+| Feature | User description | Coverage | Test files |
 |---|---|---|---|
-| Start Scan manual | El usuario pulsa "Scan Now" para lanzar un análisis inmediato de todos los tickers | ✅ Unit / ✅ E2E | `frontend/src/components/ScanEngineControls.test.jsx`, `LiveModeInteractionTest.java` |
-| Stop Scan | El usuario detiene un scan en curso antes de que termine | ✅ Unit / ✅ E2E | `frontend/src/components/ScanEngineControls.test.jsx`, `LiveModeInteractionTest.java` |
-| Force Stop / Reset | El usuario fuerza un reset total del estado de scan cuando la app queda colgada | ✅ Unit | `frontend/src/components/ScanEngineControls.test.jsx` |
-| Toggle Scheduler (auto-scan cada 15min) | El usuario activa/desactiva el scanner automático programado | ✅ Unit / ✅ E2E | `frontend/src/components/ScanEngineControls.test.jsx`, `LiveUiDashboardTest.java` |
-| Toggle Mock Market Open | El usuario simula que el mercado está abierto para poder escanear fuera de horario | ✅ Unit / ✅ E2E | `frontend/src/components/ScanEngineControls.test.jsx`, `LiveUiDashboardTest.java` |
-| Toggle Auto Execute | El usuario activa la ejecución automática de señales vía TWS | ✅ Unit / ✅ E2E | `frontend/src/components/ScanEngineControls.test.jsx`, `LiveUiDashboardTest.java` |
-| Toggle Extended Hours | El usuario activa/desactiva el horario extendido | ✅ Unit / ✅ E2E | `frontend/src/components/ScanEngineControls.test.jsx`, `LiveModeInteractionTest.java` |
-| Toggle Macro Filter | El usuario activa/desactiva el filtro macro (override manual) | ✅ Unit | `frontend/src/components/ScanEngineControls.test.jsx` |
-| Adjust Risk % | El usuario ajusta el porcentaje de riesgo por operación en runtime | ✅ Unit | `frontend/src/components/ScanEngineControls.test.jsx` |
-| Set Max Concurrent Scans | El usuario configura cuántos tickers analiza en paralelo (1–16) | ✅ Unit | `frontend/src/hooks/useLiveScanner.test.js` |
-| Inject Mock Signal | El usuario inyecta una señal simulada para testing sin TWS conectado | ✅ Unit | `frontend/src/components/ScanEngineControls.test.jsx` |
-| IBKR Lock (TWS status) | El usuario ve el estado de conexión con TWS (data/account/exec) | ✅ Unit | `frontend/src/components/ScanEngineControls.test.jsx` |
-| Scope HOT/ALL | El usuario filtra el scan a tickers calientes o universo completo | ✅ Unit | `frontend/src/hooks/useLiveScanner.test.js` |
+| Manual Start Scan | User clicks "Scan Now" to trigger an immediate scan of all tickers | ✅ Unit / ✅ E2E | `frontend/src/components/ScanEngineControls.test.jsx`, `LiveModeInteractionTest.java` |
+| Stop Scan | User stops an in-progress scan before it finishes | ✅ Unit / ✅ E2E | `frontend/src/components/ScanEngineControls.test.jsx`, `LiveModeInteractionTest.java` |
+| Force Stop / Reset | User forces a full state reset when the app gets stuck | ✅ Unit | `frontend/src/components/ScanEngineControls.test.jsx` |
+| Toggle Scheduler (auto-scan every 15min) | User enables/disables the scheduled automatic scanner | ✅ Unit / ✅ E2E | `frontend/src/components/ScanEngineControls.test.jsx`, `LiveUiDashboardTest.java` |
+| Toggle Mock Market Open | User simulates an open market to allow scanning outside trading hours | ✅ Unit / ✅ E2E | `frontend/src/components/ScanEngineControls.test.jsx`, `LiveUiDashboardTest.java` |
+| Toggle Auto Execute | User enables automatic signal execution via TWS | ✅ Unit / ✅ E2E | `frontend/src/components/ScanEngineControls.test.jsx`, `LiveUiDashboardTest.java` |
+| Toggle Extended Hours | User enables/disables extended trading hours | ✅ Unit / ✅ E2E | `frontend/src/components/ScanEngineControls.test.jsx`, `LiveModeInteractionTest.java` |
+| Toggle Macro Filter | User enables/disables the macro filter (manual override) | ✅ Unit | `frontend/src/components/ScanEngineControls.test.jsx` |
+| Adjust Risk % | User adjusts the per-trade risk percentage at runtime | ✅ Unit | `frontend/src/components/ScanEngineControls.test.jsx` |
+| Set Max Concurrent Scans | User configures how many tickers are analyzed in parallel (1–16) | ✅ Unit | `frontend/src/hooks/useLiveScanner.test.js` |
+| Inject Mock Signal | User injects a simulated signal for testing without TWS connected | ✅ Unit | `frontend/src/components/ScanEngineControls.test.jsx` |
+| IBKR Lock (TWS status) | User sees the TWS connection status (data/account/exec) | ✅ Unit | `frontend/src/components/ScanEngineControls.test.jsx` |
+| Scope HOT/ALL | User filters the scan to hot tickers or the full universe | ✅ Unit | `frontend/src/hooks/useLiveScanner.test.js` |
 
 ### Live Dashboard — Trade Actions
 
-| Funcionalidad | Descripción usuario | Cobertura | Test files |
+| Feature | User description | Coverage | Test files |
 |---|---|---|---|
-| Ejecutar señal manualmente (execute signal) | El usuario pulsa "Open" en una fila de señal para enviar la orden a TWS | ✅ Unit | `frontend/src/hooks/useTradeActions.test.js` (16 tests, ~95%) |
-| Cerrar trade (close) | El usuario pulsa "Close" para cancelar las órdenes TP/SL o marcar el trade como cerrado | ✅ Unit | `frontend/src/hooks/useTradeActions.test.js` |
-| Cancelar orden (cancel) | El usuario cancela una orden pendiente en TWS por orderId | ✅ Unit | `frontend/src/hooks/useTradeActions.test.js` |
-| Eliminar fila de señal (delete row) | El usuario elimina una fila de señal de la grilla cuando no tiene posición abierta | ✅ Unit | `frontend/src/hooks/useTradeActions.test.js` |
-| Cerrar posición externa | El usuario coloca una orden de market SELL para una posición externa (no abierta por la app) | ✅ Unit | `frontend/src/hooks/useTradeActions.test.js` |
-| Schedule Close 14:50 ET | El usuario programa el cierre automático de una posición externa a las 14:50 hora ET | ✅ Unit | `frontend/src/hooks/useTradeActions.test.js` |
-| Posiciones externas (polling 10s) | El usuario ve posiciones abiertas en TWS que no fueron abiertas por la app | ✅ Unit | `frontend/src/hooks/useExternalPositions.test.js` (100%) |
-| Bloqueo de ejecución en señal stale (>30min) | El sistema rechaza la ejecución de una señal que tiene más de 30 minutos de antigüedad | ✅ Unit | `frontend/src/hooks/useTradeActions.test.js` |
+| Execute signal manually | User clicks "Open" on a signal row to send the order to TWS | ✅ Unit | `frontend/src/hooks/useTradeActions.test.js` (16 tests, ~95%) |
+| Close trade | User clicks "Close" to cancel TP/SL orders or mark the trade as closed | ✅ Unit | `frontend/src/hooks/useTradeActions.test.js` |
+| Cancel order | User cancels a pending order in TWS by orderId | ✅ Unit | `frontend/src/hooks/useTradeActions.test.js` |
+| Delete signal row | User deletes a signal row from the grid when there is no open position | ✅ Unit | `frontend/src/hooks/useTradeActions.test.js` |
+| Close external position | User places a market SELL order for an external position (not opened by the app) | ✅ Unit | `frontend/src/hooks/useTradeActions.test.js` |
+| Schedule Close 14:50 ET | User schedules automatic close of an external position at 14:50 ET | ✅ Unit | `frontend/src/hooks/useTradeActions.test.js` |
+| External positions (10s polling) | User sees positions open in TWS that were not opened by the app | ✅ Unit | `frontend/src/hooks/useExternalPositions.test.js` (100%) |
+| Stale signal execution block (>30min) | System rejects execution of a signal older than 30 minutes | ✅ Unit | `frontend/src/hooks/useTradeActions.test.js` |
 
 ### Live Dashboard — Replay Mode
 
-| Funcionalidad | Descripción usuario | Cobertura | Test files |
+| Feature | User description | Coverage | Test files |
 |---|---|---|---|
-| ReplayControls UI (date picker + speed picker) | El usuario selecciona una fecha y velocidad para reproducir el mercado histórico | ✅ Unit | `frontend/src/components/ReplayControls.test.jsx` (12 tests, 72%) |
-| Start Replay | El usuario inicia la reproducción histórica para esa fecha | ✅ Unit / ✅ E2E | `frontend/src/components/ReplayControls.test.jsx`, `ReplayControlsE2eTest.java` (tag: tws-paper) |
-| Stop Replay | El usuario detiene la reproducción en curso | ✅ Unit / ✅ E2E | `frontend/src/components/ReplayControls.test.jsx`, `ReplayControlsE2eTest.java` |
-| Change Replay Speed | El usuario ajusta la velocidad de replay en tiempo real | ✅ Unit | `frontend/src/components/ReplayControls.test.jsx` |
-| Poll Replay Status | La UI refleja si el replay está activo/inactivo con polling | ✅ Unit | `frontend/src/components/ReplayControls.test.jsx` |
+| ReplayControls UI (date picker + speed picker) | User selects a date and speed to replay the historical market | ✅ Unit | `frontend/src/components/ReplayControls.test.jsx` (12 tests, 72%) |
+| Start Replay | User starts historical replay for that date | ✅ Unit / ✅ E2E | `frontend/src/components/ReplayControls.test.jsx`, `ReplayControlsE2eTest.java` (tag: tws-paper) |
+| Stop Replay | User stops the in-progress replay | ✅ Unit / ✅ E2E | `frontend/src/components/ReplayControls.test.jsx`, `ReplayControlsE2eTest.java` |
+| Change Replay Speed | User adjusts replay speed in real time | ✅ Unit | `frontend/src/components/ReplayControls.test.jsx` |
+| Poll Replay Status | UI reflects whether replay is active/inactive via polling | ✅ Unit | `frontend/src/components/ReplayControls.test.jsx` |
 
-### Configuración — Settings Page
+### Configuration — Settings Page
 
-| Funcionalidad | Descripción usuario | Cobertura | Test files |
+| Feature | User description | Coverage | Test files |
 |---|---|---|---|
-| Editor de tickers calientes (HotTickerCountEditor) | El usuario ajusta cuántos tickers son considerados "hot" (N entre 1 y 100) | ✅ Unit | `frontend/src/components/HotTickerCountEditor.test.jsx` (11 tests, 97%) |
-| Editor chip-based de listas (ChipListEditor) | El usuario edita listas de tickers como chips (add/remove) | ✅ Unit | `frontend/src/components/ChipListEditor.test.jsx` (16 tests) |
-| Formulario de fundamentals por ticker | El usuario edita los datos fundamentales (P/E, beta, sector, etc.) de un ticker | ✅ Unit | `frontend/src/components/FundamentalTickerForm.test.jsx` (17 tests) |
-| CRUD de watchlists | El usuario crea, edita y elimina grupos de watchlists guardados en localStorage | ✅ Unit | `frontend/src/hooks/useWatchlists.test.js` (11 tests, ~90%) |
-| Guardar filtro como watchlist (SaveListPopover) | El usuario guarda el filtro actual de tickers como una watchlist con nombre | ✅ Unit | `frontend/src/components/SaveListPopover.test.jsx` (7 tests, 95%) |
-| Overrides TP/SL ATR por ticker (MemoryPanel) | El usuario configura multiplicadores personalizados de TP/SL por ticker y estrategia | ✅ Unit | `frontend/src/components/MemoryPanel.test.jsx` (13 tests) |
-| Backup de settings a backend (debounced) | La app sincroniza automáticamente los settings del localStorage al backend (debounce 2s) | ✅ Unit | `frontend/src/hooks/useStorageBackup.test.js` (5 tests, ~90%) |
-| Sync de settings al scanner (useScanSettings) | La app sincroniza los toggles de configuración con el backend al cambiar | ⚠️ Parcial | Sin test propio; branches de error y mock-market uncovered |
-| SettingsPage tabs (Servidor/Watchlists/Preferencias) | El usuario navega entre las 3 pestañas de configuración | ❌ Sin cobertura | — |
+| Hot ticker count editor (HotTickerCountEditor) | User adjusts how many tickers are considered "hot" (N between 1 and 100) | ✅ Unit | `frontend/src/components/HotTickerCountEditor.test.jsx` (11 tests, 97%) |
+| Chip-based list editor (ChipListEditor) | User edits ticker lists as chips (add/remove) | ✅ Unit | `frontend/src/components/ChipListEditor.test.jsx` (16 tests) |
+| Ticker fundamentals form | User edits fundamental data (P/E, beta, sector, etc.) for a ticker | ✅ Unit | `frontend/src/components/FundamentalTickerForm.test.jsx` (17 tests) |
+| Watchlist CRUD | User creates, edits, and deletes watchlist groups saved in localStorage | ✅ Unit | `frontend/src/hooks/useWatchlists.test.js` (11 tests, ~90%) |
+| Save filter as watchlist (SaveListPopover) | User saves the current ticker filter as a named watchlist | ✅ Unit | `frontend/src/components/SaveListPopover.test.jsx` (7 tests, 95%) |
+| Per-ticker TP/SL ATR overrides (MemoryPanel) | User configures custom TP/SL multipliers per ticker and strategy | ✅ Unit | `frontend/src/components/MemoryPanel.test.jsx` (13 tests) |
+| Settings backup to backend (debounced) | App automatically syncs localStorage settings to the backend (2s debounce) | ✅ Unit | `frontend/src/hooks/useStorageBackup.test.js` (5 tests, ~90%) |
+| Settings sync to scanner (useScanSettings) | App syncs configuration toggles with the backend on change | ⚠️ Partial | No dedicated test; error branches and mock-market uncovered |
+| SettingsPage tabs (Server/Watchlists/Preferences) | User navigates between the 3 configuration tabs | ❌ No coverage | — |
 
-### Configuración — TickerSelector
+### Configuration — TickerSelector
 
-| Funcionalidad | Descripción usuario | Cobertura | Test files |
+| Feature | User description | Coverage | Test files |
 |---|---|---|---|
-| Autocomplete de tickers | El usuario escribe letras y ve sugerencias de tickers filtradas | ✅ Unit | `frontend/src/components/TickerSelector.test.jsx` (41 tests) |
-| Expansión de @watchlist | El usuario escribe `@nombre` y se expanden todos los tickers de esa watchlist | ✅ Unit | `frontend/src/components/TickerSelector.test.jsx` |
-| Hot chips (selección rápida) | El usuario hace click en los chips de tickers calientes para seleccionarlos | ✅ Unit | `frontend/src/components/TickerSelector.test.jsx` |
-| News ticker display | El usuario ve un ticker de noticias en tiempo real | ⚠️ Parcial | Stub cubierto; integración real sin cobertura |
+| Ticker autocomplete | User types letters and sees filtered ticker suggestions | ✅ Unit | `frontend/src/components/TickerSelector.test.jsx` (41 tests) |
+| @watchlist expansion | User types `@name` and all tickers from that watchlist are expanded | ✅ Unit | `frontend/src/components/TickerSelector.test.jsx` |
+| Hot chips (quick selection) | User clicks on hot ticker chips to select them | ✅ Unit | `frontend/src/components/TickerSelector.test.jsx` |
+| News ticker display | User sees a real-time news ticker | ⚠️ Partial | Stub covered; real integration has no coverage |
 
 ### Backtest Dashboard
 
-| Funcionalidad | Descripción usuario | Cobertura | Test files |
+| Feature | User description | Coverage | Test files |
 |---|---|---|---|
-| Carga de la página Backtest | El usuario navega a `/backtest` y ve el dashboard con sus secciones | ✅ E2E | `src/test/java/com/fgiaquinta/optionsquant/e2e/BacktestUiDashboardTest.java` |
-| Reporte KPIs + equity curve (BacktestReportPanel) | El usuario ve win rate, total PnL, max drawdown y la curva de equity del backtest | ✅ Unit | `frontend/src/components/BacktestReportPanel.test.jsx` (25 tests) |
-| Data grid con sorting y chart modal (UnifiedDataGrid) | El usuario ordena el log de trades y abre el chart modal de un trade | ✅ Unit | `frontend/src/components/UnifiedDataGrid.test.jsx` (38 tests) |
-| Iniciar backtest (Run Backtest) | El usuario lanza un backtest completo para los tickers y fechas seleccionados | ✅ E2E | `BacktestUiDashboardTest.java`, `BacktestInteractionTest.java` |
-| Detener backtest en curso | El usuario interrumpe un backtest en ejecución | ✅ E2E | `BacktestInteractionTest.java` |
-| Auto Run (backtest automático periódico) | El usuario activa el modo de backtest automático | ✅ E2E | `BacktestAutoRunStabilityTest.java` (soak test) |
-| Improve strategy (análisis y mejora) | El usuario pulsa "Improve" en una estrategia para ver recomendaciones de parámetros | ✅ E2E | `BacktestInteractionTest.java` |
-| Retest strategy con nuevos params | El usuario reejercuta el backtest de una estrategia con los parámetros mejorados | ✅ E2E | `BacktestInteractionTest.java` |
-| Improve Modal — análisis grid search (ImproveModal) | El usuario ve el modal con análisis detallado y puede lanzar un grid search desde ahí | ✅ Unit | `frontend/src/components/ImproveModal.test.jsx` (25 tests) |
-| Grid Search + Walk-Forward (GridSearchPanel) | El usuario configura y lanza un grid search exhaustivo con walk-forward validation | ✅ Unit / ✅ E2E | `frontend/src/components/GridSearchPanel.test.jsx` (49 tests), `BacktestGridWalkForwardUiE2eTest.java`, `BacktestGridSearchHttpE2eTest.java` |
-| Walk-forward fold results | El usuario ve los resultados por fold del walk-forward dentro del panel | ✅ Unit | `frontend/src/components/GridSearchPanel.test.jsx` |
-| Apply grid-search to memory | El usuario aplica los parámetros óptimos del grid search a la ticker-memory | ✅ Unit | `frontend/src/hooks/useGridSearch.test.js` (13 tests, ~90%) |
-| Promote risk params a ticker-memory | El usuario promueve los parámetros de riesgo del backtest como overrides permanentes | ✅ E2E | `BacktestInteractionTest.java`, `BacktestGridSearchWebMvcTest.java` |
-| Formateo de valores (USD, PnL coloring, lookback→date) | Los valores monetarios y PnL se formatean y colorean correctamente en la UI | ✅ Unit | `frontend/src/utils/backtestFormatters.test.js` (97%) |
-| Scan row sort (scan activity feed) | Los tickers del feed de scan se ordenan por prioridad HOT | ✅ Unit | `frontend/src/utils/scanRowSort.test.js` (100%) |
+| Backtest page load | User navigates to `/backtest` and sees the dashboard with its sections | ✅ E2E | `src/test/java/com/fgiaquinta/optionsquant/e2e/BacktestUiDashboardTest.java` |
+| KPIs report + equity curve (BacktestReportPanel) | User sees win rate, total PnL, max drawdown, and the equity curve | ✅ Unit | `frontend/src/components/BacktestReportPanel.test.jsx` (25 tests) |
+| Data grid with sorting and chart modal (UnifiedDataGrid) | User sorts the trade log and opens the chart modal for a trade | ✅ Unit | `frontend/src/components/UnifiedDataGrid.test.jsx` (38 tests) |
+| Run Backtest | User launches a full backtest for selected tickers and dates | ✅ E2E | `BacktestUiDashboardTest.java`, `BacktestInteractionTest.java` |
+| Stop in-progress backtest | User interrupts a running backtest | ✅ E2E | `BacktestInteractionTest.java` |
+| Auto Run (periodic automatic backtest) | User enables automatic backtest mode | ✅ E2E | `BacktestAutoRunStabilityTest.java` (soak test) |
+| Improve strategy (analysis and tuning) | User clicks "Improve" on a strategy to see parameter recommendations | ✅ E2E | `BacktestInteractionTest.java` |
+| Retest strategy with new params | User re-runs the backtest for a strategy with improved parameters | ✅ E2E | `BacktestInteractionTest.java` |
+| Improve Modal — grid search analysis (ImproveModal) | User sees the modal with detailed analysis and can launch a grid search from there | ✅ Unit | `frontend/src/components/ImproveModal.test.jsx` (25 tests) |
+| Grid Search + Walk-Forward (GridSearchPanel) | User configures and launches an exhaustive grid search with walk-forward validation | ✅ Unit / ✅ E2E | `frontend/src/components/GridSearchPanel.test.jsx` (49 tests), `BacktestGridWalkForwardUiE2eTest.java`, `BacktestGridSearchHttpE2eTest.java` |
+| Walk-forward fold results | User sees results per fold of the walk-forward within the panel | ✅ Unit | `frontend/src/components/GridSearchPanel.test.jsx` |
+| Apply grid-search to memory | User applies the optimal grid search parameters to ticker-memory | ✅ Unit | `frontend/src/hooks/useGridSearch.test.js` (13 tests, ~90%) |
+| Promote risk params to ticker-memory | User promotes backtest risk parameters as permanent overrides | ✅ E2E | `BacktestInteractionTest.java`, `BacktestGridSearchWebMvcTest.java` |
+| Value formatting (USD, PnL coloring, lookback→date) | Monetary values and PnL are correctly formatted and colored in the UI | ✅ Unit | `frontend/src/utils/backtestFormatters.test.js` (97%) |
+| Scan row sort (scan activity feed) | Tickers in the scan feed are sorted by HOT priority | ✅ Unit | `frontend/src/utils/scanRowSort.test.js` (100%) |
 
 ### Health Page
 
-| Funcionalidad | Descripción usuario | Cobertura | Test files |
+| Feature | User description | Coverage | Test files |
 |---|---|---|---|
-| Ver estado de salud del sistema | El usuario ve si la app está UP/DOWN | ✅ E2E | `src/test/java/com/fgiaquinta/optionsquant/e2e/HealthEndpointTest.java` (5 tests) |
-| HealthPage React component | El usuario ve la página `/health` con el contenido renderizado | ❌ Sin cobertura | — |
-| UI styling / responsive layout | La UI se ve correctamente con el tema de colores | ✅ E2E | `src/test/java/com/fgiaquinta/optionsquant/e2e/UiStylingTest.java` (4 tests) |
+| View system health status | User sees whether the app is UP/DOWN | ✅ E2E | `src/test/java/com/fgiaquinta/optionsquant/e2e/HealthEndpointTest.java` (5 tests) |
+| HealthPage React component | User sees the `/health` page with rendered content | ❌ No coverage | — |
+| UI styling / responsive layout | UI renders correctly with the color theme | ✅ E2E | `src/test/java/com/fgiaquinta/optionsquant/e2e/UiStylingTest.java` (4 tests) |
 
 ### API Client (frontend)
 
-| Funcionalidad | Descripción usuario | Cobertura | Test files |
+| Feature | User description | Coverage | Test files |
 |---|---|---|---|
-| Todas las llamadas HTTP (liveApi, replayApi, accountApi, tickerConfigApi, backtestApi) | Los clientes HTTP del frontend llaman a los endpoints correctos | ✅ Unit | `frontend/src/api.test.js` (full coverage) |
-| localStorage get/set/remove (storage.js) | El frontend persiste y recupera datos del almacenamiento local | ✅ Unit | `frontend/src/utils/storage.test.js` (100%) |
+| All HTTP calls (liveApi, replayApi, accountApi, tickerConfigApi, backtestApi) | Frontend HTTP clients call the correct endpoints | ✅ Unit | `frontend/src/api.test.js` (full coverage) |
+| localStorage get/set/remove (storage.js) | Frontend persists and retrieves data from local storage | ✅ Unit | `frontend/src/utils/storage.test.js` (100%) |
 
 ---
 
@@ -138,161 +138,161 @@ Múltiples íconos = múltiples capas de cobertura activas.
 
 ### Scan Engine — Core
 
-| Funcionalidad | Descripción usuario | Cobertura | Test files |
+| Feature | User description | Coverage | Test files |
 |---|---|---|---|
-| GET /live-ui/status — estado completo del scanner | La UI obtiene el estado actual (isScanning, tickers, progreso, toggles) | ✅ Unit | `LiveModeControllerStatusTest.java` |
-| POST /live-ui/scan-now — lanzar scan manual | El usuario lanza un scan; respeta market hours y bloquea doble-scan | ✅ E2E | `LiveModeInteractionTest.java` |
-| POST /live-ui/stop-scan | El usuario detiene el scan en curso | ✅ E2E | `LiveModeInteractionTest.java` |
-| POST /live-ui/force-stop — reset total de estado | El usuario fuerza un reset cuando la app queda inconsistente | ⚠️ Parcial | Endpoint validado vía E2E; lógica interna sin test unitario directo |
-| POST /live-ui/toggle-extended-hours | Toggle de horario extendido | ✅ E2E | `LiveModeInteractionTest.java` |
-| POST /live-ui/toggle-scheduler | Toggle del scheduler automático | ❌ Sin cobertura | — |
-| POST /live-ui/toggle-mock-market | Toggle mock market open | ❌ Sin cobertura | — |
-| POST /live-ui/toggle-auto-execute | Toggle auto execute | ❌ Sin cobertura | — |
-| POST /live-ui/toggle-macro-filter | Toggle macro filter | ❌ Sin cobertura | — |
-| POST /live-ui/set-max-concurrent | Configurar concurrencia del scanner (1–16) | ❌ Sin cobertura | — |
-| POST /live-ui/set-risk | Configurar riesgo por trade en runtime | ❌ Sin cobertura | — |
-| GET /live-ui/scan-scores — breakdown HYBRID | Retorna los scores de priorización por ticker (fundamentos + memoria) | ✅ Unit | `LiveModeControllerScanScoresTest.java` |
-| ScanPrioritizationService — HYBRID 0.65/0.35 | El scorer calcula el score híbrido fondo+memoria para priorizar el orden de scan | ✅ Unit | `ScanPrioritizationServiceTest.java` |
-| ScannerConcurrencyTest — exclusive lock | El scanner respeta la exclusividad del lock bajo concurrencia | ✅ Unit | `ScannerConcurrencyTest.java` |
-| MarketScanner.isUSMarketOpen (9:30–16:00 ET) | El scanner detecta correctamente si el mercado está abierto | ✅ Unit | `MarketScannerScanScoresTest.java` |
+| GET /live-ui/status — full scanner state | UI obtains current state (isScanning, tickers, progress, toggles) | ✅ Unit | `LiveModeControllerStatusTest.java` |
+| POST /live-ui/scan-now — launch manual scan | User launches a scan; respects market hours and blocks double-scan | ✅ E2E | `LiveModeInteractionTest.java` |
+| POST /live-ui/stop-scan | User stops the in-progress scan | ✅ E2E | `LiveModeInteractionTest.java` |
+| POST /live-ui/force-stop — full state reset | User forces a reset when the app gets into an inconsistent state | ⚠️ Partial | Endpoint validated via E2E; internal logic has no direct unit test |
+| POST /live-ui/toggle-extended-hours | Extended hours toggle | ✅ E2E | `LiveModeInteractionTest.java` |
+| POST /live-ui/toggle-scheduler | Automatic scheduler toggle | ❌ No coverage | — |
+| POST /live-ui/toggle-mock-market | Mock market open toggle | ❌ No coverage | — |
+| POST /live-ui/toggle-auto-execute | Auto execute toggle | ❌ No coverage | — |
+| POST /live-ui/toggle-macro-filter | Macro filter toggle | ❌ No coverage | — |
+| POST /live-ui/set-max-concurrent | Configure scanner concurrency (1–16) | ❌ No coverage | — |
+| POST /live-ui/set-risk | Configure per-trade risk at runtime | ❌ No coverage | — |
+| GET /live-ui/scan-scores — HYBRID breakdown | Returns ticker prioritization scores (fundamentals + memory) | ✅ Unit | `LiveModeControllerScanScoresTest.java` |
+| ScanPrioritizationService — HYBRID 0.65/0.35 | Scorer calculates the hybrid fundamentals+memory score to prioritize scan order | ✅ Unit | `ScanPrioritizationServiceTest.java` |
+| ScannerConcurrencyTest — exclusive lock | Scanner respects exclusive lock under concurrency | ✅ Unit | `ScannerConcurrencyTest.java` |
+| MarketScanner.isUSMarketOpen (9:30–16:00 ET) | Scanner correctly detects whether the market is open | ✅ Unit | `MarketScannerScanScoresTest.java` |
 
 ### Scan Engine — Signals
 
-| Funcionalidad | Descripción usuario | Cobertura | Test files |
+| Feature | User description | Coverage | Test files |
 |---|---|---|---|
-| GET /live-ui/signals — listado de señales | La UI obtiene las señales activas (live o replay) con filtro de stale | ✅ Unit | `LiveModeControllerStaleSignalTest.java` |
-| Stale signal guard (>30min bloquea execute) | El sistema rechaza ejecutar señales de más de 30 minutos | ✅ Unit | `LiveModeControllerStaleSignalTest.java` |
-| DELETE /live-ui/signal — eliminar fila | El sistema permite eliminar una fila solo si no hay posición abierta | ⚠️ Parcial | Lógica cubierta indirectamente; sin test dedicado |
-| POST /live-ui/signals/clear-stale | Eliminar en batch todas las señales stale sin posición abierta | ❌ Sin cobertura | — |
-| POST /live-ui/signals/batch-delete | Eliminar múltiples señales por ticker en un solo request | ❌ Sin cobertura | — |
-| GET /live-ui/scan-activity — feed de actividad | La UI ve el feed de tickers en scanning con tiempos de inicio/fin | ❌ Sin cobertura | — |
-| Inject Mock Signal | Inyectar señal simulada (para testing/demo sin TWS) | ❌ Sin cobertura | — |
+| GET /live-ui/signals — signal list | UI retrieves active signals (live or replay) with stale filter | ✅ Unit | `LiveModeControllerStaleSignalTest.java` |
+| Stale signal guard (>30min blocks execute) | System rejects executing signals older than 30 minutes | ✅ Unit | `LiveModeControllerStaleSignalTest.java` |
+| DELETE /live-ui/signal — delete row | System allows deleting a row only if there is no open executed position | ⚠️ Partial | Logic covered indirectly; no dedicated test |
+| POST /live-ui/signals/clear-stale | Batch delete all stale signals with no open position | ❌ No coverage | — |
+| POST /live-ui/signals/batch-delete | Delete multiple signals by ticker in a single request | ❌ No coverage | — |
+| GET /live-ui/scan-activity — activity feed | UI sees the tickers-in-scanning feed with start/end times | ❌ No coverage | — |
+| Inject Mock Signal | Inject a simulated signal (for testing/demo without TWS) | ❌ No coverage | — |
 
-### Trading — Ejecución de Órdenes
+### Trading — Order Execution
 
-| Funcionalidad | Descripción usuario | Cobertura | Test files |
+| Feature | User description | Coverage | Test files |
 |---|---|---|---|
-| POST /live-ui/execute-signal — ejecutar señal | El usuario envía una orden bracket (entry + TP + SL) a TWS | ❌ Sin cobertura | — (solo TradingService cubierto de forma unitaria) |
-| POST /live-ui/close-trade — cerrar trade | Cancela órdenes TP/SL en TWS (o hace cierre local si no hay IDs) | ✅ Unit | `LiveModeControllerCloseTradeTest.java` |
-| POST /live-ui/cancel-trade — cancelar orden | Cancela una orden pendiente en TWS por orderId | ❌ Sin cobertura | — |
-| OrderExecutionService — bracket order + contractDetails | Construye y envía la orden bracket y recupera el mejor conId | ✅ Unit | `OrderExecutionServiceTest.java` |
-| TradingService — scanAndExecute + executeSignal | Orquesta el flujo scan→signal→orden y maneja fallo de ejecución | ✅ Unit | `TradingServiceTest.java` |
-| AccountManager — balance, risk rule 2%, positions snapshot | Gestiona balance, cantidad de contratos y snapshot de posiciones | ✅ Unit | `AccountManagerTest.java` |
-| PositionPollingScheduler — polling periódico de posiciones | Sincroniza el snapshot de posiciones con TWS cada N segundos | ✅ Unit | `PositionPollingSchedulerTest.java` |
-| POST /api/trading/scan-and-execute | Endpoint legacy: escanea y ejecuta en una sola llamada | ❌ Sin cobertura | — |
-| POST /api/trading/execute | Endpoint legacy: ejecuta una señal individual | ❌ Sin cobertura | — |
-| GET /api/trading/account-status | Retorna balance, riesgo límite y número de trades activos | ❌ Sin cobertura | — |
+| POST /live-ui/execute-signal — execute signal | User sends a bracket order (entry + TP + SL) to TWS | ❌ No coverage | — (TradingService covered only at unit level) |
+| POST /live-ui/close-trade — close trade | Cancels TP/SL orders in TWS (or local close if no IDs) | ✅ Unit | `LiveModeControllerCloseTradeTest.java` |
+| POST /live-ui/cancel-trade — cancel order | Cancels a pending order in TWS by orderId | ❌ No coverage | — |
+| OrderExecutionService — bracket order + contractDetails | Builds and sends the bracket order and retrieves the best conId | ✅ Unit | `OrderExecutionServiceTest.java` |
+| TradingService — scanAndExecute + executeSignal | Orchestrates scan→signal→order flow and handles execution failure | ✅ Unit | `TradingServiceTest.java` |
+| AccountManager — balance, 2% risk rule, positions snapshot | Manages balance, contract quantity, and positions snapshot | ✅ Unit | `AccountManagerTest.java` |
+| PositionPollingScheduler — periodic position polling | Syncs the positions snapshot with TWS every N seconds | ✅ Unit | `PositionPollingSchedulerTest.java` |
+| POST /api/trading/scan-and-execute | Legacy endpoint: scans and executes in a single call | ❌ No coverage | — |
+| POST /api/trading/execute | Legacy endpoint: executes a single signal | ❌ No coverage | — |
+| GET /api/trading/account-status | Returns balance, risk limit, and number of active trades | ❌ No coverage | — |
 
-### Posiciones Externas
+### External Positions
 
-| Funcionalidad | Descripción usuario | Cobertura | Test files |
+| Feature | User description | Coverage | Test files |
 |---|---|---|---|
-| GET /live-ui/external-positions — listar posiciones externas | La UI ve posiciones abiertas en TWS que la app no registró | ✅ Unit / ✅ Integration | `LiveModeControllerExternalPositionsTest.java`, `ExternalPositionsIntegrationTest.java` |
-| POST /live-ui/external-positions/{ticker}/close — SELL inmediato | El usuario cierra una posición externa con market order | ✅ Unit / ✅ Integration | `LiveModeControllerExternalPositionsTest.java`, `ExternalPositionsIntegrationTest.java` |
-| POST /live-ui/external-positions/{ticker}/schedule-close-1450 — cierre condicional | El usuario programa el cierre automático a las 14:50 ET | ✅ Unit | `LiveModeControllerExternalPositionsTest.java` |
-| ExternalPositionDto serialización JSON | El DTO se serializa con snake_case y campos correctos | ✅ Unit / ✅ Integration | `ExternalPositionDtoTest.java`, `ExternalPositionsIntegrationTest.java` |
-| PositionSnapshot correctness | El snapshot captura símbolo, secType, cantidad y avgCost | ✅ Unit | `PositionSnapshotTest.java` |
-| Startup check de posiciones externas tras restart | La app loguea un WARNING si hay posiciones en TWS pero ningún trade registrado | ✅ Unit | `LiveModeControllerStartupListenerTest.java` |
+| GET /live-ui/external-positions — list external positions | UI sees positions open in TWS that the app did not record | ✅ Unit / ✅ Integration | `LiveModeControllerExternalPositionsTest.java`, `ExternalPositionsIntegrationTest.java` |
+| POST /live-ui/external-positions/{ticker}/close — immediate SELL | User closes an external position with a market order | ✅ Unit / ✅ Integration | `LiveModeControllerExternalPositionsTest.java`, `ExternalPositionsIntegrationTest.java` |
+| POST /live-ui/external-positions/{ticker}/schedule-close-1450 — conditional close | User schedules automatic close at 14:50 ET | ✅ Unit | `LiveModeControllerExternalPositionsTest.java` |
+| ExternalPositionDto JSON serialization | DTO serializes with snake_case and correct fields | ✅ Unit / ✅ Integration | `ExternalPositionDtoTest.java`, `ExternalPositionsIntegrationTest.java` |
+| PositionSnapshot correctness | Snapshot captures symbol, secType, quantity, and avgCost | ✅ Unit | `PositionSnapshotTest.java` |
+| External positions startup check after restart | App logs a WARNING if there are positions in TWS but no registered trades | ✅ Unit | `LiveModeControllerStartupListenerTest.java` |
 
 ### Replay Mode (Backend)
 
-| Funcionalidad | Descripción usuario | Cobertura | Test files |
+| Feature | User description | Coverage | Test files |
 |---|---|---|---|
-| POST /live-ui/replay/start — iniciar replay | El usuario inicia la reproducción de una fecha histórica con una velocidad | ✅ Unit | `LiveModeControllerReplayTest.java` |
-| POST /live-ui/replay/stop — detener replay | El usuario detiene la reproducción y limpia las señales de replay | ✅ Unit | `LiveModeControllerReplayTest.java` |
-| PUT /live-ui/replay/speed — cambiar velocidad | El usuario cambia la velocidad del replay en tiempo real | ✅ Unit | `LiveModeControllerReplayTest.java` |
-| GET /live-ui/replay/status — estado del replay | La UI refleja si el replay está activo, el tiempo virtual y la velocidad actual | ✅ Unit | `LiveModeControllerReplayTest.java` |
-| GET /live-ui/account-mode — PAPER/LIVE chip | La UI muestra si la cuenta conectada es paper o real | ✅ Unit | `LiveModeControllerReplayTest.java` |
-| ReplayService — start/stop/setSpeed/validación horaria | El servicio rechaza replay durante horario de mercado y gestiona el estado | ✅ Unit | `ReplayServiceTest.java` |
-| ReplayClock — snapshot/activate/deactivate | El reloj virtual avanza correctamente durante el replay | ✅ Unit | `ReplayClockTest.java` |
-| ReplayScheduler — ticks y progreso | El scheduler emite ticks en la cadencia correcta según la velocidad | ✅ Unit | `ReplaySchedulerTest.java` |
-| ReplayCandleSource — carga desde CSV para una fecha | El source devuelve las velas históricas del CSV para la fecha seleccionada | ✅ Unit | `ReplayCandleSourceTest.java` |
-| ReplayOrderGate — bloqueo de órdenes reales durante replay | Las órdenes reales quedan bloqueadas mientras el replay está activo | ✅ Unit | `ReplayOrderGateTest.java` |
-| SignalReplayField — flag replay en señales | Las señales generadas durante replay se marcan con `replay=true` | ✅ Unit | `SignalReplayFieldTest.java` |
-| E2E replay happy path (toggle mock + start + stop) | El flujo completo desde UI: activar mock market, iniciar y detener replay | ✅ E2E | `ReplayControlsE2eTest.java` (tag: tws-paper) |
+| POST /live-ui/replay/start — start replay | User starts historical replay for a date at a given speed | ✅ Unit | `LiveModeControllerReplayTest.java` |
+| POST /live-ui/replay/stop — stop replay | User stops replay and clears replay signals | ✅ Unit | `LiveModeControllerReplayTest.java` |
+| PUT /live-ui/replay/speed — change speed | User changes replay speed in real time | ✅ Unit | `LiveModeControllerReplayTest.java` |
+| GET /live-ui/replay/status — replay status | UI reflects whether replay is active, virtual time, and current speed | ✅ Unit | `LiveModeControllerReplayTest.java` |
+| GET /live-ui/account-mode — PAPER/LIVE chip | UI shows whether the connected account is paper or live | ✅ Unit | `LiveModeControllerReplayTest.java` |
+| ReplayService — start/stop/setSpeed/time validation | Service rejects replay during market hours and manages state | ✅ Unit | `ReplayServiceTest.java` |
+| ReplayClock — snapshot/activate/deactivate | Virtual clock advances correctly during replay | ✅ Unit | `ReplayClockTest.java` |
+| ReplayScheduler — ticks and progress | Scheduler emits ticks at the correct cadence per speed | ✅ Unit | `ReplaySchedulerTest.java` |
+| ReplayCandleSource — load from CSV for a date | Source returns historical candles from CSV for the selected date | ✅ Unit | `ReplayCandleSourceTest.java` |
+| ReplayOrderGate — block real orders during replay | Real orders are blocked while replay is active | ✅ Unit | `ReplayOrderGateTest.java` |
+| SignalReplayField — replay flag on signals | Signals generated during replay are flagged with `replay=true` | ✅ Unit | `SignalReplayFieldTest.java` |
+| E2E replay happy path (toggle mock + start + stop) | Full UI flow: enable mock market, start and stop replay | ✅ E2E | `ReplayControlsE2eTest.java` (tag: tws-paper) |
 
-### Configuración de Tickers
+### Ticker Configuration
 
-| Funcionalidad | Descripción usuario | Cobertura | Test files |
+| Feature | User description | Coverage | Test files |
 |---|---|---|---|
-| GET /api/ticker-config — configuración completa | La UI carga el universo, lista HOT y fundamentales de todos los tickers | ❌ Sin cobertura | — |
-| PUT /api/ticker-config — guardar configuración | El usuario guarda cambios al universo, lista HOT y fundamentales | ❌ Sin cobertura | — |
-| DELETE /api/ticker-config/symbol/{symbol} — eliminar ticker | El usuario elimina un ticker del universo y de la lista HOT | ❌ Sin cobertura | — |
-| GET /api/ticker-config/hot-ticker-count | Retorna el hot-ticker-count efectivo (runtime override vs yml default) | ✅ Unit | `TickerConfigControllerHotTickerCountTest.java` |
-| PUT /api/ticker-config/hot-ticker-count | Persiste un override del hot-ticker-count (validación 1–100) | ✅ Unit | `TickerConfigControllerHotTickerCountTest.java` |
-| GET /api/ticker-config/validate?symbol= | Valida un ticker contra TWS antes de agregarlo al universo | ⚠️ Parcial | BUG fix (L63) cerrado pero sin test de regresión automatizado |
-| TickerService — RUNTIME-WINS GUARD para HOT | El servicio respeta la prioridad: runtime > yml cuando la lista HOT está presente | ✅ Unit | `TickerServiceTest.java` |
-| IbkrProperties — validación de configuración | La configuración de IBKR (host, port, risk, etc.) se valida al arranque | ✅ Unit | `IbkrPropertiesTest.java` |
+| GET /api/ticker-config — full configuration | UI loads the universe, HOT list, and fundamentals for all tickers | ❌ No coverage | — |
+| PUT /api/ticker-config — save configuration | User saves changes to the universe, HOT list, and fundamentals | ❌ No coverage | — |
+| DELETE /api/ticker-config/symbol/{symbol} — delete ticker | User deletes a ticker from the universe and from the HOT list | ❌ No coverage | — |
+| GET /api/ticker-config/hot-ticker-count | Returns the effective hot-ticker-count (runtime override vs yml default) | ✅ Unit | `TickerConfigControllerHotTickerCountTest.java` |
+| PUT /api/ticker-config/hot-ticker-count | Persists a hot-ticker-count override (validation 1–100) | ✅ Unit | `TickerConfigControllerHotTickerCountTest.java` |
+| GET /api/ticker-config/validate?symbol= | Validates a ticker against TWS before adding it to the universe | ⚠️ Partial | BUG fix (L63) closed but no automated regression test |
+| TickerService — RUNTIME-WINS GUARD for HOT | Service respects the priority: runtime > yml when the HOT list is present | ✅ Unit | `TickerServiceTest.java` |
+| IbkrProperties — configuration validation | IBKR configuration (host, port, risk, etc.) is validated at startup | ✅ Unit | `IbkrPropertiesTest.java` |
 
 ### Backtest Engine
 
-| Funcionalidad | Descripción usuario | Cobertura | Test files |
+| Feature | User description | Coverage | Test files |
 |---|---|---|---|
-| Grid Search — EXHAUSTIVE + validación de axes | El servicio ejecuta todas las combinaciones de parámetros y valida axes conocidos | ✅ Unit | `GridSearchServiceTest.java` |
-| Grid Search — HTTP contract (POST /backtest-ui/grid-search) | El endpoint rechaza bodies inválidos (axes desconocidos, tickers vacíos) con 400 | ✅ Integration / ✅ E2E | `BacktestGridSearchWebMvcTest.java`, `BacktestGridSearchHttpE2eTest.java` |
-| Walk-Forward validation | El grid search soporta walk-forward con folds train/test/step configurables | ✅ Unit / ✅ E2E | `GridSearchServiceTest.java`, `BacktestGridWalkForwardUiE2eTest.java` |
-| Promote risk params (dryRun vs persist) | El usuario puede hacer dry-run o persistir los parámetros de riesgo óptimos a memoria | ✅ Unit | `PromoteRiskServiceTest.java` |
-| TickerMemoryProfileMap — aprendizaje por perfil | El mapa de perfiles persiste y recupera correctamente los overrides por ticker+estrategia | ✅ Unit | `TickerMemoryProfileMapTest.java` |
-| POST /backtest-ui/run + stop + running check | Ejecutar, detener y consultar estado del backtest en curso | ✅ E2E | `BacktestInteractionTest.java` (slow tag) |
-| POST /backtest-ui/improve/{strategy} + retest | Analizar y mejorar una estrategia, luego retestarla | ✅ E2E | `BacktestInteractionTest.java` |
-| Backtest scheduler auto-run stability | El backtest auto-run no produce errores de consola ni rompe la UI en soak | ✅ E2E | `BacktestAutoRunStabilityTest.java` |
+| Grid Search — EXHAUSTIVE + axis validation | Service runs all parameter combinations and validates known axes | ✅ Unit | `GridSearchServiceTest.java` |
+| Grid Search — HTTP contract (POST /backtest-ui/grid-search) | Endpoint rejects invalid bodies (unknown axes, empty tickers) with 400 | ✅ Integration / ✅ E2E | `BacktestGridSearchWebMvcTest.java`, `BacktestGridSearchHttpE2eTest.java` |
+| Walk-Forward validation | Grid search supports walk-forward with configurable train/test/step folds | ✅ Unit / ✅ E2E | `GridSearchServiceTest.java`, `BacktestGridWalkForwardUiE2eTest.java` |
+| Promote risk params (dryRun vs persist) | User can dry-run or persist optimal risk parameters to memory | ✅ Unit | `PromoteRiskServiceTest.java` |
+| TickerMemoryProfileMap — profile-based learning | Profile map persists and retrieves overrides per ticker+strategy correctly | ✅ Unit | `TickerMemoryProfileMapTest.java` |
+| POST /backtest-ui/run + stop + running check | Execute, stop, and check status of the in-progress backtest | ✅ E2E | `BacktestInteractionTest.java` (slow tag) |
+| POST /backtest-ui/improve/{strategy} + retest | Analyze and improve a strategy, then re-test it | ✅ E2E | `BacktestInteractionTest.java` |
+| Backtest scheduler auto-run stability | Backtest auto-run produces no console errors and does not break the UI on soak | ✅ E2E | `BacktestAutoRunStabilityTest.java` |
 
-### Estrategias de Trading
+### Trading Strategies
 
-| Funcionalidad | Descripción usuario | Cobertura | Test files |
+| Feature | User description | Coverage | Test files |
 |---|---|---|---|
-| Estrategias C5ContinuationCall / P5ContinuationPut | Las estrategias detectan correctamente el patrón de continuación | ✅ Unit | `StrategyUnitTest.java` |
-| C1SqueezeCallStrategy — Worden Stochastic | La estrategia C1 detecta squeeze breakouts usando el indicador de Worden | ✅ Unit | `StrategyUnitTest.java` |
-| RiskCalculator — TP/SL a partir de ATR | El calculador de riesgo calcula correctamente los niveles TP/SL usando ATR | ✅ Unit | `RiskCalculatorTest.java` |
-| CandlestickPatternDetector — detección de patrones | El detector identifica hammer, engulfing y otros patrones de velas | ✅ Unit | `CandlestickPatternDetectorTest.java` |
-| ConditionBuilder — TimeCondition 14:50 ET | El builder crea la condición de tiempo para el cierre condicional correctamente | ✅ Unit | `ConditionBuilderTest.java` |
-| ContractFactory — construcción de contratos STK/OPT | La factory construye contratos IBKR correctamente para stocks y opciones | ✅ Unit | `ContractFactoryTest.java` |
-| 12 estrategias completas (C1–C6, P1–P6) | Todas las estrategias de call y put están correctamente implementadas | ⚠️ Parcial | Solo C1, C5, P5 con tests directos; resto cubierto indirectamente vía backtest engine |
+| C5ContinuationCall / P5ContinuationPut strategies | Strategies correctly detect the continuation pattern | ✅ Unit | `StrategyUnitTest.java` |
+| C1SqueezeCallStrategy — Worden Stochastic | C1 strategy detects squeeze breakouts using the Worden indicator | ✅ Unit | `StrategyUnitTest.java` |
+| RiskCalculator — TP/SL from ATR | Risk calculator correctly computes TP/SL levels using ATR | ✅ Unit | `RiskCalculatorTest.java` |
+| CandlestickPatternDetector — pattern detection | Detector identifies hammer, engulfing, and other candlestick patterns | ✅ Unit | `CandlestickPatternDetectorTest.java` |
+| ConditionBuilder — TimeCondition 14:50 ET | Builder correctly creates the time condition for scheduled close | ✅ Unit | `ConditionBuilderTest.java` |
+| ContractFactory — STK/OPT contract construction | Factory builds IBKR contracts correctly for stocks and options | ✅ Unit | `ContractFactoryTest.java` |
+| 12 full strategies (C1–C6, P1–P6) | All call and put strategies are correctly implemented | ⚠️ Partial | Only C1, C5, P5 have direct tests; rest covered indirectly via backtest engine |
 
-### Datos de Mercado (Candles)
+### Market Data (Candles)
 
-| Funcionalidad | Descripción usuario | Cobertura | Test files |
+| Feature | User description | Coverage | Test files |
 |---|---|---|---|
-| POST /api/candles/download — descargar candles de IBKR | El sistema descarga datos históricos para un ticker/timeframe desde TWS | ❌ Sin cobertura | — |
-| POST /api/candles/download-all — todos los timeframes | Descarga todos los timeframes para un ticker | ❌ Sin cobertura | — |
-| POST /api/candles/download-all-tickers — universo completo | Descarga datos de todos los tickers configurados | ❌ Sin cobertura | — |
-| GET /api/candles/local — cargar desde CSV | Lee candles históricos del CSV local | ✅ Unit | `CandleCsvServiceTest.java` |
-| GET /api/candles/local/exists | Verifica si existen datos locales para un ticker/timeframe | ✅ Unit | `CandleCsvServiceTest.java` |
-| Candle domain object — validación y construcción | El objeto de dominio Candle se construye y valida correctamente | ✅ Unit | `CandleTest.java` |
+| POST /api/candles/download — download candles from IBKR | System downloads historical data for a ticker/timeframe from TWS | ❌ No coverage | — |
+| POST /api/candles/download-all — all timeframes | Downloads all timeframes for a ticker | ❌ No coverage | — |
+| POST /api/candles/download-all-tickers — full universe | Downloads data for all configured tickers | ❌ No coverage | — |
+| GET /api/candles/local — load from CSV | Reads historical candles from local CSV | ✅ Unit | `CandleCsvServiceTest.java` |
+| GET /api/candles/local/exists | Verifies whether local data exists for a ticker/timeframe | ✅ Unit | `CandleCsvServiceTest.java` |
+| Candle domain object — validation and construction | Candle domain object is built and validated correctly | ✅ Unit | `CandleTest.java` |
 
-### Backup y Configuración
+### Backup and Configuration
 
-| Funcionalidad | Descripción usuario | Cobertura | Test files |
+| Feature | User description | Coverage | Test files |
 |---|---|---|---|
-| POST /api/backup — guardar snapshot de settings | La app persiste en el servidor los settings del localStorage como backup | ❌ Sin cobertura | — |
-| GET /live-ui/market-status — estado del mercado | La app retorna la sesión actual (REGULAR/OPEN EXT/CLOSED) y segundos al próximo open | ❌ Sin cobertura | — |
-| GET /live-ui/tws-status — estado de conexión TWS | La UI ve el estado detallado de las 3 conexiones IBKR con auto-reconnect | ❌ Sin cobertura | Solo TwsPaperConnectivityTest requiere TWS real |
+| POST /api/backup — save settings snapshot | App persists localStorage settings to the server as a backup | ❌ No coverage | — |
+| GET /live-ui/market-status — market status | App returns the current session (REGULAR/OPEN EXT/CLOSED) and seconds to next open | ❌ No coverage | — |
+| GET /live-ui/tws-status — TWS connection status | UI sees the detailed status of the 3 IBKR connections with auto-reconnect | ❌ No coverage | Only TwsPaperConnectivityTest requires real TWS |
 
-### Infraestructura y Health
+### Infrastructure and Health
 
-| Funcionalidad | Descripción usuario | Cobertura | Test files |
+| Feature | User description | Coverage | Test files |
 |---|---|---|---|
-| GET /actuator/health — liveness/readiness probes | La app reporta UP con los grupos liveness y readiness | ✅ E2E | `HealthEndpointTest.java` |
-| Conectividad TWS real (paper account) | La app se conecta correctamente a TWS paper y reporta accountConnected=true | ✅ E2E | `TwsPaperConnectivityTest.java` (tag: tws-paper, requiere TWS) |
-| MarketScanner scan scores (scheduled scan) | El scanner programado calcula y almacena scores correctamente al arrancar el scan | ✅ Unit | `MarketScannerScanScoresTest.java` |
+| GET /actuator/health — liveness/readiness probes | App reports UP with liveness and readiness groups | ✅ E2E | `HealthEndpointTest.java` |
+| Real TWS connectivity (paper account) | App connects correctly to TWS paper and reports accountConnected=true | ✅ E2E | `TwsPaperConnectivityTest.java` (tag: tws-paper, requires TWS) |
+| MarketScanner scan scores (scheduled scan) | Scheduled scanner calculates and stores scores correctly at scan start | ✅ Unit | `MarketScannerScanScoresTest.java` |
 
 ---
 
-## Resumen
+## Summary
 
-| Sección | Funcionalidades | ✅ Cubierto | ⚠️ Parcial | ❌ Sin cobertura |
+| Section | Features | ✅ Covered | ⚠️ Partial | ❌ No coverage |
 |---|---|---|---|---|
 | Frontend — Live Dashboard | 31 | 28 (90%) | 2 | 1 |
-| Frontend — Configuración/Settings | 12 | 9 (75%) | 2 | 1 |
+| Frontend — Configuration/Settings | 12 | 9 (75%) | 2 | 1 |
 | Frontend — Backtest | 15 | 14 (93%) | 0 | 1 |
 | **Frontend total** | **58** | **51 (88%)** | **4** | **3** |
 | Backend — Scan Engine | 15 | 8 (53%) | 1 | 6 |
-| Backend — Trading/Órdenes | 10 | 4 (40%) | 0 | 6 |
-| Backend — Posiciones Externas | 6 | 6 (100%) | 0 | 0 |
+| Backend — Trading/Orders | 10 | 4 (40%) | 0 | 6 |
+| Backend — External Positions | 6 | 6 (100%) | 0 | 0 |
 | Backend — Replay Mode | 12 | 12 (100%) | 0 | 0 |
 | Backend — Ticker Config | 8 | 4 (50%) | 1 | 3 |
 | Backend — Backtest Engine | 8 | 8 (100%) | 0 | 0 |
-| Backend — Estrategias | 6 | 3 (50%) | 2 | 1 |
+| Backend — Strategies | 6 | 3 (50%) | 2 | 1 |
 | Backend — Candles | 6 | 2 (33%) | 0 | 4 |
 | Backend — Backup/Infra | 3 | 1 (33%) | 0 | 2 |
 | **Backend total** | **74** | **48 (65%)** | **4** | **22** |
@@ -300,17 +300,17 @@ Múltiples íconos = múltiples capas de cobertura activas.
 
 ---
 
-## Gaps críticos — Riesgo operacional
+## Critical Gaps — Operational Risk
 
 ### Frontend
-1. **`SettingsPage` tabs** — 0% coverage directo de la página
-2. **`useScanSettings`** — branches de error y mock-market sin cubrir
+1. **`SettingsPage` tabs** — 0% direct page coverage
+2. **`useScanSettings`** — error branches and mock-market uncovered
 
-### Backend — CRÍTICO
-1. **`POST /live-ui/execute-signal`** — el flujo end-to-end de ejecución de órdenes a TWS no tiene test de integración
-2. **`GET /live-ui/tws-status`** — el endpoint de estado de conexión con auto-reconnect no tiene test propio
-3. **`POST /api/candles/download*`** (3 endpoints) — falla silenciosa posible en la descarga desde IBKR
-4. **`POST /api/backup`** — el backup de settings del frontend no tiene test
-5. **Toggles de runtime** (scheduler/mock-market/auto-execute/macro-filter/set-risk/set-max-concurrent) — 6 endpoints sin test unitario
-6. **9 estrategias de las 12** — C2–C4, C6, P1–P4, P6 solo cubiertos indirectamente vía backtest engine
-7. **`GET /api/ticker-config/validate`** — fix del BUG en L63 sin test de regresión automatizado
+### Backend — CRITICAL
+1. **`POST /live-ui/execute-signal`** — end-to-end order execution flow to TWS has no integration test
+2. **`GET /live-ui/tws-status`** — connection status endpoint with auto-reconnect has no dedicated test
+3. **`POST /api/candles/download*`** (3 endpoints) — silent failure possible on IBKR download
+4. **`POST /api/backup`** — frontend settings backup has no test
+5. **Runtime toggles** (scheduler/mock-market/auto-execute/macro-filter/set-risk/set-max-concurrent) — 6 endpoints with no unit test
+6. **9 of the 12 strategies** — C2–C4, C6, P1–P4, P6 covered only indirectly via backtest engine
+7. **`GET /api/ticker-config/validate`** — BUG fix at L63 has no automated regression test

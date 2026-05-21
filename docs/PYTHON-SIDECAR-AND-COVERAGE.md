@@ -1,75 +1,75 @@
-# Python sidecar, Streamlit y cobertura (Java + frontend + Python)
+# Python sidecar, Streamlit, and coverage (Java + frontend + Python)
 
-Este documento aclara **para qué sirve el código Python** en el repo, **cómo usarlo** en el día a día, y **cómo leer/ejecutar la cobertura** en los tres lenguajes.
-
----
-
-## Resumen en una frase
-
-- **Java (Spring Boot)** es el **núcleo operativo**: backtest, live, IBKR, grid search, API que consume el **frontend React** empaquetado en el JAR.
-- **Python** es un **sidecar opcional**: servicio FastAPI de **analytics** (indicadores, métricas, Monte Carlo) y un **dashboard Streamlit** que lo consume. **No sustituye** al motor de trading ni al backtest principal.
-- La **cobertura de tests** se mide por separado: JaCoCo (JVM), Vitest+v8 (React), pytest-cov (Python).
+This document explains **what the Python code in this repo is for**, **how to use it** day-to-day, and **how to read/run coverage** across the three languages.
 
 ---
 
-## ¿El Python “es útil” o es ruido?
+## Summary in one sentence
 
-### Cuándo **sí** tiene sentido
-
-| Caso | Qué aporta |
-|------|------------|
-| Experimentar con **indicadores** (SMA, RSI, MACD, etc.) sobre series que vos mandás en JSON | `POST /api/v1/indicators` en el servicio analytics |
-| Calcular **métricas agregadas** sobre listas de trades (Sharpe, Sortino, drawdown, etc.) fuera del flujo Java | `POST /api/v1/metrics` |
-| **Monte Carlo** sobre retornos históricos | `POST /api/v1/monte-carlo` |
-| **Prototipo de UI** en Streamlit (gráficos Plotly) sin tocar React | `python/ui_service` |
-| **Investigación / notebooks mental**: pandas + numpy ya cableados | `analytics_service/engine.py` |
-
-### Cuándo **no** es imprescindible
-
-| Situación | Por qué |
-|-----------|---------|
-| Solo operás **backtest + grid + live** desde la UI React | Todo eso vive en **Java**; el frontend habla con `:9090`, no con Python. |
-| No levantás el sidecar | La app principal sigue funcionando; solo faltan los endpoints `:8001` / Streamlit `:8501`. |
-| Buscás **paridad estricta** con la estrategia en producción | Las reglas de negocio y el motor están en **Java**; Python no es la fuente de verdad. |
-
-En la práctica: Python es **útil si lo usás** para analytics extra o prototipos; si nunca abrís el puerto 8001, **no está “rompiendo” nada**, simplemente es **código opcional** en el mismo monorepo.
+- **Java (Spring Boot)** is the **operational core**: backtest, live, IBKR, grid search, and the API consumed by the **React frontend** packaged in the JAR.
+- **Python** is an **optional sidecar**: a FastAPI **analytics** service (indicators, metrics, Monte Carlo) and a **Streamlit dashboard** that consumes it. It does **not replace** the trading engine or the main backtest.
+- **Test coverage** is measured separately: JaCoCo (JVM), Vitest+v8 (React), pytest-cov (Python).
 
 ---
 
-## Componentes Python en el repo
+## Is Python "useful" or just noise?
 
-### 1. `python/analytics_service/` — FastAPI (puerto por defecto **8001**)
+### When it **does** make sense
 
-- **`engine.py`**: `AnalyticsEngine` — indicadores, métricas de performance, Monte Carlo, grid search de laboratorio (`grid_search_optimization`).
-- **`main.py`**: FastAPI, rutas `/api/v1/indicators`, `/metrics`, `/monte-carlo`, health, y proxies opcionales a Java (`/api/candles/...`, cuenta) **si** el cliente HTTP puede conectar a Spring (`JAVA_API_HOST` / `JAVA_API_PORT`, por defecto `localhost:9090`).
+| Use case | What it provides |
+|----------|-----------------|
+| Experiment with **indicators** (SMA, RSI, MACD, etc.) on series you send as JSON | `POST /api/v1/indicators` in the analytics service |
+| Calculate **aggregate metrics** on trade lists (Sharpe, Sortino, drawdown, etc.) outside the Java flow | `POST /api/v1/metrics` |
+| **Monte Carlo** on historical returns | `POST /api/v1/monte-carlo` |
+| **Streamlit UI prototype** (Plotly charts) without touching React | `python/ui_service` |
+| **Research / mental notebooks**: pandas + numpy already wired up | `analytics_service/engine.py` |
 
-Variables útiles (ejemplos):
+### When it is **not required**
 
-- `JAVA_API_HOST`, `JAVA_API_PORT` — hacia dónde apunta el cliente REST hacia Spring.
-- `PORT` — puerto del propio FastAPI (default `8001`).
+| Situation | Why |
+|-----------|-----|
+| You only run **backtest + grid + live** from the React UI | All of that lives in **Java**; the frontend talks to `:9090`, not Python. |
+| You don't start the sidecar | The main app still works; only the `:8001` / Streamlit `:8501` endpoints are missing. |
+| You need **strict parity** with the production strategy | Business rules and the engine are in **Java**; Python is not the source of truth. |
 
-### 2. `python/ui_service/` — Streamlit (puerto típico **8501**)
-
-- Dashboard que llama al **analytics** en `:8001` (y opcionalmente a Java vía `JAVA_API_URL`).
-- Es una capa de **visualización / experimentación**, no el panel principal de producción (ese es React).
-
-### 3. Arranque conjunto (Windows)
-
-El script `scripts/start-full-stack.ps1` (y la tarea Gradle `startFullStack`) pueden levantar Spring + frontend build + servicios Python según cómo lo tengas configurado. Si solo corrés `./gradlew bootRun` + `npm run dev` en `frontend/`, **no necesitás Python**.
+In practice: Python is **useful if you use it** for extra analytics or prototypes; if you never open port 8001, **nothing is broken** — it's just **optional code** in the same monorepo.
 
 ---
 
-## Cómo ejecutar tests y cobertura
+## Python components in the repo
 
-### Java (JaCoCo, fusionado test + e2e + slow)
+### 1. `python/analytics_service/` — FastAPI (default port **8001**)
+
+- **`engine.py`**: `AnalyticsEngine` — indicators, performance metrics, Monte Carlo, lab grid search (`grid_search_optimization`).
+- **`main.py`**: FastAPI, routes `/api/v1/indicators`, `/metrics`, `/monte-carlo`, health, and optional proxies to Java (`/api/candles/...`, account) **if** the HTTP client can connect to Spring (`JAVA_API_HOST` / `JAVA_API_PORT`, default `localhost:9090`).
+
+Useful environment variables (examples):
+
+- `JAVA_API_HOST`, `JAVA_API_PORT` — where the REST client points toward Spring.
+- `PORT` — port of the FastAPI service itself (default `8001`).
+
+### 2. `python/ui_service/` — Streamlit (typical port **8501**)
+
+- Dashboard that calls **analytics** at `:8001` (and optionally Java via `JAVA_API_URL`).
+- It is a **visualization / experimentation layer**, not the main production panel (that is React).
+
+### 3. Joint startup (Windows)
+
+The `scripts/start-full-stack.ps1` script (and the `startFullStack` Gradle task) can start Spring + frontend build + Python services depending on your configuration. If you only run `./gradlew bootRun` + `npm run dev` in `frontend/`, **you don't need Python**.
+
+---
+
+## How to run tests and coverage
+
+### Java (JaCoCo, merged test + e2e + slow)
 
 ```text
 .\gradlew coverageReport
 ```
 
-Informes: `build/reports/jacoco/test/html/index.html` (y XML para CI).
+Reports: `build/reports/jacoco/test/html/index.html` (and XML for CI).
 
-Tras cambios **medianamente complejos**, conviene correr este flujo completo en local para no romper integración.
+After **moderately complex** changes, it's worth running this full flow locally to avoid breaking integration.
 
 ### Frontend (Vitest + v8)
 
@@ -79,19 +79,19 @@ npm install
 npm run test:coverage
 ```
 
-O desde la raíz del repo:
+Or from the repo root:
 
 ```text
 .\gradlew frontendCoverage
 ```
 
-Informes: `build/reports/coverage-frontend/index.html` (y `lcov.info`).
+Reports: `build/reports/coverage-frontend/index.html` (and `lcov.info`).
 
-**Nota:** Hoy hay tests unitarios de ejemplo (`src/utils/storage.test.js`). El porcentaje **global del bundle** será bajo hasta que añadáis más tests; la UI pesada sigue cubierta sobre todo por **Playwright e2e** en Java (`e2eTest`), no por Vitest.
+**Note:** There are example unit tests (`src/utils/storage.test.js`). The **global bundle** percentage will be low until more tests are added; the heavy UI is still covered mainly by **Playwright e2e** in Java (`e2eTest`), not by Vitest.
 
 ### Python (pytest + pytest-cov)
 
-Desde `python/`:
+From `python/`:
 
 ```text
 cd python
@@ -99,51 +99,51 @@ py -m pip install -r requirements.txt
 py -m pytest analytics_service/test_engine.py --cov=analytics_service --cov-report=html:../build/reports/coverage-python/html
 ```
 
-En Linux/macOS suele usarse `python3` en lugar de `py`.
+On Linux/macOS, use `python3` instead of `py`.
 
-O desde la raíz:
+Or from the root:
 
 ```text
 .\gradlew pythonCoverage
 ```
 
-**Interpretación típica:** `engine.py` tiene cobertura parcial vía tests; `main.py` (FastAPI) suele quedar **0%** hasta que existan tests HTTP (TestClient) o integración. Eso es normal en sidecars sin suite API completa.
+**Typical interpretation:** `engine.py` has partial coverage via tests; `main.py` (FastAPI) often shows **0%** until HTTP tests (TestClient) or integration tests exist. That is normal for sidecars without a complete API test suite.
 
-### Todo junto (largo)
+### Everything in one pass (slow)
 
 ```text
 .\gradlew fullStackCoverage
 ```
 
-Ejecuta, en paralelo donde Gradle pueda: `coverageReport` + `frontendCoverage` + `pythonCoverage`.
+Runs, in parallel where Gradle allows: `coverageReport` + `frontendCoverage` + `pythonCoverage`.
 
 ---
 
-## Dónde mirar los números (referencia rápida)
+## Where to find the numbers (quick reference)
 
-| Stack | Herramienta | Carpeta típica del informe HTML |
-|--------|-------------|----------------------------------|
+| Stack | Tool | Typical HTML report folder |
+|--------|------|---------------------------|
 | Java | JaCoCo | `build/reports/jacoco/test/html/` |
 | React | Vitest (v8) | `build/reports/coverage-frontend/` |
 | Python | pytest-cov | `build/reports/coverage-python/html/` |
 
-Los porcentajes **no son comparables entre lenguajes** (reglas distintas, exclusiones distintas).
+Percentages **are not comparable across languages** (different rules and exclusions).
 
 ---
 
-## Próximos pasos si querés “subir” cobertura
+## Next steps if you want to "raise" coverage
 
-1. **Frontend:** tests de componentes o utilidades puras (`utils/`, helpers); mocks de `fetch` para `api.js`.
-2. **Python:** tests con `httpx.AsyncClient` / `TestClient` sobre `main.py` para rutas críticas; o marcar `main.py` como excluido en `.coveragerc` si decidís no testearlo aún.
-3. **Java:** ya cubierto por la suite existente; el informe fusionado es el de `coverageReport`.
+1. **Frontend:** component tests or pure utilities (`utils/`, helpers); `fetch` mocks for `api.js`.
+2. **Python:** tests with `httpx.AsyncClient` / `TestClient` on `main.py` for critical routes; or mark `main.py` as excluded in `.coveragerc` if you decide not to test it yet.
+3. **Java:** already covered by the existing suite; the merged report is from `coverageReport`.
 
 ---
 
-## Referencias de código
+## Code references
 
 - Analytics FastAPI: `python/analytics_service/main.py`
-- Motor numérico: `python/analytics_service/engine.py`
-- Tests Python: `python/analytics_service/test_engine.py`
-- UI Streamlit: `python/ui_service/main.py`
-- Dependencias: `python/requirements.txt`
-- Tareas Gradle: `build.gradle.kts` (`frontendCoverage`, `pythonCoverage`, `fullStackCoverage`)
+- Numerical engine: `python/analytics_service/engine.py`
+- Python tests: `python/analytics_service/test_engine.py`
+- Streamlit UI: `python/ui_service/main.py`
+- Dependencies: `python/requirements.txt`
+- Gradle tasks: `build.gradle.kts` (`frontendCoverage`, `pythonCoverage`, `fullStackCoverage`)

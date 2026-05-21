@@ -1,91 +1,91 @@
-# Cobertura: exclusiones y comandos
+# Coverage: exclusions and commands
 
-Este repo mide cobertura en **tres capas** (JVM, React unitario, Python). Los porcentajes **no son comparables entre capas** (herramientas y alcance distintos).
+This repo measures coverage in **three layers** (JVM, React unit, Python). Percentages **are not comparable across layers** (different tools and scope).
 
 ---
 
 ## Java (JaCoCo)
 
-Hay **dos informes JVM**:
+There are **two JVM reports**:
 
-| Comando | Qué ejecuta | Informe HTML/XML |
+| Command | What it runs | HTML/XML report |
 |--------|-------------|------------------|
-| `.\gradlew unitCoverageReport` | Solo `:test` + `jacocoUnitOnlyReport` (rápido) | `build/reports/jacoco-unit/html`, `build/reports/jacoco-unit/jacoco.xml` |
-| `.\gradlew coverageReport` | `:test` + `e2eTest` + `slowTest` + `jacocoTestReport` (largo; fusiona todos los `.exec`) | `build/reports/jacoco/test/html` |
+| `.\gradlew unitCoverageReport` | Only `:test` + `jacocoUnitOnlyReport` (fast) | `build/reports/jacoco-unit/html`, `build/reports/jacoco-unit/jacoco.xml` |
+| `.\gradlew coverageReport` | `:test` + `e2eTest` + `slowTest` + `jacocoTestReport` (slow; merges all `.exec` files) | `build/reports/jacoco/test/html` |
 
-El porcentaje del **informe unitario** (~**79 %** instrucciones con el conjunto actual de exclusiones) mide sobre todo `backtest/grid` (servicios de grid), `strategy/utils` y algo de `config`. No pretende cubrir línea a línea IBKR, motor de backtest completo ni REST; eso queda en e2e/slow y en exclusiones documentadas.
+The **unit-only report** percentage (~**79%** instructions with the current exclusion set) primarily covers `backtest/grid` (grid services), `strategy/utils`, and some `config`. It is not intended to cover every line of IBKR, the full backtest engine, or REST; those are handled by e2e/slow tests and documented exclusions.
 
-### Exclusiones del informe (`build.gradle.kts`, `jacocoClassExcludes` + reglas en `jacocoMainClassDirectories()`)
+### Report exclusions (`build.gradle.kts`, `jacocoClassExcludes` + rules in `jacocoMainClassDirectories()`)
 
-No se excluyen de la **compilación** ni de los tests: solo dejan de contar en el **total** del informe JaCoCo donde aplica.
+These are NOT excluded from **compilation** or tests: they only stop counting toward the JaCoCo **total** where applicable.
 
-| Área | Motivo |
+| Area | Reason |
 |------|--------|
-| `OptionsQuantApplication` | Solo arranque Spring Boot |
-| `com.fgiaquinta.optionsquant.dto.*` | DTOs / records de transporte |
-| `com.fgiaquinta.optionsquant.cli.*` | CLI interactivo (`BacktestCli`) |
-| `com.fgiaquinta.optionsquant.infrastructure.*` | Callbacks IBKR; requiere TWS/mocks pesados |
-| `*IbkrProperties`, `*GridSearchProperties`, `*ScannerProperties` (clase externa) | Beans de configuración (getters/setters) |
-| Varios records en `backtest.grid` (p. ej. `GridSearchRequest`, `WalkForwardFoldResult`, …) | DTOs del resultado; la lógica principal sigue en `GridSearchService` / `PromoteRiskService` |
-| `com.fgiaquinta.optionsquant.service/**` | Capa IBKR, escaneo, I/O — validada por e2e / manual |
-| `backtest/engine/**`, `backtest/domain/**`, `domain/**`, `trading/**` | Motor backtest y modelos; ejercidos por slow/e2e |
-| `com.fgiaquinta.optionsquant/controller/**` | REST; superficie HTTP cubierta por WebMvc/e2e, no por objetivo JaCoCo unitario |
-| `CandleDownloader`, `StartupInitializer`, `ChartController` | Arranque / utilidades |
-| `WebConfig$*` | Resolver anónimo del SPA (cubierto por Playwright) |
-| Implementaciones `strategy/*` (no `strategy/utils`, `model`, `data`, `indicator`) | Estrategias ejecutadas vía motor; se mantienen utils compartidos en el informe |
+| `OptionsQuantApplication` | Spring Boot startup only |
+| `com.fgiaquinta.optionsquant.dto.*` | Transport DTOs / records |
+| `com.fgiaquinta.optionsquant.cli.*` | Interactive CLI (`BacktestCli`) |
+| `com.fgiaquinta.optionsquant.infrastructure.*` | IBKR callbacks; requires TWS / heavy mocks |
+| `*IbkrProperties`, `*GridSearchProperties`, `*ScannerProperties` (outer class) | Configuration beans (getters/setters) |
+| Various records in `backtest.grid` (e.g. `GridSearchRequest`, `WalkForwardFoldResult`, …) | Result DTOs; core logic remains in `GridSearchService` / `PromoteRiskService` |
+| `com.fgiaquinta.optionsquant.service/**` | IBKR layer, scanning, I/O — validated by e2e / manual |
+| `backtest/engine/**`, `backtest/domain/**`, `domain/**`, `trading/**` | Backtest engine and models; exercised by slow/e2e |
+| `com.fgiaquinta.optionsquant/controller/**` | REST; HTTP surface covered by WebMvc/e2e, not by JaCoCo unit target |
+| `CandleDownloader`, `StartupInitializer`, `ChartController` | Startup / utilities |
+| `WebConfig$*` | Anonymous SPA resolver (covered by Playwright) |
+| `strategy/*` implementations (excluding `strategy/utils`, `model`, `data`, `indicator`) | Strategies run via engine; shared utils kept in the report |
 
 ---
 
 ## Frontend (Vitest + v8)
 
-**Comando:** `cd frontend && npm run test:coverage` o `.\gradlew frontendCoverage`  
-Informe: `build/reports/coverage-frontend/`
+**Command:** `cd frontend && npm run test:coverage` or `.\gradlew frontendCoverage`  
+Report: `build/reports/coverage-frontend/`
 
-### Alcance
+### Scope
 
-Solo se incluyen en el informe:
+Only these are included in the report:
 
-- `src/api.js` — cliente HTTP hacia Spring  
-- `src/utils/**/*.js` — utilidades puras  
+- `src/api.js` — HTTP client toward Spring  
+- `src/utils/**/*.js` — pure utilities  
 
-**Excluido a propósito:** `pages/`, `components/`, `App.jsx`, `main.jsx` — la UI se valida con **Playwright** en la suite JVM (`e2eTest`), no con tests de componentes React.
+**Intentionally excluded:** `pages/`, `components/`, `App.jsx`, `main.jsx` — the UI is validated with **Playwright** in the JVM suite (`e2eTest`), not with React component tests.
 
 ---
 
 ## Python (pytest-cov)
 
-**Comando:** `cd python && py -m pytest analytics_service --cov=analytics_service --cov-config=.coveragerc`  
-o `.\gradlew pythonCoverage`
+**Command:** `cd python && py -m pytest analytics_service --cov=analytics_service --cov-config=.coveragerc`  
+or `.\gradlew pythonCoverage`
 
-Config: `python/.coveragerc` (omite tests y `__init__.py`).
+Config: `python/.coveragerc` (omits tests and `__init__.py`).
 
-### Notas
+### Notes
 
-- Objetivo en CI/local: **`analytics_service` al 100 %** de líneas y ramas (`pytest-cov` con branch coverage), vía `test_engine.py` (motor) y `test_main.py` (FastAPI + `JavaApiClient`). El `try` de conexión best-effort al importar el módulo usa `# pragma: no cover`.
-- `analytics_service/main.py`: tests HTTP con `TestClient` y mocks de `java_client`.  
-- `ui_service` (Streamlit) **no** está en el paquete `analytics_service`; no entra en este informe (UI exploratoria, sin tests automatizados aquí).
+- CI/local target: **`analytics_service` at 100%** lines and branches (`pytest-cov` with branch coverage), via `test_engine.py` (engine) and `test_main.py` (FastAPI + `JavaApiClient`). The best-effort connection `try` on module import uses `# pragma: no cover`.
+- `analytics_service/main.py`: HTTP tests with `TestClient` and `java_client` mocks.  
+- `ui_service` (Streamlit) is **not** part of the `analytics_service` package; it is not included in this report (exploratory UI, no automated tests here).
 
-### Cambios útiles para JSON
+### Useful notes for JSON
 
-- Respuesta de indicadores: serialización segura de `NaN`/`Inf` vía `DataFrame.to_json` + `json.loads`.  
-- Métricas: valores numéricos nativos de Python y `profit_factor` infinito → `null` en JSON.
+- Indicator response: safe serialization of `NaN`/`Inf` via `DataFrame.to_json` + `json.loads`.  
+- Metrics: native Python numeric values and infinite `profit_factor` → `null` in JSON.
 
 ---
 
-## Todo en una pasada
+## Everything in one pass
 
-**Rápido (recomendado en local/CI):** JVM unit-only + Vitest + Python
+**Fast (recommended for local/CI):** JVM unit-only + Vitest + Python
 
 ```text
 .\gradlew fullStackCoverage
 ```
 
-Equivale a `unitCoverageReport` + `frontendCoverage` + `pythonCoverage` (sin `slowTest`).
+Equivalent to `unitCoverageReport` + `frontendCoverage` + `pythonCoverage` (without `slowTest`).
 
-**Largo (noche / cuando quieras fusionar e2e+slow en JaCoCo):**
+**Slow (nightly / when you want to merge e2e+slow into JaCoCo):**
 
 ```text
 .\gradlew coverageReport frontendCoverage pythonCoverage
 ```
 
-o `.\gradlew fullStackCoverageMerged`.
+or `.\gradlew fullStackCoverageMerged`.

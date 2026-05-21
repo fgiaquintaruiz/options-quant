@@ -3,11 +3,11 @@
 Files without automated tests — justification and mitigation plan.
 
 ## frontend/src/components/SignalChart.jsx (agregado 2026-05-18)
-- `lightweight-charts` usa DOM directo (canvas/WebGL) — no testeable con jsdom
-- Estrategia: mock completo del módulo en `SignalChart.test.jsx` via `vi.hoisted()` (necesario porque `vi.mock` se hoist al top del archivo y las variables `const` no estarían disponibles aún)
-- Los tests verifican que se llaman los métodos de la API del chart con los argumentos correctos (8 tests, 100% de casos de uso cubiertos)
-- Visual regression requiere E2E con browser real (Playwright)
-- `calcBollingerBands` es función pura — 100% testeable si se extrae a `utils/`
+- `lightweight-charts` uses DOM directly (canvas/WebGL) — not testable with jsdom
+- Strategy: full module mock in `SignalChart.test.jsx` via `vi.hoisted()` (required because `vi.mock` is hoisted to the top of the file and `const` variables would not be available yet)
+- Tests verify that chart API methods are called with the correct arguments (8 tests, 100% use cases covered)
+- Visual regression requires E2E with a real browser (Playwright)
+- `calcBollingerBands` is a pure function — 100% testable if extracted to `utils/`
 
 ## frontend/src/pages/StrategiesPage.css
 - **Why no tests**: Visual/layout styling only — no logic, state, or behavior

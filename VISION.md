@@ -1,40 +1,40 @@
-# Visión del producto (uso personal)
+# Product Vision (personal use)
 
-Documento vivo de una página: prioridades y límites. Actualizar cuando cambie el foco.
+Living one-page document: priorities and boundaries. Update whenever the focus changes.
 
-## Qué problema resuelve
+## Problem it solves
 
-Motor de trading asistido contra **Interactive Brokers (TWS/Gateway)**: escanear tickers, señales, gestión de riesgo, backtests y una **SPA** (live / backtest / health) servida por Spring en `:9090`.
+Assisted trading engine against **Interactive Brokers (TWS/Gateway)**: scan tickers, detect signals, manage risk, run backtests, and serve a **SPA** (live / backtest / health) from Spring on `:9090`.
 
-## Qué no es (por ahora)
+## What it is NOT (for now)
 
-- No es un producto multi-tenant ni un servicio SaaS.
-- No sustituye criterio humano ni due diligence; las pérdidas son responsabilidad operativa.
-- No garantiza rentabilidad ni datos de mercado fuera de lo que IBKR y el propio código entreguen.
+- Not a multi-tenant product or SaaS service.
+- Does not replace human judgment or due diligence; losses are the operator's responsibility.
+- Does not guarantee profitability or market data beyond what IBKR and the code itself deliver.
 
-## Modos operativos
+## Operating modes
 
-| Modo | Idea |
-|------|------|
-| **Paper / sim** | Puerto y cuenta de paper en TWS; validar flujos sin dinero real. |
-| **Live** | Solo cuando configuración, riesgo y límites estén explícitamente revisados. |
+| Mode | Description |
+|------|-------------|
+| **Paper / sim** | TWS paper port and account; validate flows without real money. |
+| **Live** | Only when configuration, risk, and limits have been explicitly reviewed. |
 
-La fuente de verdad de host/puerto/cuenta es `application.yml` (y lo que marque TWS).
+The source of truth for host/port/account is `application.yml` (and whatever TWS shows).
 
-## Definición de “suficientemente bien” (criterios personales)
+## Definition of "good enough" (personal criteria)
 
-Marcar o reescribir según evolucione el proyecto:
+Check or rewrite as the project evolves:
 
-- [ ] Arranque local predecible: backend + frontend empaquetado o `npm run dev` documentado.
-- [ ] UI live: ver estado de escaneo, señales y controles sin errores bloqueantes.
-- [ ] UI backtest: lanzar / parar / ver progreso o resultados según lo implementado.
-- [ ] Conexión IBKR: comportamiento claro **con TWS apagado** (errores controlados) y **con TWS encendido** (datos u órdenes según configuración).
-- [ ] Tests automatizados que yo confíe para no romper lo crítico al cambiar código.
+- [ ] Predictable local startup: backend + packaged frontend or `npm run dev` documented.
+- [ ] Live UI: view scan status, signals, and controls without blocking errors.
+- [ ] Backtest UI: launch / stop / view progress or results as implemented.
+- [ ] IBKR connection: clear behavior **with TWS off** (controlled errors) and **with TWS on** (data or orders per configuration).
+- [ ] Automated tests I trust to avoid breaking critical paths when changing code.
 
-## Decisiones técnicas que valen la pena documentar aparte
+## Technical decisions worth documenting separately
 
-Si una elección es costosa de deshacer (ej. modelo de órdenes, reintentos IBKR, límites de riesgo), un **ADR** corto en `.atl/` o `docs/adr/` basta; no hace falta un RFC formal.
+If a choice is costly to undo (e.g. order model, IBKR retries, risk limits), a short **ADR** in `.atl/` or `docs/adr/` is enough; no formal RFC needed.
 
-## Última revisión
+## Last reviewed
 
-Fecha: (completar al editar)
+Date: (fill in when editing)

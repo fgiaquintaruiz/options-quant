@@ -109,8 +109,8 @@ GET /api/v1/historical/{ticker}?from=YYYY-MM-DD&to=YYYY-MM-DD&interval=1d
 
 The `to` date must match the **period end**, not the chunk end. If you see `to` dates that extend beyond the configured period boundary, trimming is broken.
 
-> **⚠️ Sidecar URL es INTERNO**: `GET /api/v1/historical/{ticker}` que aparece en los logs del sidecar es llamado por Java internamente. No lo llames directamente desde Postman.
-> Para consultar candles históricos desde SQLite, usá el endpoint Java: `GET /api/v1/historical/{ticker}?from=YYYY-MM-DD&to=YYYY-MM-DD&interval=1d`
+> **⚠️ Sidecar URL is INTERNAL**: `GET /api/v1/historical/{ticker}` shown in sidecar logs is called by Java internally. Do not call it directly from Postman.
+> To query historical candles from SQLite, use the Java endpoint: `GET /api/v1/historical/{ticker}?from=YYYY-MM-DD&to=YYYY-MM-DD&interval=1d`
 
 ### SQLite
 
@@ -162,30 +162,30 @@ The `to` date sent to yfinance is outside the valid range or in the future. Chec
 
 ---
 
-## Clientes SQLite
+## SQLite Clients
 
-Para inspeccionar `data/candles.db` localmente:
+To inspect `data/candles.db` locally:
 
-1. **DB Browser for SQLite (DB4S)** — GUI, gratis, cero config. Recomendado.
-   - Descarga: https://sqlitebrowser.org
-   - Conectar: File → Open Database → `data/candles.db`
+1. **DB Browser for SQLite (DB4S)** — GUI, free, zero config. Recommended.
+   - Download: https://sqlitebrowser.org
+   - Connect: File → Open Database → `data/candles.db`
 
-2. **DBeaver Community** — SQL editor completo + soporte multi-DB. Más pesado, útil si ya lo tenés instalado.
-   - Conectar: New Connection → SQLite → seleccionar `data/candles.db`
+2. **DBeaver Community** — Full SQL editor + multi-DB support. Heavier, useful if you already have it installed.
+   - Connect: New Connection → SQLite → select `data/candles.db`
 
-3. **SQLiteOnline.com** — browser, sin instalar, drag & drop del `.db`. Para consultas rápidas sin instalar nada.
+3. **SQLiteOnline.com** — browser-based, no install, drag & drop the `.db` file. For quick queries without installing anything.
 
-> **Nota**: el archivo `data/candles.db` está en el directorio raíz del proyecto. Si corrés la app desde IntelliJ, el working directory apunta ahí por defecto.
+> **Note**: the `data/candles.db` file is in the project root directory. If you run the app from IntelliJ, the working directory points there by default.
 
 ---
 
-## Consultas útiles (SQLite)
+## Useful Queries (SQLite)
 
-Ejecutar en DB Browser for SQLite o cualquier cliente SQLite conectado a `data/candles.db`.
+Run in DB Browser for SQLite or any SQLite client connected to `data/candles.db`.
 
-> **Nota sobre timestamps**: `last_chunk_end_ts`, `updated_at` y `ts_epoch` están almacenados en **epoch seconds** (no milliseconds). Usar `datetime(col, 'unixepoch')` directamente, sin dividir por 1000.
+> **Timestamp note**: `last_chunk_end_ts`, `updated_at`, and `ts_epoch` are stored in **epoch seconds** (not milliseconds). Use `datetime(col, 'unixepoch')` directly, without dividing by 1000.
 
-### Schema de referencia
+### Reference Schema
 
 ```sql
 -- candles: datos OHLCV
@@ -212,9 +212,9 @@ CREATE TABLE download_progress (
 );
 ```
 
-### View: timestamps legibles
+### View: human-readable timestamps
 
-Ejecutar una sola vez para crear la view:
+Run once to create the view:
 
 ```sql
 CREATE VIEW IF NOT EXISTS download_progress_readable AS
@@ -227,14 +227,14 @@ SELECT
 FROM download_progress;
 ```
 
-Luego consultar:
+Then query:
 
 ```sql
 SELECT * FROM download_progress_readable
 ORDER BY ticker, timeframe;
 ```
 
-### View: candles con fecha legible
+### View: candles with human-readable dates
 
 ```sql
 CREATE VIEW IF NOT EXISTS candles_readable AS
@@ -247,9 +247,9 @@ SELECT
 FROM candles;
 ```
 
-Ejemplo de uso:
+Example usage:
 ```sql
--- Candles AAPL DAY_1 en período 2008 crisis
+-- AAPL DAY_1 candles during the 2008 crisis period
 SELECT date_only, open, high, low, close, volume
 FROM candles_readable
 WHERE ticker = 'AAPL'
@@ -258,13 +258,13 @@ WHERE ticker = 'AAPL'
 ORDER BY date_only;
 ```
 
-### Verificar datos de un ticker en un período
+### Verify data for a ticker in a period
 
 ```sql
--- Verificar datos en candles
+-- Check data in candles
 SELECT COUNT(*)              AS total_candles,
-       datetime(MIN(ts_epoch), 'unixepoch', 'localtime') AS desde,
-       datetime(MAX(ts_epoch), 'unixepoch', 'localtime') AS hasta
+       datetime(MIN(ts_epoch), 'unixepoch', 'localtime') AS from_date,
+       datetime(MAX(ts_epoch), 'unixepoch', 'localtime') AS to_date
 FROM candles
 WHERE ticker    = 'AAPL'
   AND timeframe = 'DAY_1'
@@ -272,15 +272,15 @@ WHERE ticker    = 'AAPL'
                    AND strftime('%s', '2009-03-31');
 ```
 
-Resultado:
-- `total_candles > 0` → datos presentes
-- `total_candles = 0` + status `COMPLETE_EMPTY` en download_progress → yfinance procesó el chunk pero no había datos
-- `total_candles = 0` + sin fila en download_progress → chunk nunca fue procesado
+Result:
+- `total_candles > 0` → data present
+- `total_candles = 0` + status `COMPLETE_EMPTY` in download_progress → yfinance processed the chunk but returned no data
+- `total_candles = 0` + no row in download_progress → chunk was never processed
 
-### Ver estado de descarga por ticker
+### View download status by ticker
 
 ```sql
--- Verificar estado de checkpoint
+-- Check checkpoint status
 SELECT ticker,
        timeframe,
        status,
@@ -291,10 +291,10 @@ WHERE ticker    = 'AAPL'
 ORDER BY last_chunk_end_ts;
 ```
 
-### Encontrar chunks vacíos (COMPLETE_EMPTY)
+### Find empty chunks (COMPLETE_EMPTY)
 
 ```sql
--- Chunks que yfinance procesó pero devolvió vacío
+-- Chunks that yfinance processed but returned empty
 SELECT ticker,
        timeframe,
        datetime(last_chunk_end_ts, 'unixepoch', 'localtime') AS chunk_end
@@ -305,37 +305,37 @@ ORDER BY ticker, timeframe, last_chunk_end_ts;
 
 ---
 
-## Consultar datos (SQLite CLI)
+## Querying Data (SQLite CLI)
 
-> **Requisito**: cerrá DB Browser for SQLite antes de correr cualquier query — ver [Acceso concurrente](#acceso-concurrente).
+> **Prerequisite**: close DB Browser for SQLite before running any query — see [Concurrent Access](#concurrent-access).
 
-### Tickers y timeframes disponibles
+### Available tickers and timeframes
 
 ```bash
-# Tickers únicos en la base
+# Unique tickers in the database
 sqlite3 data/candles.db "SELECT DISTINCT ticker FROM candles ORDER BY ticker;"
 
-# Conteo por ticker + timeframe
+# Count by ticker + timeframe
 sqlite3 data/candles.db "SELECT ticker, timeframe, COUNT(*) as total FROM candles GROUP BY ticker, timeframe ORDER BY ticker, timeframe;"
 ```
 
-### Últimas N velas de un ticker
+### Last N candles for a ticker
 
 ```bash
 sqlite3 -column -header data/candles.db "
-SELECT datetime(ts_epoch, 'unixepoch') as fecha, open, high, low, close, volume
+SELECT datetime(ts_epoch, 'unixepoch') as date, open, high, low, close, volume
 FROM candles
 WHERE ticker = 'AAPL' AND timeframe = 'DAY_1'
 ORDER BY ts_epoch DESC LIMIT 20;"
 ```
 
-Valores válidos para `timeframe`: `MIN_5` | `MIN_15` | `HOUR_1` | `DAY_1`
+Valid values for `timeframe`: `MIN_5` | `MIN_15` | `HOUR_1` | `DAY_1`
 
-### Filtro por ticker + timeframe + rango de fechas
+### Filter by ticker + timeframe + date range
 
 ```bash
 sqlite3 -column -header data/candles.db "
-SELECT datetime(ts_epoch, 'unixepoch') as fecha, open, high, low, close, volume
+SELECT datetime(ts_epoch, 'unixepoch') as date, open, high, low, close, volume
 FROM candles
 WHERE ticker = 'AAPL'
   AND timeframe = 'MIN_5'
@@ -343,11 +343,11 @@ WHERE ticker = 'AAPL'
 ORDER BY ts_epoch;"
 ```
 
-### Filtro con fecha y hora exacta
+### Filter by exact date and time
 
 ```bash
 sqlite3 -column -header data/candles.db "
-SELECT datetime(ts_epoch, 'unixepoch') as fecha, open, high, low, close, volume
+SELECT datetime(ts_epoch, 'unixepoch') as date, open, high, low, close, volume
 FROM candles
 WHERE ticker = 'AAPL'
   AND timeframe = 'HOUR_1'
@@ -356,53 +356,53 @@ WHERE ticker = 'AAPL'
 ORDER BY ts_epoch;"
 ```
 
-### Estado del checkpoint por ticker
+### Checkpoint status by ticker
 
 ```bash
 sqlite3 -column -header data/candles.db "
 SELECT ticker, timeframe, status,
-       datetime(last_chunk_end_ts, 'unixepoch') as ultimo_chunk,
-       datetime(updated_at, 'unixepoch') as actualizado
+       datetime(last_chunk_end_ts, 'unixepoch') as last_chunk,
+       datetime(updated_at, 'unixepoch') as updated
 FROM download_progress
 WHERE ticker = 'AAPL'
 ORDER BY timeframe;"
 ```
 
-### Exportar a CSV
+### Export to CSV
 
 ```bash
 sqlite3 -csv -header data/candles.db "
-SELECT datetime(ts_epoch,'unixepoch') as fecha, open, high, low, close, volume
+SELECT datetime(ts_epoch,'unixepoch') as date, open, high, low, close, volume
 FROM candles WHERE ticker='AAPL' AND timeframe='DAY_1'
 ORDER BY ts_epoch;" > aapl_daily.csv
 ```
 
 ---
 
-## Acceso concurrente
+## Concurrent Access
 
-SQLite es una base de datos **file-based con un solo writer a la vez**. El archivo `data/candles.db` no puede ser abierto por dos procesos simultáneamente si alguno necesita escribir.
+SQLite is a **file-based database with a single writer at a time**. The `data/candles.db` file cannot be opened by two processes simultaneously if either needs to write.
 
-### Regla
+### Rules
 
-| Situación | Resultado |
-|-----------|-----------|
-| App corriendo + DB Browser abierto | `SQLITE_BUSY` — la app no arranca |
-| App corriendo + `sqlite3` CLI (read-only) | ✅ OK en WAL mode |
-| App corriendo sola | ✅ OK |
-| DB Browser solo | ✅ OK |
+| Situation | Result |
+|-----------|--------|
+| App running + DB Browser open | `SQLITE_BUSY` — app fails to start |
+| App running + `sqlite3` CLI (read-only) | ✅ OK in WAL mode |
+| App running alone | ✅ OK |
+| DB Browser alone | ✅ OK |
 
-**Siempre cerrá DB Browser before de correr `bootRun` o cualquier tarea de backfill.**
+**Always close DB Browser before running `bootRun` or any backfill task.**
 
-### Si la app no arranca con SQLITE_BUSY
+### If the app fails to start with SQLITE_BUSY
 
-1. Cerrá DB Browser (o cualquier herramienta con el archivo abierto)
-2. Limpiá el WAL huérfano:
+1. Close DB Browser (or any tool that has the file open)
+2. Clean up the orphaned WAL:
    ```bash
    sqlite3 data/candles.db "PRAGMA wal_checkpoint(TRUNCATE);"
    ```
-3. Reintentá `./gradlew bootRun --args='--backfill'`
+3. Retry `./gradlew bootRun --args='--backfill'`
 
-### Por qué ocurre
+### Why this happens
 
-Cuando DB Browser (u otra herramienta) abre `candles.db`, mantiene una conexión activa con lock a nivel OS. Spring Boot + HikariCP trata de conectarse al mismo archivo y SQLite retorna `SQLITE_BUSY` (error code 5) inmediatamente, antes de que el `busy_timeout` configurado pueda ayudar.
+When DB Browser (or another tool) opens `candles.db`, it keeps an active connection with an OS-level lock. Spring Boot + HikariCP tries to connect to the same file and SQLite immediately returns `SQLITE_BUSY` (error code 5), before the configured `busy_timeout` can help.
