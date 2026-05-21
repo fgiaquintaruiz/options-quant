@@ -57,6 +57,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 /**
  * Core backtest engine.
@@ -498,11 +499,14 @@ public class BacktestEngine {
      */
     private ResumeState loadResumeState(BacktestConfig config, boolean resumeFromCheckpoint) {
         final Set<String> alreadyProcessed = new LinkedHashSet<>();
-        List<TradeRecord> resumedTrades = new ArrayList<>();
-
         if (resumeFromCheckpoint && hasCheckpoint()) {
             alreadyProcessed.addAll(loadCheckpoint());
-            resumedTrades = loadTradesForTickers(alreadyProcessed);
+        }
+        final List<TradeRecord> resumedTrades = (resumeFromCheckpoint && !alreadyProcessed.isEmpty())
+                ? loadTradesForTickers(alreadyProcessed)
+                : List.of();
+
+        if (resumeFromCheckpoint && !alreadyProcessed.isEmpty()) {
             log.info("📊 Resume mode: {} tickers already processed, {} trades loaded from CSV",
                     alreadyProcessed.size(), resumedTrades.size());
         }
@@ -570,10 +574,7 @@ public class BacktestEngine {
             List<TradeRecord> resumedTrades, List<TradeRecord> newTrades, long startTime) {
         final long elapsed = System.currentTimeMillis() - startTime;
 
-        List<TradeRecord> allTrades = new ArrayList<>();
-        allTrades.addAll(resumedTrades);
-        allTrades.addAll(newTrades);
-        allTrades = allTrades.stream()
+        final List<TradeRecord> allTrades = Stream.concat(resumedTrades.stream(), newTrades.stream())
                 .sorted(Comparator.comparing(TradeRecord::entryTime))
                 .toList();
 
@@ -1113,8 +1114,8 @@ public class BacktestEngine {
         double sharpeSqSum = 0;
         int wins = 0, losses = 0;
         double avgDurationSum = 0;
-        Map<String, Accum> strategyAccum = new HashMap<>();
-        Map<String, Accum> tickerAccum = new HashMap<>();
+        final Map<String, Accum> strategyAccum = new HashMap<>();
+        final Map<String, Accum> tickerAccum = new HashMap<>();
 
         for (TradeRecord t : trades) {
             double pnl = t.netPnl();
