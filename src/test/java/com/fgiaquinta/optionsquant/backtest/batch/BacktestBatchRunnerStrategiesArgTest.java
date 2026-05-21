@@ -14,8 +14,6 @@ import org.mockito.quality.Strictness;
 import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -24,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -87,7 +86,7 @@ class BacktestBatchRunnerStrategiesArgTest {
         runner.run(new DefaultApplicationArguments(
                 "--backtest-all", "--strategies=c4,p4"));
 
-        org.mockito.Mockito.verify(backtestEngine).run(configCaptor.capture());
+        verify(backtestEngine).run(configCaptor.capture());
         BacktestConfig config = configCaptor.getValue();
 
         assertThat(config.strategyFilter())
@@ -119,7 +118,7 @@ class BacktestBatchRunnerStrategiesArgTest {
 
         runner.run(new DefaultApplicationArguments("--backtest-all"));
 
-        org.mockito.Mockito.verify(backtestEngine).run(configCaptor.capture());
+        verify(backtestEngine).run(configCaptor.capture());
         BacktestConfig config = configCaptor.getValue();
 
         assertThat(config.strategyFilter()).isNull();
