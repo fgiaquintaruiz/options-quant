@@ -932,7 +932,7 @@ public class BacktestEngine {
         for (TradingStrategy strategy : strategies) {
             try {
                 if (config.strategyFilter() != null &&
-                        !config.strategyFilter().contains(strategy.getClass().getSimpleName())) {
+                        !config.strategyFilter().contains(strategy.getCode())) {
                     continue;
                 }
                 if (!strategy.isTriggered(ticker, data, nyTime)) continue;

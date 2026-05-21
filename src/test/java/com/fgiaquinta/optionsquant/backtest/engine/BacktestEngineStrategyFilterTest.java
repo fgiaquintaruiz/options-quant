@@ -31,7 +31,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * TDD — RED/GREEN tests for strategyFilter in BacktestConfig.
  *
  * <p>When strategyFilter is non-null, BacktestEngine must skip any strategy whose
- * simple class name is NOT in the filter list. When null, all strategies run as before.
+ * {@link com.fgiaquinta.optionsquant.strategy.TradingStrategy#getCode()} is NOT in the filter list.
+ * When null, all strategies run as before.
  */
 class BacktestEngineStrategyFilterTest {
 
@@ -50,17 +51,17 @@ class BacktestEngineStrategyFilterTest {
     }
 
     // =========================================================================
-    // T1 — strategyFilter = ["StrategyA"] → only StrategyA runs, StrategyB is skipped
+    // T1 — strategyFilter = ["strategya"] → only StrategyA runs, StrategyB is skipped
     //
     // Two strategies: StrategyA always triggers, StrategyB always triggers.
-    // With filter = ["StrategyA"], only StrategyA trades should appear.
+    // With filter = ["strategya"] (getCode() value), only StrategyA trades should appear.
     // =========================================================================
     @Test
     void runBacktest_withStrategyFilter_onlyRunsFilteredStrategies() {
         ZonedDateTime signalTime = DATE.atTime(10, 0).atZone(NY);
         Map<TimeFrame, List<Candle>> data = buildBaseDataEndingAt(signalTime, 100.0);
 
-        BacktestConfig config = configWithFilter(List.of("StrategyA"));
+        BacktestConfig config = configWithFilter(List.of("strategya"));
 
         CandleRepository stubRepo = new StubCandleRepository(TICKER, data);
         BacktestEngine engine = new BacktestEngine(
@@ -175,6 +176,8 @@ class BacktestEngineStrategyFilterTest {
         }
         @Override
         public String getName() { return "StrategyA"; }
+        @Override
+        public String getCode() { return "strategya"; }
     }
 
     private static final class StrategyB implements TradingStrategy {
@@ -186,6 +189,8 @@ class BacktestEngineStrategyFilterTest {
         }
         @Override
         public String getName() { return "StrategyB"; }
+        @Override
+        public String getCode() { return "strategyb"; }
     }
 
     // =========================================================================
