@@ -91,6 +91,17 @@ starts it automatically.
 
 ---
 
+### OptionChainRecorder — RESOLVED (2026-05-20)
+
+- 4 test files previously excluded from `compileTestJava` (tests were written before implementation)
+- Production code now implemented: `OptionChainSnapshotRow`, `OptionChainSnapshotRepository`,
+  `SqliteOptionChainSnapshotRepository`, `OptionChainSchemaInitializer`, `OptionChainIbkrGateway`,
+  `OptionChainRecorderService`, `OptionChainScheduler`, `OptionChainAsyncConfig`,
+  `NoOpOptionChainIbkrGateway` + `MarketScanner` signal-time hook
+- 22 tests now passing; `build.gradle.kts` exclude block removed
+
+---
+
 ### BacktestEngine.java — Pre-existing architectural debt (2026-05-20)
 
 - **isCall derived from class name string matching** — `runStrategies()` uses

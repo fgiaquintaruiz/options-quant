@@ -16,6 +16,9 @@
 ## Hitos cumplidos
 
 ### Infrastructure
+- ✅ BacktestEngine Refactor 1: TradingStrategy.isCall() interface method (replaces string matching)
+- ✅ BacktestEngine Refactor 2: computeReportStats extracted (no duplication)
+- ✅ BacktestEngine Refactor 3: split runCore into single-responsibility methods
 - ✅ Bug crítico paginación Polygon arreglado (commit f8342b5)
 - ✅ Stooq DAY_1 migration + DROP table + VACUUM (24M filas archivadas)
 - ✅ Tabla materializada ticker_stats (1000× speedup en filter queries)
@@ -74,16 +77,29 @@
 ### P1 — Esta semana (nuevas, 2026-05-19 evening)
 
 - ✅ **Investigar y decidir SignalQualityFilter** — backtest no lo aplica, replay/live sí; puede explicar 0 señales en replay. Decidir: agregar al backtest o quitar del replay.
-- [ ] **Investigar c4/p4 opening** — BacktestEngine fuerza entry window 9:45 ET, c4/p4 requieren 9:30 ET; posiblemente nunca se evalúan en backtest. Verificar y corregir.
-- [ ] **Implementar Condition logging en 12 estrategias** — POC completado en P1Squeeze; extender a todas. Permite debug de qué condición falla por ticker.
+- ✅ **Investigar c4/p4 opening** — BacktestEngine fuerza entry window 9:45 ET, c4/p4 requieren 9:30 ET; posiblemente nunca se evalúan en backtest. Verificar y corregir.
+- ✅ **Implementar Condition logging en 12 estrategias** — POC completado en P1Squeeze; extendido a todas (12/12 done). Permite debug de qué condición falla por ticker.
 - [ ] **Visualización profunda por señal** — 2 charts (daily+1h, 1h+15m) con SMA/BB/TP/SL. Diseño pendiente.
 
 ### P1 — Pendientes operativos (2026-05-20)
 
 - ⏸️ **Backtest c4/p4 opening con entry window 9:30-9:36 ET** — script listo en `scripts/run-backtest-c4-p4.ps1`, Fabio ejecuta manualmente
+- [ ] **Fix Bug**: manual execute silently fails on stale signals — add isMarketHours() guard + frontend badge disable
+- [ ] **Fix Bug**: no Telegram notification on manual order execution
+- [ ] **Fix Bug**: EXITED status without Entry timestamp — guard close-trade against non-executed signals
 - ✅ **Decidir sobre SignalQualityFilter** — no proviene del libro de the course author, sin tests, estrategias ya tienen filtros propios; opciones: (a) remover de live/replay, (b) agregar al backtest también, (c) mover inside cada estrategia — removido de live/replay path (f63b0b0, 8d9fd78)
 - [ ] **Extender Condition logging a las 11 estrategias restantes** — POC listo en P1/C1 Squeeze
 - [ ] **Implementar MultiTimeframeChart 1h+15m side-by-side**
+
+### P1 INMEDIATO — Live trading bugs + Option Chain Recorder
+
+- [ ] Fix 3 bugs live trading (ver arriba — bugs identificados 2026-05-20)
+- [ ] Option Chain Recorder — OptionChainSnapshotService async, 16 tickers, ATM±5 strikes, expiry ~48h, cada 15min 9:30-16:00 ET + cada 5min 9:30-9:40 ET, tabla option_chain_snapshot
+
+### P1 SIGUIENTE — Pricing + Condition logging
+
+- [ ] Black-Scholes pricing model en BacktestEngine — reemplazar OPTIONS_DELTA=0.50 hardcoded con N(d1) usando IV por ticker configurable, DTE calculado, risk-free rate 4.5%
+- [ ] Condition logging extender a c3-p3 / c4-p4 / c5-p5 / c6-p6 (POC listo en P1/C1)
 
 ### P1 CRÍTICO — Pricing de opciones (2026-05-20)
 
@@ -101,6 +117,8 @@
 - [ ] Evaluar habilitar MIN_5 para tickers tácticos (c4/p4) — considerar MIN_5 específicamente para estrategias de apertura
 - [ ] Revisar CLAUDE_ANALYSIS.md overfitting analysis — reorientación filosófica pendiente según risk philosophy de the course author; no es un bug, es decisión estratégica
 - [ ] Decidir inclusión de strategy.config en JaCoCo o formalizar exclusión — exclusión actual documentada en testing-debt.md; definir si entra al coverage gate
+- [ ] IV histórica gratuita por ticker — Yahoo Finance / CBOE VIX data; calibrar IV config por ticker
+- [ ] Calibración Black-Scholes contra option_chain_snapshot — 3 meses de datos mínimo para validación
 - [ ] Revisar gestión de riesgo: worst trades de -$1500 son excesivos
 - [ ] Implementar threshold dinámico en ticker_stats (para tickers nuevos con poca data)
 - [ ] Re-correr backtest con universo focal (16 tickers) y rango 2020+
