@@ -1,7 +1,7 @@
 # Roadmap — Options Quant Engine
 
 > Plan estratégico vivo. Se actualiza al final de cada sesión.
-> Última actualización: 2026-05-20
+> Última actualización: 2026-05-21
 
 ## Estado actual
 
@@ -84,22 +84,25 @@
 ### P1 — Pendientes operativos (2026-05-20)
 
 - ⏸️ **Backtest c4/p4 opening con entry window 9:30-9:36 ET** — script listo en `scripts/run-backtest-c4-p4.ps1`, Fabio ejecuta manualmente
-- [ ] **Fix Bug**: manual execute silently fails on stale signals — add isMarketHours() guard + frontend badge disable
-- [ ] **Fix Bug**: no Telegram notification on manual order execution
-- [ ] **Fix Bug**: EXITED status without Entry timestamp — guard close-trade against non-executed signals
 - ✅ **Decidir sobre SignalQualityFilter** — no proviene del libro de the course author, sin tests, estrategias ya tienen filtros propios; opciones: (a) remover de live/replay, (b) agregar al backtest también, (c) mover inside cada estrategia — removido de live/replay path (f63b0b0, 8d9fd78)
-- [ ] **Extender Condition logging a las 11 estrategias restantes** — POC listo en P1/C1 Squeeze
 - [ ] **Implementar MultiTimeframeChart 1h+15m side-by-side**
 
 ### P1 INMEDIATO — Live trading bugs + Option Chain Recorder
 
-- [ ] Fix 3 bugs live trading (ver arriba — bugs identificados 2026-05-20)
-- [ ] Option Chain Recorder — OptionChainSnapshotService async, 16 tickers, ATM±5 strikes, expiry ~48h, cada 15min 9:30-16:00 ET + cada 5min 9:30-9:40 ET, tabla option_chain_snapshot
+- ✅ **Fix Bug: manual execute silently fails on stale signals** — isMarketHours() guard agregado (75082d0)
+- ✅ **Fix Bug: no Telegram notification on manual order execution** — Telegram injection en execute path (80ce1bf)
+- ✅ **Fix Bug: EXITED status without Entry timestamp** — guard close-trade against unknown tickers (80ce1bf)
+- ✅ **Option Chain Recorder** — OptionChainSnapshotService async, 16 tickers, ATM±5 strikes, expiry ~48h, cada 15min 9:30-16:00 ET + cada 5min 9:30-9:40 ET, tabla option_chain_snapshot (0293460)
 
 ### P1 SIGUIENTE — Pricing + Condition logging
 
 - [ ] Black-Scholes pricing model en BacktestEngine — reemplazar OPTIONS_DELTA=0.50 hardcoded con N(d1) usando IV por ticker configurable, DTE calculado, risk-free rate 4.5%
 - [ ] Condition logging extender a c3-p3 / c4-p4 / c5-p5 / c6-p6 (POC listo en P1/C1)
+
+### P1 PENDIENTE — Validación (Fabio ejecuta)
+
+- [ ] **Correr `.\scripts\run-backtest.ps1 -Strategies c4,p4`** — verificar que solo aparecen logs [C4] y [P4], ~83% perf improvement esperado (filtro por strategyFilter activo)
+- [ ] **Verificar OptionChainRecorder en primer market open** — confirmar que `option_chain_snapshot` se puebla en primer open (15:30 ET / 9:30 ET) del 2026-05-21
 
 ### P1 CRÍTICO — Pricing de opciones (2026-05-20)
 
@@ -128,6 +131,11 @@
 - [ ] Fix BacktestBatchRunnerResumeTest.whenBacktestFreshFlagPresent_startsFreshWithoutPrompt
 - [ ] Fix RollbackConfigTest$CsvActiveTest.candleStore_csv_injectsCsvCandleRepository
 - [ ] Investigar bug checkpoint HISTORICAL hardcoded (HistoricalBackfillService L311, L448)
+- [ ] `BacktestBatchRunner.java ~L93`: Scanner resource leak — `new Scanner(System.in)` abierto sin cerrar en cada invocación
+- [ ] `BacktestBatchRunner.java ~L395`: ResultAccumulator mutable fields son package-private — deberían ser `private`
+- [ ] `BacktestBatchRunner.java buildConfig()`: DRY violation — construcción de BacktestConfig (17 args) duplicada en dos branches
+- [ ] `BacktestBatchRunner.java run()`: método ~150 líneas, múltiples responsabilidades — extraer `resolveRunId`, `handleFreshFlag`, `printSummary`
+- [ ] `C4P4OpeningBacktestIT.java`: assertion débil — solo `assertThat(report).isNotNull()`, sin assert en trade count — el test pasa con 0 trades
 
 ## Decisiones pendientes de estrategias
 
@@ -147,6 +155,14 @@
 - **Paper trading antes de capital real**
 
 ## Histórico — sesiones recientes
+
+### 2026-05-21 (miércoles, sesión estrategias filter + scripts)
+- Robust logging pattern aplicado a run-backtest.ps1 y run-live.ps1 (568e794)
+- `getCode()` agregado a TradingStrategy interface — implementado en 12 estrategias (7b292a7)
+- BacktestEngine usa `getCode()` en lugar de class name en strategyFilter (2abfbe9)
+- C4P4OpeningBacktestIT migrado a strategyFilter — fix silent no-op bug (0369d3f)
+- `--strategies` CLI flag + `-Strategies` PS script param — filtro por código de estrategia (39d9f2c)
+- Fix unused imports en BacktestBatchRunnerStrategiesArgTest (97607ed)
 
 ### 2026-05-16 (sábado, sesión maratónica)
 - 14 commits a main
