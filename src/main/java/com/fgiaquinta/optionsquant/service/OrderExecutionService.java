@@ -4,6 +4,7 @@ import com.ib.client.*;
 import com.ib.client.OrderCondition;
 import com.fgiaquinta.optionsquant.config.IbkrProperties;
 import com.fgiaquinta.optionsquant.infrastructure.IbkrCallbackHandler;
+import com.fgiaquinta.optionsquant.pricing.TickPriceEvent;
 import com.fgiaquinta.optionsquant.strategy.model.TradePlan;
 import com.fgiaquinta.optionsquant.trading.ContractFactory;
 import com.fgiaquinta.optionsquant.trading.OrderFactory;
@@ -11,14 +12,17 @@ import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.Objects;
 import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 /**
  * Handles option order execution: contract resolution, option chain lookup, bracket order placement.
@@ -41,6 +45,9 @@ public class OrderExecutionService {
     private final AtomicInteger nextOrderId = new AtomicInteger(1);
     /** New latch for every connect attempt — {@link CountDownLatch} is single-use. */
     private volatile CountDownLatch connectionLatch = new CountDownLatch(1);
+
+    private final List<Consumer<TickPriceEvent>> tickPriceConsumers = new CopyOnWriteArrayList<>();
+    private final AtomicInteger snapshotReqIdSeq = new AtomicInteger(10_000);
 
     // Option chain data
     private final Map<String, Integer> tickerToUnderlyingConId = new ConcurrentHashMap<>();
@@ -132,15 +139,61 @@ public class OrderExecutionService {
             @Override
             public void error(int id, long timestamp, int errorCode, String errorMsg, String advancedOrderRejectJson) {
                 if (errorCode == 2104 || errorCode == 2106 || errorCode == 2158) return;
-                
+
                 String context = service.requestTracker.getOrDefault(id, "Request " + id);
                 OrderExecutionService.log.error("❌ IBKR {} Error: code={}, message={}", context, errorCode, errorMsg);
-                
+
                 if (service.pendingMetadataRequests.contains(id)) {
                     service.pendingMetadataRequests.remove(id);
                 }
             }
+
+            @Override
+            public void tickPrice(int reqId, int field, double price, TickAttrib attribs) {
+                TickPriceEvent event = new TickPriceEvent(reqId, field, price);
+                for (Consumer<TickPriceEvent> c : service.tickPriceConsumers) {
+                    try {
+                        c.accept(event);
+                    } catch (Exception e) {
+                        OrderExecutionService.log.error("[OES] tickPriceConsumer threw — swallowing to protect other consumers", e);
+                    }
+                }
+            }
         };
+    }
+
+    /**
+     * Registers a consumer to be invoked for every tickPrice callback received on this socket.
+     * Multiple consumers can register; each is invoked in registration order.
+     * Exceptions from one consumer do not affect others — they are logged and swallowed.
+     *
+     * <p>This method never throws and is safe to call multiple times.
+     */
+    public void registerTickPriceConsumer(Consumer<TickPriceEvent> consumer) {
+        Objects.requireNonNull(consumer, "consumer");
+        tickPriceConsumers.add(consumer);
+    }
+
+    /**
+     * Requests a one-shot market-data snapshot (snapshot=true) for the given ticker.
+     * Returns the reqId assigned to the request; tickPrice callbacks arriving with this
+     * reqId carry the response. Caller is responsible for correlating reqId to its waiting state.
+     *
+     * @param ticker symbol, e.g. "SPY"
+     * @return reqId assigned to the request
+     */
+    public int requestPriceSnapshot(String ticker) {
+        if (ticker == null || ticker.isBlank()) {
+            throw new IllegalArgumentException("ticker must be non-blank");
+        }
+        int reqId = snapshotReqIdSeq.incrementAndGet();
+        Contract contract = new Contract();
+        contract.symbol(ticker);
+        contract.secType("STK");
+        contract.exchange("SMART");
+        contract.currency("USD");
+        client.reqMktData(reqId, contract, "", true, false, null);
+        return reqId;
     }
 
 
