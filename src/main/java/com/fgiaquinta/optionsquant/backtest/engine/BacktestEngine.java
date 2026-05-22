@@ -38,6 +38,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -637,6 +638,7 @@ public class BacktestEngine {
         double equity = initialCapital;
         final List<OpenPosition> openPositions = new ArrayList<>();
         final List<TradeRecord> trades = new ArrayList<>();
+        final Set<String> loggedTickerStrategy = new HashSet<>();
         final List<BacktestReport.EquityPoint> equityCurve = new ArrayList<>();
         double peakEquity = equity;
 
@@ -721,7 +723,7 @@ public class BacktestEngine {
                     && !etTime.isBefore(config.entryWindowStart())
                     && etTime.isBefore(config.entryWindowEnd())) {
                 runStrategies(ticker, fullData, nyTime, currentCandle, candleTime,
-                        config, equity, openPositions, fillEngine, vixMap);
+                        config, equity, openPositions, fillEngine, vixMap, loggedTickerStrategy);
             }
         }
 
@@ -927,13 +929,16 @@ public class BacktestEngine {
     private void runStrategies(String ticker, StrategyData data, ZonedDateTime nyTime,
             Candle candle, ZonedDateTime time, BacktestConfig config, double equity,
             List<OpenPosition> openPositions, FillEngine fillEngine,
-            NavigableMap<LocalDate, Double> vixMap) {
+            NavigableMap<LocalDate, Double> vixMap, Set<String> loggedTickerStrategy) {
 
         for (TradingStrategy strategy : strategies) {
             try {
                 if (config.strategyFilter() != null &&
                         !config.strategyFilter().contains(strategy.getCode())) {
                     continue;
+                }
+                if (loggedTickerStrategy.add(ticker + "|" + strategy.getCode())) {
+                    log.info("[backtest] {} evaluating strategy {}", ticker, strategy.getCode());
                 }
                 if (!strategy.isTriggered(ticker, data, nyTime)) continue;
 
