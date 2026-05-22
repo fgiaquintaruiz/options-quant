@@ -1,7 +1,7 @@
 # Roadmap — Options Quant Engine
 
 > Living strategic plan. Updated at the end of each session.
-> Last updated: 2026-05-21
+> Last updated: 2026-05-22
 
 ## Current Status
 
@@ -127,8 +127,7 @@
 
 ### P1 PENDING — Validation (Fabio runs)
 
-- [ ] **Run `.\scripts\run-backtest.ps1 -Strategies c4,p4`** — verify only [C4] and [P4] logs appear, ~83% perf improvement expected (strategyFilter active)
-  > **Pending** — diagnostic log added (commits `9ba85e5` + `00872aa`); needs fresh run with both `Corriendo:` line and `[backtest] Strategy filter:` visible in log to confirm end-to-end.
+- ✅ **Run `.\scripts\run-backtest.ps1 -Strategies c4,p4`** — 2026-05-22: -Strategies filter validated end-to-end (117 tickers × c4,p4 → 0 trades expected for non-earnings period, log: run-backtest_20260522_125614.log)
 - [ ] **Verify OptionChainRecorder on first market open** — confirm `option_chain_snapshot` is populated on first open (15:30 ET / 9:30 ET) on 2026-05-21
 
 ### P1 CRITICAL — Options pricing (2026-05-20)
@@ -139,7 +138,7 @@
 
 ### P2 — Next 2 weeks
 
-- [ ] --start-date/--end-date filter in BacktestBatchRunner
+- [ ] --start-date/--end-date filter in BacktestBatchRunner — needed to backtest specific historical periods where c4/p4 actually fire (nudge 2026-05-22: blocker for c4/p4 validation on real signal windows)
 - [ ] Full Polygon backfill for SMH/GLD (2 years)
 - [ ] Analysis of first days of paper trades (with current parameters)
 - [ ] Investigate c4 opening / p4 opening: why do they not generate trades? (0 trades in backtest — check signal detection or parameter thresholds)
