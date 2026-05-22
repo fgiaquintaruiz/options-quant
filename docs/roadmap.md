@@ -89,16 +89,31 @@
 
 ### P1 IMMEDIATE — Live trading bugs + Option Chain Recorder
 
-- [ ] **Investigate OptionChainRecorder silent failure**
-  **Status**: TODO
+### OptionChainRecorder fix — 3 stacked blockers
+**Status**: Ready to execute (today)
 
-  - Schedulers fire correctly at 15:30, 15:35, 15:40 ES (verified live_session log 2026-05-21)
-  - `snapshotAsync` invoked for all 16 tickers (log: "OptionChainRecorderService.snapshotAsync: ticker=X, signalId=Y, …")
-  - `option_chain_snapshot` table has **0 rows** after multiple snapshot cycles
-  - Schema: nullable `bid`/`ask`; NOT NULL on `signal_id`, `ticker`, `direction`, `trigger`, `expiry`, `strike`, `right`, `snapshot_ts`, `is_paper`, `created_at`
-  - No "snapshot complete" or "persist" log line visible after "starting" log
-  - **Suspects**: IBKR request fails silently / exception swallowed in async future / required fields (`expiry`/`strike`/`right`) not resolved at runtime / validation rejecting before persist
-  - **Entry point**: `OptionChainRecorderService.snapshotAsync()` — trace what happens AFTER the "starting" log, before any persistence call
+| # | Layer | Issue | File |
+|---|-------|-------|------|
+| 1 | Wiring | `snapshotAsync()` never calls `snapshotSync()` | `OptionChainRecorderService.java:53-62` |
+| 2 | Gateway | `NoOpOptionChainIbkrGateway` returns `null` for all calls | `options/NoOpOptionChainIbkrGateway.java` |
+| 3 | Connection | TWS error 502 (not running) during 2026-05-21 session | operator checklist |
+
+**Scheduler is CLEAN** — zero changes needed. It correctly calls
+`recorderService.snapshotAsync(ticker, batchId, null, "BOTH", "SCHEDULED")` at
+`OptionChainScheduler.java:106`. Recorder must resolve strikes/expiry/price internally.
+
+**Fix tasks (TDD, separate commits):**
+
+1. Wire `snapshotAsync()` → resolve params internally → `snapshotSync()` — size: **S**
+2. Implement real `IbkrOptionChainGateway.fetchOptionSnapshot()` (TWS `reqSecDefOptParams` + `reqMktData` with greeks ticks) — size: **L**
+3. `@Profile("live")` on real impl, `@Profile("!live")` on no-op — size: **XS**
+4. Diagnostic logging: `[optchain] snapshotAsync ENTRY/DONE ticker=X rows=N` / `snapshotSync ticker=X validStrikes=N expiry=Y` / `null snap ticker=X strike=Y right=Z` (WARN) — size: **XS**
+
+**Validation steps:**
+1. Start TWS first, verify port 7497 connected
+2. Run live session before 15:30 ES
+3. Wait for 15:30 ES cron fire (or next 15-min tick)
+4. `sqlite3 data/candles.db "SELECT COUNT(*) FROM option_chain_snapshot;"` → expect > 0 with greeks
 
 - ✅ **Bug Fix: manual execute silently fails on stale signals** — isMarketHours() guard added (75082d0)
 - ✅ **Bug Fix: no Telegram notification on manual order execution** — Telegram injection in execute path (80ce1bf)
