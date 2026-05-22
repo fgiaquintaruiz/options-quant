@@ -8,13 +8,13 @@
 #   .\scripts\run-backtest.ps1 -Fresh -Strategies p1  # Fresh run, P1 only
 param(
     [switch]$Fresh,
+    [switch]$Force,
     [switch]$Resume,
     [switch]$CompleteTickers = $true,
     [string]$Strategies  # Optional filter: comma-separated codes e.g. "c4,p4"
 )
 $argsList = @("--backtest-all", "--server.port=-1", "--spring.devtools.restart.enabled=false")
 if ($CompleteTickers) { $argsList += "--complete-tickers" }
-if ($Fresh) { $argsList += "--backtest-fresh" }
 if ($Resume) { $argsList += "--backtest-resume" }
 # Spring expects --strategies=c4,p4 (comma-separated, no spaces)
 if ($Strategies) { $argsList += "--strategies=$(($Strategies -split '[,\s]+' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) -join ',')" }
@@ -37,6 +37,23 @@ function Write-AndLog {
 Write-Host "Log: $logFile"
 Write-Host "Follow: Get-Content '$logFile' -Tail 50 -Wait"
 Write-Host ""
+
+if ($Fresh) {
+    if ($Force) {
+        Write-AndLog "Force flag detected - skipping confirmation"
+    } else {
+        $promptText = "About to delete all backtest data. Continue? (y/n)"
+        Write-AndLog $promptText
+        $answer = Read-Host $promptText
+        Write-AndLog "User answer: $answer"
+        if ($answer -ine 'y') {
+            Write-AndLog "Aborted"
+            exit 1
+        }
+    }
+    $argsList += "--backtest-fresh-force"
+    $argsString = $argsList -join " "
+}
 
 Write-AndLog "Corriendo: ./gradlew bootRun --args=`"$argsString`""
 
