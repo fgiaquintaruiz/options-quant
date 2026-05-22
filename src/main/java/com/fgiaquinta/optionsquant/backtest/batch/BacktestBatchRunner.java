@@ -268,10 +268,8 @@ public class BacktestBatchRunner implements ApplicationRunner {
             tickers = new ArrayList<>(allTickers);
         }
 
-        log.info("[backtest] {} tickers with valid candles — running 12 strategies", tickers.size());
-
         List<String> strategyFilter = parseStrategyFilter(args);
-        log.info("[backtest] Strategy filter: {}", strategyFilter != null ? strategyFilter : "none — running all 12 strategies");
+        log.info("[backtest] {} tickers to process — running {}", tickers.size(), describeStrategyFilter(strategyFilter));
         BacktestConfig config = buildConfig(tickers, runId, strategyFilter);
         List<BacktestBatchResult> results = new ArrayList<>();
         BacktestReport report = null;
@@ -499,6 +497,11 @@ public class BacktestBatchRunner implements ApplicationRunner {
             );
         }
         return codes;
+    }
+
+    static String describeStrategyFilter(List<String> filter) {
+        if (filter == null) return "all 12 strategies";
+        return filter.size() + " strategies: " + filter;
     }
 
     /**

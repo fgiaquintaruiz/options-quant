@@ -191,4 +191,25 @@ class BacktestBatchRunnerTest {
 
         verifyNoInteractions(backtestEngine);
     }
+
+    // -------------------------------------------------------------------------
+    // T9 — describeStrategyFilter: with filter list → "N strategies: [list]"
+    // -------------------------------------------------------------------------
+
+    @Test
+    void describeStrategyFilter_withFilter_showsCountAndList() {
+        List<String> filter = List.of("c4", "p4");
+        String result = BacktestBatchRunner.describeStrategyFilter(filter);
+        assertThat(result).isEqualTo("2 strategies: [c4, p4]");
+    }
+
+    // -------------------------------------------------------------------------
+    // T10 — describeStrategyFilter: null filter → "all 12 strategies"
+    // -------------------------------------------------------------------------
+
+    @Test
+    void describeStrategyFilter_withNullFilter_showsAllTwelve() {
+        String result = BacktestBatchRunner.describeStrategyFilter(null);
+        assertThat(result).isEqualTo("all 12 strategies");
+    }
 }
