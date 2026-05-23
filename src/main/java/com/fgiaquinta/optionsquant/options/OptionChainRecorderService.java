@@ -1,9 +1,14 @@
 package com.fgiaquinta.optionsquant.options;
 
+import com.fgiaquinta.optionsquant.pricing.PriceQuote;
+import com.fgiaquinta.optionsquant.pricing.UnderlyingPriceGateway;
+import com.fgiaquinta.optionsquant.service.OrderExecutionService;
+import com.fgiaquinta.optionsquant.service.OrderExecutionService.OptionChainResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -31,12 +36,18 @@ public class OptionChainRecorderService {
 
     private final OptionChainSnapshotRepository repository;
     private final OptionChainIbkrGateway ibkrGateway;
+    private final UnderlyingPriceGateway underlyingPriceGateway;
+    private final OrderExecutionService orderExecutionService;
 
     public OptionChainRecorderService(
             OptionChainSnapshotRepository repository,
-            OptionChainIbkrGateway ibkrGateway) {
+            OptionChainIbkrGateway ibkrGateway,
+            UnderlyingPriceGateway underlyingPriceGateway,
+            OrderExecutionService orderExecutionService) {
         this.repository = repository;
         this.ibkrGateway = ibkrGateway;
+        this.underlyingPriceGateway = underlyingPriceGateway;
+        this.orderExecutionService = orderExecutionService;
     }
 
     /**
@@ -52,13 +63,25 @@ public class OptionChainRecorderService {
     @Async("optionChainExecutor")
     public void snapshotAsync(String ticker, String signalId, String strategy,
                                String direction, String trigger) {
-        log.debug("Option chain snapshot starting: ticker={}, signalId={}, trigger={}",
-                ticker, signalId, trigger);
-        // Production path: delegate to gateway for live IBKR data
-        // Gateway resolves the option chain (valid strikes + expiry) internally
-        // For now, log and no-op in the async path — full IBKR wiring via IbkrOptionChainGateway
-        log.info("OptionChainRecorderService.snapshotAsync: ticker={}, signalId={}, strategy={}, direction={}, trigger={}",
-                ticker, signalId, strategy, direction, trigger);
+        log.info("[optchain] snapshotAsync ENTRY ticker={} signalId={}", ticker, signalId);
+        try {
+            OptionChainResult chain = orderExecutionService.resolveOptionChain(ticker);
+            if (chain == null || chain.validStrikes() == null || chain.validStrikes().isEmpty()) {
+                log.warn("[optchain] no chain metadata for ticker={} signalId={}", ticker, signalId);
+                return;
+            }
+            PriceQuote priceQuote = underlyingPriceGateway.get(ticker, Duration.ofSeconds(5));
+            if (priceQuote == null) {
+                log.warn("[optchain] no underlying price for ticker={} signalId={}", ticker, signalId);
+                return;
+            }
+            List<Double> strikes = new ArrayList<>(chain.validStrikes());
+            snapshotSync(ticker, signalId, strategy, direction, trigger,
+                         priceQuote.price(), strikes, chain.expiration());
+            log.info("[optchain] snapshotAsync DONE ticker={} strikesProcessed={}", ticker, strikes.size());
+        } catch (Exception e) {
+            log.error("[optchain] snapshotAsync failed for ticker={} signalId={}", ticker, signalId, e);
+        }
     }
 
     /**

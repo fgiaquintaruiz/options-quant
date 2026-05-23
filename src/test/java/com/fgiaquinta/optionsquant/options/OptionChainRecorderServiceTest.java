@@ -1,16 +1,23 @@
 package com.fgiaquinta.optionsquant.options;
 
+import com.fgiaquinta.optionsquant.pricing.PriceQuote;
+import com.fgiaquinta.optionsquant.pricing.UnderlyingPriceGateway;
+import com.fgiaquinta.optionsquant.service.OrderExecutionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 import org.mockito.ArgumentCaptor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -22,13 +29,18 @@ class OptionChainRecorderServiceTest {
 
     private OptionChainSnapshotRepository repository;
     private OptionChainIbkrGateway ibkrGateway;
+    private UnderlyingPriceGateway underlyingPriceGateway;
+    private OrderExecutionService orderExecutionService;
     private OptionChainRecorderService service;
 
     @BeforeEach
     void setUp() {
         repository = mock(OptionChainSnapshotRepository.class);
         ibkrGateway = mock(OptionChainIbkrGateway.class);
-        service = new OptionChainRecorderService(repository, ibkrGateway);
+        underlyingPriceGateway = mock(UnderlyingPriceGateway.class);
+        orderExecutionService = mock(OrderExecutionService.class);
+        service = new OptionChainRecorderService(
+                repository, ibkrGateway, underlyingPriceGateway, orderExecutionService);
     }
 
     // ─── snapshotSync — strike selection ─────────────────────────────────────
@@ -144,6 +156,34 @@ class OptionChainRecorderServiceTest {
 
         // Only 10 non-null responses should be persisted (first strike was null)
         verify(repository, times(10)).save(any(OptionChainSnapshotRow.class));
+    }
+
+    // ─── snapshotAsync — wiring ──────────────────────────────────────────────
+
+    @Test
+    @DisplayName("snapshotAsync resolves option chain + underlying price then delegates to snapshotSync")
+    void snapshotAsync_delegatesToSnapshotSync_afterResolvingMetadata() {
+        // Arrange
+        when(orderExecutionService.resolveOptionChain("SPY"))
+                .thenReturn(new OrderExecutionService.OptionChainResult(
+                        "20260606",
+                        Set.of(415.0, 420.0, 425.0),
+                        "SPY"));
+        when(underlyingPriceGateway.get(eq("SPY"), any(Duration.class)))
+                .thenReturn(new PriceQuote(420.50, Instant.now()));
+        // ibkrGateway returns null by default — snapshotSync will skip persistence
+        // but will still call fetchOptionSnapshot once per strike before the null check
+
+        // Act
+        service.snapshotAsync("SPY", "sig-123", null, "BOTH", "SCHEDULED");
+
+        // Assert: resolution flow invoked
+        verify(orderExecutionService).resolveOptionChain("SPY");
+        verify(underlyingPriceGateway).get(eq("SPY"), any(Duration.class));
+
+        // Assert: snapshotSync was reached (gateway invoked at least once for any strike + right)
+        verify(ibkrGateway, atLeastOnce())
+                .fetchOptionSnapshot(eq("SPY"), anyDouble(), eq("20260606"), anyString());
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────────
