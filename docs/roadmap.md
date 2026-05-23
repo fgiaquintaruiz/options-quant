@@ -288,7 +288,7 @@ Investigation 2026-05-23 confirmed **Verdict B** — live mode resolves strike +
 - [ ] `BacktestBatchRunner.java buildConfig()`: DRY violation — BacktestConfig construction (17 args) duplicated across two branches
 - [ ] `BacktestBatchRunner.java run()`: ~150-line method with multiple responsibilities — extract `resolveRunId`, `handleFreshFlag`, `printSummary`
 - [ ] `C4P4OpeningBacktestIT.java`: weak assertion — only `assertThat(report).isNotNull()`, no assert on trade count — test passes with 0 trades
-- [ ] **TwsPaperConnectivityTest broken** — `ObjectMapper` bean not available in Spring test context. Pre-existing, surfaced during 2026-05-23 IT run. `NoSuchBeanDefinitionException`, not related to pricing spike work. Investigate and fix or document as test-context configuration issue.
+- [x] RESOLVED (63cc432): **TwsPaperConnectivityTest broken** — `ObjectMapper` bean not available in Spring test context. Pre-existing, surfaced during 2026-05-23 IT run. `NoSuchBeanDefinitionException`, not related to pricing spike work. Fixed using local `ObjectMapper` instance pattern (matches project convention).
 - [ ] **ReplayControlsE2eTest TimeoutError** — surfaced during 2026-05-23 `twsTest` task run. Likely cascade from clientId conflicts during test cleanup (`clientId already in use` errors). Investigate ordering / cleanup between tests in `twsTest` task.
 
 ## Pending Strategy Decisions
