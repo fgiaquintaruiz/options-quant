@@ -74,3 +74,10 @@ backtest-*.csv
 backtesting.db
 data/backtest-exports/
 *.log
+
+### Node/JS tooling ###
+node_modules/
+.vite/
+
+# Ad-hoc sqlite/debug dumps (kept locally)
+docs/info-*.txt
