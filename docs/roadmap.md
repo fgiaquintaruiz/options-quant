@@ -170,6 +170,53 @@
 - [ ] Black-Scholes pricing model in BacktestEngine — replace hardcoded OPTIONS_DELTA=0.50 with N(d1) using configurable IV per ticker, calculated DTE, risk-free rate 4.5%
 - ~~Condition logging extend to c3-p3 / c4-p4 / c5-p5 / c6-p6~~ (✅ verified 2026-05-23: all 12 strategies have condition logging + dedicated test files, no coverage gap)
 
+#### Phase 2 (Black-Scholes Delta) — partial design lock 2026-05-23
+
+**Goal**: Replace hardcoded `BacktestConfig.OPTIONS_DELTA=0.60` with N(d1) Black-Scholes delta for accurate PnL on option exits at `BacktestEngine.java:917-920` (unrealized) + `:1022-1024` (realized).
+
+**Locked decisions**:
+- Strike + expiry decided at **strategy signal-time**, propagated via `TradePlan`
+- `RiskCalculator` populates `OpenPosition.strike` + `OpenPosition.expiry` from `TradePlan`
+- **Delta-only scope** for Phase 2 (gamma / vega / theta deferred to Phase 3)
+- New port `OptionPricer` + `BlackScholesOptionPricer` implementation (hexagonal pattern, mirrors `UnderlyingPriceGateway`)
+- No external math dependency — 5-line Abramowitz-Stegun `Phi(d)` approximation (±0.0015 error, sufficient for backtest)
+
+**Pending decisions (deferred to Monday 2026-05-26 after Task 2 IT validates)**:
+- **IV source** — default 0.30 (single global) vs per-ticker from `option_chain_snapshot` table
+- **Risk-free rate** — hardcoded 0.045 vs `application.yml` configurable vs external API (ECB/Fed)
+- **T convention** — calendar days / 365 vs business days / 252
+- **Backfill policy** — apply only forward (cutover date) vs recompute historical trades
+
+**Scope estimate (10 pieces, ~510 lines, S-M total)**:
+
+| # | Piece | Size | Lines |
+|---|---|---|---|
+| 1 | `TradeRecord` field add (strike, expiryDate) | XS | 15 |
+| 2 | `OpenPosition` field add (strike, expiryDate) | XS | 5 |
+| 3 | `BlackScholesPricer.java` (pure function) | XS | 40 |
+| 4 | Unit tests vs Hull textbook values | XS | 60 |
+| 5 | `OptionPricer` interface + impl | XS | 30 |
+| 6 | `RiskCalculator` populates strike + expiry | S | 50 |
+| 7 | `BacktestEngine` wiring (replace constant) | S | 50 |
+| 8 | Config plumbing (IV + r) | XS | 40 |
+| 9 | CSV format update + migration | S | 80 |
+| 10 | Integration test (end-to-end PnL) | S | 100 |
+
+**Pre-Monday sanity check required before implementation**:
+- Trace `ContractFactory.createOptionContract` callers in live mode
+- Confirm whether `TradePlan` in live mode already carries strike + expiry
+- If yes → mirror in backtest path
+- If no → add to both paths consistently (avoids parallel-shape drift)
+
+**Reuse identified**:
+- `OptionPricer` port mirrors `UnderlyingPriceGateway` hexagonal pattern
+- No external dependency (custom `Phi(d)` 5 lines, no commons-math3 needed)
+
+**Validation criteria**:
+- Unit tests pass against textbook BS values (ATM/OTM/ITM scenarios from Hull)
+- Backtest PnL on identical inputs differs from constant-0.60 baseline by expected amount
+- Integration test: backtest run with BS delta vs constant delta — diff documented
+
 ### P1 PENDING — Validation (Fabio runs)
 
 - ✅ **Run `.\scripts\run-backtest.ps1 -Strategies c4,p4`** — 2026-05-22: -Strategies filter validated end-to-end (117 tickers × c4,p4 → 0 trades expected for non-earnings period, log: run-backtest_20260522_125614.log)
