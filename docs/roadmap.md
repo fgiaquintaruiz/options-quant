@@ -106,6 +106,45 @@
 
 1. Wire `snapshotAsync()` → resolve params internally → `snapshotSync()` — size: **S**
 2. Implement real `IbkrOptionChainGateway.fetchOptionSnapshot()` (TWS `reqSecDefOptParams` + `reqMktData` with greeks ticks) — size: **L**
+
+#### Task 2 (locked design, ready to execute Monday after IT passes)
+
+**Goal**: Replace NoOpOptionChainIbkrGateway with RealOptionChainIbkrGateway that fetches per-contract greeks via reqMktData streaming + tickOptionComputation.
+
+**Implementation order (8 pieces, ~430-450 lines)**:
+1. TickOptionComputationEvent record + Consumer registration on OES (XS, 30 lines)
+2. tickOptionComputation override on OES anonymous wrapper (XS, 10-15 lines)
+3. Semaphore(5) throttling per-gateway (XS, 10 lines)
+4. Lifecycle: subscribe → wait → cancelMktData (S, 70 lines)
+5. RealOptionChainIbkrGateway class (M, 120-140 lines)
+6. @Profile("live") + @Profile("!live") routing (XS, 15 lines)
+7. Integration with Recorder (0 lines — already decoupled via gateway port)
+8. Tests unit + IT TWS-gated (M, 180 lines)
+
+**Design decisions locked**:
+- Streaming reqMktData (snapshot=false), explicit cancelMktData on completion or timeout
+- 5s default timeout via Duration ctor param
+- reqId range 20000-29999 for option snapshots (document in OES constants block)
+- Serial strikes within snapshotSync (gateway-level Semaphore(5) bounds concurrency)
+- Return partial greeks if at least delta OR optPrice non-null; skip if all null
+- No caching (greeks change tick-by-tick)
+- @Profile("live") activates RealGateway; default uses NoOp
+
+**Reuse identified**:
+- ContractFactory.createOptionContract — existing, handles dot-sanitize + tradingClass
+- OrderExecutionService.requestPriceSnapshot — pattern for reqMktData call
+- CopyOnWriteArrayList<Consumer<>> + register pattern — same as tickPrice consumer
+- Semaphore(5) — same idiom as UnderlyingPriceGateway
+
+**Open risks to validate Monday**:
+- IBKR market data line limit (100 concurrent) — recorder uses few but worth monitoring
+- tickOptionComputation field semantics (field=13 = model, may need to also check fields 10/11/12)
+- Cancel timing — race between cancelMktData and final tick delivery
+
+**Validation criteria**:
+- IT against TWS with SPY options
+- Asserts: at least one strike returns non-null delta within 5s
+- After full integration, check option_chain_snapshot table populated with greeks on Monday's first scheduled cron tick
 3. `@Profile("live")` on real impl, `@Profile("!live")` on no-op — size: **XS**
 4. Diagnostic logging: `[optchain] snapshotAsync ENTRY/DONE ticker=X rows=N` / `snapshotSync ticker=X validStrikes=N expiry=Y` / `null snap ticker=X strike=Y right=Z` (WARN) — size: **XS**
 
