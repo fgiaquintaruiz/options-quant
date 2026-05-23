@@ -168,7 +168,7 @@
 ### P1 NEXT — Pricing + Condition logging
 
 - [ ] Black-Scholes pricing model in BacktestEngine — replace hardcoded OPTIONS_DELTA=0.50 with N(d1) using configurable IV per ticker, calculated DTE, risk-free rate 4.5%
-- [ ] Condition logging extend to c3-p3 / c4-p4 / c5-p5 / c6-p6 (POC ready in P1/C1)
+- ~~Condition logging extend to c3-p3 / c4-p4 / c5-p5 / c6-p6~~ (✅ verified 2026-05-23: all 12 strategies have condition logging + dedicated test files, no coverage gap)
 
 ### P1 PENDING — Validation (Fabio runs)
 
