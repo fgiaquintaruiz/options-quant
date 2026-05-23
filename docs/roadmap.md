@@ -186,27 +186,61 @@
 - **Risk-free rate** — hardcoded 0.045 vs `application.yml` configurable vs external API (ECB/Fed)
 - **T convention** — calendar days / 365 vs business days / 252
 - **Backfill policy** — apply only forward (cutover date) vs recompute historical trades
+- **Q1.b — Backtest strike source**:
+  - Option A: synthesize from `entryPrice` rounded to nearest $1/$5 increment (cheap, approximate — works for all historical bars)
+  - Option B: real strikes from `option_chain_snapshot` table (accurate, but only forward from snapshot start = Task 2 deployment date)
+  - Recommendation pending Monday Task 2 data + decision on whether to recompute historical trades (relates to Q5 backfill policy)
 
-**Scope estimate (10 pieces, ~510 lines, S-M total)**:
+**Side effect of strike + expiry on TradePlan**
+
+Resolving strike + expiry at signal time (vs current order-placement time in live mode) introduces **stale-strike risk**: if signal-to-order latency is high, picked strike may no longer be ATM when order fires.
+
+**Mitigation policy**:
+- `TradePlan.strike` and `TradePlan.expiryDate` are **PREFERRED hints**
+- `OES` may re-resolve at order placement if elapsed time > threshold (configurable, default ~30s)
+- Threshold value TBD — surfaced as Q1.c
+
+- **Q1.c — Stale-strike threshold**:
+  - Hardcode 30s? Make configurable via `application.yml`?
+  - What's the typical signal-to-order latency in current live runs? (Need to inspect `MarketScanner` cron timing vs `LiveModeController` order submission timing)
+
+**Scope estimate (revised post-Verdict B investigation 2026-05-23): ~685 lines (was 510)**
+
+Investigation 2026-05-23 confirmed **Verdict B** — live mode resolves strike + expiry at order placement (`OrderExecutionService.java:280-347`), NOT at signal time. `TradePlan` currently lacks strike, expiry, and option type fields. Phase 2 must add field propagation to both live and backtest paths.
+
+**Added pieces**:
+- `TradePlan`: add `strike` + `expiryDate` fields + propagation (~80 lines, S)
+- Shared strike/expiry picker utility (~60 lines, S) — currently inline in `OES.findBestStrike` + `resolveOptionChain`
+
+**Modified pieces**:
+- `TradeRecord` field add: 20 → 30 lines
+- `RiskCalculator` enhancement: 10 → 35 lines
+
+**Full piece list**:
 
 | # | Piece | Size | Lines |
 |---|---|---|---|
-| 1 | `TradeRecord` field add (strike, expiryDate) | XS | 15 |
+| 1 | `TradeRecord` field add (strike, expiryDate) | XS | 30 |
 | 2 | `OpenPosition` field add (strike, expiryDate) | XS | 5 |
 | 3 | `BlackScholesPricer.java` (pure function) | XS | 40 |
 | 4 | Unit tests vs Hull textbook values | XS | 60 |
 | 5 | `OptionPricer` interface + impl | XS | 30 |
-| 6 | `RiskCalculator` populates strike + expiry | S | 50 |
+| 6 | `RiskCalculator` populates strike + expiry | S | 35 |
 | 7 | `BacktestEngine` wiring (replace constant) | S | 50 |
 | 8 | Config plumbing (IV + r) | XS | 40 |
 | 9 | CSV format update + migration | S | 80 |
 | 10 | Integration test (end-to-end PnL) | S | 100 |
+| **NEW 11** | `TradePlan` field add + propagation | S | 80 |
+| **NEW 12** | Shared strike/expiry picker utility | S | 60 |
+| **Total** | — | S-M | **~685** |
 
-**Pre-Monday sanity check required before implementation**:
-- Trace `ContractFactory.createOptionContract` callers in live mode
-- Confirm whether `TradePlan` in live mode already carries strike + expiry
-- If yes → mirror in backtest path
-- If no → add to both paths consistently (avoids parallel-shape drift)
+**Pre-Monday investigation status**:
+- ✅ DONE 2026-05-23: `ContractFactory.createOptionContract` callers traced (`OrderExecutionService.java:370`, only call site)
+- ✅ DONE 2026-05-23: `TradePlan` inventory complete (no strike/expiry/optionType fields today)
+- ✅ DONE 2026-05-23: Verdict B confirmed — Phase 2 must add field propagation to both paths
+- ⏸️ Pending Monday: Q1.b backtest strike source decision
+- ⏸️ Pending Monday: Q1.c stale-strike threshold decision
+- ⏸️ Pending Monday: Q2-Q5 (IV, r, T, backfill) per original lock
 
 **Reuse identified**:
 - `OptionPricer` port mirrors `UnderlyingPriceGateway` hexagonal pattern
