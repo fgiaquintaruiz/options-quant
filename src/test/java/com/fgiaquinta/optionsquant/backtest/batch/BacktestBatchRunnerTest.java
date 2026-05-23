@@ -212,4 +212,134 @@ class BacktestBatchRunnerTest {
         String result = BacktestBatchRunner.describeStrategyFilter(null);
         assertThat(result).isEqualTo("all 12 strategies");
     }
+
+    // -------------------------------------------------------------------------
+    // T11 — --start-date / --end-date: valid ISO accepted, narrows config window
+    // -------------------------------------------------------------------------
+
+    @Test
+    void whenStartAndEndDateValidIso_configUsesThatWindow() throws Exception {
+        var args = new DefaultApplicationArguments(
+                "--backtest-all",
+                "--start-date=2024-03-01",
+                "--end-date=2024-06-30");
+        when(readJdbc.queryForList(anyString(), eq(String.class), any(Object[].class)))
+                .thenReturn(List.of("AAPL"));
+        when(backtestEngine.run(any(BacktestConfig.class))).thenReturn(EMPTY_REPORT);
+
+        runner.run(args);
+
+        ArgumentCaptor<BacktestConfig> captor = ArgumentCaptor.forClass(BacktestConfig.class);
+        verify(backtestEngine).run(captor.capture());
+        assertThat(captor.getValue().fromDate()).isEqualTo(LocalDate.of(2024, 3, 1));
+        assertThat(captor.getValue().toDate()).isEqualTo(LocalDate.of(2024, 6, 30));
+    }
+
+    // -------------------------------------------------------------------------
+    // T12 — bad ISO format → IllegalArgumentException
+    // -------------------------------------------------------------------------
+
+    @Test
+    void whenStartDateBadFormat_throwsIllegalArgument() {
+        var args = new DefaultApplicationArguments(
+                "--backtest-all",
+                "--start-date=2024/01/01");
+        when(readJdbc.queryForList(anyString(), eq(String.class), any(Object[].class)))
+                .thenReturn(List.of("AAPL"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> runner.run(args))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("start-date");
+    }
+
+    @Test
+    void whenEndDateInvalidMonth_throwsIllegalArgument() {
+        var args = new DefaultApplicationArguments(
+                "--backtest-all",
+                "--end-date=2024-13-01");
+        when(readJdbc.queryForList(anyString(), eq(String.class), any(Object[].class)))
+                .thenReturn(List.of("AAPL"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> runner.run(args))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("end-date");
+    }
+
+    // -------------------------------------------------------------------------
+    // T13 — start > end → IllegalArgumentException
+    // -------------------------------------------------------------------------
+
+    @Test
+    void whenStartAfterEnd_throwsIllegalArgument() {
+        var args = new DefaultApplicationArguments(
+                "--backtest-all",
+                "--start-date=2024-06-30",
+                "--end-date=2024-03-01");
+        when(readJdbc.queryForList(anyString(), eq(String.class), any(Object[].class)))
+                .thenReturn(List.of("AAPL"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> runner.run(args))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("start-date");
+    }
+
+    // -------------------------------------------------------------------------
+    // T14 — only one flag supplied → other defaults
+    // -------------------------------------------------------------------------
+
+    @Test
+    void whenOnlyStartDateSupplied_endDefaultsToToday() throws Exception {
+        var args = new DefaultApplicationArguments(
+                "--backtest-all",
+                "--start-date=2024-03-01");
+        when(readJdbc.queryForList(anyString(), eq(String.class), any(Object[].class)))
+                .thenReturn(List.of("AAPL"));
+        when(backtestEngine.run(any(BacktestConfig.class))).thenReturn(EMPTY_REPORT);
+
+        runner.run(args);
+
+        ArgumentCaptor<BacktestConfig> captor = ArgumentCaptor.forClass(BacktestConfig.class);
+        verify(backtestEngine).run(captor.capture());
+        assertThat(captor.getValue().fromDate()).isEqualTo(LocalDate.of(2024, 3, 1));
+        // toDate should default to today (allow same-day tolerance)
+        assertThat(captor.getValue().toDate())
+                .isBetween(LocalDate.now(ZoneOffset.UTC).minusDays(1), LocalDate.now(ZoneOffset.UTC).plusDays(1));
+    }
+
+    @Test
+    void whenOnlyEndDateSupplied_startDefaultsTo2018() throws Exception {
+        var args = new DefaultApplicationArguments(
+                "--backtest-all",
+                "--end-date=2024-06-30");
+        when(readJdbc.queryForList(anyString(), eq(String.class), any(Object[].class)))
+                .thenReturn(List.of("AAPL"));
+        when(backtestEngine.run(any(BacktestConfig.class))).thenReturn(EMPTY_REPORT);
+
+        runner.run(args);
+
+        ArgumentCaptor<BacktestConfig> captor = ArgumentCaptor.forClass(BacktestConfig.class);
+        verify(backtestEngine).run(captor.capture());
+        assertThat(captor.getValue().fromDate()).isEqualTo(LocalDate.of(2018, 1, 1));
+        assertThat(captor.getValue().toDate()).isEqualTo(LocalDate.of(2024, 6, 30));
+    }
+
+    // -------------------------------------------------------------------------
+    // T15 — neither flag supplied → preserves 2018→today default
+    // -------------------------------------------------------------------------
+
+    @Test
+    void whenBothDateFlagsAbsent_configUsesDefaultRange() throws Exception {
+        var args = new DefaultApplicationArguments("--backtest-all");
+        when(readJdbc.queryForList(anyString(), eq(String.class), any(Object[].class)))
+                .thenReturn(List.of("AAPL"));
+        when(backtestEngine.run(any(BacktestConfig.class))).thenReturn(EMPTY_REPORT);
+
+        runner.run(args);
+
+        ArgumentCaptor<BacktestConfig> captor = ArgumentCaptor.forClass(BacktestConfig.class);
+        verify(backtestEngine).run(captor.capture());
+        assertThat(captor.getValue().fromDate()).isEqualTo(LocalDate.of(2018, 1, 1));
+        assertThat(captor.getValue().toDate())
+                .isBetween(LocalDate.now(ZoneOffset.UTC).minusDays(1), LocalDate.now(ZoneOffset.UTC).plusDays(1));
+    }
 }

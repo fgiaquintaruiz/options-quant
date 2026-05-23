@@ -23,6 +23,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -269,8 +270,12 @@ public class BacktestBatchRunner implements ApplicationRunner {
         }
 
         List<String> strategyFilter = parseStrategyFilter(args);
-        log.info("[backtest] {} tickers to process — running {}", tickers.size(), describeStrategyFilter(strategyFilter));
-        BacktestConfig config = buildConfig(tickers, runId, strategyFilter);
+        DateWindow dateWindow = parseStartEndDates(args,
+                LocalDate.of(2018, 1, 1),
+                LocalDate.now(ZoneOffset.UTC));
+        log.info("[backtest] {} tickers to process — running {} ({} → {})",
+                tickers.size(), describeStrategyFilter(strategyFilter), dateWindow.start(), dateWindow.end());
+        BacktestConfig config = buildConfig(tickers, runId, strategyFilter, dateWindow);
         List<BacktestBatchResult> results = new ArrayList<>();
         BacktestReport report = null;
 
@@ -435,9 +440,9 @@ public class BacktestBatchRunner implements ApplicationRunner {
      * each ticker completes, rather than in a single batch at the end.
      * The callback is safe to call from multiple worker threads concurrently.
      */
-    private BacktestConfig buildConfig(List<String> tickers, String runId, List<String> strategyFilter) {
-        LocalDate from = LocalDate.of(2018, 1, 1);
-        LocalDate to = LocalDate.now(ZoneOffset.UTC);
+    private BacktestConfig buildConfig(List<String> tickers, String runId, List<String> strategyFilter, DateWindow window) {
+        LocalDate from = window.start();
+        LocalDate to = window.end();
         if (persistenceService != null) {
             BacktestConfig base = BacktestConfig.withCallback(tickers, from, to,
                     (ticker, trades) -> {
@@ -502,6 +507,50 @@ public class BacktestBatchRunner implements ApplicationRunner {
     static String describeStrategyFilter(List<String> filter) {
         if (filter == null) return "all 12 strategies";
         return filter.size() + " strategies: " + filter;
+    }
+
+    /**
+     * Date window for backtest execution. Either bound may be the caller-supplied
+     * default when the matching CLI flag is absent.
+     */
+    record DateWindow(LocalDate start, LocalDate end) {}
+
+    /**
+     * Parses the {@code --start-date} and {@code --end-date} CLI flags.
+     *
+     * <p>Both flags are optional and expect ISO date format ({@code YYYY-MM-DD}).
+     * When absent, the matching {@code defaultStart}/{@code defaultEnd} is used,
+     * preserving the historical 2018→today range.
+     *
+     * @param args         the application arguments
+     * @param defaultStart fallback start date when {@code --start-date} is absent
+     * @param defaultEnd   fallback end date when {@code --end-date} is absent
+     * @return resolved date window with {@code start <= end}
+     * @throws IllegalArgumentException if either flag has bad ISO format or {@code start > end}
+     */
+    DateWindow parseStartEndDates(ApplicationArguments args, LocalDate defaultStart, LocalDate defaultEnd) {
+        LocalDate start = parseIsoDateFlag(args, "start-date", defaultStart);
+        LocalDate end = parseIsoDateFlag(args, "end-date", defaultEnd);
+        if (start.isAfter(end)) {
+            throw new IllegalArgumentException(
+                    "Invalid date window: --start-date (" + start + ") is after --end-date (" + end + ")"
+            );
+        }
+        return new DateWindow(start, end);
+    }
+
+    private LocalDate parseIsoDateFlag(ApplicationArguments args, String flagName, LocalDate fallback) {
+        List<String> values = args.getOptionValues(flagName);
+        if (values == null || values.isEmpty()) return fallback;
+        String raw = values.get(0);
+        if (raw == null || raw.isBlank()) return fallback;
+        try {
+            return LocalDate.parse(raw.trim(), DateTimeFormatter.ISO_DATE);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException(
+                    "Invalid --" + flagName + " value '" + raw + "'. Expected ISO format YYYY-MM-DD.", e
+            );
+        }
     }
 
     /**
