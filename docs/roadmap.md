@@ -119,6 +119,12 @@
 - ✅ **Bug Fix: no Telegram notification on manual order execution** — Telegram injection in execute path (80ce1bf)
 - ✅ **Bug Fix: EXITED status without Entry timestamp** — guard close-trade against unknown tickers (80ce1bf)
 - ✅ **Option Chain Recorder** — OptionChainSnapshotService async, 16 tickers, ATM±5 strikes, expiry ~48h, every 15min 9:30-16:00 ET + every 5min 9:30-9:40 ET, option_chain_snapshot table (0293460)
+- [ ] **Re-run IbkrSnapshotUnderlyingPriceGatewayIT during market hours** — Saturday 2026-05-23 attempt failed due to usfarm/ushmds disconnected on weekend (IBKR paper accounts lose Market Data + HMDS connections on weekends — expected behavior, environmental not code). Required: Monday 2026-05-26 (or any weekday) between 09:30 and 16:00 ET / 15:30-22:00 ES with TWS running.
+
+  Command:
+  ```
+  .\gradlew twsTest "-DrunTwsTests=true" --tests "*IbkrSnapshotUnderlyingPriceGatewayIT*"
+  ```
 
 ### P1 NEXT — Pricing + Condition logging
 
@@ -162,6 +168,8 @@
 - [ ] `BacktestBatchRunner.java buildConfig()`: DRY violation — BacktestConfig construction (17 args) duplicated across two branches
 - [ ] `BacktestBatchRunner.java run()`: ~150-line method with multiple responsibilities — extract `resolveRunId`, `handleFreshFlag`, `printSummary`
 - [ ] `C4P4OpeningBacktestIT.java`: weak assertion — only `assertThat(report).isNotNull()`, no assert on trade count — test passes with 0 trades
+- [ ] **TwsPaperConnectivityTest broken** — `ObjectMapper` bean not available in Spring test context. Pre-existing, surfaced during 2026-05-23 IT run. `NoSuchBeanDefinitionException`, not related to pricing spike work. Investigate and fix or document as test-context configuration issue.
+- [ ] **ReplayControlsE2eTest TimeoutError** — surfaced during 2026-05-23 `twsTest` task run. Likely cascade from clientId conflicts during test cleanup (`clientId already in use` errors). Investigate ordering / cleanup between tests in `twsTest` task.
 
 ## Pending Strategy Decisions
 
