@@ -84,3 +84,16 @@ docs/info-*.txt
 
 # engram memory sync: private notes, never commit
 .engram/
+
+# Local-only working data (never commit)
+data/
+logs/
+backtest/
+*.db
+*.db-journal
+*.sqbpro
+TUTOR.md
+PROGRESS.md
+analysis/**/*.log
+analysis/backtest_2026-05-17/
+analysis/backtest_c4_p4_opening_2026-05-20/
