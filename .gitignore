@@ -97,3 +97,11 @@ PROGRESS.md
 analysis/**/*.log
 analysis/backtest_2026-05-17/
 analysis/backtest_c4_p4_opening_2026-05-20/
+
+# IDE / tool state and stray build output
+.idea/
+.qwen/
+.continue/
+/META-INF/
+/com/
+.atl/
