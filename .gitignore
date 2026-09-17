@@ -81,3 +81,6 @@ node_modules/
 
 # Ad-hoc sqlite/debug dumps (kept locally)
 docs/info-*.txt
+
+# engram memory sync: private notes, never commit
+.engram/
