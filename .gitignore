@@ -49,7 +49,7 @@ backtest/*
 
 # Sensitive Config
 config.yaml
-/.idea/
+.idea/*
 /screenshots/
 scanner.log
 

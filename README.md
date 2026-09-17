@@ -4,6 +4,17 @@
 
 A hybrid algorithmic trading engine designed for Interactive Brokers (TWS/Gateway). Built for ultra-fast execution, strict risk management, automated backtest analysis, and intelligent ticker filtering.
 
+> [!WARNING]
+> **DISCLAIMER — EDUCATIONAL PROJECT ONLY**
+>
+> This is a **personal, educational/portfolio project** built to practice Java 25, Spring Boot, TDD, and trading-systems/backtesting engineering. **Nothing here is financial advice or a recommendation to buy or sell any security or option.**
+>
+> - It connects to **Interactive Brokers TWS / IB Gateway**, and in **live mode it EXECUTES REAL ORDERS** against whatever account TWS is logged into. Paper vs. live is only a port number (`7497` vs `7496`) — one misconfiguration trades real money.
+> - Use it **at your own risk**. The author takes **no responsibility** for financial loss, misuse, or security incidents arising from this project.
+> - The included strategies are **examples for exercising the engine**, not validated trading systems, and published backtest results are **not predictive** of live results.
+> - Provided **as-is, with no warranty** of any kind.
+>
+> If you want to study the code — great. If you want to run this against a live account, know exactly what every line does first.
 
 ---
 
