@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * TDD — RED/GREEN tests for global time-window filter (9:45–10:30 ET) and forced close (13:00 ET).
  *
- * <p>the course author's method restricts ALL strategy entries to a fixed 45-minute window each morning.
+ * <p>The opening-window rule restricts ALL strategy entries to a fixed 45-minute window each morning.
  * Any candle outside that window must be skipped — no trade generated regardless of pattern.
  * Open positions that haven't hit TP or SL by 13:00 ET are force-closed at that candle's price.
  *

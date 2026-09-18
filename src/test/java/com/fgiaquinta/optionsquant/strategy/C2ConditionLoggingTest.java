@@ -26,9 +26,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * TDD — FAILING FIRST.
  *
  * Verifies that C2TrendCallStrategy emits per-condition DEBUG log lines in the format:
- *   [C2] <ticker> @ <time> — Paso X/4 "<libro description>" → <value> ✅  (or ❌ STOP)
+ *   [C2] <ticker> @ <time> — Paso X/4 "<step description>" → <value> ✅  (or ❌ STOP)
  *
- * C2 has 8 technical checks mapped to 4 book steps:
+ * C2 has 8 technical checks mapped to 4 steps:
  *   Paso 1/4 — "Línea de tendencia bordeando puntos de la tendencia previa"
  *   Paso 2/4 — "El precio rompe la línea de tendencia"
  *   Paso 3/4 — "El precio rompe la SMA20 + vela de confirmación alcista"
@@ -172,9 +172,9 @@ class C2ConditionLoggingTest {
                 .as("Paso 3/4 must be ❌ STOP (bullish candle check failed)")
                 .anyMatch(msg -> msg.contains("Paso 3/4") && msg.contains("❌ STOP"));
 
-        // The label must contain the exact libro text
+        // The label must contain the exact step text
         assertThat(logMessages)
-                .as("Paso 3/4 must contain the libro step label")
+                .as("Paso 3/4 must contain the step label")
                 .anyMatch(msg -> msg.contains("Paso 3/4") && msg.contains("El precio rompe la SMA20 + vela de confirmación alcista"));
 
         // No Paso 4/4 lines should appear — execution stopped at 3
@@ -182,7 +182,7 @@ class C2ConditionLoggingTest {
                 .as("No Paso 4/4 lines should appear — execution stopped at step 3")
                 .noneMatch(msg -> msg.contains("Paso 4/4"));
 
-        // Format: Paso X/4 (4 total book steps)
+        // Format: Paso X/4 (4 steps)
         assertThat(logMessages)
                 .as("Log line must contain 'Paso X/4' step counter")
                 .anyMatch(msg -> msg.matches(".*Paso \\d/4.*"));

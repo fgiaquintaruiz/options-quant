@@ -26,9 +26,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * TDD — FAILING FIRST.
  *
  * Verifies that C4OpeningCallStrategy emits per-condition DEBUG log lines in the format:
- *   [C4] <ticker> @ <time> — Paso X/3 "<libro description>" → <value> ✅  (or ❌ STOP)
+ *   [C4] <ticker> @ <time> — Paso X/3 "<step description>" → <value> ✅  (or ❌ STOP)
  *
- * C4 maps to 3 book steps (libro 5/6):
+ * C4 maps to 3 steps:
  *   Paso 1/3 — "Tendencia totalmente lateral y sin volatilidad en 15m"
  *   Paso 2/3 — "Apertura con salto, precio en zona de sobrecompra"
  *   Paso 3/3 — "Ejecutar en los primeros 5 minutos de apertura"
@@ -155,9 +155,9 @@ class C4ConditionLoggingTest {
                 .as("Paso 2/3 must be ❌ STOP (gap down check failed)")
                 .anyMatch(msg -> msg.contains("Paso 2/3") && msg.contains("❌ STOP"));
 
-        // Paso 2/3 must contain the libro label
+        // Paso 2/3 must contain the step label
         assertThat(logMessages)
-                .as("Paso 2/3 must contain libro step label")
+                .as("Paso 2/3 must contain the step label")
                 .anyMatch(msg -> msg.contains("Paso 2/3") && msg.contains("Apertura con salto, precio en zona de sobrecompra"));
 
         // Paso 3/3 must NOT appear (execution stopped at step 2)
@@ -165,7 +165,7 @@ class C4ConditionLoggingTest {
                 .as("No Paso 3/3 lines should appear — stopped at step 2")
                 .noneMatch(msg -> msg.contains("Paso 3/3"));
 
-        // Format: Paso X/3 (3 total book steps)
+        // Format: Paso X/3 (3 steps)
         assertThat(logMessages)
                 .as("Log lines must contain 'Paso X/3' step counter")
                 .anyMatch(msg -> msg.matches(".*Paso \\d/3.*"));
@@ -218,7 +218,7 @@ class C4ConditionLoggingTest {
 
         // Exactly 3 [C4] log lines
         assertThat(logMessages)
-                .as("Exactly 3 [C4] log lines expected (one per book step)")
+                .as("Exactly 3 [C4] log lines expected (one per step)")
                 .filteredOn(msg -> msg.startsWith("[C4]"))
                 .hasSize(3);
 

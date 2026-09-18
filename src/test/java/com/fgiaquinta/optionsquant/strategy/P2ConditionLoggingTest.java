@@ -26,9 +26,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * TDD — FAILING FIRST.
  *
  * Verifies that P2TrendPutStrategy emits per-condition DEBUG log lines in the format:
- *   [P2] <ticker> @ <time> — Paso X/4 "<libro description>" → <value> ✅  (or ❌ STOP)
+ *   [P2] <ticker> @ <time> — Paso X/4 "<step description>" → <value> ✅  (or ❌ STOP)
  *
- * P2 has 8 technical checks mapped to 4 book steps:
+ * P2 has 8 technical checks mapped to 4 steps:
  *   Paso 1/4 — "Tendencia bajista establecida (1D + 1H bajo SMA20)"
  *   Paso 2/4 — "Pullback rechazado en SMA20 (toca y cierra por debajo)"
  *   Paso 3/4 — "Vela bajista con presión vendedora (cuerpo + mecha + volumen)"
@@ -209,7 +209,7 @@ class P2ConditionLoggingTest {
                 .as("Expected ❌ STOP for the failed condition")
                 .anyMatch(msg -> msg.contains("❌ STOP"));
 
-        // Format: Paso X/4 (4 total book steps)
+        // Format: Paso X/4 (4 steps)
         assertThat(logMessages)
                 .as("Log line must contain 'Paso X/4' step counter")
                 .anyMatch(msg -> msg.matches(".*Paso \\d/4.*"));

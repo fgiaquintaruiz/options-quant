@@ -27,9 +27,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * TDD — FAILING FIRST.
  *
  * Verifies that C3BounceCallStrategy emits per-condition DEBUG log lines in the format:
- *   [C3] <ticker> @ <time> — Paso X/4 "<libro description>" → <value> ✅  (or ❌ STOP)
+ *   [C3] <ticker> @ <time> — Paso X/4 "<step description>" → <value> ✅  (or ❌ STOP)
  *
- * C3 maps to 4 book steps (libro 3/4 "Rebote en punto medio, Bollinger diario"):
+ * C3 maps to 4 steps:
  *   Paso 1/4 — "Tendencia clara en Bollinger temporalidad hora"
  *   Paso 2/4 — "Precio acercándose a SMA20 diaria como punto de rebote"
  *   Paso 3/4 — "Precio respeta el punto, en 15m comienza a rebotar"
@@ -112,7 +112,7 @@ class C3ConditionLoggingTest {
      * 15m:
      *   - close15m < sma20_15m → confirmedUptrend15m = false → Paso 3/4 fails
      *
-     * Note: C3's current logic has only 3 technical checks mapped to 4 book steps.
+     * Note: C3's current logic has only 3 technical checks mapped to 4 steps.
      * Paso 3 = 15m above SMA20, Paso 4 = 1H bullish candle (touchedSupport + rejectedSupport).
      * We arrange data so: 1D uptrend ✅, BB context ✅, Paso 2 ✅, but 15m below SMA20 → Paso 3 ❌.
      */
@@ -199,7 +199,7 @@ class C3ConditionLoggingTest {
                 .as("Expected ❌ STOP for the failed condition")
                 .anyMatch(msg -> msg.contains("❌ STOP"));
 
-        // Format: Paso X/4 (4 total book steps)
+        // Format: Paso X/4 (4 steps)
         assertThat(logMessages)
                 .as("Log line must contain 'Paso X/4' step counter")
                 .anyMatch(msg -> msg.matches(".*Paso \\d/4.*"));
@@ -219,9 +219,9 @@ class C3ConditionLoggingTest {
                 .as("Paso 1/4 line must contain ❌ STOP marker")
                 .anyMatch(msg -> msg.contains("Paso 1/4") && msg.contains("❌ STOP"));
 
-        // Paso 1/4 must contain the exact libro label
+        // Paso 1/4 must contain the exact step label
         assertThat(logMessages)
-                .as("Paso 1/4 must contain the libro label for step 1")
+                .as("Paso 1/4 must contain the step label for step 1")
                 .anyMatch(msg -> msg.contains("Paso 1/4") && msg.contains("Tendencia clara en Bollinger temporalidad hora"));
     }
 
@@ -271,9 +271,9 @@ class C3ConditionLoggingTest {
                 .filteredOn(msg -> msg.startsWith("[C3]"))
                 .allMatch(msg -> msg.contains(" → "));
 
-        // Paso 3/4 must contain the exact libro label
+        // Paso 3/4 must contain the exact step label
         assertThat(logMessages)
-                .as("Paso 3/4 must contain the libro label for step 3")
+                .as("Paso 3/4 must contain the step label for step 3")
                 .anyMatch(msg -> msg.contains("Paso 3/4") && msg.contains("Precio respeta el punto, en 15m comienza a rebotar"));
     }
 }

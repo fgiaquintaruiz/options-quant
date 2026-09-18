@@ -152,32 +152,32 @@ public class P1SqueezePutStrategy implements TradingStrategy, TimeframeRequireme
         final List<Condition> conditions = List.of(
             new Condition() {
                 @Override public boolean test() { return smaSpread <= 0.04; }
-                @Override public String label() { return "Squeeze SMAs (sin referencia libro)"; }
+                @Override public String label() { return "Squeeze SMAs"; }
                 @Override public String value() { return String.format("SMA spread %.4f <= 0.04", smaSpread); }
             },
             new Condition() {
                 @Override public boolean test() { return ChannelAnalyzer.isSmaLateralChannel(series1h, prevIdx, 70, 4.0); }
-                @Override public String label() { return "Canal lateral SMAs (sin referencia libro)"; }
+                @Override public String label() { return "Canal lateral SMAs"; }
                 @Override public String value() { return String.format("ChannelAnalyzer lateral (70 bars, 4.0%% threshold)"); }
             },
             new Condition() {
                 @Override public boolean test() { return currentClose1h < breakoutThreshold && currentClose1h < currentOpen1h; }
-                @Override public String label() { return "Breakout bajista con buffer (sin referencia libro)"; }
+                @Override public String label() { return "Breakout bajista con buffer"; }
                 @Override public String value() { return String.format("close %.4f < threshold %.4f (floor %.4f - %.1f%%)", currentClose1h, breakoutThreshold, capturedMinPrice, breakoutBufferPct * 100); }
             },
             new Condition() {
                 @Override public boolean test() { return bodyPct15m <= -minBodyPct; }
-                @Override public String label() { return "Vela bajista en 15m (sin referencia libro)"; }
+                @Override public String label() { return "Vela bajista en 15m"; }
                 @Override public String value() { return String.format("15m body %.4f <= -%.4f", bodyPct15m, minBodyPct); }
             },
             new Condition() {
                 @Override public boolean test() { return bbWidthCurrent >= bbWidthMinRequired; }
-                @Override public String label() { return "Expansión Bollinger 15m (sin referencia libro)"; }
+                @Override public String label() { return "Expansión Bollinger 15m"; }
                 @Override public String value() { return String.format("BB width %.4f >= avg*threshold %.4f", bbWidthCurrent, bbWidthMinRequired); }
             },
             new Condition() {
                 @Override public boolean test() { return bb15m.isRidingLowerBand(idx15m, 0.005); }
-                @Override public String label() { return "Precio riding lower BB 15m (sin referencia libro)"; }
+                @Override public String label() { return "Precio riding lower BB 15m"; }
                 @Override public String value() { return "15m riding lower BB (within 0.5%)"; }
             }
         );

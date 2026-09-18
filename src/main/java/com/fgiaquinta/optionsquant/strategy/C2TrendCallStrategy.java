@@ -30,7 +30,7 @@ public class C2TrendCallStrategy implements TradingStrategy, TimeframeRequiremen
     /**
      * Evaluates the C2 Trend Call strategy against the provided market data at {@code currentTime}.
      *
-     * <p>The evaluation proceeds through four sequential book steps (short-circuit on first failure):
+     * <p>The evaluation proceeds through four sequential steps (short-circuit on first failure):
      * <ol>
      *   <li>Línea de tendencia bordeando puntos de la tendencia previa — 1D uptrend + 1H price above SMA20 for last 3 bars</li>
      *   <li>El precio rompe la línea de tendencia — low touches SMA20 (within 0.5%) and close stays above</li>
@@ -39,7 +39,7 @@ public class C2TrendCallStrategy implements TradingStrategy, TimeframeRequiremen
      * </ol>
      *
      * <p>When DEBUG logging is enabled, each step emits a structured log line:
-     * {@code [C2] <ticker> @ <time> — Paso X/4 "<libro description>" → <value> ✅|❌ STOP}
+     * {@code [C2] <ticker> @ <time> — Paso X/4 "<step description>" → <value> ✅|❌ STOP}
      *
      * @param ticker      the instrument symbol being evaluated
      * @param data        multi-timeframe market data container
@@ -132,7 +132,7 @@ public class C2TrendCallStrategy implements TradingStrategy, TimeframeRequiremen
         final BollingerBandsUtil bb15m  = new BollingerBandsUtil(series15m, 20);
         final boolean isBullishBBTrend  = bb15m.isBullishTrend(idx15m, 10);
 
-        // ---- Four-step condition array (mapped to reference book) ----
+        // ---- Four-step condition array (strategy conditions) ----
 
         final List<Condition> conditions = List.of(
             new Condition() {

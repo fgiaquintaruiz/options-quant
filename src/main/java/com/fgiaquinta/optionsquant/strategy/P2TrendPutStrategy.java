@@ -31,7 +31,7 @@ public class P2TrendPutStrategy implements TradingStrategy, TimeframeRequirement
     /**
      * Evaluates the P2 Trend Put strategy against the provided market data at {@code currentTime}.
      *
-     * <p>The evaluation proceeds through four sequential book steps (short-circuit on first failure):
+     * <p>The evaluation proceeds through four sequential steps (short-circuit on first failure):
      * <ol>
      *   <li>Tendencia bajista establecida — 1D downtrend + 1H price below SMA20 for last 3 bars</li>
      *   <li>Pullback rechazado en SMA20 — high touches SMA20 (&ge;99.5%) and close stays below</li>
@@ -40,7 +40,7 @@ public class P2TrendPutStrategy implements TradingStrategy, TimeframeRequirement
      * </ol>
      *
      * <p>When DEBUG logging is enabled, each step emits a structured log line:
-     * {@code [P2] <ticker> @ <time> — Paso X/4 "<libro description>" → <value> ✅|❌ STOP}
+     * {@code [P2] <ticker> @ <time> — Paso X/4 "<step description>" → <value> ✅|❌ STOP}
      *
      * @param ticker      the instrument symbol being evaluated
      * @param data        multi-timeframe market data container
@@ -130,7 +130,7 @@ public class P2TrendPutStrategy implements TradingStrategy, TimeframeRequirement
         final BollingerBandsUtil bb15m = new BollingerBandsUtil(series15m, 20);
         final boolean isBearishBBTrend = bb15m.isBearishTrend(idx15m, 10);
 
-        // ---- Four-step condition array (mapped to reference book) ----
+        // ---- Four-step condition array (strategy conditions) ----
 
         final List<Condition> conditions = List.of(
             new Condition() {

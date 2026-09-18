@@ -27,9 +27,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * TDD — FAILING FIRST.
  *
  * Verifies that P3BouncePutStrategy emits per-condition DEBUG log lines in the format:
- *   [P3] <ticker> @ <time> — Paso X/4 "<libro description>" → <value> ✅  (or ❌ STOP)
+ *   [P3] <ticker> @ <time> — Paso X/4 "<step description>" → <value> ✅  (or ❌ STOP)
  *
- * P3 maps to 4 book steps (libro 3/4 — bearish mirror of C3):
+ * P3 maps to 4 steps (bearish mirror of C3):
  *   Paso 1/4 — "Tendencia bajista clara en Bollinger temporalidad hora"
  *   Paso 2/4 — "Precio acercándose a SMA20 diaria como punto de rebote bajista"
  *   Paso 3/4 — "Precio respeta el punto, en 15m comienza a rebotar a la baja"
@@ -192,7 +192,7 @@ class P3ConditionLoggingTest {
                 .as("Expected ❌ STOP for the failed condition")
                 .anyMatch(msg -> msg.contains("❌ STOP"));
 
-        // Format: Paso X/4 (4 total book steps)
+        // Format: Paso X/4 (4 steps)
         assertThat(logMessages)
                 .as("Log line must contain 'Paso X/4' step counter")
                 .anyMatch(msg -> msg.matches(".*Paso \\d/4.*"));
@@ -212,9 +212,9 @@ class P3ConditionLoggingTest {
                 .as("Paso 1/4 line must contain ❌ STOP marker")
                 .anyMatch(msg -> msg.contains("Paso 1/4") && msg.contains("❌ STOP"));
 
-        // Paso 1/4 must contain the exact libro label
+        // Paso 1/4 must contain the exact step label
         assertThat(logMessages)
-                .as("Paso 1/4 must contain the libro label for step 1")
+                .as("Paso 1/4 must contain the step label for step 1")
                 .anyMatch(msg -> msg.contains("Paso 1/4") && msg.contains("Tendencia bajista clara en Bollinger temporalidad hora"));
     }
 
@@ -264,9 +264,9 @@ class P3ConditionLoggingTest {
                 .filteredOn(msg -> msg.startsWith("[P3]"))
                 .allMatch(msg -> msg.contains(" → "));
 
-        // Paso 3/4 must contain the exact libro label
+        // Paso 3/4 must contain the exact step label
         assertThat(logMessages)
-                .as("Paso 3/4 must contain the libro label for step 3")
+                .as("Paso 3/4 must contain the step label for step 3")
                 .anyMatch(msg -> msg.contains("Paso 3/4") && msg.contains("Precio respeta el punto, en 15m comienza a rebotar a la baja"));
     }
 }

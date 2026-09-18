@@ -44,7 +44,7 @@ public class DataManager {
         Map<TimeFrame, BarSeries> data = cache.get(ticker);
         if (data == null) return false;
 
-        // Exigimos las 4 temporalidades del libro de the course author
+        // Exigimos las 4 temporalidades de la estrategia
         return data.containsKey(TimeFrame.DAY_1) &&
                 data.containsKey(TimeFrame.HOUR_1) &&
                 data.containsKey(TimeFrame.MIN_15) &&

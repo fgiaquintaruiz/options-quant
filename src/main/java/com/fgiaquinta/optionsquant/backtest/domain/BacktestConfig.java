@@ -33,17 +33,17 @@ public record BacktestConfig(
         BiConsumer<String, List<TradeRecord>> onTickerComplete,
         /**
          * Earliest ET time at which a new entry signal is allowed (inclusive).
-         * Default: 9:45 AM ET (the course author's method — after the first 15-minute candle closes).
+         * Default: 9:45 AM ET (the opening-window rule — after the first 15-minute candle closes).
          */
         LocalTime entryWindowStart,
         /**
          * Latest ET time at which a new entry signal is allowed (exclusive).
-         * Default: 10:30 AM ET (the course author's method — 45-minute opening window).
+         * Default: 10:30 AM ET (the opening-window rule — 45-minute opening window).
          */
         LocalTime entryWindowEnd,
         /**
          * ET time at which all open positions are force-closed.
-         * Default: 1:00 PM ET (the course author's method — avoid afternoon chop and IV collapse).
+         * Default: 1:00 PM ET (the opening-window rule — avoid afternoon chop and IV collapse).
          */
         LocalTime forcedCloseTime,
         /**

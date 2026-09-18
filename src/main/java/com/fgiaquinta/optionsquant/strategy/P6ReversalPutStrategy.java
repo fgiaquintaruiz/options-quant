@@ -22,9 +22,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * P6 - REVERSIÓN BAJISTA (Reversal Put) — sin referencia libro.
+ * P6 - REVERSIÓN BAJISTA (Reversal Put).
  *
- * Strategy not documented in the course author's book. Labels and logic derived from the code.
+ * Labels and logic derived from the code.
  *
  * EVALUATION STEPS (derived from code):
  * 1. Tendencia alcista previa en 1H  — 3 prior 1H closes above SMA20
@@ -47,8 +47,7 @@ public class P6ReversalPutStrategy implements TradingStrategy, TimeframeRequirem
     /**
      * Evaluates the P6 Reversal Put strategy against the provided market data at {@code currentTime}.
      *
-     * <p>The evaluation proceeds through four sequential conditions derived from the code logic
-     * (no reference book reference — hence "(sin referencia libro)" labels):
+     * <p>The evaluation proceeds through four sequential conditions derived from the code logic:
      * <ol>
      *   <li>Tendencia alcista previa en 1H — 3 prior 1H closes above SMA20</li>
      *   <li>Ruptura bajista de SMA20 en 1H con vela roja — close crosses below SMA20 with bearish candle</li>
@@ -139,12 +138,12 @@ public class P6ReversalPutStrategy implements TradingStrategy, TimeframeRequirem
         final double prevSma15m      = sma20_15m.getValue(idx15m - 1).doubleValue();
         final boolean isDowntrend15m = (currentPrice15m < currentSma15m) && (currentSma15m < prevSma15m);
 
-        // ---- Four-step condition array (derived from code logic — sin referencia libro) ----
+        // ---- Four-step condition array (derived from code logic) ----
 
         final List<Condition> conditions = List.of(
             new Condition() {
                 @Override public boolean test() { return capturedUptrend; }
-                @Override public String label() { return "Tendencia alcista previa en 1H (sin referencia libro)"; }
+                @Override public String label() { return "Tendencia alcista previa en 1H"; }
                 @Override public String value() {
                     return String.format("bars-below-sma20=%d/3 (need 0); wasAboveSma=%b",
                             capturedBarsBelowSma, capturedUptrend);
@@ -152,7 +151,7 @@ public class P6ReversalPutStrategy implements TradingStrategy, TimeframeRequirem
             },
             new Condition() {
                 @Override public boolean test() { return crossedBelowSma && isBearishCandle; }
-                @Override public String label() { return "Ruptura bajista de SMA20 en 1H con vela roja (sin referencia libro)"; }
+                @Override public String label() { return "Ruptura bajista de SMA20 en 1H con vela roja"; }
                 @Override public String value() {
                     return String.format("close %.4f < SMA20 %.4f=%b; bearish(close<open)=%b",
                             currentClose1h, currentSma1h, crossedBelowSma, isBearishCandle);
@@ -160,7 +159,7 @@ public class P6ReversalPutStrategy implements TradingStrategy, TimeframeRequirem
             },
             new Condition() {
                 @Override public boolean test() { return closedNearLow && hasVolume; }
-                @Override public String label() { return "Cierre en tercio inferior y volumen suficiente (sin referencia libro)"; }
+                @Override public String label() { return "Cierre en tercio inferior y volumen suficiente"; }
                 @Override public String value() {
                     return String.format("closedNearLow=%b (%.1f%% from bottom); vol %.0f>=90%%avg %.0f=%b",
                             closedNearLow,
@@ -170,7 +169,7 @@ public class P6ReversalPutStrategy implements TradingStrategy, TimeframeRequirem
             },
             new Condition() {
                 @Override public boolean test() { return isDowntrend15m; }
-                @Override public String label() { return "Confirmación de tendencia bajista en 15m (sin referencia libro)"; }
+                @Override public String label() { return "Confirmación de tendencia bajista en 15m"; }
                 @Override public String value() {
                     return String.format("15m price %.4f<SMA %.4f && SMA<prevSMA %.4f=%b",
                             currentPrice15m, currentSma15m, prevSma15m, isDowntrend15m);

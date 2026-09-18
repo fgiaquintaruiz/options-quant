@@ -22,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * C3 - REBOTE EN SOPORTE (Support Bounce Call).
  *
- * REQUIREMENTS (from the course author's book):
+ * REQUIREMENTS:
  * 1. "Tendencia alcista establecida"           — daily uptrend + 1H SMA20 rising
  * 2. "Retroceso hacia soporte clave"           — 1H price touches lower Bollinger Band
  * 3. "Señal de reversión / rechazo del soporte" — bullish 1H candle closes above SMA20
@@ -45,7 +45,7 @@ public class C3BounceCallStrategy implements TradingStrategy, TimeframeRequireme
     /**
      * Evaluates the C3 Bounce Call strategy against the provided market data at {@code currentTime}.
      *
-     * <p>The evaluation proceeds through four sequential book steps (short-circuit on first failure):
+     * <p>The evaluation proceeds through four sequential steps (short-circuit on first failure):
      * <ol>
      *   <li>Tendencia clara en Bollinger temporalidad hora — 1D uptrend AND price recently broke below 1H lower BB</li>
      *   <li>Precio acercándose a SMA20 diaria como punto de rebote — 1H low touched SMA20 support zone (within 0.2%)</li>
@@ -54,7 +54,7 @@ public class C3BounceCallStrategy implements TradingStrategy, TimeframeRequireme
      * </ol>
      *
      * <p>When DEBUG logging is enabled, each step emits a structured log line:
-     * {@code [C3] <ticker> @ <time> — Paso X/4 "<libro description>" → <value> ✅|❌ STOP}
+     * {@code [C3] <ticker> @ <time> — Paso X/4 "<step description>" → <value> ✅|❌ STOP}
      *
      * @param ticker      the instrument symbol being evaluated
      * @param data        multi-timeframe market data container
@@ -128,7 +128,7 @@ public class C3BounceCallStrategy implements TradingStrategy, TimeframeRequireme
         final double sma20Val15m = sma20_15m.getValue(idx15m).doubleValue();
         final boolean confirmedUptrend15m = currentPrice15m > sma20Val15m;
 
-        // ---- Four-step condition array (mapped to the course author libro 3/4) ----
+        // ---- Four-step condition array (strategy conditions) ----
 
         final List<Condition> conditions = List.of(
             new Condition() {

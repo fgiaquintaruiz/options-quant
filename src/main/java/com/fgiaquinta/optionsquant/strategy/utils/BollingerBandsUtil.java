@@ -7,7 +7,7 @@ import org.ta4j.core.indicators.statistics.StandardDeviationIndicator;
 
 /**
  * Bollinger Bands utility for strategies.
- * Provides BB calculations and trend analysis per the book requirements.
+ * Provides BB calculations and trend analysis for strategy requirements.
  */
 public class BollingerBandsUtil {
 

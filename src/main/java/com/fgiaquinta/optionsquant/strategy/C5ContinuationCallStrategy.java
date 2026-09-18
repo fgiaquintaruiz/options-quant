@@ -22,7 +22,7 @@ import java.util.Set;
  *
  * Bearish trend + gap down + Bollinger breakout below + Worden Stochastic confirmation.
  *
- * REQUIREMENTS (from the course author's book, libro 7/8):
+ * REQUIREMENTS:
  * 1. "Tendencia clara llevando varios días"                         — bearish daily trend (2+ red candles)
  * 2. "Apertura con fuerte salto, precio alejado de SMA20"          — gap down + >3% below 1H SMA20
  * 3. "Primera vela 15m completamente fuera del Bollinger"          — first 15m candle fully below lower BB
@@ -62,7 +62,7 @@ public class C5ContinuationCallStrategy implements TradingStrategy, TimeframeReq
      * <p>Evaluation window: 9:45 AM – 9:55 AM NY (right after the first 15m candle closes).
      * Outside this window the method returns {@code false} immediately.
      *
-     * <p>The evaluation proceeds through four sequential book steps (short-circuit on first failure):
+     * <p>The evaluation proceeds through four sequential steps (short-circuit on first failure):
      * <ol>
      *   <li>Tendencia clara llevando varios días — bearish daily trend (3 prior descending closes)</li>
      *   <li>Apertura con fuerte salto, precio alejado de SMA20 — gap down + open &gt;3% below 1H SMA20</li>
@@ -71,7 +71,7 @@ public class C5ContinuationCallStrategy implements TradingStrategy, TimeframeReq
      * </ol>
      *
      * <p>When DEBUG logging is enabled, each step emits a structured log line:
-     * {@code [C5] <ticker> @ <time> — Paso X/4 "<libro description>" → <value> ✅|❌ STOP}
+     * {@code [C5] <ticker> @ <time> — Paso X/4 "<step description>" → <value> ✅|❌ STOP}
      *
      * @param ticker      the instrument symbol being evaluated
      * @param data        multi-timeframe market data container
@@ -145,7 +145,7 @@ public class C5ContinuationCallStrategy implements TradingStrategy, TimeframeReq
         }
 
         // =========================================================================
-        // CONDITION PIPELINE — 4 reference book steps
+        // CONDITION PIPELINE — 4 strategy steps
         // =========================================================================
         final List<Condition> conditions = List.of(
             new Condition() {

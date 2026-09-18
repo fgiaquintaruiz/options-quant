@@ -694,7 +694,7 @@ public class BacktestEngine {
             }
 
             // ---------------------------------------------------------------
-            // FORCED CLOSE — the course author's method: close all positions at 1:00 PM ET
+            // FORCED CLOSE — the opening-window rule: close all positions at 1:00 PM ET
             // Evaluated BEFORE new entries: a candle at exactly 13:00 closes
             // existing positions but also prevents new ones (window already closed).
             // ---------------------------------------------------------------
@@ -714,7 +714,7 @@ public class BacktestEngine {
             }
 
             // ---------------------------------------------------------------
-            // ENTRY WINDOW FILTER — the course author's method: only enter 9:45–10:30 AM ET
+            // ENTRY WINDOW FILTER — the opening-window rule: only enter 9:45–10:30 AM ET
             // The window is [entryWindowStart, entryWindowEnd) — inclusive start, exclusive end.
             // C4/P4 (9:30–9:35 ET) and C5/P5 (9:45–9:55 ET) keep their own internal
             // sniper filters unchanged — they are more restrictive than this global gate.

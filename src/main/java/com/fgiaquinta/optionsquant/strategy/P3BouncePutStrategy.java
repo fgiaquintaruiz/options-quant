@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Bearish mirror of C3: price bounces down from SMA20 after overextending into the upper
  * Bollinger Band on the 1H timeframe, with 15m confirmation of the reversal.
  *
- * REQUIREMENTS (from the course author's book, libro 3/4 — bearish variant):
+ * REQUIREMENTS (bearish variant):
  * 1. "Tendencia bajista clara en Bollinger temporalidad hora"           — 1D downtrend + 1H price broke above upper BB
  * 2. "Precio acercándose a SMA20 diaria como punto de rebote bajista"  — 1H high touches SMA20 resistance (within 0.2%)
  * 3. "Precio respeta el punto, en 15m comienza a rebotar a la baja"    — 15m price crosses below SMA20
@@ -48,7 +48,7 @@ public class P3BouncePutStrategy implements TradingStrategy, TimeframeRequiremen
     /**
      * Evaluates the P3 Bounce Put strategy against the provided market data at {@code currentTime}.
      *
-     * <p>The evaluation proceeds through four sequential book steps (short-circuit on first failure):
+     * <p>The evaluation proceeds through four sequential steps (short-circuit on first failure):
      * <ol>
      *   <li>Tendencia bajista clara en Bollinger temporalidad hora — 1D downtrend AND price recently broke above 1H upper BB</li>
      *   <li>Precio acercándose a SMA20 diaria como punto de rebote bajista — 1H high touched SMA20 resistance zone (within 0.2%)</li>
@@ -57,7 +57,7 @@ public class P3BouncePutStrategy implements TradingStrategy, TimeframeRequiremen
      * </ol>
      *
      * <p>When DEBUG logging is enabled, each step emits a structured log line:
-     * {@code [P3] <ticker> @ <time> — Paso X/4 "<libro description>" → <value> ✅|❌ STOP}
+     * {@code [P3] <ticker> @ <time> — Paso X/4 "<step description>" → <value> ✅|❌ STOP}
      *
      * @param ticker      the instrument symbol being evaluated
      * @param data        multi-timeframe market data container
@@ -131,7 +131,7 @@ public class P3BouncePutStrategy implements TradingStrategy, TimeframeRequiremen
         final double sma20Val15m = sma20_15m.getValue(idx15m).doubleValue();
         final boolean confirmedDowntrend15m = currentPrice15m < sma20Val15m;
 
-        // ---- Four-step condition array (mapped to the course author libro 3/4 — bearish) ----
+        // ---- Four-step condition array (strategy conditions, bearish) ----
 
         final List<Condition> conditions = List.of(
             new Condition() {

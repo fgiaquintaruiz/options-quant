@@ -27,13 +27,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * TDD — FAILING FIRST.
  *
  * Verifies that P6ReversalPutStrategy emits per-condition DEBUG log lines in the format:
- *   [P6] <ticker> @ <time> — Paso X/4 "<description (sin referencia libro)>" → <value> ✅  (or ❌ STOP)
+ *   [P6] <ticker> @ <time> — Paso X/4 "<description>" → <value> ✅  (or ❌ STOP)
  *
- * P6 has 4 conditions derived from the code logic (no reference book reference):
- *   Paso 1/4 — "Tendencia alcista previa en 1H (sin referencia libro)"
- *   Paso 2/4 — "Ruptura bajista de SMA20 en 1H con vela roja (sin referencia libro)"
- *   Paso 3/4 — "Cierre en tercio inferior y volumen suficiente (sin referencia libro)"
- *   Paso 4/4 — "Confirmación de tendencia bajista en 15m (sin referencia libro)"
+ * P6 has 4 conditions derived from the code logic:
+ *   Paso 1/4 — "Tendencia alcista previa en 1H"
+ *   Paso 2/4 — "Ruptura bajista de SMA20 en 1H con vela roja"
+ *   Paso 3/4 — "Cierre en tercio inferior y volumen suficiente"
+ *   Paso 4/4 — "Confirmación de tendencia bajista en 15m"
  */
 class P6ConditionLoggingTest {
 

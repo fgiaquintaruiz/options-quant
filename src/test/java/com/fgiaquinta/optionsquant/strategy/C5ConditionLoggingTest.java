@@ -27,9 +27,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * TDD — FAILING FIRST.
  *
  * Verifies that C5ContinuationCallStrategy emits per-condition DEBUG log lines in the format:
- *   [C5] <ticker> @ <time> — Paso X/4 "<libro description>" → <value> ✅  (or ❌ STOP)
+ *   [C5] <ticker> @ <time> — Paso X/4 "<step description>" → <value> ✅  (or ❌ STOP)
  *
- * C5 maps to 4 reference book steps:
+ * C5 maps to 4 steps:
  *   Paso 1/4 — "Tendencia clara llevando varios días"
  *   Paso 2/4 — "Apertura con fuerte salto, precio alejado de SMA20"
  *   Paso 3/4 — "Primera vela 15m completamente fuera del Bollinger"
@@ -150,7 +150,7 @@ class C5ConditionLoggingTest {
                 .as("Expected a ❌ STOP log line for the failed condition")
                 .anyMatch(msg -> msg.contains("❌ STOP"));
 
-        // Format: Paso X/4 (4 total book steps)
+        // Format: Paso X/4 (4 steps)
         assertThat(logMessages)
                 .as("Log line must contain 'Paso X/4' step counter (4 total conditions)")
                 .anyMatch(msg -> msg.matches(".*Paso \\d/4.*"));
@@ -202,15 +202,15 @@ class C5ConditionLoggingTest {
                 .as("No Paso 4/4 lines should appear — execution stopped at step 3")
                 .noneMatch(msg -> msg.contains("Paso 4/4"));
 
-        // Paso 3 label must contain the libro description
+        // Paso 3 label must contain the step description
         assertThat(logMessages)
-                .as("Paso 3/4 must contain the libro step label about Bollinger")
+                .as("Paso 3/4 must contain the step label about Bollinger")
                 .anyMatch(msg -> msg.contains("Paso 3/4") && msg.contains("Primera vela 15m completamente fuera del Bollinger"));
     }
 
     @Test
-    @DisplayName("When bearish-trend condition fails (Paso 1), first log line is ❌ STOP with libro label")
-    void whenBearishTrendFails_firstLogLineIsStopWithLibroLabel() {
+    @DisplayName("When bearish-trend condition fails (Paso 1), first log line is ❌ STOP with step label")
+    void whenBearishTrendFails_firstLogLineIsStopWithStepLabel() {
         // 9:50 AM NY — inside the C5 entry window
         ZonedDateTime testTime = ZonedDateTime.of(2026, 4, 8, 9, 50, 0, 0, NY);
 
@@ -260,9 +260,9 @@ class C5ConditionLoggingTest {
                 .as("Paso 1/4 must be ❌ STOP (bullish trend does not pass bearish check)")
                 .anyMatch(msg -> msg.contains("Paso 1/4") && msg.contains("❌ STOP"));
 
-        // Paso 1 label must contain the libro text
+        // Paso 1 label must contain the step text
         assertThat(logMessages)
-                .as("Paso 1/4 must contain the libro label about multi-day trend")
+                .as("Paso 1/4 must contain the step label about multi-day trend")
                 .anyMatch(msg -> msg.contains("Paso 1/4") && msg.contains("Tendencia clara llevando varios días"));
 
         // No Paso 2/4 or beyond — stopped at step 1

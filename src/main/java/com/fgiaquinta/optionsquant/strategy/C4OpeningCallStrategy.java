@@ -25,7 +25,7 @@ public class C4OpeningCallStrategy implements TradingStrategy, TimeframeRequirem
     /**
      * Evaluates the C4 Opening Call strategy against the provided market data at {@code currentTime}.
      *
-     * <p>The evaluation proceeds through three sequential book steps (libro 5/6 — short-circuit on first failure):
+     * <p>The evaluation proceeds through three sequential steps (short-circuit on first failure):
      * <ol>
      *   <li>Tendencia totalmente lateral y sin volatilidad en 15m — BB width &lt; 2% on previous 15m bar</li>
      *   <li>Apertura con salto, precio en zona de sobrecompra — gap down below lower BB, between -1.5% and -6%</li>
@@ -33,7 +33,7 @@ public class C4OpeningCallStrategy implements TradingStrategy, TimeframeRequirem
      * </ol>
      *
      * <p>When DEBUG logging is enabled, each step emits a structured log line:
-     * {@code [C4] <ticker> @ <time> — Paso X/3 "<libro description>" → <value> ✅|❌ STOP}
+     * {@code [C4] <ticker> @ <time> — Paso X/3 "<step description>" → <value> ✅|❌ STOP}
      *
      * @param ticker      the instrument symbol being evaluated
      * @param data        multi-timeframe market data container
@@ -80,7 +80,7 @@ public class C4OpeningCallStrategy implements TradingStrategy, TimeframeRequirem
         final double currentClose = series5m.getBar(idx5m).getClosePrice().doubleValue();
         final boolean isGreenCandle = currentClose > openToday;
 
-        // ---- Three-step condition array (mapped to the course author libro 5/6) ----
+        // ---- Three-step condition array (strategy conditions) ----
 
         final List<Condition> conditions = List.of(
             new Condition() {

@@ -22,7 +22,7 @@ import java.util.Set;
  *
  * Bullish trend + gap up + Bollinger breakout above + Worden Stochastic confirmation.
  *
- * REQUIREMENTS (from the course author's book, libro 7/8):
+ * REQUIREMENTS:
  * 1. "Tendencia alcista clara llevando varios días"                  — bullish daily trend (2+ green candles)
  * 2. "Apertura con fuerte caída, precio alejado de SMA20"           — gap up + >3% above 1H SMA20
  * 3. "Primera vela 15m completamente fuera del Bollinger superior"  — first 15m candle fully above upper BB
@@ -62,7 +62,7 @@ public class P5ContinuationPutStrategy implements TradingStrategy, TimeframeRequ
      * <p>Evaluation window: 9:45 AM – 9:55 AM NY (right after the first 15m candle closes).
      * Outside this window the method returns {@code false} immediately.
      *
-     * <p>The evaluation proceeds through four sequential book steps (short-circuit on first failure):
+     * <p>The evaluation proceeds through four sequential steps (short-circuit on first failure):
      * <ol>
      *   <li>Tendencia alcista clara llevando varios días — bullish daily trend (3 prior ascending closes)</li>
      *   <li>Apertura con fuerte caída, precio alejado de SMA20 — gap up + open &gt;3% above 1H SMA20</li>
@@ -71,7 +71,7 @@ public class P5ContinuationPutStrategy implements TradingStrategy, TimeframeRequ
      * </ol>
      *
      * <p>When DEBUG logging is enabled, each step emits a structured log line:
-     * {@code [P5] <ticker> @ <time> — Paso X/4 "<libro description>" → <value> ✅|❌ STOP}
+     * {@code [P5] <ticker> @ <time> — Paso X/4 "<step description>" → <value> ✅|❌ STOP}
      *
      * @param ticker      the instrument symbol being evaluated
      * @param data        multi-timeframe market data container
@@ -139,7 +139,7 @@ public class P5ContinuationPutStrategy implements TradingStrategy, TimeframeRequ
             confirmation = firstCandleVol > (avgVol * 1.5);
         }
 
-        // --- 4 reference book steps ---
+        // --- 4 strategy steps ---
         final List<Condition> conditions = List.of(
             new Condition() {
                 @Override public boolean test()  { return prevClose1D > prev2Close1D && prev2Close1D > prev3Close1D; }

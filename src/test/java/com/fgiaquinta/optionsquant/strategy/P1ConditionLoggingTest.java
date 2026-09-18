@@ -177,7 +177,7 @@ class P1ConditionLoggingTest {
                 .as("Expected a ❌ STOP log line for the failed condition")
                 .anyMatch(msg -> msg.contains("❌ STOP"));
 
-        // Format: [P1] TEST @ 14:00 — Paso 1/6 "Squeeze SMAs (sin referencia libro)" → ... ❌ STOP
+        // Format: [P1] TEST @ 14:00 — Paso 1/6 "Squeeze SMAs" → ... ❌ STOP
         assertThat(logMessages)
                 .as("Log line must contain 'Paso X/6' step counter (6 total conditions)")
                 .anyMatch(msg -> msg.matches(".*Paso \\d/6.*"));

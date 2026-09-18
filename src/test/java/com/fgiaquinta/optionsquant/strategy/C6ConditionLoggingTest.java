@@ -27,13 +27,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * TDD — FAILING FIRST.
  *
  * Verifies that C6ReversalCallStrategy emits per-condition DEBUG log lines in the format:
- *   [C6] <ticker> @ <time> — Paso X/4 "<description (sin referencia libro)>" → <value> ✅  (or ❌ STOP)
+ *   [C6] <ticker> @ <time> — Paso X/4 "<description>" → <value> ✅  (or ❌ STOP)
  *
- * C6 has 4 conditions derived from the code logic (no reference book reference):
- *   Paso 1/4 — "Tendencia bajista previa en 1H (sin referencia libro)"
- *   Paso 2/4 — "Ruptura alcista de SMA20 en 1H con vela verde (sin referencia libro)"
- *   Paso 3/4 — "Cierre en tercio superior y volumen suficiente (sin referencia libro)"
- *   Paso 4/4 — "Confirmación de tendencia alcista en 15m (sin referencia libro)"
+ * C6 has 4 conditions derived from the code logic:
+ *   Paso 1/4 — "Tendencia bajista previa en 1H"
+ *   Paso 2/4 — "Ruptura alcista de SMA20 en 1H con vela verde"
+ *   Paso 3/4 — "Cierre en tercio superior y volumen suficiente"
+ *   Paso 4/4 — "Confirmación de tendencia alcista en 15m"
  */
 class C6ConditionLoggingTest {
 
