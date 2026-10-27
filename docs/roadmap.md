@@ -1,5 +1,5 @@
 # Roadmap — Options Quant Engine
-_Last updated: 2026-09-17_
+_Last updated: 2026-09-23_
 
 ## Where the project is (September 2026)
 
@@ -15,6 +15,12 @@ project is now being rebuilt in the open as a portfolio piece: the immediate goa
 features but an honest architecture — hexagonal boundaries, trading strategies defined as
 external configuration instead of hardcoded classes, and reproducible backtests — with each
 phase documented as it happens.
+
+## Resume here (next actions, in order)
+
+1. **Wire the rotated Telegram secrets to the environment.** `src/main/resources/application.yml` lines 69–71 still hold literal placeholder strings for `chat-id`, `webhook-secret` and `master-key`, so the rotated values are never read. Replace them with `${TELEGRAM_CHAT_ID:}`, `${TELEGRAM_WEBHOOK_SECRET:}` and `${ORDER_MASTER_KEY:}`; add the same three keys (empty) to `.env.example`; put the real values in the gitignored `.env` (spring-dotenv loads it). Sweep the diff for secret-shaped values before staging. Commit: `fix(config): read Telegram chat id, webhook secret and master key from environment`.
+2. **Tutor Session 02 (MENTORED): the look-ahead fix.** Owner writes the failing test first in the test package for `strategy/data/StrategyData`: a bar delivered with start time T for timeframe D must not be visible to a lookup at any instant before T + D, for MIN_5, MIN_15, HOUR_1 and DAY_1. Then the owner changes `buildSeries` so the stored end time is start + timeframe duration. Re-run the backtests and publish the corrected metrics in this file under Known limitations.
+3. **Phase 1 dependency map (MECHANICAL):** every class touching `com.ib.*`, and where those types leak into business logic; JaCoCo coverage report; the three riskiest refactor points.
 
 ## Guiding principles
 
@@ -42,10 +48,12 @@ phase documented as it happens.
 | Inventory + history rewrite + republish | DONE 2026-09-17 | New repository, rewritten git history |
 | Author identity normalised | DONE | |
 | README educational disclaimer | DONE 2026-09-17 | commit `160defa` |
-| Credential rotation (Telegram bot token, webhook secret + master key to env vars, Gemini key) | OPEN, manual | Owner action, not code |
-| Move local-only data from old working folder (`data/`, `analysis/`, `scripts`) | IN PROGRESS | Blocked intermittently by open file handles (IDE watcher / Gradle daemons) on Windows |
-| Hygiene commit: untrack `.idea/`, `.qwen/`, `.continue/`, `META-INF/`, root `com/ib/**` class files, `.atl/` | OPEN | |
+| Credential rotation (Telegram bot token, webhook secret + master key to env vars, Gemini key) | ROTATED 2026-09-18, wiring OPEN | See "Resume here" item 1 |
+| Move local-only data from old working folder (`data/`, `analysis/`, `scripts`) | DONE 2026-09-17 | data/, analysis/, scripts moved; old folder deleted |
+| Hygiene commit: untrack `.idea/`, `.qwen/`, `.continue/`, `META-INF/`, root `com/ib/**` class files, `.atl/` | DONE 2026-09-17 | commits 6f09ece, f42ff69 |
 | Tone down README tagline marketing language | OPEN, optional | |
+| Strategy provenance clean-up (attribution comments and label suffixes removed, logic untouched) | DONE 2026-09-18 | commit 4b99958; wording rewrite of step labels deliberately skipped, classes are removed in Phase 2b |
+| Personal analysis scripts published with repo-relative paths | DONE 2026-09-18 | commit 2dd6a35 |
 
 ## Phase 1 — Assessment (MECHANICAL analysis)
 
